@@ -74,8 +74,17 @@ class KafkaRaftServer(
   private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    Some(new BrokerServer(config, metaProps, metaLogShim, time, metrics, threadNamePrefix,
-      offlineDirs, controllerQuorumVotersFuture, Server.SUPPORTED_FEATURES))
+    Some(new BrokerServer(
+      config,
+      metaProps,
+      metaLogShim,
+      time,
+      metrics,
+      threadNamePrefix,
+      offlineDirs,
+      controllerQuorumVotersFuture,
+      Server.SUPPORTED_FEATURES
+    ))
   } else {
     None
   }
@@ -89,7 +98,7 @@ class KafkaRaftServer(
       time,
       metrics,
       threadNamePrefix,
-      CompletableFuture.completedFuture(config.quorumVoters)
+      controllerQuorumVotersFuture
     ))
   } else {
     None

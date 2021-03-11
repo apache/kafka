@@ -40,7 +40,6 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
@@ -849,9 +848,25 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
   private[log] def recoverLog(): Long = {
+    /** return the log end offset if valid */
+    def deleteSegmentsIfLogStartGreaterThanLogEnd(): Option[Long] = {
+      if (logSegments.nonEmpty) {
+        val logEndOffset = activeSegment.readNextOffset
+        if (logEndOffset >= logStartOffset)
+          Some(logEndOffset)
+        else {
+          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+            "This could happen if segment files were deleted from the file system.")
+          removeAndDeleteSegments(logSegments, asyncDelete = true, LogRecovery)
+          leaderEpochCache.foreach(_.clearAndFlush())
+          producerStateManager.truncateFullyAndStartAt(logStartOffset)
+          None
+        }
+      } else None
+    }
+
     // if we have the clean shutdown marker, skip recovery
     if (!hadCleanShutdown) {
-      // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
       var truncated = false
 
@@ -879,16 +894,7 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    if (logSegments.nonEmpty) {
-      val logEndOffset = activeSegment.readNextOffset
-      if (logEndOffset < logStartOffset) {
-        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
-          "This could happen if segment files were deleted from the file system.")
-        removeAndDeleteSegments(logSegments,
-          asyncDelete = true,
-          reason = LogRecovery)
-      }
-    }
+    val logEndOffsetOption = deleteSegmentsIfLogStartGreaterThanLogEnd()
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
@@ -900,8 +906,21 @@ class Log(@volatile private var _dir: File,
         preallocate = config.preallocate))
     }
 
-    recoveryPoint = activeSegment.readNextOffset
-    recoveryPoint
+    // Update the recovery point if there was a clean shutdown and did not perform any changes to
+    // the segment. Otherwise, we just ensure that the recovery point is not ahead of the log end
+    // offset. To ensure correctness and to make it easier to reason about, it's best to only advance
+    // the recovery point in flush(Long). If we advanced the recovery point here, we could skip recovery for
+    // unflushed segments if the broker crashed after we checkpoint the recovery point and before we flush the
+    // segment.
+    (hadCleanShutdown, logEndOffsetOption) match {
+      case (true, Some(logEndOffset)) =>
+        recoveryPoint = logEndOffset
+        logEndOffset
+      case _ =>
+        val logEndOffset = logEndOffsetOption.getOrElse(activeSegment.readNextOffset)
+        recoveryPoint = Math.min(recoveryPoint, logEndOffset)
+        logEndOffset
+    }
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
@@ -942,8 +961,11 @@ class Log(@volatile private var _dir: File,
         producerStateManager.takeSnapshot()
       }
     } else {
+      info(s"Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
+      val producerStateLoadStart = time.milliseconds()
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
+      val segmentRecoveryStart = time.milliseconds()
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
       // offset (which would be the case on first startup) and there were active producers prior to truncation
@@ -979,6 +1001,8 @@ class Log(@volatile private var _dir: File,
       }
       producerStateManager.updateMapEndOffset(lastOffset)
       producerStateManager.takeSnapshot()
+      info(s"Producer state recovery took ${producerStateLoadStart - segmentRecoveryStart}ms for snapshot load " +
+        s"and ${time.milliseconds() - segmentRecoveryStart}ms for segment recovery from offset $lastOffset")
     }
   }
 
@@ -1547,7 +1571,7 @@ class Log(@volatile private var _dir: File,
   private def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                                  includeAbortedTxns: Boolean): FetchDataInfo = {
     val abortedTransactions =
-      if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
+      if (includeAbortedTxns) Some(List.empty[FetchResponseData.AbortedTransaction])
       else None
     FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,
@@ -1651,7 +1675,7 @@ class Log(@volatile private var _dir: File,
         logEndOffset
     }
 
-    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+    val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
     collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry, accumulator)
 
@@ -1864,7 +1888,9 @@ class Log(@volatile private var _dir: File,
    */
   def deleteOldSegments(): Int = {
     if (config.delete) {
-      deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+      deleteLogStartOffsetBreachedSegments() +
+        deleteRetentionSizeBreachedSegments() +
+        deleteRetentionMsBreachedSegments()
     } else {
       deleteLogStartOffsetBreachedSegments()
     }

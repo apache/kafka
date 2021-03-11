@@ -50,6 +50,7 @@
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
+    <allow class="org.apache.kafka.common.message.ApiMessageType" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.annotation" />
@@ -108,6 +109,7 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
+      <allow class="org.apache.kafka.common.requests.ApiVersionsResponse" />
     </subpackage>
 
     <subpackage name="resource">
@@ -201,8 +203,10 @@
   </subpackage>
 
   <subpackage name="controller">
+    <allow pkg="com.yammer.metrics"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.feature" />
     <allow pkg="org.apache.kafka.common.internals" />
@@ -265,6 +269,23 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
+  <subpackage name="shell">
+    <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="kafka.raft"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.tools"/>
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.metalog"/>
+    <allow pkg="org.apache.kafka.queue"/>
+    <allow pkg="org.apache.kafka.raft"/>
+    <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.log4j" />
+    <allow pkg="org.jline"/>
+    <allow pkg="scala.compat"/>
   </subpackage>
 
   <subpackage name="tools">

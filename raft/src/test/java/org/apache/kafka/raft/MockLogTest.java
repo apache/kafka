@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -65,7 +66,7 @@ public class MockLogTest {
     public void testAppendAsLeaderHelper() {
         int epoch = 2;
         SimpleRecord recordOne = new SimpleRecord("one".getBytes());
-        log.appendAsLeader(Collections.singleton(recordOne), epoch);
+        appendAsLeader(Collections.singleton(recordOne), epoch);
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(0L, log.startOffset());
         assertEquals(1L, log.endOffset().offset);
@@ -84,7 +85,7 @@ public class MockLogTest {
 
         SimpleRecord recordTwo = new SimpleRecord("two".getBytes());
         SimpleRecord recordThree = new SimpleRecord("three".getBytes());
-        log.appendAsLeader(Arrays.asList(recordTwo, recordThree), epoch);
+        appendAsLeader(Arrays.asList(recordTwo, recordThree), epoch);
         assertEquals(0L, log.startOffset());
         assertEquals(3L, log.endOffset().offset);
 
@@ -109,10 +110,10 @@ public class MockLogTest {
         int epoch = 2;
         SimpleRecord recordOne = new SimpleRecord("one".getBytes());
         SimpleRecord recordTwo = new SimpleRecord("two".getBytes());
-        log.appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
+        appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
         SimpleRecord recordThree = new SimpleRecord("three".getBytes());
-        log.appendAsLeader(Collections.singleton(recordThree), epoch);
+        appendAsLeader(Collections.singleton(recordThree), epoch);
 
         assertEquals(0L, log.startOffset());
         assertEquals(3L, log.endOffset().offset);
@@ -150,11 +151,14 @@ public class MockLogTest {
 
     @Test
     public void testAppendAsLeader() {
-        // The record passed-in offsets are not going to affect the eventual offsets.
-        final long initialOffset = 5L;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
         final int currentEpoch = 3;
-        log.appendAsLeader(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo), currentEpoch);
+        final long initialOffset = log.endOffset().offset;
+
+        log.appendAsLeader(
+            MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo),
+            currentEpoch
+        );
 
         assertEquals(0, log.startOffset());
         assertEquals(1, log.endOffset().offset);
@@ -172,12 +176,46 @@ public class MockLogTest {
     }
 
     @Test
+    public void testUnexpectedAppendOffset() {
+        SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+        final int currentEpoch = 3;
+        final long initialOffset = log.endOffset().offset;
+
+        log.appendAsLeader(
+            MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+            currentEpoch
+        );
+
+        // Throw exception for out of order records
+        assertThrows(
+            RuntimeException.class,
+            () -> {
+                log.appendAsLeader(
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+                    currentEpoch
+                );
+            }
+        );
+
+        assertThrows(
+            RuntimeException.class,
+            () -> {
+                log.appendAsFollower(
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
+                );
+            }
+        );
+    }
+
+    @Test
     public void testAppendControlRecord() {
-        final long initialOffset = 5L;
+        final long initialOffset = 0;
         final int currentEpoch = 3;
         LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
-        log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(
-            initialOffset, 2, messageData), currentEpoch);
+        log.appendAsLeader(
+            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, messageData),
+            currentEpoch
+        );
 
         assertEquals(0, log.startOffset());
         assertEquals(1, log.endOffset().offset);
@@ -239,7 +277,7 @@ public class MockLogTest {
         recordTwoBuffer.putInt(2);
         SimpleRecord recordTwo = new SimpleRecord(recordTwoBuffer);
 
-        log.appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
+        appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
         Records records = log.read(0, Isolation.UNCOMMITTED).records;
 
@@ -597,11 +635,23 @@ public class MockLogTest {
         }
     }
 
+    private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
+        log.appendAsLeader(
+            MemoryRecords.withRecords(
+                log.endOffset().offset,
+                CompressionType.NONE,
+                records.toArray(new SimpleRecord[records.size()])
+            ),
+            epoch
+        );
+    }
+
     private void appendBatch(int numRecords, int epoch) {
         List<SimpleRecord> records = new ArrayList<>(numRecords);
         for (int i = 0; i < numRecords; i++) {
             records.add(new SimpleRecord(String.valueOf(i).getBytes()));
         }
-        log.appendAsLeader(records, epoch);
+
+        appendAsLeader(records, epoch);
     }
 }

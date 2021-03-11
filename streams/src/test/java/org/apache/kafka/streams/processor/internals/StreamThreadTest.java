@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -846,6 +847,8 @@ public class StreamThreadTest {
         final Task task = niceMock(Task.class);
         expect(task.id()).andStubReturn(task1);
         expect(task.inputPartitions()).andStubReturn(Collections.singleton(t1p1));
+        expect(task.committedOffsets()).andStubReturn(Collections.emptyMap());
+        expect(task.highWaterMark()).andStubReturn(Collections.emptyMap());
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
@@ -1422,7 +1425,7 @@ public class StreamThreadTest {
             "proc",
             () -> record -> {
                 if (shouldThrow.get()) {
-                    throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    throw new TaskCorruptedException(singleton(task1));
                 } else {
                     processed.set(true);
                 }
@@ -1479,7 +1482,7 @@ public class StreamThreadTest {
         final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, thread::runOnce);
 
         // Now, we can handle the corruption
-        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTaskWithChangelogs());
+        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
 
         // again, complete the restoration
         thread.runOnce();
@@ -1637,7 +1640,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(metadata.standbyTasks().isEmpty());
 
         assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
@@ -1690,7 +1693,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(threadMetadata.activeTasks().isEmpty());
     }
 
@@ -1805,7 +1808,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
-            () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
                 @Override
                 public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
@@ -1814,9 +1817,6 @@ public class StreamThreadTest {
 
                 @Override
                 public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1846,19 +1846,17 @@ public class StreamThreadTest {
         assertEquals(0, punctuatedWallClockTime.size());
 
         mockTime.sleep(100L);
-        for (long i = 0L; i < 10L; i++) {
-            clientSupplier.consumer.addRecord(new ConsumerRecord<>(
-                topic1,
-                1,
-                i,
-                i * 100L,
-                TimestampType.CREATE_TIME,
-                ConsumerRecord.NULL_CHECKSUM,
-                ("K" + i).getBytes().length,
-                ("V" + i).getBytes().length,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-        }
+        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+            topic1,
+            1,
+            100L,
+            100L,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            "K".getBytes().length,
+            "V".getBytes().length,
+            "K".getBytes(),
+            "V".getBytes()));
 
         thread.runOnce();
 
@@ -1875,6 +1873,85 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
+            () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, timestamp -> context.forward("key", "value"));
+                }
+
+                @Override
+                public KeyValue<Object, Object> transform(final Object key, final Object value) {
+                        return null;
+                    }
+
+                @Override
+                public void close() {}
+            };
+
+        final List<Long> peekedContextTime = new ArrayList<>();
+        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> peekProcessor =
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
+                @Override
+                public void process(final Object key, final Object value) {
+                    peekedContextTime.add(context.timestamp());
+                }
+            };
+
+        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
+            .transform(punctuateProcessor)
+            .process(peekProcessor);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+
+        final long currTime = mockTime.milliseconds();
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        clientSupplier.consumer.assign(assignedPartitions);
+        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+        thread.runOnce();
+        assertEquals(0, peekedContextTime.size());
+
+        mockTime.sleep(100L);
+        thread.runOnce();
+
+        assertEquals(1, peekedContextTime.size());
+        assertEquals(currTime + 100L, peekedContextTime.get(0).longValue());
+
+        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+            topic1,
+            1,
+            110L,
+            110L,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            "K".getBytes().length,
+            "V".getBytes().length,
+            "K".getBytes(),
+            "V".getBytes()));
+
+        thread.runOnce();
+
+        assertEquals(2, peekedContextTime.size());
+        assertEquals(110L, peekedContextTime.get(1).longValue());
+    }
+
+    @Test
     public void shouldAlwaysUpdateTasksMetadataAfterChangingState() {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         ThreadMetadata metadata = thread.threadMetadata();
@@ -1886,56 +1963,6 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-    }
-
-    @Test
-    public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() {
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-                              .groupByKey().count(Materialized.as("count-one"));
-        internalStreamsBuilder.buildAndOptimizeTopology();
-
-        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
-        restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
-                                         Arrays.asList(
-                                             new PartitionInfo("stream-thread-test-count-one-changelog",
-                                                               0,
-                                                               null,
-                                                               new Node[0],
-                                                               new Node[0]),
-                                             new PartitionInfo("stream-thread-test-count-one-changelog",
-                                                               1,
-                                                               null,
-                                                               new Node[0],
-                                                               new Node[0])
-                                         ));
-        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 0), 0L);
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
-        restoreConsumer.updateEndOffsets(offsets);
-        restoreConsumer.updateBeginningOffsets(offsets);
-
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(assignedPartitions);
-        assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_REVOKED);
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        standbyTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
-
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_ASSIGNED);
     }
 
     private void assertThreadMetadataHasEmptyTasksWithState(final ThreadMetadata metadata, final StreamThread.State state) {
@@ -2261,16 +2288,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2298,7 +2323,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
@@ -2326,16 +2351,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
         expectLastCall().andThrow(new TaskMigratedException("Task migrated",
                                                             new RuntimeException("non-corrupted task migrated")));
 
@@ -2368,7 +2391,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 

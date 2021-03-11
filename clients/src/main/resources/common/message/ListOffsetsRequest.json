@@ -16,6 +16,7 @@
 {
   "apiKey": 2,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "ListOffsetsRequest",
   // Version 1 removes MaxNumOffsets.  From this version forward, only a single
   // offset can be returned.

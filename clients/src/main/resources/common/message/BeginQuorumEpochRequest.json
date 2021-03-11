@@ -16,6 +16,7 @@
 {
   "apiKey": 53,
   "type": "request",
+  "listeners": ["controller"],
   "name": "BeginQuorumEpochRequest",
   "validVersions": "0",
   "fields": [
@@ -29,7 +30,7 @@
         "versions": "0+", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "LeaderId", "type": "int32", "versions": "0+",
+        { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The ID of the newly elected leader"},
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The epoch of the newly elected leader"}

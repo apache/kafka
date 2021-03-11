@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
@@ -911,7 +912,7 @@ public class ValuesTest {
 
     protected void assertConsumable(Parser parser, String... expectedTokens) {
         for (String expectedToken : expectedTokens) {
-            if (!expectedToken.trim().isEmpty()) {
+            if (!Utils.isBlank(expectedToken)) {
                 int position = parser.mark();
                 assertTrue(parser.canConsume(expectedToken.trim()));
                 parser.rewindTo(position);

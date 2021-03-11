@@ -19,11 +19,12 @@ import errno
 import time
 from random import randint
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix, parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import TestContext
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from ducktape.tests.test import Test
 from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, V_0_11_0_0, V_0_10_1_0, KafkaVersion
 
@@ -69,7 +70,7 @@ class ClientCompatibilityFeaturesTest(Test):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ClientCompatibilityFeaturesTest, self).__init__(test_context=test_context)
 
-        self.zk = ZookeeperService(test_context, num_nodes=3)
+        self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
 
         # Generate a unique topic name
         topic_name = "client_compat_features_topic_%d%d" % (int(time.time()), randint(0, 2147483647))
@@ -81,11 +82,11 @@ class ClientCompatibilityFeaturesTest(Test):
 
     def invoke_compatibility_program(self, features):
         # Run the compatibility test on the first Kafka node.
-        node = self.zk.nodes[0]
+        node = self.kafka.nodes[0]
         cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
                "--num-cluster-nodes %d "
-               "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
+               "--topic %s " % (self.kafka.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
                                list(self.topics.keys())[0]))
@@ -107,7 +108,8 @@ class ClientCompatibilityFeaturesTest(Test):
           self.logger.info("** Command failed.  See %s for log messages." % ssh_log_file)
           raise
 
-    @parametrize(broker_version=str(DEV_BRANCH))
+    @cluster(num_nodes=7)
+    @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_2))
@@ -122,8 +124,9 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_2_5))
     @parametrize(broker_version=str(LATEST_2_6))
     @parametrize(broker_version=str(LATEST_2_7))
-    def run_compatibility_test(self, broker_version):
-        self.zk.start()
+    def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
+        if self.zk:
+            self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         features = get_broker_features(broker_version)

@@ -91,7 +91,7 @@ public class OffsetCommitRequestTest {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
             assertEquals(expectedOffsets, request.offsets());
 
@@ -130,7 +130,7 @@ public class OffsetCommitRequestTest {
                 .setGroupInstanceId(groupInstanceId)
         );
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             if (version >= 7) {
                 builder.build(version);
             } else {

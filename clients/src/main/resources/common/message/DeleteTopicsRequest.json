@@ -16,6 +16,7 @@
 {
   "apiKey": 20,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DeleteTopicsRequest",
   // Versions 0, 1, 2, and 3 are the same.
   //
@@ -30,7 +31,7 @@
   "fields": [
     { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",
       "fields": [
-        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "about": "The topic name"},
+        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "entityType": "topicName", "about": "The topic name"},
         {"name": "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID"}
     ]},
     { "name": "TopicNames", "type": "[]string", "versions": "0-5", "entityType": "topicName", "ignorable": true,

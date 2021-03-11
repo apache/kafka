@@ -847,17 +847,17 @@ class ControllerChannelManagerTest {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
       val topicIds = leaderAndIsrRequest.topicIds
-      val topicErrors = leaderAndIsrRequest.data.topicStates.asScala.map(t =>
-        new LeaderAndIsrTopicError()
+      val data = new LeaderAndIsrResponseData()
+        .setErrorCode(error.code)
+      leaderAndIsrRequest.data.topicStates.asScala.foreach { t =>
+        data.topics.add(new LeaderAndIsrTopicError()
           .setTopicId(topicIds.get(t.topicName))
           .setPartitionErrors(t.partitionStates.asScala.map(p =>
             new LeaderAndIsrPartitionError()
               .setPartitionIndex(p.partitionIndex)
               .setErrorCode(error.code)).asJava))
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(
-        new LeaderAndIsrResponseData()
-          .setErrorCode(error.code)
-          .setTopics(topicErrors.toBuffer.asJava), leaderAndIsrRequest.version())
+      }
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(data, leaderAndIsrRequest.version)
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }

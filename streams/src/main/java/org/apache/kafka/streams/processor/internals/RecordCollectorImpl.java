@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -213,27 +214,24 @@ public class RecordCollectorImpl implements RecordCollector {
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
-            // TODO: KIP-572 handle `TimeoutException extends RetriableException`
-            // is seems inappropriate to pass `TimeoutException` into the `ProductionExceptionHander`
-            // -> should we add `TimeoutException` as `isFatalException` above (maybe not) ?
-            // -> maybe we should try to reset the task by throwing a `TaskCorruptedException` (including triggering `task.timeout.ms`) ?
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-            }
-
-            if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
-                errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
-                sendException.set(new StreamsException(errorMessage, exception));
+                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
-                droppedRecordsSensor.record();
+                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                    errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
+                    sendException.set(new StreamsException(errorMessage, exception));
+                } else {
+                    errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
+                    droppedRecordsSensor.record();
+                }
             }
         }
 
-        log.error(errorMessage);
+        log.error(errorMessage, exception);
     }
 
     private boolean isFatalException(final Exception exception) {

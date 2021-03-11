@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -50,7 +51,6 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -485,7 +485,7 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void endOffsetsShouldFailWithNonRetriableWhenVersionUnsupportedErrorOccurs() {
+    public void endOffsetsShouldFailWithUnsupportedVersionWhenVersionUnsupportedErrorOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -496,15 +496,14 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            ConnectException e = assertThrows(ConnectException.class, () -> {
+            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> {
                 admin.endOffsets(tps);
             });
-            assertTrue(e.getMessage().contains("is unsupported on brokers"));
         }
     }
 
     @Test
-    public void endOffsetsShouldFailWithRetriableWhenTimeoutErrorOccurs() {
+    public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -515,10 +514,9 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            RetriableException e = assertThrows(RetriableException.class, () -> {
+            TimeoutException e = assertThrows(TimeoutException.class, () -> {
                 admin.endOffsets(tps);
             });
-            assertTrue(e.getMessage().contains("Timed out while waiting"));
         }
     }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,23 +17,26 @@
 
 package kafka.server
 
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.Broker.ServerInfo
+import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.Controller
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
@@ -124,19 +127,35 @@ class ControllerServer(
           }.toMap
       }
 
+      val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
       socketServer = new SocketServer(config,
         metrics,
         time,
         credentialProvider,
-        allowControllerOnlyApis = true,
-        controllerSocketServer = true)
-      socketServer.startup(false, None, config.controllerListeners)
+        apiVersionManager)
+      socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
       socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
         config.controllerListeners.head.listenerName))
 
-      controller = null
+      val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
+        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
+      val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+      controller = new QuorumController.Builder(config.nodeId).
+        setTime(time).
+        setThreadNamePrefix(threadNamePrefixAsString).
+        setConfigDefs(configDefs).
+        setLogManager(metaLogManager).
+        setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
+        setDefaultNumPartitions(config.numPartitions.intValue()).
+        setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
+          TimeUnit.MILLISECONDS)).
+        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+        build()
+
+
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       val controllerNodes =
         RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
@@ -149,7 +168,8 @@ class ControllerServer(
         raftManager,
         config,
         metaProperties,
-        controllerNodes.toSeq)
+        controllerNodes.toSeq,
+        apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
