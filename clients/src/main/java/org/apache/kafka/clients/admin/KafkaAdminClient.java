@@ -737,7 +737,6 @@ public class KafkaAdminClient extends AdminClient {
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
         private int tries = 0;
-        private boolean aborted = false;
         private Node curNode = null;
         private long nextAllowedTryMs = 0;
 
@@ -756,11 +755,6 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
-        void abortAndFail(TimeoutException timeoutException) {
-            this.aborted = true;
-            fail(time.milliseconds(), timeoutException);
-        }
-
         /**
          * Handle a failure.
          *
@@ -772,12 +766,13 @@ public class KafkaAdminClient extends AdminClient {
          * @param throwable     The failure exception.
          */
         final void fail(long now, Throwable throwable) {
-            if (aborted) {
-                // If the call was aborted while in flight due to a timeout, deliver a
-                // TimeoutException. In this case, we do not get any more retries - the call has
-                // failed. We increment tries anyway in order to display an accurate log message.
-                tries++;
-                failWithTimeout(now, throwable);
+            if (curNode != null) {
+                runnable.nodeReadyDeadlines.remove(curNode);
+                curNode = null;
+            }
+            // If the admin client is closing, we can't retry.
+            if (runnable.closing) {
+                handleFailure(throwable);
                 return;
             }
             // If this is an UnsupportedVersionException that we can retry, do so. Note that a
@@ -786,7 +781,7 @@ public class KafkaAdminClient extends AdminClient {
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
                 log.debug("{} attempting protocol downgrade and then retry.", this);
-                runnable.enqueue(this, now);
+                runnable.pendingCalls.add(this);
                 return;
             }
             tries++;
@@ -794,7 +789,7 @@ public class KafkaAdminClient extends AdminClient {
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
-                failWithTimeout(now, throwable);
+                handleTimeoutFailure(now, throwable);
                 return;
             }
             // If the exception is not retriable, fail.
@@ -808,17 +803,17 @@ public class KafkaAdminClient extends AdminClient {
             }
             // If we are out of retries, fail.
             if (tries > maxRetries) {
-                failWithTimeout(now, throwable);
+                handleTimeoutFailure(now, throwable);
                 return;
             }
             if (log.isDebugEnabled()) {
                 log.debug("{} failed: {}. Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
-            runnable.enqueue(this, now);
+            runnable.pendingCalls.add(this);
         }
 
-        private void failWithTimeout(long now, Throwable cause) {
+        private void handleTimeoutFailure(long now, Throwable cause) {
             if (log.isDebugEnabled()) {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
                     new Exception(prettyPrintException(cause)));
@@ -979,9 +974,20 @@ public class KafkaAdminClient extends AdminClient {
 
         /**
          * Pending calls. Protected by the object monitor.
-         * This will be null only if the thread has shut down.
          */
-        private List<Call> newCalls = new LinkedList<>();
+        private final List<Call> newCalls = new LinkedList<>();
+
+        /**
+         * Maps node ID strings to their readiness deadlines.  A node will appear in this
+         * map if there are callsToSend which are waiting for it to be ready, and there
+         * are no calls in flight using the node.
+         */
+        private final Map<Node, Long> nodeReadyDeadlines = new HashMap<>();
+
+        /**
+         * Whether the admin client is closing.
+         */
+        private volatile boolean closing = false;
 
         /**
          * Time out the elements in the pendingCalls list which are expired.
@@ -1017,10 +1023,21 @@ public class KafkaAdminClient extends AdminClient {
          * users of AdminClient who will also take the lock to add new calls.
          */
         private synchronized void drainNewCalls() {
-            if (!newCalls.isEmpty()) {
-                pendingCalls.addAll(newCalls);
-                newCalls.clear();
+            transitionToPendingAndClearList(newCalls);
+        }
+
+        /**
+         * Add some calls to pendingCalls, and then clear the input list.
+         * Also clears Call#curNode.
+         *
+         * @param calls         The calls to add.
+         */
+        private void transitionToPendingAndClearList(List<Call> calls) {
+            for (Call call : calls) {
+                call.curNode = null;
+                pendingCalls.add(call);
             }
+            calls.clear();
         }
 
         /**
@@ -1089,29 +1106,61 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 Node node = entry.getKey();
+                if (!callsInFlight.getOrDefault(node.idString(), Collections.emptyList()).isEmpty()) {
+                    log.trace("Still waiting for other calls to finish on node {}.", node);
+                    nodeReadyDeadlines.remove(node);
+                    continue;
+                }
                 if (!client.ready(node, now)) {
+                    Long deadline = nodeReadyDeadlines.get(node);
+                    if (deadline != null) {
+                        if (now >= deadline) {
+                            log.info("Disconnecting from {} and revoking {} node assignment(s) " +
+                                "because the node is taking too long to become ready.",
+                                node.idString(), calls.size());
+                            transitionToPendingAndClearList(calls);
+                            client.disconnect(node.idString());
+                            nodeReadyDeadlines.remove(node);
+                            iter.remove();
+                            continue;
+                        }
+                        pollTimeout = Math.min(pollTimeout, deadline - now);
+                    } else {
+                        nodeReadyDeadlines.put(node, now + requestTimeoutMs);
+                    }
                     long nodeTimeout = client.pollDelayMs(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
                     continue;
                 }
-                Call call = calls.remove(0);
-                int requestTimeoutMs = Math.min(KafkaAdminClient.this.requestTimeoutMs,
-                        calcTimeoutMsRemainingAsInt(now, call.deadlineMs));
-                AbstractRequest.Builder<?> requestBuilder;
-                try {
-                    requestBuilder = call.createRequest(requestTimeoutMs);
-                } catch (Throwable throwable) {
-                    call.fail(now, new KafkaException(String.format(
-                        "Internal error sending %s to %s.", call.callName, node)));
-                    continue;
+                int remainingRequestTime;
+                Long deadlineMs = nodeReadyDeadlines.remove(node);
+                if (deadlineMs == null) {
+                    remainingRequestTime = requestTimeoutMs;
+                } else {
+                    remainingRequestTime = calcTimeoutMsRemainingAsInt(now, deadlineMs);
                 }
-                ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
-                        true, requestTimeoutMs, null);
-                log.debug("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
-                client.send(clientRequest, now);
-                getOrCreateListValue(callsInFlight, node.idString()).add(call);
-                correlationIdToCalls.put(clientRequest.correlationId(), call);
+                while (!calls.isEmpty()) {
+                    Call call = calls.remove(0);
+                    int timeoutMs = Math.min(remainingRequestTime,
+                        calcTimeoutMsRemainingAsInt(now, call.deadlineMs));
+                    AbstractRequest.Builder<?> requestBuilder;
+                    try {
+                        requestBuilder = call.createRequest(timeoutMs);
+                    } catch (Throwable throwable) {
+                        call.fail(now, new KafkaException(String.format(
+                            "Internal error sending %s to %s.", call.callName, node)));
+                        continue;
+                    }
+                    ClientRequest clientRequest = client.newClientRequest(node.idString(),
+                        requestBuilder, now, true, timeoutMs, null);
+                    log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
+                        requestBuilder, node, clientRequest.correlationId(), timeoutMs);
+                    client.send(clientRequest, now);
+                    getOrCreateListValue(callsInFlight, node.idString()).add(call);
+                    correlationIdToCalls.put(clientRequest.correlationId(), call);
+                    break;
+                }
             }
             return pollTimeout;
         }
@@ -1136,17 +1185,12 @@ public class KafkaAdminClient extends AdminClient {
                 // only one we need to check the timeout for.
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
-                    if (call.aborted) {
-                        log.warn("Aborted call {} is still in callsInFlight.", call);
-                    } else {
-                        log.debug("Closing connection to {} due to timeout while awaiting {}", nodeId, call);
-                        call.aborted = true;
-                        client.disconnect(nodeId);
-                        numTimedOut++;
-                        // We don't remove anything from the callsInFlight data structure. Because the connection
-                        // has been closed, the calls should be returned by the next client#poll(),
-                        // and handled at that point.
-                    }
+                    log.debug("Disconnecting from {} due to timeout while awaiting {}", nodeId, call);
+                    client.disconnect(nodeId);
+                    numTimedOut++;
+                    // We don't remove anything from the callsInFlight data structure. Because the connection
+                    // has been closed, the calls should be returned by the next client#poll(),
+                    // and handled at that point.
                 }
             }
             if (numTimedOut > 0)
@@ -1226,7 +1270,8 @@ public class KafkaAdminClient extends AdminClient {
                 if (awaitingCalls.isEmpty()) {
                     iter.remove();
                 } else if (shouldUnassign.test(node)) {
-                    pendingCalls.addAll(awaitingCalls);
+                    nodeReadyDeadlines.remove(node);
+                    transitionToPendingAndClearList(awaitingCalls);
                     iter.remove();
                 }
             }
@@ -1275,20 +1320,20 @@ public class KafkaAdminClient extends AdminClient {
             try {
                 processRequests();
             } finally {
+                closing = true;
                 AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
 
                 int numTimedOut = 0;
                 TimeoutProcessor timeoutProcessor = new TimeoutProcessor(Long.MAX_VALUE);
                 synchronized (this) {
                     numTimedOut += timeoutProcessor.handleTimeouts(newCalls, "The AdminClient thread has exited.");
-                    newCalls = null;
                 }
                 numTimedOut += timeoutProcessor.handleTimeouts(pendingCalls, "The AdminClient thread has exited.");
                 numTimedOut += timeoutCallsToSend(timeoutProcessor);
                 numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
                         "The AdminClient thread has exited.");
                 if (numTimedOut > 0) {
-                    log.debug("Timed out {} remaining operation(s).", numTimedOut);
+                    log.info("Timed out {} remaining operation(s) during close.", numTimedOut);
                 }
                 closeQuietly(client, "KafkaClient");
                 closeQuietly(metrics, "Metrics");
@@ -1367,7 +1412,7 @@ public class KafkaAdminClient extends AdminClient {
         void enqueue(Call call, long now) {
             if (call.tries > maxRetries) {
                 log.debug("Max retries {} for {} reached", maxRetries, call);
-                call.fail(time.milliseconds(), new TimeoutException());
+                call.handleTimeoutFailure(time.milliseconds(), new TimeoutException());
                 return;
             }
             if (log.isDebugEnabled()) {
@@ -1375,7 +1420,7 @@ public class KafkaAdminClient extends AdminClient {
             }
             boolean accepted = false;
             synchronized (this) {
-                if (newCalls != null) {
+                if (!closing) {
                     newCalls.add(call);
                     accepted = true;
                 }
@@ -1384,7 +1429,8 @@ public class KafkaAdminClient extends AdminClient {
                 client.wakeup(); // wake the thread if it is in poll()
             } else {
                 log.debug("The AdminClient thread has exited. Timing out {}.", call);
-                call.abortAndFail(new TimeoutException("The AdminClient thread has exited."));
+                call.handleTimeoutFailure(time.milliseconds(),
+                    new TimeoutException("The AdminClient thread has exited."));
             }
         }
 
@@ -1399,7 +1445,8 @@ public class KafkaAdminClient extends AdminClient {
         void call(Call call, long now) {
             if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
                 log.debug("The AdminClient is not accepting new calls. Timing out {}.", call);
-                call.abortAndFail(new TimeoutException("The AdminClient thread is not accepting new calls."));
+                call.handleTimeoutFailure(time.milliseconds(),
+                    new TimeoutException("The AdminClient thread is not accepting new calls."));
             } else {
                 enqueue(call, now);
             }
