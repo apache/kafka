@@ -128,11 +128,10 @@ public class MetaLogRaftShim implements MetaLogManager {
 
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            // TODO: Implement this
+            // TODO: Create Jira: Handle loading commit in ListenerShim
             try {
                 reader.close();
             } catch (IOException e) {
-                // TODO: handle exception
             }
         }
 

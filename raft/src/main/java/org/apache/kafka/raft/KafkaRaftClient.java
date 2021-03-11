@@ -138,11 +138,6 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    than the leader's log start offset. This API is similar to the Fetch API since the snapshot is stored
  *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
  *    are not necessarily offset-aligned.
- *
- * 5) {@link FetchSnapshotRequestData}: Sent by the followers to the epoch leader when fetching a snapshot.
- *    Followers need to fetch snapshots when the follower's log end offset is less than the leader's log
- *    start offset. The follower discover this case when the leader replies with a fetch response that
- *    contains a snapshot id.
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
@@ -2123,7 +2118,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        maybeUpdateOldestSnapshotId();
+        maybeUpdateEarliestSnapshotId();
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2187,7 +2182,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeUpdateOldestSnapshotId() {
+    private void maybeUpdateEarliestSnapshotId() {
         log.latestSnapshotId().ifPresent(snapshotId -> {
             quorum.highWatermark().ifPresent(highWatermark -> {
                 if (highWatermark.offset >= snapshotId.offset) {
@@ -2392,7 +2387,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used when the Listener needs to be notified of a new snapshot. This happens
-         * when the context's next offset is less than then log start offset.
+         * when the context's next offset is less than the log start offset.
          */
         public void fireHandleSnapshot(SnapshotReader<T> reader) {
             synchronized (this) {
