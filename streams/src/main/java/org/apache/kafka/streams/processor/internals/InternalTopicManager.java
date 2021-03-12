@@ -44,6 +44,8 @@ import org.apache.kafka.streams.processor.internals.ClientUtils.QuietConsumerCon
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -186,14 +188,23 @@ public class InternalTopicManager {
                     );
                 }
 
-                maybeThrowTimeoutException(topicDescriptionsStillToValidate, topicConfigsStillToValidate, deadline);
+                maybeThrowTimeoutException(
+                    Arrays.asList(topicDescriptionsStillToValidate, topicConfigsStillToValidate),
+                    deadline,
+                    String.format("Could not validate internal topics within %d milliseconds. " +
+                        "This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs)
+                );
 
                 if (!descriptionsForTopic.isEmpty() || !configsForTopic.isEmpty()) {
                     Utils.sleep(100);
                 }
             }
 
-            maybeSleep(topicDescriptionsStillToValidate, topicConfigsStillToValidate, deadline);
+            maybeSleep(
+                Arrays.asList(topicDescriptionsStillToValidate, topicConfigsStillToValidate),
+                deadline,
+                "validated"
+            );
         }
 
         log.info("Completed validation of internal topics {}.", topicConfigs.keySet());
@@ -239,35 +250,6 @@ public class InternalTopicManager {
                     futuresForTopic.remove(topicName);
                 }
             }
-        }
-    }
-
-    private void maybeThrowTimeoutException(final Set<String> topicDescriptionsStillToValidate,
-                                            final Set<String> topicConfigsStillToValidate,
-                                            final long deadline) {
-        if (!topicDescriptionsStillToValidate.isEmpty() || !topicConfigsStillToValidate.isEmpty()) {
-            final long now = time.milliseconds();
-            if (now >= deadline) {
-                final String timeoutError = String.format("Could not validate internal topics within %d milliseconds. " +
-                    "This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs);
-                log.error(timeoutError);
-                throw new TimeoutException(timeoutError);
-            }
-        }
-    }
-
-    private void maybeSleep(final Set<String> topicDescriptionsStillToValidate,
-                            final Set<String> topicConfigsStillToValidate,
-                            final long deadline) {
-        if (!topicDescriptionsStillToValidate.isEmpty() || !topicConfigsStillToValidate.isEmpty()) {
-            final long now = time.milliseconds();
-            log.info(
-                "Internal topics {} could not be validated. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
-                new HashSet<>(topicDescriptionsStillToValidate).addAll(topicConfigsStillToValidate),
-                retryBackOffMs,
-                deadline - now
-            );
-            Utils.sleep(retryBackOffMs);
         }
     }
 
@@ -579,5 +561,119 @@ public class InternalTopicManager {
         }
 
         return topicsToCreate;
+    }
+
+    /**
+     * Sets up internal topics.
+     *
+     * Either the given topic are all created or the method fails with an exception.
+     *
+     * @param topicConfigs internal topics to setup
+     */
+    public void setup(final Map<String, InternalTopicConfig> topicConfigs) {
+        log.info("Starting to setup internal topics {}.", topicConfigs.keySet());
+
+        final long now = time.milliseconds();
+        final long deadline = now + retryTimeoutMs;
+
+        final Map<String, Map<String, String>> newTopicConfigs = topicConfigs.values().stream()
+            .collect(Collectors.toMap(
+                InternalTopicConfig::name,
+                topicConfig -> topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention)
+            ));
+        final Set<String> topicStillToCreate = new HashSet<>(topicConfigs.keySet());
+        while (!topicStillToCreate.isEmpty()) {
+            final Set<NewTopic> newTopics = topicStillToCreate.stream()
+                .map(topicName -> new NewTopic(
+                        topicName,
+                        topicConfigs.get(topicName).numberOfPartitions(),
+                        Optional.of(replicationFactor)
+                    ).configs(newTopicConfigs.get(topicName))
+                ).collect(Collectors.toSet());
+
+            log.info("Going to create internal topics: " + newTopics);
+            final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
+
+            final Map<String, KafkaFuture<Void>> createResultForTopic = createTopicsResult.values();
+            while (!createResultForTopic.isEmpty()) {
+                for (final InternalTopicConfig topicConfig : topicConfigs.values()) {
+                    final String topicName = topicConfig.name();
+                    if (!createResultForTopic.containsKey(topicName)) {
+                        throw new IllegalStateException("Create topic results do not contain internal topic " + topicName
+                            + " to setup. " + BUG_ERROR_MESSAGE);
+                    }
+                    final KafkaFuture<Void> createResult = createResultForTopic.get(topicName);
+                    if (createResult.isDone()) {
+                        try {
+                            createResult.get();
+                            topicStillToCreate.remove(topicName);
+                        } catch (final ExecutionException executionException) {
+                            final Throwable cause = executionException.getCause();
+                            if (cause instanceof TopicExistsException) {
+                                log.info("Internal topic {} already exists. Topic is probably marked for deletion. " +
+                                    "Will retry to create this topic later (to let broker complete async delete operation first)",
+                                    topicName);
+                            } else if (cause instanceof TimeoutException) {
+                                log.info("Creating internal topic {} timed out.", topicName);
+                            } else {
+                                log.error("Unexpected error during creation of internal topic: ", cause);
+                                throw new StreamsException(
+                                    String.format("Could not create internal topic %s for the following reason: ", topicName),
+                                    cause
+                                );
+                            }
+                        } catch (final InterruptedException interruptedException) {
+                            throw new InterruptException(interruptedException);
+                        } finally {
+                            createResultForTopic.remove(topicName);
+                        }
+                    }
+                }
+
+                maybeThrowTimeoutException(
+                    Collections.singletonList(topicStillToCreate),
+                    deadline,
+                    String.format("Could not create internal topics within %d milliseconds. This can happen if the " +
+                        "Kafka cluster is temporarily not available or a topic is marked for deletion and the broker " +
+                        "did not complete its deletion within the timeout.", retryTimeoutMs)
+                );
+
+                if (!topicStillToCreate.isEmpty()) {
+                    Utils.sleep(100);
+                }
+            }
+
+            maybeSleep(Collections.singletonList(topicStillToCreate), deadline, "created");
+        }
+
+        log.info("Completed setup of internal topics {}.", topicConfigs.keySet());
+    }
+
+    private void maybeThrowTimeoutException(final List<Set<String>> resultSetsStillToProcess,
+                                            final long deadline,
+                                            final String errorMessage) {
+        if (resultSetsStillToProcess.stream().anyMatch(resultSet -> !resultSet.isEmpty())) {
+            final long now = time.milliseconds();
+            if (now >= deadline) {
+                log.error(errorMessage);
+                throw new TimeoutException(errorMessage);
+            }
+        }
+    }
+
+    private void maybeSleep(final List<Set<String>> resultSetsStillToValidate,
+                            final long deadline,
+                            final String action) {
+        if (resultSetsStillToValidate.stream().anyMatch(resultSet -> !resultSet.isEmpty())) {
+            final long now = time.milliseconds();
+            log.info(
+                "Internal topics {} could not be {}. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
+                resultSetsStillToValidate.stream().flatMap(Collection::stream).collect(Collectors.toSet()),
+                action,
+                retryBackOffMs,
+                deadline - now
+            );
+            Utils.sleep(retryBackOffMs);
+        }
     }
 }

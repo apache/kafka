@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -61,6 +62,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.easymock.EasyMock.anyObject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anEmptyMap;
 import static org.hamcrest.Matchers.equalTo;
@@ -121,6 +123,149 @@ public class InternalTopicManagerTest {
     @After
     public void shutdown() {
         mockAdminClient.close();
+    }
+
+    @Test
+    public void shouldCreateTopics() throws Exception {
+        final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
+        final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
+
+        internalTopicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2)
+        ));
+
+        final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
+        assertThat(newlyCreatedTopics.size(), is(2));
+        assertThat(newlyCreatedTopics, hasItem(topic1));
+        assertThat(newlyCreatedTopics, hasItem(topic2));
+    }
+
+    @Test
+    public void shouldNotCreateTopicsWithEmptyInput() throws Exception {
+
+        internalTopicManager.setup(Collections.emptyMap());
+
+        final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
+        assertThat(newlyCreatedTopics, empty());
+    }
+
+    @Test
+    public void shouldRetryWhenCreateTopicsThrowsTimeoutException() throws Exception {
+        mockAdminClient.timeoutNextRequest(1);
+        final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
+
+        internalTopicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig1)
+        ));
+
+        final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
+        assertThat(newlyCreatedTopics.size(), is(1));
+        assertThat(newlyCreatedTopics, hasItem(topic1));
+    }
+
+
+    @Test
+    public void shouldThrowTimeoutExceptionIfTopicExists() {
+        setupTopicInMockAdminClient(topic1, Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
+            () -> internalTopicManager.setup(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+
+        assertThat(
+            exception.getMessage(),
+            is("Could not create internal topics within " +
+                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
+                " milliseconds. This can happen if the Kafka cluster is temporarily not available or a topic is marked" +
+                " for deletion and the broker did not complete its deletion within the timeout.")
+        );
+    }
+
+    @Test
+    public void shouldThrowWhenCreateTopicsThrowsUnexpectedException() {
+        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final InternalTopicManager topicManager = new InternalTopicManager(
+            Time.SYSTEM,
+            admin,
+            new StreamsConfig(config)
+        );
+        final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
+        createTopicFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
+        EasyMock.expect(admin.createTopics(anyObject()))
+            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFailFuture))));
+        EasyMock.replay(admin);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        assertThrows(StreamsException.class, () -> topicManager.setup(Collections.singletonMap(topic1, internalTopicConfig)));
+    }
+
+    @Test
+    public void shouldThrowWhenCreateTopicsResultsDoNotContainTopic() {
+        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final InternalTopicManager topicManager = new InternalTopicManager(
+            Time.SYSTEM,
+            admin,
+            new StreamsConfig(config)
+        );
+        EasyMock.expect(admin.createTopics(anyObject()))
+            .andStubAnswer(() -> new MockCreateTopicsResult(Collections.singletonMap(topic2, new KafkaFutureImpl<>())));
+        EasyMock.replay(admin);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> topicManager.setup(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenCreateTopicExceedsTimeout() {
+        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final MockTime time = new MockTime(
+            (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
+        );
+        final InternalTopicManager topicManager = new InternalTopicManager(
+            time,
+            admin,
+            new StreamsConfig(config)
+        );
+        final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
+        createTopicFailFuture.completeExceptionally(new TimeoutException());
+        EasyMock.expect(admin.createTopics(anyObject()))
+            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFailFuture))));
+        EasyMock.replay(admin);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        assertThrows(
+            TimeoutException.class,
+            () -> topicManager.setup(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenFuturesNeverCompleteDuringSetup() {
+        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final MockTime time = new MockTime(
+            (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 3
+        );
+        final InternalTopicManager topicManager = new InternalTopicManager(
+            time,
+            admin,
+            new StreamsConfig(config)
+        );
+        final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
+        EasyMock.expect(admin.createTopics(anyObject()))
+            .andStubAnswer(() -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFutureThatNeverCompletes))));
+        EasyMock.replay(admin);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        assertThrows(
+            TimeoutException.class,
+            () -> topicManager.setup(Collections.singletonMap(topic1, internalTopicConfig))
+        );
     }
 
     @Test
@@ -653,56 +798,22 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldReportMisconfigurationsOfCleanupPolicyForRepartitionTopics() {
         final long retentionMs = 1000;
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(-1)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
-            )
+        setupTopicInMockAdminClient(topic1, repartitionTopicConfig());
+        final Map<String, String> repartitionTopicConfigCleanupPolicyCompact = repartitionTopicConfig();
+        repartitionTopicConfigCleanupPolicyCompact.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        setupTopicInMockAdminClient(topic2, repartitionTopicConfigCleanupPolicyCompact);
+        final Map<String, String> repartitionTopicConfigCleanupPolicyCompactAndDelete = repartitionTopicConfig();
+        repartitionTopicConfigCleanupPolicyCompactAndDelete.put(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE
         );
-        mockAdminClient.addTopic(
-            false,
-            topic2,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(-1)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
-            )
-        );
-        mockAdminClient.addTopic(
-            false,
-            topic3,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(-1)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
-            )
-        );
-        mockAdminClient.addTopic(
-            false,
-            topic4,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
-            )
-        );
-        mockAdminClient.addTopic(
-            false,
-            topic5,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(-1)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, "1024")
-            )
-        );
+        setupTopicInMockAdminClient(topic3, repartitionTopicConfigCleanupPolicyCompactAndDelete);
+        final Map<String, String> repartitionTopicConfigWithFiniteRetentionMs = repartitionTopicConfig();
+        repartitionTopicConfigWithFiniteRetentionMs.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs));
+        setupTopicInMockAdminClient(topic4, repartitionTopicConfigWithFiniteRetentionMs);
+        final Map<String, String> repartitionTopicConfigWithRetentionBytesSet = repartitionTopicConfig();
+        repartitionTopicConfigWithRetentionBytesSet.put(TopicConfig.RETENTION_BYTES_CONFIG, "1024");
+        setupTopicInMockAdminClient(topic5, repartitionTopicConfigWithRetentionBytesSet);
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
         final InternalTopicConfig internalTopicConfig3 = setupRepartitionTopicConfig(topic3, 1);
@@ -754,16 +865,9 @@ public class InternalTopicManagerTest {
     public void shouldReportMultipleMisconfigurationsForSameTopic() {
         final long retentionMs = 1000;
         final long shorterRetentionMs = 900;
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(shorterRetentionMs)),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, "1024")
-            )
-        );
+        final Map<String, String> windowedChangelogConfig = windowedChangelogConfig(shorterRetentionMs);
+        windowedChangelogConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1024");
+        setupTopicInMockAdminClient(topic1, windowedChangelogConfig);
         final InternalTopicConfig internalTopicConfig1 = setupWindowedChangelogTopicConfig(topic1, 1, retentionMs);
 
         final ValidationResult validationResult = internalTopicManager.validate(mkMap(
@@ -789,12 +893,7 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldThrowWhenPartitionCountUnknown() {
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE))
-        );
+        setupTopicInMockAdminClient(topic1, repartitionTopicConfig());
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
 
         assertThrows(
@@ -804,17 +903,26 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldRetryWhenCallsThrowTimeoutExceptionDuringValidation() {
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            mkMap(
-                mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"),
-                mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
-            )
+    public void shouldNotThrowExceptionIfTopicExistsWithDifferentReplication() {
+        setupTopicInMockAdminClient(topic1, repartitionTopicConfig());
+        // attempt to create it again with replication 1
+        final InternalTopicManager internalTopicManager2 = new InternalTopicManager(
+            Time.SYSTEM,
+            mockAdminClient,
+            new StreamsConfig(config)
         );
+
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+        final ValidationResult validationResult =
+            internalTopicManager2.validate(Collections.singletonMap(topic1, internalTopicConfig));
+
+        assertThat(validationResult.missingTopics(), empty());
+        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+    }
+
+    @Test
+    public void shouldRetryWhenCallsThrowTimeoutExceptionDuringValidation() {
+        setupTopicInMockAdminClient(topic1, repartitionTopicConfig());
         mockAdminClient.timeoutNextRequest(2);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
