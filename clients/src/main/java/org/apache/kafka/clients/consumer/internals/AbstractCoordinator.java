@@ -978,11 +978,6 @@ public abstract class AbstractCoordinator implements Closeable {
         resetStateAndRejoin("consumer pro-actively leaving the group");
     }
 
-    synchronized void requestRejoinOnResponseError(ApiKeys api, Errors error) {
-        final String reason = String.format("encountered %s from %s response", error, api);
-        requestRejoin(reason);
-    }
-
     public synchronized void requestRejoin(final String reason) {
         log.info("Request joining group due to: {}", reason);
         this.rejoinNeeded = true;
