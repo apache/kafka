@@ -392,7 +392,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
       aliveNodes.get(brokerId).foreach { listenerMap =>
         val listeners = listenerMap.keySet
         if (!aliveNodes.values.forall(_.keySet == listeners))
-          error(s"Listeners are not identical across brokers: $aliveNodes")
+          info(s"Listeners are not identical across brokers: $aliveNodes")
       }
 
       val newTopicIds = updateMetadataRequest.topicStates().asScala
