@@ -219,8 +219,7 @@ public class InternalTopicManager {
                 } catch (final ExecutionException executionException) {
                     final Throwable cause = executionException.getCause();
                     if (cause instanceof UnknownTopicOrPartitionException) {
-                        log.info("Internal topic {} is missing",
-                            topicName);
+                        log.info("Internal topic {} is missing", topicName);
                         validationResult.addMissingTopic(topicName);
                         topicsStillToValidate.remove(topicName);
                     } else if (cause instanceof LeaderNotAvailableException) {
@@ -296,6 +295,10 @@ public class InternalTopicManager {
             validateCleanupPolicyForUnwindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof WindowedChangelogTopicConfig) {
             validateCleanupPolicyForWindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
+        } else if (topicConfig instanceof RepartitionTopicConfig) {
+            validateCleanupPolicyForRepartitionTopic(validationResult, topicConfig, brokerSideTopicConfig);
+        } else {
+            throw new IllegalStateException("Internal topic " + topicConfig.name() + " has unknown type.");
         }
     }
 
@@ -307,7 +310,8 @@ public class InternalTopicManager {
         if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
             validationResult.addMisconfiguration(
                 topicName,
-                "Cleanup policy of existing internal topic " + topicName + " should not contain \""
+                "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                    + topicName + " should not contain \""
                 + TopicConfig.CLEANUP_POLICY_DELETE + "\"."
             );
         }
@@ -327,8 +331,8 @@ public class InternalTopicManager {
             if (brokerSideRetentionMs < streamsSideRetentionMs) {
                 validationResult.addMisconfiguration(
                     topicName,
-                    "Retention time of existing internal topic " + topicName + " is " + brokerSideRetentionMs +
-                    " but should be " + streamsSideRetentionMs + " or larger."
+                    "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic "
+                        + topicName + " is " + brokerSideRetentionMs + " but should be " + streamsSideRetentionMs + " or larger."
                 );
             }
             final String brokerSideRetentionBytes =
@@ -336,7 +340,41 @@ public class InternalTopicManager {
             if (brokerSideRetentionBytes != null) {
                 validationResult.addMisconfiguration(
                     topicName,
-                    "Retention byte of existing internal topic " + topicName + " is set but it should be unset."
+                    "Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic "
+                        + topicName + " is set but it should be unset."
+                );
+            }
+        }
+    }
+
+    private void validateCleanupPolicyForRepartitionTopic(final ValidationResult validationResult,
+                                                          final InternalTopicConfig topicConfig,
+                                                          final Config brokerSideTopicConfig) {
+        final String topicName = topicConfig.name();
+        final String cleanupPolicy = getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, topicName);
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+            validationResult.addMisconfiguration(
+                topicName,
+                "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                    + topicName + " should not contain \"" + TopicConfig.CLEANUP_POLICY_COMPACT + "\"."
+            );
+        } else if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
+            final long brokerSideRetentionMs =
+                Long.parseLong(getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.RETENTION_MS_CONFIG, topicName));
+            if (brokerSideRetentionMs != -1) {
+                validationResult.addMisconfiguration(
+                    topicName,
+                    "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic "
+                        + topicName + " is " + brokerSideRetentionMs + " but should be -1."
+                );
+            }
+            final String brokerSideRetentionBytes =
+                getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.RETENTION_BYTES_CONFIG, topicName);
+            if (brokerSideRetentionBytes != null) {
+                validationResult.addMisconfiguration(
+                    topicName,
+                    "Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic "
+                        + topicName + " is set but it should be unset."
                 );
             }
         }
