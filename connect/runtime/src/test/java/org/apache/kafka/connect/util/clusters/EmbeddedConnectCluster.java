@@ -261,6 +261,19 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    @Override
+    public String toString() {
+        return String.format("EmbeddedConnectCluster(name= %s, numBrokers= %d, numInitialWorkers= %d, workerProps= %s)",
+            connectClusterName,
+            numBrokers,
+            numInitialWorkers,
+            workerProps);
+    }
+
+    public String getName() {
+        return connectClusterName;
+    }
+
     /**
      * Get the workers that are up and running.
      *
