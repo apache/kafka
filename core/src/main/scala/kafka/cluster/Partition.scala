@@ -609,6 +609,13 @@ class Partition(val topicPartition: TopicPartition,
       if (isNewLeader) {
         // mark local replica as the leader after converting hw
         System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+        if (topicPartition.topic().contains("__consumer_offsets")) {
+          val elements = Thread.currentThread.getStackTrace
+          for (i <- 1 until elements.length) {
+            val s = elements(i)
+            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+          }
+        }
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         remoteReplicas.foreach { replica =>
@@ -676,6 +683,13 @@ class Partition(val topicPartition: TopicPartition,
         false
       } else {
         System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+        if (topicPartition.topic().contains("__consumer_offsets")) {
+          val elements = Thread.currentThread.getStackTrace
+          for (i <- 1 until elements.length) {
+            val s = elements(i)
+            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+          }
+        }
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
