@@ -186,7 +186,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "clientToControllerChannel",
+        channelName = "controllerForwardingChannel",
         threadNamePrefix,
         retryTimeoutMs = 60000
       )

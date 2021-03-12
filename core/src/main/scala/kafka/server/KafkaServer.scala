@@ -265,7 +265,7 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             config = config,
-            channelName = "clientToControllerChannel",
+            channelName = "controllerForwardingChannel",
             threadNamePrefix = threadNamePrefix,
             retryTimeoutMs = config.requestTimeoutMs.longValue)
           brokerToControllerManager.start()
