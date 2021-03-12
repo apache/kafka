@@ -61,7 +61,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
-public class KTableKTableForeignKeyInnerJoinMultiIntegration4Test {
+public class KTableKTableForeignKeyInnerJoinMultiIntegration17Test {
     private final static int NUM_BROKERS = 1;
 
     @ClassRule
@@ -204,7 +204,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration4Test {
 
         assertEquals(expectedResult, result);
     }
-
 
     private static Properties getStreamsConfig() {
         final Properties streamsConfig = new Properties();
