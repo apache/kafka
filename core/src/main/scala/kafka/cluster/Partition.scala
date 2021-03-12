@@ -843,9 +843,11 @@ class Partition(val topicPartition: TopicPartition,
           s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
           s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
 //        }
-        System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
-          s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
-          s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+        if (requiredOffset < 3) {
+          System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
+            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+        }
 
         val minIsr = leaderLog.config.minInSyncReplicas
         if (leaderLog.highWatermark >= requiredOffset) {
