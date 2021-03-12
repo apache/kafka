@@ -578,6 +578,11 @@ class Partition(val topicPartition: TopicPartition,
         s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
         s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
 
+//      System.err.println(s"$localBrokerId: Leader $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+//        s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
+//        s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
+//        s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
+
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
@@ -603,6 +608,7 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // mark local replica as the leader after converting hw
+        System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         remoteReplicas.foreach { replica =>
@@ -669,6 +675,7 @@ class Partition(val topicPartition: TopicPartition,
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
+        System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
@@ -822,20 +829,23 @@ class Partition(val topicPartition: TopicPartition,
         // keep the current immutable replica list reference
         val curMaximalIsr = isrState.maximalIsr
 
-        if (isTraceEnabled) {
-          def logEndOffsetString: ((Int, Long)) => String = {
-            case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
-          }
-
-          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
-          val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
-          val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
-          val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
-
-          trace(s"Progress awaiting ISR acks for offset $requiredOffset: " +
-            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
-            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        if (isTraceEnabled) {
+        def logEndOffsetString: ((Int, Long)) => String = {
+          case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
         }
+
+        val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
+        val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
+        val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
+        val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
+
+        trace(s"Progress awaiting ISR acks for offset $requiredOffset: " +
+          s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+          s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        }
+        System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
+          s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+          s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
 
         val minIsr = leaderLog.config.minInSyncReplicas
         if (leaderLog.highWatermark >= requiredOffset) {
@@ -850,6 +860,7 @@ class Partition(val topicPartition: TopicPartition,
         } else
           (false, Errors.NONE)
       case None =>
+        System.err.println("not leader")
         (false, Errors.NOT_LEADER_OR_FOLLOWER)
     }
   }

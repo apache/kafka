@@ -614,7 +614,7 @@ class ReplicaManager(val config: KafkaConfig,
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         origin, entriesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-      System.err.println("Produce to local log in %d ms".format(time.milliseconds - sTime))
+//      System.err.println("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition -> ProducePartitionStatus(

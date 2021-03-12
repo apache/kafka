@@ -270,6 +270,8 @@ class GroupMetadataManager(brokerId: Int,
 
           // construct the error status in the propagated assignment response in the cache
           val status = responseStatus(groupMetadataPartition)
+          System.err.println("responseStatus" + responseStatus)
+//          System.err.println("!!! status" + status)
 
           val responseError = if (status.error == Errors.NONE) {
             Errors.NONE
@@ -277,7 +279,7 @@ class GroupMetadataManager(brokerId: Int,
             debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status.error.exceptionName}")
             System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
-              s"due to ${status.error.exceptionName}")
+              s"due to ${status}")
 
             val elements = Thread.currentThread.getStackTrace
             for (i <- 1 until elements.length) {
