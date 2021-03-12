@@ -679,6 +679,7 @@ class Partition(val topicPartition: TopicPartition,
       // Since we might have been a leader previously, still clear any pending AlterIsr requests
       alterIsrManager.clearPending(topicPartition)
 
+      
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
