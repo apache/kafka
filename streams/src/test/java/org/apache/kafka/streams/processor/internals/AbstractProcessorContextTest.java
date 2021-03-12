@@ -156,12 +156,6 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
-        context.setRecordContext(null);
-        assertThrows(IllegalStateException.class, context::headers);
-    }
-
-    @Test
     public void appConfigsShouldReturnParsedValues() {
         assertThat(
             context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
