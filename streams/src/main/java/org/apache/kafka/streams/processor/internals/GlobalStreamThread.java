@@ -364,7 +364,8 @@ public class GlobalStreamThread extends Thread {
                 config,
                 stateMgr,
                 streamsMetrics,
-                cache
+                cache,
+                time
             );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 

@@ -62,7 +62,6 @@ public class MockLog implements ReplicatedLog {
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long lastFlushedOffset = 0;
-    private Optional<OffsetAndEpoch> oldestSnapshotId = Optional.empty();
 
     public MockLog(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
@@ -89,7 +88,7 @@ public class MockLog implements ReplicatedLog {
 
                 batches.clear();
                 epochStartOffsets.clear();
-                oldestSnapshotId = Optional.of(snapshotId);
+                snapshots.headMap(snapshotId, false).clear();
                 updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
                 flush();
 
@@ -174,14 +173,12 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public int lastFetchedEpoch() {
-        return logLastFetchedEpoch().orElseGet(() -> {
-            return latestSnapshotId().map(id -> id.epoch).orElse(0);
-        });
+        return logLastFetchedEpoch().orElseGet(() -> latestSnapshotId().map(id -> id.epoch).orElse(0));
     }
 
     @Override
     public OffsetAndEpoch endOffsetForEpoch(int epoch) {
-        int epochLowerBound = oldestSnapshotId.map(id -> id.epoch).orElse(0);
+        int epochLowerBound = earliestSnapshotId().map(id -> id.epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
             if (epochStartOffset.epoch > epoch) {
                 return new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound);
@@ -216,7 +213,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     private long logStartOffset() {
-        return oldestSnapshotId.map(id -> id.offset).orElse(0L);
+        return earliestSnapshotId().map(id -> id.offset).orElse(0L);
     }
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
@@ -415,8 +412,12 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<OffsetAndEpoch> oldestSnapshotId() {
-        return oldestSnapshotId;
+    public Optional<OffsetAndEpoch> earliestSnapshotId() {
+        try {
+            return Optional.of(snapshots.firstKey());
+        } catch (NoSuchElementException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -441,11 +442,11 @@ public class MockLog implements ReplicatedLog {
         Optional<OffsetAndEpoch> snapshotIdOpt = latestSnapshotId();
         if (snapshotIdOpt.isPresent()) {
             OffsetAndEpoch snapshotId = snapshotIdOpt.get();
-            if (logStartOffset() < logStartSnapshotId.offset &&
+            if (startOffset() < logStartSnapshotId.offset &&
                 highWatermark.offset >= logStartSnapshotId.offset &&
                 snapshotId.offset >= logStartSnapshotId.offset) {
 
-                oldestSnapshotId = Optional.of(logStartSnapshotId);
+                snapshots.headMap(logStartSnapshotId, false).clear();
 
                 batches.removeIf(entry -> entry.lastOffset() < logStartSnapshotId.offset);
 
