@@ -608,8 +608,8 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // mark local replica as the leader after converting hw
-        System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
         if (topicPartition.topic().contains("__consumer_offsets")) {
+          System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
           val elements = Thread.currentThread.getStackTrace
           for (i <- 1 until elements.length) {
             val s = elements(i)
@@ -683,8 +683,8 @@ class Partition(val topicPartition: TopicPartition,
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
-        System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
         if (topicPartition.topic().contains("__consumer_offsets")) {
+          System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
           val elements = Thread.currentThread.getStackTrace
           for (i <- 1 until elements.length) {
             val s = elements(i)
