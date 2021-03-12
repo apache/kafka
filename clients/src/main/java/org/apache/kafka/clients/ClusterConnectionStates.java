@@ -107,6 +107,7 @@ final class ClusterConnectionStates {
         if (state == null) return 0;
         if (state.state.isDisconnected()) {
             long timeWaited = now - state.lastConnectAttemptMs;
+//            System.err.println("!!! timeWait:" + timeWaited + "," + state.lastConnectAttemptMs);
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
             // When connecting or connected, we should be able to delay indefinitely since other events (connection or
@@ -178,6 +179,12 @@ final class ClusterConnectionStates {
      * @param now the current time in ms
      */
     public void disconnected(String id, long now) {
+        System.err.println("disconnected:" + id);
+        final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+        for (int i = 1; i < elements.length; i++) {
+            final StackTraceElement s = elements[i];
+            System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+        }
         NodeConnectionState nodeState = nodeState(id);
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
@@ -321,6 +328,7 @@ final class ClusterConnectionStates {
      */
     public boolean isDisconnected(String id) {
         NodeConnectionState state = nodeState.get(id);
+//        System.err.println("!!! state:" + state);
         return state != null && state.state.isDisconnected();
     }
 
