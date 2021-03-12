@@ -260,22 +260,17 @@ class KafkaServer(
 
         /* start forwarding manager */
         if (enableForwarding) {
-          clientToControllerChannelManager =
-            Some(
-              BrokerToControllerChannelManager(
-                controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
-                time = time,
-                metrics = metrics,
-                config = config,
-                channelName = "clientToControllerChannel",
-                threadNamePrefix = threadNamePrefix,
-                retryTimeoutMs = config.requestTimeoutMs.longValue)
-            )
-          clientToControllerChannelManager.get.start()
-          this.forwardingManager = Some(ForwardingManager(
-            clientToControllerChannelManager.get
-          ))
-          forwardingManager.foreach(_.start())
+          val brokerToControllerManager = BrokerToControllerChannelManager(
+            controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+            time = time,
+            metrics = metrics,
+            config = config,
+            channelName = "clientToControllerChannel",
+            threadNamePrefix = threadNamePrefix,
+            retryTimeoutMs = config.requestTimeoutMs.longValue)
+          brokerToControllerManager.start()
+          this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
+          clientToControllerChannelManager = Some(brokerToControllerManager)
         }
 
         val apiVersionManager = ApiVersionManager(
@@ -354,7 +349,6 @@ class KafkaServer(
           groupCoordinator,
           transactionCoordinator
         )
-        autoTopicCreationManager.start()
 
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = config.authorizer
@@ -710,11 +704,6 @@ class KafkaServer(
 
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
-
-        CoreUtils.swallow(forwardingManager.foreach(_.shutdown()), this)
-
-        if (autoTopicCreationManager != null)
-          CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
 
         CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
 

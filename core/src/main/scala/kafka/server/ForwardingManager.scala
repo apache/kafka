@@ -35,10 +35,6 @@ trait ForwardingManager {
   ): Unit
 
   def controllerApiVersions: Option[NodeApiVersions]
-
-  def start(): Unit = {}
-
-  def shutdown(): Unit = {}
 }
 
 object ForwardingManager {
@@ -52,12 +48,6 @@ object ForwardingManager {
 class ForwardingManagerImpl(
   channelManager: BrokerToControllerChannelManager
 ) extends ForwardingManager with Logging {
-
-  override def start(): Unit = {
-  }
-
-  override def shutdown(): Unit = {
-  }
 
   /**
    * Forward given request to the active controller.

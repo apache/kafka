@@ -44,10 +44,6 @@ trait AutoTopicCreationManager {
     topicNames: Set[String],
     controllerMutationQuota: ControllerMutationQuota
   ): Seq[MetadataResponseTopic]
-
-  def start(): Unit
-
-  def shutdown(): Unit
 }
 
 object AutoTopicCreationManager {
@@ -80,13 +76,6 @@ class DefaultAutoTopicCreationManager(
   }
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
-
-  override def start(): Unit = {
-  }
-
-  override def shutdown(): Unit = {
-    inflightTopics.clear()
-  }
 
   override def createTopics(
     topics: Set[String],
