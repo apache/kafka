@@ -187,6 +187,7 @@ final class ClusterConnectionStates {
                 System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
             }
         }
+        
         NodeConnectionState nodeState = nodeState(id);
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
