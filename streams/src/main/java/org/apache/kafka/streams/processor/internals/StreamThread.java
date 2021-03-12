@@ -1003,7 +1003,7 @@ public class StreamThread extends Thread {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
-            System.err.println("ms has elapsed:" + (now - lastCommitMs) + "," + commitTimeMs);
+//            System.err.println("ms has elapsed:" + (now - lastCommitMs) + "," + commitTimeMs);
 
             committed = taskManager.commit(
                 taskManager.tasks()
