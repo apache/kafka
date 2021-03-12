@@ -181,6 +181,19 @@ public class IntegrationTestUtils {
         }
     }
 
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster,
+                                            final int partitionCount,
+                                            final Map<String, Map<String, String>> topics) {
+        try {
+            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            for (final Map.Entry<String, Map<String, String>> topic : topics.entrySet()) {
+                cluster.createTopic(topic.getKey(), partitionCount, 1, topic.getValue());
+            }
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void quietlyCleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
         try {
             driver.cleanUp();

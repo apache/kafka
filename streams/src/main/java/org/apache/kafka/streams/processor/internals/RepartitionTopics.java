@@ -21,8 +21,11 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.MisconfiguredInternalTopicException;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager.ValidationResult;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.slf4j.Logger;
@@ -31,7 +34,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,41 +44,49 @@ import java.util.stream.Collectors;
 public class RepartitionTopics {
 
     private final InternalTopicManager internalTopicManager;
-    private final InternalTopologyBuilder internalTopologyBuilder;
-    private final Cluster clusterMetadata;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final Logger log;
     private final Map<TopicPartition, PartitionInfo> topicPartitionInfos = new HashMap<>();
+    private final ValidationResult validationResult;
+    private final Map<String, InternalTopicConfig> repartitionTopicConfigs;
 
     public RepartitionTopics(final InternalTopologyBuilder internalTopologyBuilder,
                              final InternalTopicManager internalTopicManager,
                              final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
                              final Cluster clusterMetadata,
                              final String logPrefix) {
-        this.internalTopologyBuilder = internalTopologyBuilder;
         this.internalTopicManager = internalTopicManager;
-        this.clusterMetadata = clusterMetadata;
         this.copartitionedTopicsEnforcer = copartitionedTopicsEnforcer;
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
-    }
 
-    public void setup() {
         final Map<Integer, TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
-        final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicConfig(topicGroups, clusterMetadata);
+        repartitionTopicConfigs = computeRepartitionTopicConfig(topicGroups, clusterMetadata);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
-        ensureCopartitioning(internalTopologyBuilder.copartitionGroups(), repartitionTopicMetadata, clusterMetadata);
+        ensureCopartitioning(internalTopologyBuilder.copartitionGroups(), repartitionTopicConfigs, clusterMetadata);
 
-        // make sure the repartition source topics exist with the right number of partitions,
-        // create these topics if necessary
-        internalTopicManager.makeReady(repartitionTopicMetadata);
+        validationResult = internalTopicManager.validate(repartitionTopicConfigs);
+    }
+
+    public void setup() {
+        if (!validationResult.misconfigurationsForTopics().isEmpty()) {
+            throw new MisconfiguredInternalTopicException(Utils.join(misconfigured().values().stream()
+                .flatMap(Collection::stream).collect(Collectors.toList()), Utils.NL)
+            );
+        }
+
+        final Map<String, InternalTopicConfig> repartitionTopicsToCreate = repartitionTopicConfigs.entrySet().stream()
+            .filter(entry -> validationResult.missingTopics().contains(entry.getKey()))
+            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        internalTopicManager.setup(repartitionTopicsToCreate);
+        log.info("Created repartition topics {} from the parsed topology.", repartitionTopicsToCreate.values());
 
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
-        for (final Map.Entry<String, InternalTopicConfig> entry : repartitionTopicMetadata.entrySet()) {
+        for (final Map.Entry<String, InternalTopicConfig> entry : repartitionTopicConfigs.entrySet()) {
             final String topic = entry.getKey();
             final int numPartitions = entry.getValue().numberOfPartitions().orElse(-1);
 
@@ -88,6 +101,14 @@ public class RepartitionTopics {
 
     public Map<TopicPartition, PartitionInfo> topicPartitionsInfo() {
         return Collections.unmodifiableMap(topicPartitionInfos);
+    }
+
+    public Set<String> missing() {
+        return validationResult.missingTopics();
+    }
+
+    public Map<String, List<String>> misconfigured() {
+        return validationResult.misconfigurationsForTopics();
     }
 
     private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Integer, TopicsInfo> topicGroups,
