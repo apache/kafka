@@ -99,7 +99,9 @@ class DelayedProduce(delayMs: Long,
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
-          System.err.println("B:" + error)
+          if (error != Errors.NONE) {
+            System.err.println("B:" + error)
+          }
           status.responseStatus.error = error
         }
       }
