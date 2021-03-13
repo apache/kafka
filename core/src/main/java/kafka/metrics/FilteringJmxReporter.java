@@ -40,11 +40,6 @@ public class FilteringJmxReporter extends JmxReporter {
         }
     }
 
-    @Override
-    public void onMetricRemoved(MetricName name) {
-        super.onMetricRemoved(name);
-    }
-
     public void updatePredicate(Predicate<MetricName> predicate) {
         this.metricPredicate = predicate;
         // re-register metrics on update
