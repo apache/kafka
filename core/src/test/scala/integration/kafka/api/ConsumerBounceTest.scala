@@ -484,7 +484,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       }})
 
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(time.Duration.ZERO)
+      consumer.poll(time.Duration.ofMillis(100L))
       assignSemaphore.tryAcquire()
     }, "Assignment did not complete on time")
 
@@ -493,8 +493,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     consumer.close()
   }
 
-  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false)
-  {
+  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false) {
     var iter: Int = 0
 
     override def doWork(): Unit = {
