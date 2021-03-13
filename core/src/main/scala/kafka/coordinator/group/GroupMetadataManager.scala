@@ -281,7 +281,7 @@ class GroupMetadataManager(brokerId: Int,
             System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status}")
 
-            val elements = Thread.currentThread.getStackTrace
+            // val elements = Thread.currentThread.getStackTrace
 //            for (i <- 1 until elements.length) {
 //              val s = elements(i)
 //              System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
