@@ -109,7 +109,7 @@ class DelayedProduce(delayMs: Long,
 
     // check if every partition has satisfied at least one of case A or B
     if (!produceMetadata.produceStatus.values.exists(_.acksPending)) {
-      System.err.print(" fc ")
+//      System.err.print(" fc ")
       forceComplete()
     }
     else
