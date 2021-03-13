@@ -849,7 +849,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         for (String channel : this.failedSends) {
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
-            System.err.println("clear dis");
+            System.err.println("clear dis: " + channel + "," + ChannelState.FAILED_SEND);
             final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
             for (int i = 1; i < elements.length; i++) {
                 final StackTraceElement s = elements[i];
@@ -967,7 +967,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect) {
             this.disconnected.put(channel.id(), channel.state());
-            System.err.println("doClose dis");
+            System.err.println("doClose dis:" + channel.id() + "," + channel.state());
             final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
             for (int i = 1; i < elements.length; i++) {
                 final StackTraceElement s = elements[i];
