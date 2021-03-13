@@ -170,9 +170,9 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
         // Follower crashes and disk is lost. It fetches an earlier offset to rebuild state.
-        state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(5L));
-
         // The leader will report an error in the logs, but will not let the high watermark rewind
+        assertFalse(state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(5L)));
+        assertEquals(5L, state.getVoterEndOffsets().get(node1));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
     }
 

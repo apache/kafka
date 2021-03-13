@@ -401,6 +401,51 @@ public class RaftEventSimulationTest {
         }
     }
 
+    @Test
+    public void checkSingleNodeCommittedDataLossQuorumSizeThree() {
+        checkSingleNodeCommittedDataLoss(new QuorumConfig(3, 0));
+    }
+
+    private void checkSingleNodeCommittedDataLoss(QuorumConfig config) {
+        assertTrue(config.numVoters > 2,
+            "This test requires the cluster to be able to recover from one failed node");
+
+        for (int seed = 0; seed < 100; seed++) {
+            // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
+            // invariants since the loss of committed data on one node can violate them.
+
+            Cluster cluster = new Cluster(config, seed);
+            EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
+            scheduler.addInvariant(new MonotonicHighWatermark(cluster));
+            scheduler.addInvariant(new SingleLeader(cluster));
+            scheduler.addValidation(new ConsistentCommittedData(cluster));
+
+            MessageRouter router = new MessageRouter(cluster);
+
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 5);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+
+            RaftNode node = cluster.randomRunning().orElseThrow(() ->
+                new AssertionError("Failed to find running node")
+            );
+
+            // Kill a random node and drop all of its persistent state. The Raft
+            // protocol guarantees should still ensure we lose no committed data
+            // as long as a new leader is elected before the failed node is restarted.
+            cluster.kill(node.nodeId);
+            cluster.deletePersistentState(node.nodeId);
+            scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
+
+            // Now restart the failed node and ensure that it recovers.
+            long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
+            cluster.start(node.nodeId);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
+        }
+    }
+
     private EventScheduler schedulerWithDefaultInvariants(Cluster cluster) {
         EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
         scheduler.addInvariant(new MonotonicHighWatermark(cluster));
@@ -590,10 +635,6 @@ public class RaftEventSimulationTest {
             return voters.size() / 2 + 1;
         }
 
-        Set<Integer> voters() {
-            return voters;
-        }
-
         OptionalLong leaderHighWatermark() {
             Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.client.quorum().isLeader())
                     .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
@@ -633,6 +674,11 @@ public class RaftEventSimulationTest {
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
                 .allMatch(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
+        }
+
+        boolean hasLeader(int nodeId) {
+            OptionalInt latestLeader = latestLeader();
+            return latestLeader.isPresent() && latestLeader.getAsInt() == nodeId;
         }
 
         OptionalInt latestLeader() {
@@ -701,11 +747,12 @@ public class RaftEventSimulationTest {
             nodeIfRunning(nodeId).ifPresent(action);
         }
 
-        void forRandomRunning(Consumer<RaftNode> action) {
+        Optional<RaftNode> randomRunning() {
             List<RaftNode> nodes = new ArrayList<>(running.values());
-            if (!nodes.isEmpty()) {
-                RaftNode randomNode = nodes.get(random.nextInt(nodes.size()));
-                action.accept(randomNode);
+            if (nodes.isEmpty()) {
+                return Optional.empty();
+            } else {
+                return Optional.of(nodes.get(random.nextInt(nodes.size())));
             }
         }
 
@@ -727,6 +774,10 @@ public class RaftEventSimulationTest {
             for (int voterId : nodes.keySet()) {
                 start(voterId);
             }
+        }
+
+        void deletePersistentState(int nodeId) {
+            nodes.put(nodeId, new PersistentState());
         }
 
         private static RaftConfig.AddressSpec nodeAddress(int id) {
@@ -921,8 +972,13 @@ public class RaftEventSimulationTest {
                 Integer nodeId = nodeStateEntry.getKey();
                 PersistentState state = nodeStateEntry.getValue();
                 Integer oldEpoch = nodeEpochs.get(nodeId);
-                Integer newEpoch = state.store.readElectionState().epoch;
 
+                ElectionState electionState = state.store.readElectionState();
+                if (electionState == null) {
+                    continue;
+                }
+
+                Integer newEpoch = electionState.epoch;
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
@@ -971,6 +1027,10 @@ public class RaftEventSimulationTest {
                 PersistentState state = nodeEntry.getValue();
                 ElectionState electionState = state.store.readElectionState();
 
+                if (electionState == null) {
+                    continue;
+                }
+
                 if (electionState.epoch >= epoch && electionState.hasLeader()) {
                     if (epoch == electionState.epoch && leaderId.isPresent()) {
                         assertEquals(leaderId.getAsInt(), electionState.leaderId());
@@ -980,7 +1040,6 @@ public class RaftEventSimulationTest {
                     }
                 }
             }
-
         }
     }
 
