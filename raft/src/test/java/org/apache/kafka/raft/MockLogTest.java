@@ -134,6 +134,16 @@ public class MockLogTest {
     }
 
     @Test
+    public void testTruncateBelowHighWatermark() {
+        appendBatch(5, 1);
+        LogOffsetMetadata highWatermark = new LogOffsetMetadata(5L);
+        log.updateHighWatermark(highWatermark);
+        assertEquals(highWatermark, log.highWatermark());
+        assertThrows(IllegalArgumentException.class, () -> log.truncateTo(4L));
+        assertEquals(highWatermark, log.highWatermark());
+    }
+
+    @Test
     public void testUpdateHighWatermark() {
         appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
