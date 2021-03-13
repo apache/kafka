@@ -443,6 +443,22 @@ final class KafkaMetadataLogTest {
     assertEquals(0L, appendInfo.firstOffset)
   }
 
+  @Test
+  def testTruncateBelowHighWatermark(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val numRecords = 10
+    val epoch = 5
+
+    append(log, numRecords, epoch)
+    assertEquals(numRecords.toLong, log.endOffset.offset)
+
+    log.updateHighWatermark(new LogOffsetMetadata(numRecords))
+    assertEquals(numRecords.toLong, log.highWatermark.offset)
+
+    assertThrows(classOf[IllegalArgumentException], () => log.truncateTo(5L))
+    assertEquals(numRecords.toLong, log.highWatermark.offset)
+  }
+
   private def buildFullBatch(
     leaderEpoch: Int,
     recordSize: Int,
