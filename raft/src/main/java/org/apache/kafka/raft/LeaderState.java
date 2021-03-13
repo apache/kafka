@@ -292,6 +292,16 @@ public class LeaderState implements EpochState {
             else
                 return Long.compare(that.endOffset.get().offset, this.endOffset.get().offset);
         }
+
+        @Override
+        public String toString() {
+            return "ReplicaState(" +
+                "nodeId=" + nodeId +
+                ", endOffset=" + endOffset +
+                ", lastFetchTimestamp=" + lastFetchTimestamp +
+                ", hasAcknowledgedLeader=" + hasAcknowledgedLeader +
+                ')';
+        }
     }
 
     @Override
