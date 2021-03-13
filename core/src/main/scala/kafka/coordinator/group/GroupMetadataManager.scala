@@ -282,10 +282,10 @@ class GroupMetadataManager(brokerId: Int,
               s"due to ${status}")
 
             val elements = Thread.currentThread.getStackTrace
-            for (i <- 1 until elements.length) {
-              val s = elements(i)
-              System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-            }
+//            for (i <- 1 until elements.length) {
+//              val s = elements(i)
+//              System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//            }
             
 
             // transform the log append error code to the corresponding the commit status error code

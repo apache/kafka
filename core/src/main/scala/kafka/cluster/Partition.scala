@@ -610,11 +610,11 @@ class Partition(val topicPartition: TopicPartition,
         // mark local replica as the leader after converting hw
         if (topicPartition.topic().contains("__consumer_offsets")) {
           System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
-          val elements = Thread.currentThread.getStackTrace
-          for (i <- 1 until elements.length) {
-            val s = elements(i)
-            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-          }
+//          val elements = Thread.currentThread.getStackTrace
+//          for (i <- 1 until elements.length) {
+//            val s = elements(i)
+//            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//          }
         }
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
@@ -685,11 +685,11 @@ class Partition(val topicPartition: TopicPartition,
       } else {
         if (topicPartition.topic().contains("__consumer_offsets")) {
           System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
-          val elements = Thread.currentThread.getStackTrace
-          for (i <- 1 until elements.length) {
-            val s = elements(i)
-            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-          }
+//          val elements = Thread.currentThread.getStackTrace
+//          for (i <- 1 until elements.length) {
+//            val s = elements(i)
+//            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//          }
         }
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true

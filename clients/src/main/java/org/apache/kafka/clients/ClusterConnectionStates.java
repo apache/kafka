@@ -181,11 +181,11 @@ final class ClusterConnectionStates {
     public void disconnected(String id, long now) {
         if (Integer.parseInt(id) < 5) {
             System.err.println("disconnected:" + id);
-            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-            for (int i = 1; i < elements.length; i++) {
-                final StackTraceElement s = elements[i];
-                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
-            }
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
         }
         
         NodeConnectionState nodeState = nodeState(id);
