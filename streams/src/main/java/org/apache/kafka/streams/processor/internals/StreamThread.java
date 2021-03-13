@@ -714,19 +714,12 @@ public class StreamThread extends Thread {
 
         final long pollLatency = pollPhase();
 
-        // Optimization to skip the rest of the processing loop in case the thread was requested to shut down during
-        // the poll phase
-        if (!isRunning()) {
-            log.info("Exiting the processing loop early since StreamThread state is {}", state);
-            return;
-        }
-
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
-            log.debug("Thread state is already {}, skipping the run once call after poll request", state);
+            log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
