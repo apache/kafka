@@ -2155,7 +2155,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeUpdateOldestSnapshotId() {
-        log.latestSnapshotId().ifPresent(snapshotId -> log.deleteBeforeSnapshot(snapshotId));
+        log.latestSnapshotId().ifPresent(log::deleteBeforeSnapshot);
     }
 
     private void wakeup() {

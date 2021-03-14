@@ -92,12 +92,6 @@ allprojects {
     }
   }
 
-  tasks.withType(Javadoc) {
-    // disable the crazy super-strict doclint tool in Java 8
-    // noinspection SpellCheckingInspection
-    options.addStringOption('Xdoclint:none', '-quiet')
-  }
-
 }
 
 ext {
@@ -168,6 +162,7 @@ if (file('.git').exists()) {
   }
 }
 
+println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 
 subprojects {
 
@@ -471,6 +466,14 @@ subprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
+    options.addStringOption('Xdoclint:none', '-quiet')
+
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   task systemTestLibs(dependsOn: jar)
@@ -749,8 +752,6 @@ tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" })
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 
 project(':core') {
-  println "Building project 'core' with Scala version ${versions.scala}"
-
   apply plugin: 'scala'
   
   // scaladoc generation is configured at the sub-module level with an artifacts
@@ -1476,7 +1477,7 @@ project(':streams') {
 
   javadoc {
     include "**/org/apache/kafka/streams/**"
-    exclude "**/internals/**"
+    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1552,7 +1553,6 @@ project(':streams') {
 }
 
 project(':streams:streams-scala') {
-  println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
@@ -1614,7 +1614,7 @@ project(':streams:test-utils') {
 
   javadoc {
     include "**/org/apache/kafka/streams/test/**"
-    exclude "**/internals/**"
+    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1941,11 +1941,6 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `aggregatedJavadoc` task
-    // The URL structure was changed to include the locale after Java 8
-    if (JavaVersion.current().isJava11Compatible())
-      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-    else
-      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -2309,12 +2304,19 @@ project(':connect:mirror-client') {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc) {
+task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
   source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+
+  options.charSet = 'UTF-8'
+  options.docEncoding = 'UTF-8'
+  options.encoding = 'UTF-8'
+  // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
+  options.addStringOption('Xdoclint:none', '-quiet')
+
   // The URL structure was changed to include the locale after Java 8
   if (JavaVersion.current().isJava11Compatible())
     options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"

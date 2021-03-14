@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -81,7 +82,8 @@ public class GlobalProcessorContextImplTest {
             streamsConfig,
             stateManager,
             null,
-            null);
+            null,
+            Time.SYSTEM);
 
         final ProcessorNode<Object, Object, Object, Object> processorNode = new ProcessorNode<>("testNode");
 
@@ -232,5 +234,10 @@ public class GlobalProcessorContextImplTest {
             store.close();
             fail("Should have thrown UnsupportedOperationException.");
         } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnCurrentStreamTime() {
+        globalContext.currentStreamTimeMs();
     }
 }
