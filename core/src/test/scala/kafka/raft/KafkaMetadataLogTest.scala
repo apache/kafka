@@ -477,17 +477,32 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testValidateOffsetLessThanLEO(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch + 1, initialOffset = 10)
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch)
+    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.getType)
+    assertEquals(new OffsetAndEpoch(10, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
   def testValidateValidEpochAndOffset(): Unit = {
     val log = buildMetadataLog(tempDir, mockTime)
 
-    val numberOfRecords = 1
+    val numberOfRecords = 5
     val epoch = 1
 
     append(log, numberOfRecords, epoch)
 
-    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch)
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch)
     assertEquals(ValidOffsetAndEpoch.Type.VALID, resultOffsetAndEpoch.getType)
-    assertEquals(new OffsetAndEpoch(numberOfRecords, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+    assertEquals(new OffsetAndEpoch(numberOfRecords - 1, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 }
 

@@ -707,14 +707,27 @@ public class MockLogTest {
     }
 
     @Test
+    public void testValidateOffsetLessThanLEO() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch + 1, 10);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(10, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
     public void testValidateValidEpochAndOffset() {
-        int numberOfRecords = 1;
+        int numberOfRecords = 5;
         int epoch = 1;
 
         appendBatch(numberOfRecords, epoch);
 
-        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(numberOfRecords, epoch)),
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(numberOfRecords - 1, epoch)),
                 resultOffsetAndEpoch);
     }
 
