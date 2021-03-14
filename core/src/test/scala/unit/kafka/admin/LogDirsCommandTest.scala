@@ -38,7 +38,7 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
     val nonExistBrokersLineIter = nonExistBrokersContent.split("\n").iterator
 
     assertTrue(nonExistBrokersLineIter.hasNext)
-    assertTrue(nonExistBrokersLineIter.next().contains(s"ERROR: The given node(s) does not exist from broker-list 1,2"))
+    assertTrue(nonExistBrokersLineIter.next().contains(s"ERROR: The given node(s) does not exist from broker-list: 1,2. Current cluster exist node(s): 0"))
 
     //use all brokerList for current cluster
     byteArrayOutputStream.reset()
