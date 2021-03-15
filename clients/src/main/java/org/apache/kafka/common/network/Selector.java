@@ -618,6 +618,7 @@ public class Selector implements Selectable, AutoCloseable {
                 } else {
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 }
+                System.err.println("Connection with " + desc + "," + e.getMessage());
 
                 if (e instanceof DelayedResponseAuthenticationException)
                     maybeDelayCloseOnAuthenticationFailure(channel);
@@ -967,11 +968,13 @@ public class Selector implements Selectable, AutoCloseable {
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect) {
             this.disconnected.put(channel.id(), channel.state());
-            System.err.println("doClose dis:" + channel.id() + "," + channel.state());
-            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-            for (int i = 1; i < elements.length; i++) {
-                final StackTraceElement s = elements[i];
-                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+            if (channel.id().equals("0") || channel.id().equals("1") || channel.id().equals("2")) {
+                System.err.println("doClose dis:" + channel.id() + "," + channel.state().state());
+                final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+                for (int i = 1; i < elements.length; i++) {
+                    final StackTraceElement s = elements[i];
+                    System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+                }
             }
         }
     }
