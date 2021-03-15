@@ -40,25 +40,23 @@ object LogDirsCommand {
         val opts = new LogDirsCommandOptions(args)
         val adminClient = createAdminClient(opts)
         val topicList = opts.options.valueOf(opts.topicListOpt).split(",").filter(_.nonEmpty)
-        var nonExistBrokers: Set[Int] = Set.empty
         try {
-            val clusterBrokers: Set[Int] = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toSet
-            val brokerList = Option(opts.options.valueOf(opts.brokerListOpt)) match {
+            val clusterBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toSet
+            val (existingBrokers, nonExistingBrokers) = Option(opts.options.valueOf(opts.brokerListOpt)) match {
                 case Some(brokerListStr) =>
-                    val inputBrokers: Set[Int] = brokerListStr.split(',').filter(_.nonEmpty).map(_.toInt).toSet
-                    nonExistBrokers = inputBrokers.diff(clusterBrokers)
-                    inputBrokers
-                case None => clusterBrokers
+                    val inputBrokers = brokerListStr.split(',').filter(_.nonEmpty).map(_.toInt).toSet
+                    (inputBrokers, inputBrokers.diff(clusterBrokers))
+                case None => (clusterBrokers, Set.empty)
             }
 
-            if (nonExistBrokers.nonEmpty) {
-                out.println(s"ERROR: The given node(s) does not exist from broker-list: ${nonExistBrokers.mkString(",")}. Current cluster exist node(s): ${clusterBrokers.mkString(",")}")
+            if (nonExistingBrokers.nonEmpty) {
+                out.println(s"ERROR: The given node(s) does not exist from broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist node(s): ${clusterBrokers.mkString(",")}")
             } else {
                 out.println("Querying brokers for log directories information")
-                val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
+                val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(existingBrokers.map(Integer.valueOf).toSeq.asJava)
                 val logDirInfosByBroker = describeLogDirsResult.allDescriptions.get().asScala.map { case (k, v) => k -> v.asScala }
 
-                out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
+                out.println(s"Received log directory information from brokers ${existingBrokers.mkString(",")}")
                 out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))
             }
         } finally {
