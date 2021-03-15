@@ -26,12 +26,14 @@ import signal
 class OffsetValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
     NUM_PARTITIONS = 1
+    DEFAULT_NUM_BROKERS = 2
 
     def __init__(self, test_context):
-        super(OffsetValidationTest, self).__init__(test_context, num_consumers=3, num_producers=1,
-                                                     num_zk=1, num_brokers=2, topics={
-            self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }
-        })
+        super(OffsetValidationTest, self).__init__(test_context, num_consumers=3, num_producers=1, num_zk=1,
+                                                   num_brokers= self.DEFAULT_NUM_BROKERS if not test_context.injected_args \
+                                                       else test_context.injected_args.get('num_brokers', self.DEFAULT_NUM_BROKERS),
+                                                   topics={self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }},
+                                                   )
 
     def rolling_bounce_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
@@ -74,9 +76,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         return consumer
 
-    @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk):
+    @cluster(num_nodes=8)
+    @matrix(num_brokers=[3], metadata_quorum=quorum.all_non_upgrade)
+    def test_broker_rolling_bounce(self, num_brokers, metadata_quorum=quorum.zk):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
