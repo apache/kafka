@@ -66,7 +66,7 @@ class GroupMetadataManager(brokerId: Int,
   /* lock protecting access to loading and owned partition sets */
   private val partitionLock = new ReentrantLock()
 
-  /* partitions of consumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
+  /* partitions of conasumer groups that are being loaded, its lock should be always called BEFORE the group lock if needed */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
   /* partitions of consumer groups that are assigned, using the same loading partition lock */
@@ -281,7 +281,7 @@ class GroupMetadataManager(brokerId: Int,
             System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status}")
 
-            val elements = Thread.currentThread.getStackTrace
+            // val elements = Thread.currentThread.getStackTrace
 //            for (i <- 1 until elements.length) {
 //              val s = elements(i)
 //              System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
