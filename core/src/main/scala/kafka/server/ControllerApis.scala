@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util
 import java.util.Collections
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{CompletableFuture, ExecutionException}
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
@@ -32,11 +32,14 @@ import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_A
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
+import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsRequestData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED}
+import org.apache.kafka.common.message._
+import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
@@ -89,6 +92,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -537,5 +541,66 @@ class ControllerApis(val requestChannel: RequestChannel,
             new IncrementalAlterConfigsResponse(requestThrottleMs, results))
         }
       })
+  }
+
+  def handleCreatePartitions(request: RequestChannel.Request): Unit = {
+    val future = createPartitions(request.body[CreatePartitionsRequest].data,
+      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+    future.whenComplete((responses, exception) => {
+      if (exception != null) {
+        requestHelper.handleError(request, exception)
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+          val responseData = new CreatePartitionsResponseData().
+            setResults(responses).
+            setThrottleTimeMs(requestThrottleMs)
+          new CreatePartitionsResponse(responseData)
+        })
+      }
+    })
+  }
+
+  def createPartitions(request: CreatePartitionsRequestData,
+                       hasClusterAuth: Boolean,
+                       getCreatableTopics: Iterable[String] => Set[String])
+                       : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+    val responses = new util.ArrayList[CreatePartitionsTopicResult]()
+    val duplicateTopicNames = new util.HashSet[String]()
+    val topicNames = new util.HashSet[String]()
+    request.topics().forEach {
+      topic =>
+        if (!topicNames.add(topic.name())) {
+          duplicateTopicNames.add(topic.name())
+        }
+    }
+    duplicateTopicNames.forEach { topicName =>
+      responses.add(new CreatePartitionsTopicResult().
+        setName(topicName).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate topic name."))
+        topicNames.remove(topicName)
+    }
+    val authorizedTopicNames = {
+      if (hasClusterAuth) {
+        topicNames.asScala
+      } else {
+        getCreatableTopics(topicNames.asScala)
+      }
+    }
+    val topics = new util.ArrayList[CreatePartitionsTopic]
+    topicNames.forEach { topicName =>
+      if (authorizedTopicNames.contains(topicName)) {
+        topics.add(request.topics().find(topicName))
+      } else {
+        responses.add(new CreatePartitionsTopicResult().
+          setName(topicName).
+          setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
+      }
+    }
+    controller.createPartitions(topics).thenApply { results =>
+      results.forEach(response => responses.add(response))
+      responses
+    }
   }
 }
