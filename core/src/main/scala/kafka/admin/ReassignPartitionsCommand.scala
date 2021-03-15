@@ -815,20 +815,13 @@ object ReassignPartitionsCommand extends Logging {
   private def describeTopics(adminClient: Admin,
                              topics: Set[String])
                              : Map[String, TopicDescription] = {
-    adminClient.describeTopics(topics.asJava).values.asScala.map {
-      case (topicName, topicDescriptionFuture) =>
-        try {
-          topicName -> topicDescriptionFuture.get
-        }
-        catch {
-          case t: ExecutionException =>
-            if (classOf[UnknownTopicOrPartitionException].isInstance(t.getCause)) {
-              throw new ExecutionException(
-                new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
-            } else {
-              throw t
-            }
-        }
+    adminClient.describeTopics(topics.asJava).values.asScala.map { case (topicName, topicDescriptionFuture) =>
+      try topicName -> topicDescriptionFuture.get
+      catch {
+        case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
+          throw new ExecutionException(
+            new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
+      }
     }
   }
 
