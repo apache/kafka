@@ -133,11 +133,6 @@ class RaftReplicaManagerTest {
     val partition0 =  Partition(topicPartition0, time, configRepository, rrm)
     val partition1 =  Partition(topicPartition1, time, configRepository, rrm)
 
-    rrm.createPartition(topicPartition0).createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-    rrm.createPartition(topicPartition1).createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-
     processTopicPartitionMetadata(rrm)
     // verify changes would have been deferred
     val partitionsNewMapCaptor: ArgumentCaptor[mutable.Map[Partition, Boolean]] =
@@ -145,7 +140,7 @@ class RaftReplicaManagerTest {
     verify(mockDelegate).makeDeferred(partitionsNewMapCaptor.capture(), ArgumentMatchers.eq(offset1))
     val partitionsDeferredMap = partitionsNewMapCaptor.getValue
     assertEquals(Map(partition0 -> true, partition1 -> true), partitionsDeferredMap)
-    verify(mockDelegate, never()).makeFollowers(any(), any(), any(), any(), any())
+    verify(mockDelegate, never()).makeFollowers(any(), any(), any(), any(), any(), any())
 
     // now mark those topic partitions as being deferred so we can later apply the changes
     rrm.markPartitionDeferred(partition0, isNew = true)
@@ -153,8 +148,15 @@ class RaftReplicaManagerTest {
 
     // apply the changes
     // define some return values to avoid NPE
-    when(mockDelegate.makeLeaders(any(), any(), any(), any())).thenReturn(Set(partition0))
-    when(mockDelegate.makeFollowers(any(), any(), any(), any(), any())).thenReturn(Set(partition1))
+    when(mockDelegate.makeLeaders(any(), any(), any(), any(), any())).thenReturn(Set(partition0))
+    when(mockDelegate.makeFollowers(any(), any(), any(), any(), any(), any())).thenReturn(Set(partition1))
+
+    // Simulate creation of logs in makeLeaders/makeFollowers
+    partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(topicId))
+    partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(topicId))
+
     rrm.endMetadataChangeDeferral(onLeadershipChange)
     // verify that the deferred changes would have been applied
 
@@ -180,16 +182,18 @@ class RaftReplicaManagerTest {
     val partition0 = Partition(topicPartition0, time, configRepository, rrm)
     val partition1 = Partition(topicPartition1, time, configRepository, rrm)
 
-    rrm.createPartition(topicPartition0).createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-    rrm.createPartition(topicPartition1).createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-
     rrm.endMetadataChangeDeferral(onLeadershipChange)
 
     // define some return values to avoid NPE
-    when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition0))
-    when(mockDelegate.makeFollowers(any(), any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition1))
+    when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)), any())).thenReturn(Set(partition0))
+    when(mockDelegate.makeFollowers(any(), any(), any(), any(), ArgumentMatchers.eq(Some(offset1)), any())).thenReturn(Set(partition1))
+
+    // Simulate creation of logs in makeLeaders/makeFollowers
+    partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(topicId))
+    partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(topicId))
+
     // process the changes
     processTopicPartitionMetadata(rrm)
     // verify that the changes would have been applied
@@ -217,12 +221,9 @@ class RaftReplicaManagerTest {
     val partition1 = rrm.createPartition(topicPartition1)
 
     partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+     new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(Uuid.randomUuid()))
     partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-
-    assertTrue(partition0.log.isDefined)
-    partition0.log.get.topicId = Uuid.randomUuid()
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(Uuid.randomUuid()))
 
     try {
       processTopicPartitionMetadata(rrm)
@@ -239,18 +240,15 @@ class RaftReplicaManagerTest {
     val partition1 = rrm.createPartition(topicPartition1)
 
     partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(Uuid.randomUuid()))
     partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
-
-    assertTrue(partition1.log.isDefined)
-    partition1.log.get.topicId = Uuid.randomUuid()
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints), Some(Uuid.randomUuid()))
 
     rrm.endMetadataChangeDeferral(onLeadershipChange)
 
     // define some return values to avoid NPE
-    when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition0))
-    when(mockDelegate.makeFollowers(any(), any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition1))
+    when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)), any())).thenReturn(Set(partition0))
+    when(mockDelegate.makeFollowers(any(), any(), any(), any(), ArgumentMatchers.eq(Some(offset1)), any())).thenReturn(Set(partition1))
 
     try {
       processTopicPartitionMetadata(rrm)
@@ -264,7 +262,7 @@ class RaftReplicaManagerTest {
     val leaderPartitionStatesCaptor: ArgumentCaptor[mutable.Map[Partition, MetadataPartition]] =
       ArgumentCaptor.forClass(classOf[mutable.Map[Partition, MetadataPartition]])
     verify(mockDelegate).makeLeaders(ArgumentMatchers.eq(expectedPrevPartitionsAlreadyExisting),
-      leaderPartitionStatesCaptor.capture(), any(), ArgumentMatchers.eq(expectedMetadataOffset))
+      leaderPartitionStatesCaptor.capture(), any(), ArgumentMatchers.eq(expectedMetadataOffset), any())
     leaderPartitionStatesCaptor.getValue
   }
 
@@ -275,7 +273,7 @@ class RaftReplicaManagerTest {
       ArgumentCaptor.forClass(classOf[mutable.Map[Partition, MetadataPartition]])
     val brokersCaptor: ArgumentCaptor[MetadataBrokers] = ArgumentCaptor.forClass(classOf[MetadataBrokers])
     verify(mockDelegate).makeFollowers(ArgumentMatchers.eq(expectedPrevPartitionsAlreadyExisting), brokersCaptor.capture(),
-      followerPartitionStatesCaptor.capture(), any(), ArgumentMatchers.eq(expectedMetadataOffset))
+      followerPartitionStatesCaptor.capture(), any(), ArgumentMatchers.eq(expectedMetadataOffset), any())
     val brokers = brokersCaptor.getValue
     assertEquals(expectedBrokers.size, brokers.size())
     expectedBrokers.foreach(brokerId => assertTrue(brokers.aliveBroker(brokerId).isDefined))

@@ -34,7 +34,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
@@ -230,7 +230,7 @@ class PartitionTest extends AbstractPartitionTest {
       logManager,
       alterIsrManager) {
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid] = None): Log = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints)
         new SlowLog(log, mockTime, appendSemaphore)
       }
@@ -1635,6 +1635,98 @@ class PartitionTest extends AbstractPartitionTest {
       .setIsNew(false)
     partition.makeLeader(leaderState, offsetCheckpoints)
     assertEquals(4, partition.localLogOrException.highWatermark)
+  }
+
+  @Test
+  def testTopicIdAndPartitionMetadataFileForLeader(): Unit = {
+    val controllerEpoch = 3
+    val leaderEpoch = 5
+    val topicId = Uuid.randomUuid()
+    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(brokerId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(replicas)
+      .setZkVersion(1)
+      .setReplicas(replicas)
+      .setIsNew(false)
+    partition.makeLeader(leaderState, offsetCheckpoints, Some(topicId))
+
+    checkTopicId(topicId, partition)
+
+    // Create new Partition object for same topicPartition
+    val partition2 = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      isrChangeListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterIsrManager)
+
+    // partition2 should not yet be associated with the log, but should be able to get ID
+    assertTrue(partition2.topicId.isDefined)
+    assertEquals(topicId, partition2.topicId.get)
+    assertFalse(partition2.log.isDefined)
+
+    // Calling makeLeader with a new topic ID should not overwrite the old topic ID. We should get the same log.
+    // This scenario should not occur, since the topic ID check will fail, but it is good to check we grab the old log.
+    partition2.makeLeader(leaderState, offsetCheckpoints, Some(Uuid.randomUuid()))
+    checkTopicId(topicId, partition2)
+  }
+
+  @Test
+  def testTopicIdAndPartitionMetadataFileForFollower(): Unit = {
+    val controllerEpoch = 3
+    val leaderEpoch = 5
+    val topicId = Uuid.randomUuid()
+    val replicas = List[Integer](brokerId, brokerId + 1).asJava
+    val leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(brokerId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(replicas)
+      .setZkVersion(1)
+      .setReplicas(replicas)
+      .setIsNew(false)
+    partition.makeFollower(leaderState, offsetCheckpoints, Some(topicId))
+
+    checkTopicId(topicId, partition)
+
+    // Create new Partition object for same topicPartition
+    val partition2 = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      isrChangeListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterIsrManager)
+
+    // partition2 should not yet be associated with the log, but should be able to get ID
+    assertTrue(partition2.topicId.isDefined)
+    assertEquals(topicId, partition2.topicId.get)
+    assertFalse(partition2.log.isDefined)
+
+    // Calling makeFollower with a new topic ID should not overwrite the old topic ID. We should get the same log.
+    // This scenario should not occur, since the topic ID check will fail, but it is good to check we grab the old log.
+    partition2.makeFollower(leaderState, offsetCheckpoints, Some(Uuid.randomUuid()))
+    checkTopicId(topicId, partition2)
+  }
+
+  def checkTopicId(expectedTopicId: Uuid, partition: Partition): Unit = {
+    assertTrue(partition.topicId.isDefined)
+    assertEquals(expectedTopicId, partition.topicId.get)
+    assertTrue(partition.log.isDefined)
+    val log = partition.log.get
+    assertEquals(expectedTopicId, log.topicId.get)
+    assertTrue(log.partitionMetadataFile.exists())
+    assertEquals(expectedTopicId, log.partitionMetadataFile.read().topicId)
   }
 
   @Test

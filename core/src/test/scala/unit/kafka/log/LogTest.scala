@@ -2559,8 +2559,27 @@ class LogTest {
 
     // test recovery case
     log = createLog(logDir, logConfig)
-    assertTrue(log.topicId == topicId)
+    assertTrue(log.topicId.isDefined)
+    assertTrue(log.topicId.get == topicId)
     log.close()
+  }
+
+  @Test
+  def testLogFailsWhenInconsistentTopicIdSet(): Unit = {
+    val logConfig = LogTest.createLogConfig()
+    var log = createLog(logDir, logConfig)
+
+    val topicId = Uuid.randomUuid()
+    log.partitionMetadataFile.write(topicId)
+    log.close()
+
+    // test creating a log with a new ID
+    try {
+      log = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()))
+      log.close()
+    } catch {
+      case e: Throwable => assertTrue(e.isInstanceOf[IllegalStateException])
+    }
   }
 
   /**
@@ -3123,7 +3142,7 @@ class LogTest {
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
     val id = Uuid.randomUuid()
-    log.topicId = id
+    log.topicId = Some(id)
     log.partitionMetadataFile.write(id)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
@@ -3138,7 +3157,8 @@ class LogTest {
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
     // Check the topic ID remains in memory and was copied correctly.
-    assertEquals(id, log.topicId)
+    assertTrue(log.topicId.isDefined)
+    assertEquals(id, log.topicId.get)
     assertEquals(id, log.partitionMetadataFile.read().topicId)
   }
 
@@ -4853,9 +4873,10 @@ class LogTest {
                         time: Time = mockTime,
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
-                        lastShutdownClean: Boolean = true): Log = {
+                        lastShutdownClean: Boolean = true,
+                        topicId: Option[Uuid] = None): Log = {
     LogTest.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean)
+      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
@@ -4921,7 +4942,8 @@ object LogTest {
                 recoveryPoint: Long = 0L,
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
-                lastShutdownClean: Boolean = true): Log = {
+                lastShutdownClean: Boolean = true,
+                topicId: Option[Uuid] = None): Log = {
     Log(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
@@ -4932,7 +4954,8 @@ object LogTest {
       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      lastShutdownClean = lastShutdownClean)
+      lastShutdownClean = lastShutdownClean,
+      topicId = topicId)
   }
 
   /**
