@@ -135,6 +135,8 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
+  var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+
   var alterIsrManager: AlterIsrManager = null
 
   var kafkaScheduler: KafkaScheduler = null
@@ -256,15 +258,19 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        /* start forwarding manager */
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(
-            config,
-            metadataCache,
-            time,
-            metrics,
-            threadNamePrefix
-          ))
-          forwardingManager.foreach(_.start())
+          val brokerToControllerManager = BrokerToControllerChannelManager(
+            controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+            time = time,
+            metrics = metrics,
+            config = config,
+            channelName = "controllerForwardingChannel",
+            threadNamePrefix = threadNamePrefix,
+            retryTimeoutMs = config.requestTimeoutMs.longValue)
+          brokerToControllerManager.start()
+          this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
+          clientToControllerChannelManager = Some(brokerToControllerManager)
         }
 
         val apiVersionManager = ApiVersionManager(
@@ -336,16 +342,13 @@ class KafkaServer(
         this.autoTopicCreationManager = AutoTopicCreationManager(
           config,
           metadataCache,
-          time,
-          metrics,
           threadNamePrefix,
+          clientToControllerChannelManager,
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
-          transactionCoordinator,
-          enableForwarding
+          transactionCoordinator
         )
-        autoTopicCreationManager.start()
 
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = config.authorizer
@@ -702,10 +705,7 @@ class KafkaServer(
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-        CoreUtils.swallow(forwardingManager.foreach(_.shutdown()), this)
-
-        if (autoTopicCreationManager != null)
-          CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
+        CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

@@ -32,10 +32,8 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest}
-import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -46,10 +44,6 @@ trait AutoTopicCreationManager {
     topicNames: Set[String],
     controllerMutationQuota: ControllerMutationQuota
   ): Seq[MetadataResponseTopic]
-
-  def start(): Unit
-
-  def shutdown(): Unit
 }
 
 object AutoTopicCreationManager {
@@ -57,30 +51,13 @@ object AutoTopicCreationManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
-    time: Time,
-    metrics: Metrics,
     threadNamePrefix: Option[String],
+    channelManager: Option[BrokerToControllerChannelManager],
     adminManager: Option[ZkAdminManager],
     controller: Option[KafkaController],
     groupCoordinator: GroupCoordinator,
     txnCoordinator: TransactionCoordinator,
-    enableForwarding: Boolean
   ): AutoTopicCreationManager = {
-
-    val channelManager =
-      if (enableForwarding)
-        Some(new BrokerToControllerChannelManagerImpl(
-          controllerNodeProvider = MetadataCacheControllerNodeProvider(
-            config, metadataCache),
-          time = time,
-          metrics = metrics,
-          config = config,
-          channelName = "autoTopicCreationChannel",
-          threadNamePrefix = threadNamePrefix,
-          retryTimeoutMs = config.requestTimeoutMs.longValue
-        ))
-      else
-        None
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
@@ -99,15 +76,6 @@ class DefaultAutoTopicCreationManager(
   }
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
-
-  override def start(): Unit = {
-    channelManager.foreach(_.start())
-  }
-
-  override def shutdown(): Unit = {
-    channelManager.foreach(_.shutdown())
-    inflightTopics.clear()
-  }
 
   override def createTopics(
     topics: Set[String],
