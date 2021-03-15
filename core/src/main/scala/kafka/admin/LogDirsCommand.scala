@@ -21,7 +21,7 @@ import java.io.PrintStream
 import java.util.Properties
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeLogDirsResult, LogDirDescription}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, LogDirDescription}
 import org.apache.kafka.common.utils.Utils
 
 import scala.jdk.CollectionConverters._
@@ -50,10 +50,10 @@ object LogDirsCommand {
             }
 
             if (nonExistingBrokers.nonEmpty) {
-                out.println(s"ERROR: The given node(s) does not exist from broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist node(s): ${clusterBrokers.mkString(",")}")
+                out.println(s"ERROR: The given broker(s) does not exist from --broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist broker(s): ${clusterBrokers.mkString(",")}")
             } else {
                 out.println("Querying brokers for log directories information")
-                val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(existingBrokers.map(Integer.valueOf).toSeq.asJava)
+                val describeLogDirsResult = adminClient.describeLogDirs(existingBrokers.map(Integer.valueOf).toSeq.asJava)
                 val logDirInfosByBroker = describeLogDirsResult.allDescriptions.get().asScala.map { case (k, v) => k -> v.asScala }
 
                 out.println(s"Received log directory information from brokers ${existingBrokers.mkString(",")}")
