@@ -99,11 +99,15 @@ class TransactionsBounce13Test extends IntegrationTestHarness {
     val numInputRecords = 10000
     val expectedConsumerAssignment = Set(new TopicPartition(inputTopic, 0), new TopicPartition(inputTopic, 1),
       new TopicPartition(inputTopic, 2))
+    val expectedVerifyingConsumerAssignment = Set(new TopicPartition(outputTopic, 0), new TopicPartition(outputTopic, 1),
+      new TopicPartition(outputTopic, 2))
     createTopics()
 
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
+    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
     // wait for rebalancing completed before producing records, to avoid consuming records we want to verify later
     waitForRebalancingCompleted(consumer, expectedConsumerAssignment)
+    waitForRebalancingCompleted(verifyingConsumer, expectedVerifyingConsumerAssignment)
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val producer = createTransactionalProducer("test-txn")
@@ -146,7 +150,6 @@ class TransactionsBounce13Test extends IntegrationTestHarness {
       scheduler.shutdown()
     }
 
-    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
     val recordsByPartition = new mutable.HashMap[TopicPartition, mutable.ListBuffer[Int]]()
     TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords, waitTimeMs = consumeRecordTimeout).foreach { record =>
       val value = TestUtils.assertCommittedAndGetValue(record).toInt
