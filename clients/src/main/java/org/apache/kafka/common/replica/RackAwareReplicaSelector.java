@@ -35,6 +35,7 @@ public class RackAwareReplicaSelector implements ReplicaSelector {
         if (clientMetadata.rackId() != null && !clientMetadata.rackId().isEmpty()) {
             Set<ReplicaView> sameRackReplicas = partitionView.replicas().stream()
                     .filter(replicaInfo -> clientMetadata.rackId().equals(replicaInfo.endpoint().rack()))
+                    .filter(replicaInfo -> replicaInfo.timeSinceLastCaughtUpMs() != Long.MAX_VALUE)
                     .collect(Collectors.toSet());
             if (sameRackReplicas.isEmpty()) {
                 return Optional.of(partitionView.leader());

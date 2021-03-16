@@ -1263,7 +1263,7 @@ class ReplicaManager(val config: KafkaConfig,
             .map(replica => new DefaultReplicaView(
               replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
               replica.logEndOffset,
-              currentTimeMs - replica.lastCaughtUpTimeMs))
+              if (replica.lastCaughtUpTimeMs == 0) Long.MaxValue else currentTimeMs - replica.lastCaughtUpTimeMs))
 
           val leaderReplica = new DefaultReplicaView(
             replicaEndpoints.getOrElse(leaderReplicaId, Node.noNode()),

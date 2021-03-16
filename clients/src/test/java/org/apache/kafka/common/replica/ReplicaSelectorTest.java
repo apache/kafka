@@ -60,6 +60,10 @@ public class ReplicaSelectorTest {
             assertEquals(replicaInfo, leader, "Expect the leader since it's in rack-a");
         });
 
+        selected = selector.select(tp, metadata("rack-c"), partitionView);
+        assertOptional(selected, replicaInfo -> {
+            assertEquals(replicaInfo, leader, "Expect leader when we can't find any ISR nodes in given rack");
+        });
 
     }
 
@@ -68,7 +72,8 @@ public class ReplicaSelectorTest {
                 replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 0),
                 replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
                 replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 3),
-                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2)
+                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2),
+                replicaInfo(new Node(4, "badhost", 1234, "rack-c"), 4, Long.MAX_VALUE)
 
         ).collect(Collectors.toList());
     }
