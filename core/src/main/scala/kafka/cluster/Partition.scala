@@ -608,14 +608,14 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // mark local replica as the leader after converting hw
-        if (topicPartition.topic().contains("__consumer_offsets")) {
-          System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
-//          val elements = Thread.currentThread.getStackTrace
-//          for (i <- 1 until elements.length) {
-//            val s = elements(i)
-//            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-//          }
-        }
+//        if (topicPartition.topic().contains("__consumer_offsets")) {
+//          System.err.println(s"$localBrokerId:makeL: newL: $localBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+////          val elements = Thread.currentThread.getStackTrace
+////          for (i <- 1 until elements.length) {
+////            val s = elements(i)
+////            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+////          }
+//        }
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         remoteReplicas.foreach { replica =>
@@ -683,14 +683,14 @@ class Partition(val topicPartition: TopicPartition,
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
-        if (topicPartition.topic().contains("__consumer_offsets")) {
-          System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
-//          val elements = Thread.currentThread.getStackTrace
-//          for (i <- 1 until elements.length) {
-//            val s = elements(i)
-//            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-//          }
-        }
+//        if (topicPartition.topic().contains("__consumer_offsets")) {
+////          System.err.println(s"$localBrokerId:makeF: newL: $newLeaderBrokerId, ori:$leaderReplicaIdOpt, $topicPartition")
+////          val elements = Thread.currentThread.getStackTrace
+////          for (i <- 1 until elements.length) {
+////            val s = elements(i)
+////            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+////          }
+//        }
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
@@ -858,11 +858,11 @@ class Partition(val topicPartition: TopicPartition,
           s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
           s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
 //        }
-        if (requiredOffset < 3) {
-          System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
-            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
-            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
-        }
+//        if (requiredOffset < 3) {
+//          System.err.println(s"$localBrokerId: Progress awaiting ISR acks for offset $requiredOffset: " +
+//            s"acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+//            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
+//        }
 
         val minIsr = leaderLog.config.minInSyncReplicas
         if (leaderLog.highWatermark >= requiredOffset) {
