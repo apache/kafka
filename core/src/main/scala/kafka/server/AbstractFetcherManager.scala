@@ -163,8 +163,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetchStates ++= fetcher.removePartitions(partitions)
-      existingTopicPartitions ++= failedPartitions.intersect(partitions)
-      failedPartitions.removeAll(existingTopicPartitions)
+      existingTopicPartitions ++= failedPartitions.removeAll(partitions)
     }
     existingTopicPartitions ++= fetchStates.keySet
     info(s"Removed fetcher for partitions ${existingTopicPartitions}. Current no fetcher for partitions ${partitions.diff(existingTopicPartitions)}")
@@ -220,16 +219,14 @@ class FailedPartitions {
     failedPartitionsSet += topicPartition
   }
 
-  def removeAll(topicPartitions: Set[TopicPartition]): Unit = synchronized {
-    failedPartitionsSet --= topicPartitions
+  def removeAll(topicPartitions: Set[TopicPartition]): Set[TopicPartition] = synchronized {
+    val existingTopicPartitions = failedPartitionsSet & topicPartitions
+    failedPartitionsSet --= existingTopicPartitions
+    existingTopicPartitions
   }
 
   def contains(topicPartition: TopicPartition): Boolean = synchronized {
     failedPartitionsSet.contains(topicPartition)
-  }
-
-  def intersect(topicPartitions: Set[TopicPartition]): Set[TopicPartition] = synchronized {
-    failedPartitionsSet & topicPartitions
   }
 }
 
