@@ -85,8 +85,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration40Test {
     private final static Properties PRODUCER_CONFIG_1 = new Properties();
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
     private final static Properties PRODUCER_CONFIG_3 = new Properties();
-
-
+    
 
     @BeforeClass
     public static void beforeTest() throws Exception {
