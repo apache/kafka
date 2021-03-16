@@ -372,6 +372,9 @@ class SecurityConfig(TemplateRenderer):
 
     @property
     def enabled_sasl_mechanisms(self):
+        """
+        :return: all the SASL mechanisms in use, including for brokers, clients, controllers, and ZooKeeper
+        """
         sasl_mechanisms = []
         if self.is_sasl(self.security_protocol):
             # .csv is supported so be sure to account for that possibility
