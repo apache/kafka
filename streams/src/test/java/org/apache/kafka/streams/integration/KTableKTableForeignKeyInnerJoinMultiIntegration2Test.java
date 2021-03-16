@@ -110,7 +110,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration2Test {
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-
         final List<KeyValue<Integer, Float>> table1 = asList(
             new KeyValue<>(1, 1.33f),
             new KeyValue<>(2, 2.22f),
