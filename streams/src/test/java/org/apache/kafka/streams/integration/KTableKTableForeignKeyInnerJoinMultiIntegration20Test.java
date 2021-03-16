@@ -50,6 +50,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -57,13 +58,14 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegration20Test {
     private final static int NUM_BROKERS = 1;
-
 
     @ClassRule
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -86,7 +88,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration20Test {
 
     @BeforeClass
     public static void beforeTest() throws Exception {
-        //Use multiple partitions to ensure distribution of keys.
+        //Us  alatiple partitionvs to ensure distribution of keys.
 
         CLUSTER.createTopic(TABLE_1, 3, 1);
         CLUSTER.createTopic(TABLE_2, 5, 1);
@@ -194,9 +196,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration20Test {
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
-        streams.start();
-        streamsTwo.start();
-        streamsThree.start();
+
+        final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -213,6 +215,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration20Test {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 5000);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 15000);
         return streamsConfig;
     }
 
