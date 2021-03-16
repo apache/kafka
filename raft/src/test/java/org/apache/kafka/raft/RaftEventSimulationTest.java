@@ -505,12 +505,12 @@ public class RaftEventSimulationTest {
 
         boolean anyReachedHighWatermark(long offset) {
             return running.values().stream()
-                    .anyMatch(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
+                    .anyMatch(node -> node.highWatermark() > offset);
         }
 
         long maxHighWatermarkReached() {
             return running.values().stream()
-                .map(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L))
+                .map(RaftNode::highWatermark)
                 .max(Long::compareTo)
                 .orElse(0L);
         }
@@ -518,20 +518,19 @@ public class RaftEventSimulationTest {
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L))
+                .map(RaftNode::highWatermark)
                 .max(Long::compareTo)
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).client.quorum().highWatermark().map(hw -> hw.offset)
-                    .orElse(0L) > offset);
+                .allMatch(nodeId -> running.get(nodeId).highWatermark() > offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
+                .allMatch(node -> node.highWatermark() > offset);
         }
 
         OptionalInt latestLeader() {
@@ -736,8 +735,9 @@ public class RaftEventSimulationTest {
         }
 
         long highWatermark() {
-            Optional<LogOffsetMetadata> highWatermarkMetadata = client.quorum().highWatermark();
-            return highWatermarkMetadata.map(hw -> hw.offset).orElse(0L);
+            return client.quorum().highWatermark()
+                .map(hw -> hw.offset)
+                .orElse(0L);
         }
 
         @Override
