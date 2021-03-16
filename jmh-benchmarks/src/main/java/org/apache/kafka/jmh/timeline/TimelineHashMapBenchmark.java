@@ -100,6 +100,36 @@ public class TimelineHashMapBenchmark {
         }
     }
 
+    @State(Scope.Thread)
+    public static class TimelineMapSnapshotInput {
+        public SnapshotRegistry snapshotRegistry;
+        public TimelineHashMap<Integer, String> map;
+        public final List<Integer> keys = createKeys(NUM_ENTRIES);
+
+        @Setup(Level.Invocation)
+        public void setup() {
+            snapshotRegistry = new SnapshotRegistry(new LogContext());
+            map = new TimelineHashMap<>(snapshotRegistry, keys.size());
+
+            for (Integer key : keys) {
+                map.put(key, String.valueOf(key));
+            }
+
+            int count = 0;
+            for (Integer key : keys) {
+                if (count % 1_000 == 0) {
+                    snapshotRegistry.deleteSnapshotsUpTo(count - 10_000);
+                    snapshotRegistry.createSnapshot(count);
+                }
+                map.put(key, String.valueOf(key));
+                count++;
+            }
+
+            Collections.shuffle(keys);
+        }
+    }
+
+
     @Benchmark
     public Map<Integer, String> testAddEntriesInHashMap() {
         HashMap<Integer, String> map = new HashMap<>();
@@ -240,6 +270,35 @@ public class TimelineHashMapBenchmark {
             epoch++;
         }
         return input.map;
+    }
+
+    @Benchmark
+    public int testIterateEntriesInHashMap(HashMapInput input) {
+        int count = 0;
+        for (HashMap.Entry<Integer, String> entry : input.map.entrySet()) {
+            count++;
+        }
+        return count;
+    }
+
+    @Benchmark
+    public int testIterateEntriesInImmutableMap(ImmutableMapInput input) {
+        int count = 0;
+        scala.collection.Iterator<scala.Tuple2<Integer, String>> iterator = input.map.iterator();
+        while (iterator.hasNext()) {
+            iterator.next();
+            count++;
+        }
+        return count;
+    }
+
+    @Benchmark
+    public int testIterateEntriesWithSnapshots(TimelineMapSnapshotInput input) {
+        int count = 0;
+        for (TimelineHashMap.Entry<Integer, String> entry : input.map.entrySet(input.snapshotRegistry.epochsList().get(0))) {
+            count++;
+        }
+        return count;
     }
 
     static List<Integer> createKeys(int numberOfEntries) {
