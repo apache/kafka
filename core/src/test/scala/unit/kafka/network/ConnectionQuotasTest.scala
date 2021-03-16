@@ -758,7 +758,7 @@ class ConnectionQuotasTest {
       "Expected broker-connection-accept-rate metric to exist")
 
     // add listeners and verify connection limits not exceeded
-    listeners.foreach { case (name, listener) =>
+    listeners.forKeyValue { (name, listener) =>
       val listenerName = listener.listenerName
       connectionQuotas.addListener(config, listenerName)
       connectionQuotas.maxConnectionsPerListener(listenerName).configure(listenerConfig)
@@ -806,7 +806,7 @@ class ConnectionQuotasTest {
   }
 
   private def verifyOnlyNonInterBrokerListenersBlockedPercentRecorded(): Unit = {
-    blockedPercentMeters.foreach { case (name, meter) =>
+    blockedPercentMeters.forKeyValue { (name, meter) =>
       name match {
         case "REPLICATION" =>
           assertEquals(0, meter.count(), s"BlockedPercentMeter metric for $name listener")
