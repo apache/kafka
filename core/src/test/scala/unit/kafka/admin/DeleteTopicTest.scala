@@ -160,7 +160,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
                                                 partition: TopicPartition,
                                                 reassignment: NewPartitionReassignment): Unit = {
     val e = assertThrows(classOf[ExecutionException], () => adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
-      Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2, 3))))).all().get())
+      Optional.of(reassignment))).all().get())
     assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
   }
 
