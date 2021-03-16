@@ -41,20 +41,29 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
     //input exist brokerList
     LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0", "--describe"), printStream)
-    val existBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
-    val existBrokersLineIter = existBrokersContent.split("\n").iterator
+    val existingBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
+    val existingBrokersLineIter = existingBrokersContent.split("\n").iterator
 
-    assertTrue(existBrokersLineIter.hasNext)
-    assertTrue(existBrokersLineIter.next().contains(s"Querying brokers for log directories information"))
+    assertTrue(existingBrokersLineIter.hasNext)
+    assertTrue(existingBrokersLineIter.next().contains(s"Querying brokers for log directories information"))
 
-    //input nonExist brokerList
+    //input nonexistent brokerList
     byteArrayOutputStream.reset()
     LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0,1,2", "--describe"), printStream)
-    val nonExistBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
-    val nonExistBrokersLineIter = nonExistBrokersContent.split("\n").iterator
+    val nonExistingBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
+    val nonExistingBrokersLineIter = nonExistingBrokersContent.split("\n").iterator
 
-    assertTrue(nonExistBrokersLineIter.hasNext)
-    assertTrue(nonExistBrokersLineIter.next().contains(s"ERROR: The given brokers do not exist from --broker-list: 1,2. Current cluster exist brokers: 0"))
+    assertTrue(nonExistingBrokersLineIter.hasNext)
+    assertTrue(nonExistingBrokersLineIter.next().contains(s"ERROR: The given brokers do not exist from --broker-list: 1,2. Current existent brokers: 0"))
+
+    //input duplicate ids
+    byteArrayOutputStream.reset()
+    LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0,0,1,2,2", "--describe"), printStream)
+    val duplicateBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
+    val duplicateBrokersLineIter = duplicateBrokersContent.split("\n").iterator
+
+    assertTrue(duplicateBrokersLineIter.hasNext)
+    assertTrue(duplicateBrokersLineIter.next().contains(s"ERROR: The given brokers do not exist from --broker-list: 1,2. Current existent brokers: 0"))
 
     //use all brokerList for current cluster
     byteArrayOutputStream.reset()

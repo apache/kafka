@@ -39,8 +39,8 @@ object LogDirsCommand {
     def describe(args: Array[String], out: PrintStream): Unit = {
         val opts = new LogDirsCommandOptions(args)
         val adminClient = createAdminClient(opts)
-        val topicList = opts.options.valueOf(opts.topicListOpt).split(",").filter(_.nonEmpty)
         try {
+            val topicList = opts.options.valueOf(opts.topicListOpt).split(",").filter(_.nonEmpty)
             val clusterBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toSet
             val (existingBrokers, nonExistingBrokers) = Option(opts.options.valueOf(opts.brokerListOpt)) match {
                 case Some(brokerListStr) =>
@@ -50,7 +50,8 @@ object LogDirsCommand {
             }
 
             if (nonExistingBrokers.nonEmpty) {
-                out.println(s"ERROR: The given brokers do not exist from --broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist brokers: ${clusterBrokers.mkString(",")}")
+                out.println(s"ERROR: The given brokers do not exist from --broker-list: ${nonExistingBrokers.mkString(",")}." +
+                  s" Current existent brokers: ${clusterBrokers.mkString(",")}")
             } else {
                 out.println("Querying brokers for log directories information")
                 val describeLogDirsResult = adminClient.describeLogDirs(existingBrokers.map(Integer.valueOf).toSeq.asJava)
