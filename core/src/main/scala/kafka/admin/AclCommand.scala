@@ -376,8 +376,8 @@ object AclCommand extends Logging {
   private def getConsumerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[AccessControlEntry]] = {
     val filters = getResourceFilter(opts)
 
-    val topics: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
-    val groups: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.GROUP)
+    val topics = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val groups = filters.filter(_.resourceType == JResourceType.GROUP)
 
     //Read, Describe on topic, Read on consumerGroup
 
