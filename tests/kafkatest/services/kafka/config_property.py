@@ -80,7 +80,7 @@ From KafkaConfig.scala
   val ListenersProp = "listeners"
   val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
-  val SocketNagleDisableProp = "socket.nagle.disable"
+  val SocketTcpNoDelay = "socket.tcp.no.delay"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
