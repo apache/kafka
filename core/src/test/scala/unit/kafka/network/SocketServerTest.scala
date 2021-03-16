@@ -60,7 +60,7 @@ class SocketServerTest {
   val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
   props.put("listeners", "PLAINTEXT://localhost:0")
   props.put("num.network.threads", "1")
-  props.put("socket.nagle.disable", "false")
+  props.put("socket.tcp.no.delay", "true")
   props.put("socket.send.buffer.bytes", "300000")
   props.put("socket.receive.buffer.bytes", "300000")
   props.put("queued.max.requests", "50")

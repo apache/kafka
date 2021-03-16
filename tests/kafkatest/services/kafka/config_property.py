@@ -28,7 +28,7 @@ ADVERTISED_HOSTNAME = "advertised.host.name"
 
 NUM_NETWORK_THREADS = "num.network.threads"
 NUM_IO_THREADS = "num.io.threads"
-SOCKET_NAGLE_DISABLE = "socket.nagle.disable"
+SOCKET_TCP_NODELAY = "socket.tcp.no.delay"
 SOCKET_SEND_BUFFER_BYTES = "socket.send.buffer.bytes"
 SOCKET_RECEIVE_BUFFER_BYTES = "socket.receive.buffer.bytes"
 SOCKET_REQUEST_MAX_BYTES = "socket.request.max.bytes"
