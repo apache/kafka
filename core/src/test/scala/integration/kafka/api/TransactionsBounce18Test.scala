@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  *    http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package kafka.api
 
@@ -21,18 +21,19 @@ import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable
 
 class TransactionsBounce18Test extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
+  private val rebalanceTimeout = 60000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3
@@ -83,16 +84,28 @@ class TransactionsBounce18Test extends IntegrationTestHarness {
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
+  private def waitForRebalancingCompleted(consumer: Consumer[Array[Byte], Array[Byte]],
+                                          expectedAssignment: Set[TopicPartition]): Unit = {
+    TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
+      s"Timed out while waiting expected assignment $expectedAssignment. " +
+        s"The current assignment is ${consumer.assignment()}", waitTimeMs = rebalanceTimeout)
+  }
+
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
     String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
     val numInputRecords = 10000
+    val expectedConsumerAssignment = Set(new TopicPartition(inputTopic, 0), new TopicPartition(inputTopic, 1),
+      new TopicPartition(inputTopic, 2))
     createTopics()
 
-    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
+    // wait for rebalancing completed before producing records, to avoid consuming records we want to verify later
+    waitForRebalancingCompleted(consumer, expectedConsumerAssignment)
+
+    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val producer = createTransactionalProducer("test-txn")
 
     producer.initTransactions()
@@ -107,12 +120,8 @@ class TransactionsBounce18Test extends IntegrationTestHarness {
       while (numMessagesProcessed < numInputRecords) {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
         trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
-        System.err.println(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
-        
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead, waitTimeMs = consumeRecordTimeout)
-
         trace(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
-        System.err.println(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
 
         producer.beginTransaction()
         val shouldAbort = iteration % 3 == 0
@@ -120,17 +129,14 @@ class TransactionsBounce18Test extends IntegrationTestHarness {
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, null, record.key, record.value, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
-        System.err.println(s"Sent ${records.size} messages. Committing offsets.")
         commit(producer, consumerGroup, consumer)
 
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
-          System.err.println(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
           TestUtils.resetToCommittedPositions(consumer)
         } else {
           trace(s"Committed offsets. committing transaction of ${records.size} messages.")
-          System.err.println(s"Committed offsets. committing transaction of ${records.size} messages.")
           producer.commitTransaction()
           numMessagesProcessed += records.size
         }
@@ -209,7 +215,7 @@ class TransactionsBounce18Test extends IntegrationTestHarness {
 
     override def shutdown(): Unit = {
       super.shutdown()
-   }
+    }
   }
 
 }
