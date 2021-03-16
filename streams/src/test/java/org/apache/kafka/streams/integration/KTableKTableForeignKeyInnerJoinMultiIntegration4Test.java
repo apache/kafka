@@ -89,7 +89,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration4Test {
     @BeforeClass
     public static void beforeTest() throws Exception {
         //Us  alatiple partitionvs to ensure distribution of keys.
-
         CLUSTER.createTopic(TABLE_1, 3, 1);
         CLUSTER.createTopic(TABLE_2, 5, 1);
         CLUSTER.createTopic(TABLE_3, 7, 1);
