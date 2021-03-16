@@ -665,7 +665,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 1);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -681,7 +681,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch - 1);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -697,7 +697,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -713,7 +713,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.VALID, new OffsetAndEpoch(offset, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -734,7 +734,7 @@ public class MockLogTest {
 
         // offset is not equal to oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(20, 2)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(20, 2)),
                 resultOffsetAndEpoch);
     }
 
@@ -753,7 +753,7 @@ public class MockLogTest {
 
         // offset is not equal to oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(10, 1)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(10, 1)),
                 resultOffsetAndEpoch);
     }
 
@@ -765,7 +765,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -778,7 +778,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch + 1);
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(10, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(10, epoch)),
                 resultOffsetAndEpoch);
     }
 
@@ -790,7 +790,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(numberOfRecords - 1, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.VALID, new OffsetAndEpoch(numberOfRecords - 1, epoch)),
                 resultOffsetAndEpoch);
     }
 

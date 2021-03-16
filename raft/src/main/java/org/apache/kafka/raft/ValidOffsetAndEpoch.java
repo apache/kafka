@@ -19,36 +19,36 @@ package org.apache.kafka.raft;
 import java.util.Objects;
 
 public final class ValidOffsetAndEpoch {
-    final private Type type;
+    final private Kind kind;
     final private OffsetAndEpoch offsetAndEpoch;
 
-    ValidOffsetAndEpoch(Type type, OffsetAndEpoch offsetAndEpoch) {
-        this.type = type;
+    ValidOffsetAndEpoch(Kind kind, OffsetAndEpoch offsetAndEpoch) {
+        this.kind = kind;
         this.offsetAndEpoch = offsetAndEpoch;
     }
 
-    public Type getType() {
-        return type;
+    public Kind kind() {
+        return kind;
     }
 
     public OffsetAndEpoch offsetAndEpoch() {
         return offsetAndEpoch;
     }
 
-    public static enum Type {
+    public static enum Kind {
         DIVERGING, SNAPSHOT, VALID
     }
 
     public static ValidOffsetAndEpoch diverging(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidOffsetAndEpoch(Type.DIVERGING, offsetAndEpoch);
+        return new ValidOffsetAndEpoch(Kind.DIVERGING, offsetAndEpoch);
     }
 
     public static ValidOffsetAndEpoch snapshot(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidOffsetAndEpoch(Type.SNAPSHOT, offsetAndEpoch);
+        return new ValidOffsetAndEpoch(Kind.SNAPSHOT, offsetAndEpoch);
     }
 
     public static ValidOffsetAndEpoch valid(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidOffsetAndEpoch(Type.VALID, offsetAndEpoch);
+        return new ValidOffsetAndEpoch(Kind.VALID, offsetAndEpoch);
     }
 
     public static ValidOffsetAndEpoch valid() {
@@ -60,12 +60,12 @@ public final class ValidOffsetAndEpoch {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         ValidOffsetAndEpoch that = (ValidOffsetAndEpoch) obj;
-        return type == that.type &&
+        return kind == that.kind &&
                 offsetAndEpoch.equals(that.offsetAndEpoch);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, offsetAndEpoch);
+        return Objects.hash(kind, offsetAndEpoch);
     }
 }
