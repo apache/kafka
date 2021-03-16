@@ -50,7 +50,7 @@ object LogDirsCommand {
             }
 
             if (nonExistingBrokers.nonEmpty) {
-                out.println(s"ERROR: The given broker(s) does not exist from --broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist broker(s): ${clusterBrokers.mkString(",")}")
+                out.println(s"ERROR: The given brokers do not exist from --broker-list: ${nonExistingBrokers.mkString(",")}. Current cluster exist brokers: ${clusterBrokers.mkString(",")}")
             } else {
                 out.println("Querying brokers for log directories information")
                 val describeLogDirsResult = adminClient.describeLogDirs(existingBrokers.map(Integer.valueOf).toSeq.asJava)
