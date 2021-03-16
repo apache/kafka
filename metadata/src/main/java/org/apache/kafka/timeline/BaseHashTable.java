@@ -40,14 +40,16 @@ class BaseHashTable<T> {
     private final static double MAX_LOAD_FACTOR = 0.75f;
 
     /**
-     * The natural log of 2
+     * The minimum number of slots we can have in the hash table.
      */
-    private final static double LN_2 = Math.log(2);
+    final static int MIN_CAPACITY = 2;
 
     /**
      * The maximum number of slots we can have in the hash table.
+     *
+     * This is set to the maximum 31-bit power of two.
      */
-    private final static int MAX_CAPACITY = 0x4000000;
+    final static int MAX_CAPACITY = 0x4000_0000;
 
     private Object[] elements;
     private int size = 0;
@@ -56,12 +58,30 @@ class BaseHashTable<T> {
         this.elements = new Object[expectedSizeToCapacity(expectedSize)];
     }
 
+    /**
+     * Calculate the capacity we should provision, given the expected size.
+     *
+     * Our capacity must always be a power of 2, and never less than 2.
+     */
     static int expectedSizeToCapacity(int expectedSize) {
-        if (expectedSize <= 1) {
-            return 2;
+        if (expectedSize >= MAX_CAPACITY / 2) {
+            return MAX_CAPACITY;
         }
-        double sizeToFit = expectedSize / MAX_LOAD_FACTOR;
-        return (int) Math.min(MAX_CAPACITY, Math.ceil(Math.log(sizeToFit) / LN_2));
+        return Math.max(MIN_CAPACITY, roundUpToPowerOfTwo(expectedSize * 2));
+    }
+
+    private static int roundUpToPowerOfTwo(int i) {
+        if (i < 0) {
+            return 0;
+        }
+        i = i - 1;
+        i |= i >> 1;
+        i |= i >> 2;
+        i |= i >> 4;
+        i |= i >> 8;
+        i |= i >> 16;
+        i = i + 1;
+        return i < 0 ? MAX_CAPACITY : i;
     }
 
     final int baseSize() {
