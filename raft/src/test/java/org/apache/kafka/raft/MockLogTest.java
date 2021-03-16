@@ -838,9 +838,9 @@ public class MockLogTest {
     private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
         log.appendAsLeader(
             MemoryRecords.withRecords(
-            log.endOffset().offset,
-            CompressionType.NONE,
-            records.toArray(new SimpleRecord[records.size()])
+                log.endOffset().offset,
+                CompressionType.NONE,
+                records.toArray(new SimpleRecord[records.size()])
             ),
             epoch
         );
