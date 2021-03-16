@@ -806,55 +806,68 @@ public class RequestResponseTest {
 
     @Test
     public void fetchResponseVersionTest() {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0),
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(0)
-                        .setHighWatermark(1000000)
-                        .setLogStartOffset(0)
-                        .setRecords(records));
+        List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("test")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setHighWatermark(1000000)
+                .setLogStartOffset(0)
+                .setRecords(records))));
 
-        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData);
-        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
+        FetchResponse v0Response = new FetchResponse(new FetchResponseData()
+            .setThrottleTimeMs(0)
+            .setErrorCode(Errors.NONE.code())
+            .setSessionId(INVALID_SESSION_ID)
+            .setResponses(topicResponses));
+        FetchResponse v1Response = new FetchResponse(new FetchResponseData()
+            .setThrottleTimeMs(10)
+            .setErrorCode(Errors.NONE.code())
+            .setSessionId(INVALID_SESSION_ID)
+            .setResponses(topicResponses));
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
-        assertEquals(responseData, v0Response.responseData(), "Response data does not match");
-        assertEquals(responseData, v1Response.responseData(), "Response data does not match");
+        assertEquals(v1Response.responseData(), v0Response.responseData(), "Response data does not match");
     }
 
     @Test
     public void testFetchResponseV4() {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
 
         List<FetchResponseData.AbortedTransaction> abortedTransactions = asList(
                 new FetchResponseData.AbortedTransaction().setProducerId(10).setFirstOffset(100),
                 new FetchResponseData.AbortedTransaction().setProducerId(15).setFirstOffset(50)
         );
-        responseData.put(new TopicPartition("bar", 0),
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(0)
-                        .setHighWatermark(1000000)
-                        .setAbortedTransactions(abortedTransactions)
-                        .setRecords(records));
-        responseData.put(new TopicPartition("bar", 1),
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(1)
-                        .setHighWatermark(900000)
-                        .setLastStableOffset(5)
-                        .setRecords(records));
-        responseData.put(new TopicPartition("foo", 0),
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(0)
-                        .setHighWatermark(70000)
-                        .setLastStableOffset(6)
-                        .setRecords(records));
-
-        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("bar")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setHighWatermark(1000000)
+                .setAbortedTransactions(abortedTransactions)
+                .setRecords(records))));
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("bar")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(1)
+                .setHighWatermark(900000)
+                .setLastStableOffset(5)
+                .setRecords(records))));
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("foo")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setHighWatermark(70000)
+                .setLastStableOffset(6)
+                .setRecords(records))));
+        FetchResponse response = new FetchResponse(new FetchResponseData()
+                .setThrottleTimeMs(10)
+                .setErrorCode(Errors.NONE.code())
+                .setSessionId(INVALID_SESSION_ID)
+                .setResponses(topicResponses));
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
-        assertEquals(responseData, deserialized.responseData());
+        assertEquals(response.data(), deserialized.data());
     }
 
     @Test
@@ -1177,48 +1190,67 @@ public class RequestResponseTest {
     }
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
-        return FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>());
+        return new FetchResponse(new FetchResponseData()
+                .setThrottleTimeMs(25)
+                .setErrorCode(error.code())
+                .setSessionId(sessionId));
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
-                        .setPartitionIndex(0)
-                        .setHighWatermark(1000000)
-                        .setLogStartOffset(0)
-                        .setRecords(records));
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("test")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setHighWatermark(1000000)
+                .setLogStartOffset(0)
+                .setRecords(records))));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
-        responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
-                        .setPartitionIndex(1)
-                        .setHighWatermark(1000000)
-                        .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
-        return FetchResponse.of(Errors.NONE, 25, sessionId, responseData);
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("test")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(1)
+                .setHighWatermark(1000000)
+                .setLogStartOffset(0)
+                .setAbortedTransactions(abortedTransactions))));
+        return new FetchResponse(new FetchResponseData()
+                .setThrottleTimeMs(25)
+                .setErrorCode(Errors.NONE.code())
+                .setSessionId(sessionId)
+                .setResponses(topicResponses));
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
-                        .setPartitionIndex(0)
-                        .setHighWatermark(1000000)
-                        .setLogStartOffset(0)
-                        .setRecords(records));
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("test")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setHighWatermark(1000000)
+                .setLogStartOffset(0)
+                .setRecords(records))));
 
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.emptyList();
         if (includeAborted) {
             abortedTransactions = Collections.singletonList(
                     new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         }
-        responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
-                        .setPartitionIndex(1)
-                        .setHighWatermark(1000000)
-                        .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic("test")
+            .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                .setPartitionIndex(1)
+                .setHighWatermark(1000000)
+                .setLogStartOffset(0)
+                .setAbortedTransactions(abortedTransactions))));
 
-        return FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID, responseData);
+        return new FetchResponse(new FetchResponseData()
+                .setThrottleTimeMs(25)
+                .setErrorCode(Errors.NONE.code())
+                .setSessionId(INVALID_SESSION_ID)
+                .setResponses(topicResponses));
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

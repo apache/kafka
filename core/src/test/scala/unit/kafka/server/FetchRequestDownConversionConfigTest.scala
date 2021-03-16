@@ -93,7 +93,10 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponse.responseData.get(tp).errorCode)))
+    topicPartitions.foreach { tp =>
+      assertNotNull(fetchResponse.responseData.get(tp))
+      assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponse.responseData.get(tp).errorCode))
+    }
   }
 
   /**

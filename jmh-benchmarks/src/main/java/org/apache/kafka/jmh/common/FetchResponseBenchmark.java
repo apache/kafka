@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.common;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -43,7 +42,8 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -60,7 +60,7 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
+    private List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
 
     ResponseHeader header;
 
@@ -73,27 +73,27 @@ public class FetchResponseBenchmark {
                 new SimpleRecord(1001, "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8)),
                 new SimpleRecord(1002, "key3".getBytes(StandardCharsets.UTF_8), "value3".getBytes(StandardCharsets.UTF_8)));
 
-        this.responseData = new LinkedHashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
-            String topic = UUID.randomUUID().toString();
+            List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                                .setPartitionIndex(partitionId)
-                                .setLastStableOffset(0)
-                                .setLogStartOffset(0)
-                                .setRecords(records);
-                responseData.put(new TopicPartition(topic, partitionId), partitionData);
+                partitionResponses.add(new FetchResponseData.PartitionData()
+                        .setPartitionIndex(partitionId)
+                        .setLastStableOffset(0)
+                        .setLogStartOffset(0)
+                        .setRecords(records));
             }
+            String topic = UUID.randomUUID().toString();
+            topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+                    .setTopic(topic)
+                    .setPartitions(partitionResponses));
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
-    }
-
-    @Benchmark
-    public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
-        return fetchResponse.responseData().size();
+        this.fetchResponse = new FetchResponse(new FetchResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setSessionId(0)
+            .setResponses(topicResponses));
     }
 
     @Benchmark

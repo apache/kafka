@@ -26,9 +26,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,17 +120,20 @@ public class FetchResponse extends AbstractResponse {
     /**
      * Convenience method to find the size of a response.
      *
-     * @param version       The version of the response to use.
-     * @param partIterator  The partition iterator.
-     * @return              The response size in bytes.
+     * @param version        The version of the response to use.
+     * @param topicResponses data
+     * @return               The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+                             List<FetchResponseData.FetchableTopicResponse> topicResponses) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator);
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        return 4 + data.size(cache, version);
+        return 4 + new FetchResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setSessionId(INVALID_SESSION_ID)
+            .setResponses(topicResponses)
+            .size(new ObjectSerializationCache(), version);
     }
 
     @Override
@@ -187,43 +188,5 @@ public class FetchResponse extends AbstractResponse {
      */
     public static int recordsSize(FetchResponseData.PartitionData partition) {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
-    }
-
-    public static FetchResponse of(Errors error,
-                                   int throttleTimeMs,
-                                   int sessionId,
-                                   LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData) {
-        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
-    }
-
-    private static FetchResponseData toMessage(Errors error,
-                                               int throttleTimeMs,
-                                               int sessionId,
-                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
-        List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        partIterator.forEachRemaining(entry -> {
-            FetchResponseData.PartitionData partitionData = entry.getValue();
-            // Since PartitionData alone doesn't know the partition ID, we set it here
-            partitionData.setPartitionIndex(entry.getKey().partition());
-            // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
-            // batch is in the same topic group.
-            FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
-                : topicResponseList.get(topicResponseList.size() - 1);
-            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
-                previousTopic.partitions().add(partitionData);
-            else {
-                List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
-                partitionResponses.add(partitionData);
-                topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopic(entry.getKey().topic())
-                    .setPartitions(partitionResponses));
-            }
-        });
-
-        return new FetchResponseData()
-            .setThrottleTimeMs(throttleTimeMs)
-            .setErrorCode(error.code())
-            .setSessionId(sessionId)
-            .setResponses(topicResponseList);
     }
 }

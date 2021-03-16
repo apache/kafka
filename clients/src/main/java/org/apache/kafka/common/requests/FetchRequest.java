@@ -296,11 +296,16 @@ public class FetchRequest extends AbstractRequest {
         // may not be any partitions at all in the response.  For this reason, the top-level error code
         // is essential for them.
         Errors error = Errors.forException(e);
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-        for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-            responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
-        }
-        return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData);
+        FetchResponseData responseData = new FetchResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setSessionId(data.sessionId());
+        data.topics().forEach(topic -> {
+            FetchResponseData.FetchableTopicResponse topicResponses = new FetchResponseData.FetchableTopicResponse().setTopic(topic.topic());
+            responseData.responses().add(topicResponses);
+            topic.partitions().forEach(partition -> topicResponses.partitions().add(FetchResponse.partitionResponse(partition.partition(), error)));
+        });
+        return new FetchResponse(responseData);
     }
 
     public int replicaId() {

@@ -81,7 +81,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -136,11 +135,16 @@ public class ReplicaFetcherThreadBenchmark {
                 Time.SYSTEM,
                 true);
 
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
+        FetchResponseData.FetchableTopicResponse topicResponse = new FetchResponseData.FetchableTopicResponse()
+                .setTopic("topic");
+        FetchResponseData fetchedData = new FetchResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+                .setSessionId(999)
+                .setResponses(Collections.singletonList(topicResponse));
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         for (int i = 0; i < partitionCount; i++) {
-            TopicPartition tp = new TopicPartition("topic", i);
-
+            TopicPartition tp = new TopicPartition(topicResponse.topic(), i);
             List<Integer> replicas = Arrays.asList(0, 1, 2);
             LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
                     .setControllerEpoch(0)
@@ -173,7 +177,7 @@ public class ReplicaFetcherThreadBenchmark {
                     return null;
                 }
             };
-            initialFetched.put(tp, new FetchResponseData.PartitionData()
+            topicResponse.partitions().add(new FetchResponseData.PartitionData()
                     .setPartitionIndex(tp.partition())
                     .setLastStableOffset(0)
                     .setLogStartOffset(0)
@@ -188,7 +192,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched));
+        fetcher.fetchSessionHandler().handleResponse(new FetchResponse(fetchedData));
     }
 
     @TearDown(Level.Trial)
@@ -259,7 +263,7 @@ public class ReplicaFetcherThreadBenchmark {
                         }
 
                         @Override
-                        public boolean isThrottled(TopicPartition topicPartition) {
+                        public boolean isThrottled(String topicName, int partition) {
                             return false;
                         }
                     },
