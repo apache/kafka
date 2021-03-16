@@ -71,7 +71,7 @@ public class FetchResponseBenchmark {
 
     Map<Uuid, String> topicNames;
 
-    List<FetchResponse.TopicIdError> topicIdErrors;
+    List<FetchResponseData.FetchableTopicResponse> unresolvedTopicData;
 
     ResponseHeader header;
 
@@ -89,7 +89,7 @@ public class FetchResponseBenchmark {
         this.responseData = new LinkedHashMap<>();
         this.topicIds = new HashMap<>();
         this.topicNames = new HashMap<>();
-        this.topicIdErrors = new LinkedList<>();
+        this.unresolvedTopicData = new LinkedList<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
             Uuid id = Uuid.randomUuid();
@@ -106,13 +106,13 @@ public class FetchResponseBenchmark {
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, topicIdErrors, topicIds, 0, 0);
+        this.fetchResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, unresolvedTopicData, topicIds, 0, 0);
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, topicIdErrors, topicIds, 0, 0);
+        FetchResponse fetchResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, unresolvedTopicData, topicIds, 0, 0);
         return fetchResponse.resolvedResponseData().size();
     }
 

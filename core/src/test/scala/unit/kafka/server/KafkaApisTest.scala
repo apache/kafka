@@ -118,7 +118,6 @@ class KafkaApisTest {
 
 
   private val emptyUnresolvedPart =  List[FetchRequest.UnresolvedPartitions]().asJava
-  private val emptyIdErrors = Map[Uuid, FetchResponse.TopicIdError]().asJava
 
   @AfterEach
   def tearDown(): Unit = {
@@ -2118,7 +2117,7 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds(), false)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart),  metadataCache.topicNamesToIds(), false)
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
@@ -2681,7 +2680,7 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds(), true)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart),  metadataCache.topicNamesToIds(), true)
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
@@ -3269,16 +3268,20 @@ class KafkaApisTest {
 
   @Test
   def testSizeOfThrottledPartitionsWithIdError(): Unit = {
-    val topicIdError = List(new FetchResponse.TopicIdError(Uuid.randomUuid(), List[Integer](1, 2, 3).asJava, Errors.UNKNOWN_TOPIC_ID))
-    checkSizeOfThrottledPartitions(topicIdError)
+    val unresolvedTopicData = Collections.singletonList(new FetchResponseData.FetchableTopicResponse()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
+        .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))))
+    checkSizeOfThrottledPartitions(unresolvedTopicData)
   }
 
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
-    checkSizeOfThrottledPartitions(List[FetchResponse.TopicIdError]())
+    checkSizeOfThrottledPartitions(Collections.emptyList())
   }
 
-  private def checkSizeOfThrottledPartitions(topicIdErrors: List[FetchResponse.TopicIdError]): Unit = {
+  private def checkSizeOfThrottledPartitions(unresolvedTopicData: util.List[FetchResponseData.FetchableTopicResponse]): Unit = {
     val topicNames = new util.HashMap[Uuid, String]
     val topicIds = new util.HashMap[String, Uuid]()
     def fetchResponse(data: Map[TopicPartition, String]): FetchResponse = {
@@ -3297,13 +3300,13 @@ class KafkaApisTest {
         topicIds.put(tp.topic(), id)
         topicNames.put(id, tp.topic())
       }
-      FetchResponse.prepareResponse(Errors.NONE, responseData, topicIdErrors.asJava, topicIds, 100, 100)
+      FetchResponse.prepareResponse(Errors.NONE, responseData, unresolvedTopicData, topicIds, 100, 100)
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.iterator,  topicIdErrors.asJava, topicIds)
+      fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.iterator, Collections.emptyList(), topicIds)
 
     val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
 
@@ -3311,8 +3314,7 @@ class KafkaApisTest {
     Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[TopicPartition])))
       .thenAnswer(invocation => throttledPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
 
-    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota,
-      topicIdErrors, topicIds))
+    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota, topicIds))
   }
 
   @Test

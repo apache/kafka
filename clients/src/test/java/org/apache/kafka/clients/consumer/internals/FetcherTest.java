@@ -1379,9 +1379,12 @@ public class FetcherTest {
                 .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setRecords(records));
-        List<FetchResponse.TopicIdError> topicIdErrors = Collections.singletonList(
-                new FetchResponse.TopicIdError(topicIds.get(tp0.topic()), Collections.singletonList(0), Errors.UNKNOWN_TOPIC_ID));
-        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), topicIdErrors, topicIds,
+        List<FetchResponseData.FetchableTopicResponse> unresolvedTopicData = Collections.singletonList(new FetchResponseData.FetchableTopicResponse()
+                .setTopicId(topicIds.get(tp0.topic()))
+                .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp0.partition())
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))));
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), unresolvedTopicData, topicIds,
                 0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 

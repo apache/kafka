@@ -265,11 +265,11 @@ public class FetchResponse extends AbstractResponse {
     public static int sizeOf(short version,
                              Iterator<Map.Entry<TopicPartition,
                              FetchResponseData.PartitionData>> partIterator,
-                             List<TopicIdError> topicIdErrors,
+                             List<FetchResponseData.FetchableTopicResponse> unresolvedTopics,
                              Map<String, Uuid> topicIds) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, topicIdErrors, topicIds);
+        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, unresolvedTopics, topicIds);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -288,11 +288,11 @@ public class FetchResponse extends AbstractResponse {
     //  Topic ID errors make the process a bit more complicated but maybe we can find a way to clean this up.
     public static FetchResponse prepareResponse(Errors error,
                                                 LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData,
-                                                List<TopicIdError> topicIdErrors,
+                                                List<FetchResponseData.FetchableTopicResponse> unresolvedTopics,
                                                 Map<String, Uuid> topicIds,
                                                 int throttleTimeMs,
                                                 int sessionId) {
-        return new FetchResponse(toMessage(error, throttleTimeMs,  sessionId, responseData.entrySet().iterator(), topicIdErrors, topicIds));
+        return new FetchResponse(toMessage(error, throttleTimeMs,  sessionId, responseData.entrySet().iterator(), unresolvedTopics, topicIds));
     }
 
     public static Optional<FetchResponseData.EpochEndOffset> divergingEpoch(FetchResponseData.PartitionData partitionResponse) {
@@ -356,7 +356,7 @@ public class FetchResponse extends AbstractResponse {
                                                int throttleTimeMs,
                                                int sessionId,
                                                Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator,
-                                               List<TopicIdError> topicIdErrors,
+                                               List<FetchResponseData.FetchableTopicResponse> unresolvedTopics,
                                                Map<String, Uuid> topicIds) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         partIterator.forEachRemaining(entry -> {
@@ -379,13 +379,8 @@ public class FetchResponse extends AbstractResponse {
             }
         });
 
-        // ID errors will be empty unless topic IDs are supported and there are topic ID errors.
-        topicIdErrors.forEach(topicIdError -> {
-            List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>(topicIdError.errorData());
-            topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopicId(topicIdError.id())
-                    .setPartitions(partitionResponses));
-        });
+        // Unresolved topics will be empty unless topic IDs are supported and there are topic ID errors.
+        topicResponseList.addAll(unresolvedTopics);
 
         return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)

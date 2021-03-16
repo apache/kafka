@@ -77,7 +77,7 @@ public class FetchSessionBenchmark {
         topicIds = new HashMap<>();
         FetchSessionHandler.Builder builder = handler.newBuilder();
 
-        List<FetchResponse.TopicIdError> topicIdErrors = new LinkedList<>();
+        List<FetchResponseData.FetchableTopicResponse> unresolvedTopicData = new LinkedList<>();
         Uuid id = Uuid.randomUuid();
         topicIds.put("foo", id);
 
@@ -95,7 +95,7 @@ public class FetchSessionBenchmark {
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(FetchResponse.prepareResponse(Errors.NONE, respMap, topicIdErrors, topicIds, 0, 1), ApiKeys.FETCH.latestVersion());
+        handler.handleResponse(FetchResponse.prepareResponse(Errors.NONE, respMap, unresolvedTopicData, topicIds, 0, 1), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {

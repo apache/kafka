@@ -840,7 +840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-          FetchResponse.prepareResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getIdErrors(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
+          FetchResponse.prepareResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getUnresolvedTopicData(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
         response.resolvedResponseData.forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
@@ -861,9 +861,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, fetchContext.getIdErrors().asScala.toList, topicIds)
+        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, topicIds)
         quotas.leader.record(responseSize)
-        val unresolvedPartitionsSize = fetchContext.getIdErrors().asScala.foldLeft(0)((prev, idError) => prev + idError.partitions().size())
+        val unresolvedPartitionsSize = fetchContext.getUnresolvedTopicData().asScala.foldLeft(0)((prev, topic) => prev + topic.partitions().size())
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
         requestHelper.sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
@@ -896,7 +896,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          val unresolvedPartitionsSize = fetchContext.getIdErrors().asScala.foldLeft(0)((prev, idError) => prev + idError.partitions().size())
+          val unresolvedPartitionsSize = fetchContext.getUnresolvedTopicData().asScala.foldLeft(0)((prev, topic) => prev + topic.partitions().size())
           trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
             s"metadata=${unconvertedFetchResponse.sessionId}")
         }
@@ -3381,10 +3381,9 @@ object KafkaApis {
   private[server] def sizeOfThrottledPartitions(versionId: Short,
                                                 unconvertedResponse: FetchResponse,
                                                 quota: ReplicationQuotaManager,
-                                                topicIdErrors: List[FetchResponse.TopicIdError],
                                                 topicIds: util.Map[String, Uuid]): Int = {
     FetchResponse.sizeOf(versionId, unconvertedResponse.resolvedResponseData.entrySet
-      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, topicIdErrors.asJava, topicIds)
+      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, Collections.emptyList(), topicIds)
   }
 
   // visible for testing

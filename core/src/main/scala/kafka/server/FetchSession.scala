@@ -26,10 +26,10 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.FetchRequest.{FetchDataAndError, ToForgetAndIds}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
-
 import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
+
 import scala.collection.{mutable, _}
 import scala.math.Ordered.orderingToOrdered
 
@@ -40,7 +40,7 @@ object FetchSession {
   type UNRESOLVED_CACHE = util.HashSet[CachedUnresolvedPartition]
   type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponseData.PartitionData]]
   type TOPIC_ID_MAP = util.Map[String, Uuid]
-  type ID_ERRORS = util.List[FetchResponse.TopicIdError]
+  type UNRESOLVED_DATA = util.ArrayList[FetchResponseData.FetchableTopicResponse]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
@@ -221,7 +221,16 @@ class CachedUnresolvedPartition(val topicId: Uuid,
                                 var fetchOffset: Long,
                                 var leaderEpoch: Optional[Integer],
                                 var fetcherLogStartOffset: Long,
-                                var lastFetchedEpoch: Optional[Integer]) {
+                                var lastFetchedEpoch: Optional[Integer])
+  extends ImplicitLinkedHashCollection.Element {
+
+  var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
+  var cachedPrev: Int = ImplicitLinkedHashCollection.INVALID_INDEX
+
+  override def next: Int = cachedNext
+  override def setNext(next: Int): Unit = this.cachedNext = next
+  override def prev: Int = cachedPrev
+  override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
   def this(id: Uuid, partition: Int) =
     this(id, partition, -1, -1, Optional.empty(), -1, Optional.empty[Integer])
@@ -321,7 +330,6 @@ class FetchSession(val id: Int,
     // Only make changes to unresolvedPartitions if we have a new request version.
     // If we receive an old request version, ignore all topic ID code, keep IDs that are there.
     if (version >= 13) {
-      val error = if (topicNames.isEmpty) Errors.UNSUPPORTED_VERSION else Errors.UNKNOWN_TOPIC_ID
       val unresolvedIterator = unresolvedPartitions.iterator()
       while (unresolvedIterator.hasNext()) {
         val partition = unresolvedIterator.next()
@@ -344,13 +352,6 @@ class FetchSession(val id: Int,
             updated.add(newTp)
           }
           unresolvedIterator.remove()
-        } else {
-          val topicIdError = fetchDataAndError.topicIdErrors.get(partition.topicId)
-          if (topicIdError == null) {
-            fetchDataAndError.topicIdErrors.put(partition.topicId, new FetchResponse.TopicIdError(partition.topicId, Collections.singletonList(partition.partition), error))
-          } else {
-            topicIdError.addPartition(partition.partition)
-          }
         }
       }
 
@@ -422,7 +423,10 @@ trait FetchContext extends Logging {
   def getThrottledResponse(throttleTimeMs: Int): FetchResponse =
     FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
 
-  def getIdErrors(): FetchSession.ID_ERRORS
+  /**
+   * Return unresolved partition data in the form of a list of FetchResponseData.FetchableTopicResponse
+   */
+  def getUnresolvedTopicData(): util.List[FetchResponseData.FetchableTopicResponse]
 }
 
 /**
@@ -444,7 +448,10 @@ class SessionErrorContext(val error: Errors,
     FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
   }
 
-  override def getIdErrors(): FetchSession.ID_ERRORS = Collections.emptyList()
+  override def getUnresolvedTopicData(): util.List[FetchResponseData.FetchableTopicResponse] = {
+    new FetchSession.UNRESOLVED_DATA
+  }
+
 }
 
 /**
@@ -455,7 +462,7 @@ class SessionErrorContext(val error: Errors,
   */
 class SessionlessFetchContext(val fetchDataAndError: FetchRequest.FetchDataAndError,
                               val topicIds: util.Map[String, Uuid]) extends FetchContext {
-  val topicIdErrors = new util.LinkedList(fetchDataAndError.topicIdErrors.values())
+  val unresolvedTopicData = generateUnresolvedTopicData(topicIds)
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchDataAndError.fetchData.get(part)).map(_.fetchOffset)
 
@@ -463,16 +470,44 @@ class SessionlessFetchContext(val fetchDataAndError: FetchRequest.FetchDataAndEr
     fetchDataAndError.fetchData.forEach(fun(_, _))
   }
 
+  private def generateUnresolvedTopicData(topicIds: util.Map[String, Uuid]): util.List[FetchResponseData.FetchableTopicResponse] = {
+    val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse]()
+    val error = if (topicIds.isEmpty) Errors.UNSUPPORTED_VERSION else Errors.UNKNOWN_TOPIC_ID
+
+    def buildPartitionData(partition: Int): FetchResponseData.PartitionData = {
+      new FetchResponseData.PartitionData()
+        .setPartitionIndex(partition)
+        .setErrorCode(error.code)
+        .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
+        .setAbortedTransactions(null)
+        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+    }
+
+    fetchDataAndError.unresolvedPartitions.forEach(unresolvedTopic => {
+      val partitionResponses = new util.ArrayList[FetchResponseData.PartitionData]
+      unresolvedTopic.partitionData().forEach((partitionIdx, _) => partitionResponses.add(buildPartitionData(partitionIdx)))
+      topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+        .setTopicId(unresolvedTopic.id())
+        .setPartitions(partitionResponses)
+      )
+    })
+    topicResponses
+  }
+
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
-    FetchResponse.sizeOf(versionId, updates.entrySet.iterator, topicIdErrors, topicIds)
+    FetchResponse.sizeOf(versionId, updates.entrySet.iterator, unresolvedTopicData, topicIds)
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet)}")
-    FetchResponse.prepareResponse(Errors.NONE, updates, topicIdErrors, topicIds, 0, INVALID_SESSION_ID)
+    FetchResponse.prepareResponse(Errors.NONE, updates, unresolvedTopicData, topicIds, 0, INVALID_SESSION_ID)
   }
 
-  override def getIdErrors(): FetchSession.ID_ERRORS = topicIdErrors
+  override def getUnresolvedTopicData(): util.List[FetchResponseData.FetchableTopicResponse] = {
+    unresolvedTopicData
+  }
 }
 
 /**
@@ -491,7 +526,7 @@ class FullFetchContext(private val time: Time,
                        private val fetchDataAndError: FetchDataAndError,
                        private val topicIds: util.Map[String, Uuid],
                        private val isFromFollower: Boolean) extends FetchContext {
-  val topicIdErrors = new util.LinkedList(fetchDataAndError.topicIdErrors.values())
+  val unresolvedTopicData = generateUnresolvedTopicData(topicIds)
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchDataAndError.fetchData.get(part)).map(_.fetchOffset)
 
@@ -499,8 +534,34 @@ class FullFetchContext(private val time: Time,
     fetchDataAndError.fetchData.forEach(fun(_, _))
   }
 
+  private def generateUnresolvedTopicData(topicIds: util.Map[String, Uuid]): util.List[FetchResponseData.FetchableTopicResponse] = {
+    val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse]()
+    val error = if (topicIds.isEmpty) Errors.UNSUPPORTED_VERSION else Errors.UNKNOWN_TOPIC_ID
+
+    def buildPartitionData(partition: Int): FetchResponseData.PartitionData = {
+      new FetchResponseData.PartitionData()
+        .setPartitionIndex(partition)
+        .setErrorCode(error.code)
+        .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
+        .setAbortedTransactions(null)
+        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+    }
+
+    fetchDataAndError.unresolvedPartitions.forEach(unresolvedTopic => {
+      val partitionResponses = new util.ArrayList[FetchResponseData.PartitionData]
+      unresolvedTopic.partitionData().forEach((partitionIdx, _) => partitionResponses.add(buildPartitionData(partitionIdx)))
+      topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+        .setTopicId(unresolvedTopic.id())
+        .setPartitions(partitionResponses)
+      )
+    })
+    topicResponses
+  }
+
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
-    FetchResponse.sizeOf(versionId, updates.entrySet.iterator, topicIdErrors, topicIds)
+    FetchResponse.sizeOf(versionId, updates.entrySet.iterator, unresolvedTopicData, topicIds)
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
@@ -525,27 +586,27 @@ class FullFetchContext(private val time: Time,
         updates.size + fetchDataAndError.unresolvedPartitions().size(), () => generateResolvedPartitions, () => generateUnresolvedPartitions)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
-    FetchResponse.prepareResponse(Errors.NONE, updates, topicIdErrors, topicIds, 0, responseSessionId)
+    FetchResponse.prepareResponse(Errors.NONE, updates, unresolvedTopicData, topicIds, 0, responseSessionId)
   }
 
-  override def getIdErrors(): FetchSession.ID_ERRORS = topicIdErrors
+  override def getUnresolvedTopicData(): util.List[FetchResponseData.FetchableTopicResponse] = {
+    unresolvedTopicData
+  }
 }
 
 /**
   * The fetch context for an incremental fetch request.
   *
   * @param time         The clock to use.
-  * @param topicIdErrors     The list of IDs and partitions with errors due to unresolved IDs
   * @param topicIds     The map from topic name to topic IDs
   * @param reqMetadata  The request metadata.
   * @param session      The incremental fetch request session.
   */
 class IncrementalFetchContext(private val time: Time,
-                              private val topicIdErrors: util.List[FetchResponse.TopicIdError],
                               private val topicIds: util.Map[String, Uuid],
                               private val reqMetadata: JFetchMetadata,
                               private val session: FetchSession) extends FetchContext {
-
+  private val unresolvedTopicData = generateUnresolvedTopicData(topicIds)
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
@@ -555,6 +616,37 @@ class IncrementalFetchContext(private val time: Time,
         fun(new TopicPartition(part.topic, part.partition), part.reqData)
       }
     }
+  }
+
+  private def generateUnresolvedTopicData(topicIds: util.Map[String, Uuid]): util.List[FetchResponseData.FetchableTopicResponse] = {
+    val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse]()
+    val error = if (topicIds.isEmpty) Errors.UNSUPPORTED_VERSION else Errors.UNKNOWN_TOPIC_ID
+
+    session.unresolvedPartitions.forEach(unresolvedPartition => {
+
+      def buildPartitionData(): FetchResponseData.PartitionData = {
+        new FetchResponseData.PartitionData()
+          .setPartitionIndex(unresolvedPartition.partition)
+          .setErrorCode(error.code)
+          .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+          .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+          .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
+          .setAbortedTransactions(null)
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+      }
+
+      val prevTopic = if (topicResponses.isEmpty) null else topicResponses.get(topicResponses.size - 1)
+      if (prevTopic != null && prevTopic.topicId == unresolvedPartition.topicId)
+        prevTopic.partitions.add(buildPartitionData())
+      else {
+        val partitionResponses = new util.ArrayList[FetchResponseData.PartitionData]
+        partitionResponses.add(buildPartitionData())
+        topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+          .setTopicId(unresolvedPartition.topicId)
+          .setPartitions(partitionResponses))
+      }
+    })
+    topicResponses
   }
 
   // Iterator that goes over the given partition map and selects partitions that need to be included in the response.
@@ -620,7 +712,7 @@ class IncrementalFetchContext(private val time: Time,
         FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet.iterator, Collections.emptyList(), Collections.emptyMap())
       } else {
         // Pass the partition iterator which updates neither the fetch context nor the partition map.
-        FetchResponse.sizeOf(versionId, new PartitionIterator(updates.entrySet.iterator, false), topicIdErrors, topicIds)
+        FetchResponse.sizeOf(versionId, new PartitionIterator(updates.entrySet.iterator, false), unresolvedTopicData, topicIds)
       }
     }
   }
@@ -642,7 +734,7 @@ class IncrementalFetchContext(private val time: Time,
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet)}")
-        FetchResponse.prepareResponse(Errors.NONE, updates, topicIdErrors, topicIds, 0, session.id)
+        FetchResponse.prepareResponse(Errors.NONE, updates, unresolvedTopicData, topicIds, 0, session.id)
       }
     }
   }
@@ -663,7 +755,9 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
-  override def getIdErrors(): FetchSession.ID_ERRORS = topicIdErrors
+  override def getUnresolvedTopicData(): util.List[FetchResponseData.FetchableTopicResponse] = {
+    unresolvedTopicData
+  }
 }
 
 case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
@@ -765,13 +859,13 @@ class FetchSessionCache(private val maxEntries: Int,
                          privileged: Boolean,
                          size: Int,
                          createPartitions: () => FetchSession.CACHE_MAP,
-                         createPartitionIdErrors: () => FetchSession.UNRESOLVED_CACHE): Int =
+                         createUnresolvedPartitions: () => FetchSession.UNRESOLVED_CACHE): Int =
   synchronized {
     // If there is room, create a new session entry.
     if ((sessions.size < maxEntries) ||
         tryEvict(privileged, EvictableKey(privileged, size, 0), now)) {
       val partitionMap = createPartitions()
-      val unresolvedPartitions = createPartitionIdErrors()
+      val unresolvedPartitions = createUnresolvedPartitions()
       val session = new FetchSession(newSessionId(), privileged, partitionMap, unresolvedPartitions,
           now, now, JFetchMetadata.nextEpoch(INITIAL_EPOCH))
       debug(s"Created fetch session ${session.toString}")
@@ -945,7 +1039,7 @@ class FetchManager(private val time: Time,
                   s"epoch ${session.epoch}: added ${partitionsToLogString(added)}, " +
                   s"updated ${partitionsToLogString(updated)}, " +
                   s"removed ${partitionsToLogString(removed)}")
-                new IncrementalFetchContext(time, new util.LinkedList(fetchDataAndError.topicIdErrors.values()), topicIds, reqMetadata, session)
+                new IncrementalFetchContext(time, topicIds, reqMetadata, session)
               }
             }
           }

@@ -178,17 +178,15 @@ public class FetchRequest extends AbstractRequest {
     }
 
     // For Fetch versions 13+, this object holds the fetchData map used in previous Fetch iterations,
-    // a list of UnresolvedPartitions, and a map containing all unresolved IDs to the corresponding TopicIdError.
+    // a list of UnresolvedPartitions, and a map containing all unresolved IDs.
     // For Fetch versions < 13, this will only wrap the fetchData map.
     public static final class FetchDataAndError {
         private final Map<TopicPartition, PartitionData> fetchData;
         private final List<UnresolvedPartitions> unresolvedPartitions;
-        private final Map<Uuid, FetchResponse.TopicIdError> topicIdErrors;
 
-        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions, Map<Uuid, FetchResponse.TopicIdError> topicIdErrors) {
+        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions) {
             this.fetchData = fetchData;
             this.unresolvedPartitions = unresolvedPartitions;
-            this.topicIdErrors = topicIdErrors;
         }
 
         public final Map<TopicPartition, PartitionData> fetchData() {
@@ -197,10 +195,6 @@ public class FetchRequest extends AbstractRequest {
 
         public final List<UnresolvedPartitions> unresolvedPartitions() {
             return unresolvedPartitions;
-        }
-
-        public final Map<Uuid, FetchResponse.TopicIdError> topicIdErrors() {
-            return topicIdErrors;
         }
     }
 
@@ -230,13 +224,6 @@ public class FetchRequest extends AbstractRequest {
     private FetchDataAndError toPartitionDataMapAndError(List<FetchRequestData.FetchTopic> fetchableTopics, Map<Uuid, String> topicNames) {
         Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
         List<UnresolvedPartitions> unresolvedPartitions = new LinkedList<>();
-        Map<Uuid, FetchResponse.TopicIdError> topicIdErrors = new HashMap<>();
-        Errors error;
-        if (topicNames.isEmpty()) {
-            error = Errors.UNSUPPORTED_VERSION;
-        } else {
-            error = Errors.UNKNOWN_TOPIC_ID;
-        }
         fetchableTopics.forEach(fetchTopic -> {
             String name = topicNames.get(fetchTopic.topicId());
             if (name != null) {
@@ -261,17 +248,9 @@ public class FetchRequest extends AbstractRequest {
                         fetchPartition.partitionMaxBytes(),
                         optionalEpoch(fetchPartition.currentLeaderEpoch()),
                         optionalEpoch(fetchPartition.lastFetchedEpoch()))))));
-
-                // Either adds the list of partitions to the set in and existing TopicIdError
-                // Or creates a new TopicIdError and adds the list of partitions
-                if (topicIdErrors.containsKey(fetchTopic.topicId()))
-                    topicIdErrors.get(fetchTopic.topicId()).addPartitions(fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()));
-                else
-                    topicIdErrors.put(fetchTopic.topicId(), new FetchResponse.TopicIdError(fetchTopic.topicId(), fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()),
-                        error));
             }
         });
-        return new FetchDataAndError(fetchData, unresolvedPartitions, topicIdErrors);
+        return new FetchDataAndError(fetchData, unresolvedPartitions);
     }
 
     // For Fetch versions 13+, this object holds the toForget list used in previous Fetch iterations as well as
@@ -540,7 +519,7 @@ public class FetchRequest extends AbstractRequest {
 
     public FetchDataAndError fetchDataAndError(Map<Uuid, String> topicNames) {
         if (version() < 13)
-            return new FetchDataAndError(fetchData, Collections.emptyList(), Collections.emptyMap());
+            return new FetchDataAndError(fetchData, Collections.emptyList());
         return toPartitionDataMapAndError(data.topics(), topicNames);
     }
 

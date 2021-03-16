@@ -663,11 +663,11 @@ class FetchSessionTest {
     // There will be two unresolved partitions
     assertEquals(2, resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
     resp1.resolvedResponseData().forEach( (_, resp) => assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp.errorCode))
-    val topicIdErrors = context1.getIdErrors()
-    assertEquals(1, topicIdErrors.size())
-    topicIdErrors.forEach( topicIdError => {
-      assertEquals(topicIds.get("foo"), topicIdError.id())
-      assertEquals(Set(0,1).asJava, topicIdError.partitions())
+    val unresolvedTopics = context1.getUnresolvedTopicData()
+    assertEquals(1, unresolvedTopics.size())
+    unresolvedTopics.forEach( topic => {
+      assertEquals(topicIds.get("foo"), topic.topicId())
+      assertEquals(List(0,1), topic.partitions().asScala.map(_.partitionIndex()))
     })
 
     // Create an incremental fetch request that removes foo-0 and adds bar-0
@@ -711,11 +711,11 @@ class FetchSessionTest {
     assertEquals(2, resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
     assertTrue(resp2.sessionId > 0)
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).get(new TopicPartition("foo", 1)).errorCode)
-    val topicIdErrors2 = context2.getIdErrors()
-    assertEquals(1, topicIdErrors2.size())
-    topicIdErrors2.forEach( topicIdError => {
-      assertEquals(topicIds.get("foo"), topicIdError.id())
-      assertEquals(Set(1).asJava, topicIdError.partitions())
+    val unresolvedTopics2 = context2.getUnresolvedTopicData()
+    assertEquals(1, unresolvedTopics2.size())
+    unresolvedTopics2.forEach( topic => {
+      assertEquals(topicIds.get("foo"), topic.topicId())
+      assertEquals(List(1), topic.partitions().asScala.map(_.partitionIndex()))
     })
 
     // Create an incremental fetch request that resolves foo-0's topic ID
@@ -754,7 +754,7 @@ class FetchSessionTest {
     // There are no unresolved partitions
     assertEquals(1, resp3.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
     assertTrue(resp3.sessionId > 0)
-    assertEquals(0, context3.getIdErrors().size())
+    assertEquals(0, context3.getUnresolvedTopicData().size())
 
     // Create an incremental fetch request that removes foo-1 as though the topic was deleted and recreated
     val reqData4 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
@@ -787,7 +787,7 @@ class FetchSessionTest {
     // There are no unresolved partitions
     assertEquals(0, resp4.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
     assertTrue(resp4.sessionId > 0)
-    assertEquals(0, context4.getIdErrors().size())
+    assertEquals(0, context4.getUnresolvedTopicData().size())
   }
 
   // This test simulates a request without IDs sent to a broker with IDs.
@@ -836,7 +836,7 @@ class FetchSessionTest {
     assertEquals(2, resp1.resolvedResponseData.size)
     // Since we are ignoring IDs, we should have no ID errors.
     resp1.resolvedResponseData().forEach( (_, resp) => assertEquals(Errors.NONE.code, resp.errorCode))
-    assertEquals(0, context1.getIdErrors().size())
+    assertEquals(0, context1.getUnresolvedTopicData().size())
   }
 
   // This test simulates a request without IDs sent to a broker with IDs and switching over to using IDs.
@@ -884,7 +884,7 @@ class FetchSessionTest {
     assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, resp1.resolvedResponseData.size)
     // Since we are ignoring IDs, we should have no ID errors.
-    assertEquals(0, context1.getIdErrors().size())
+    assertEquals(0, context1.getUnresolvedTopicData().size())
 
     // Create an incremental fetch request that adds topic Ids
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
@@ -953,7 +953,7 @@ class FetchSessionTest {
     assertEquals(Errors.NONE, resp3.error)
     assertEquals(1, resp3.resolvedResponseData.size)
     assertTrue(resp3.sessionId > 0)
-    assertEquals(0, context3.getIdErrors().size())
+    assertEquals(0, context3.getUnresolvedTopicData().size())
   }
 
   @Test
