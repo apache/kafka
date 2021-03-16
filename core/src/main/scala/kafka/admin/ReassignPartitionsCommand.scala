@@ -488,12 +488,8 @@ object ReassignPartitionsCommand extends Logging {
         targetReplicas,
         true)
     } catch {
-      case t: ExecutionException =>
-        t.getCause match {
-          case _: UnknownTopicOrPartitionException =>
-            PartitionReassignmentState(Seq(), targetReplicas, true)
-          case e => throw e
-        }
+      case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
+        PartitionReassignmentState(Seq(), targetReplicas, true)
     }
   }
 
@@ -514,11 +510,10 @@ object ReassignPartitionsCommand extends Logging {
     val results = new mutable.HashMap[TopicPartition, PartitionReassignmentState]()
     targetReassignments.groupBy(_._1.topic).forKeyValue { (topic, partitions) =>
       val replicasForTopic = zkClient.getReplicaAssignmentForTopics(Set(topic))
-      partitions.foreach {
-        case (partition, targetReplicas) =>
-          val currentReplicas = replicasForTopic.getOrElse(partition, Seq())
-          results.put(partition, new PartitionReassignmentState(
-            currentReplicas, targetReplicas, !partitionsBeingReassigned.contains(partition)))
+      partitions.forKeyValue { (partition, targetReplicas) =>
+        val currentReplicas = replicasForTopic.getOrElse(partition, Seq())
+        results.put(partition, new PartitionReassignmentState(
+          currentReplicas, targetReplicas, !partitionsBeingReassigned.contains(partition)))
       }
     }
     (results, partitionsBeingReassigned.nonEmpty)
