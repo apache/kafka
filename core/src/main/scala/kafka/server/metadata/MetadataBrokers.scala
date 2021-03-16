@@ -107,7 +107,7 @@ object MetadataBrokers {
       }
     }
     if (!listenersIdenticalAcrossBrokers) {
-      log.error("Listeners are not identical across alive brokers. " +
+      log.info("Listeners are not identical across alive brokers. " +
         _aliveBrokers.asScala.map(
           broker => s"${broker.id}: ${broker.endpoints.keySet.mkString(", ")}"))
     }
