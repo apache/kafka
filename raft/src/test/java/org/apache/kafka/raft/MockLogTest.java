@@ -728,9 +728,9 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        appendBatch(numberOfRecords, 1, 10);
-        appendBatch(numberOfRecords, 2, 15);
-        appendBatch(numberOfRecords, 4, 20);
+        appendBatch(numberOfRecords, 1);
+        appendBatch(numberOfRecords, 2);
+        appendBatch(numberOfRecords, 4);
 
         // offset is not equal to oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3);
@@ -739,7 +739,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateUnknownEpochLessThanLeaderGreaterThanOldestSnapshot() throws IOException {
+    public void testValidateEpochLessThanFirstEpochInLog() throws IOException {
         int numberOfRecords = 5;
         int offset = 10;
 
@@ -749,7 +749,7 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        appendBatch(numberOfRecords, 3, 10);
+        appendBatch(numberOfRecords, 3);
 
         // offset is not equal to oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
@@ -775,7 +775,7 @@ public class MockLogTest {
         int epoch = 1;
 
         appendBatch(numberOfRecords, epoch);
-        appendBatch(numberOfRecords, epoch + 1, 10);
+        appendBatch(numberOfRecords, epoch + 1);
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch);
         assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(10, epoch)),
@@ -836,17 +836,13 @@ public class MockLogTest {
     }
 
     private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
-        appendAsLeader(records, epoch, log.endOffset().offset);
-    }
-
-    private void appendAsLeader(Collection<SimpleRecord> records, int epoch, long initialOffset) {
         log.appendAsLeader(
-                MemoryRecords.withRecords(
-                        initialOffset,
-                        CompressionType.NONE,
-                        records.toArray(new SimpleRecord[records.size()])
-                ),
-                epoch
+            MemoryRecords.withRecords(
+            log.endOffset().offset,
+            CompressionType.NONE,
+            records.toArray(new SimpleRecord[records.size()])
+            ),
+            epoch
         );
     }
 
@@ -857,14 +853,5 @@ public class MockLogTest {
         }
 
         appendAsLeader(records, epoch);
-    }
-
-    private void appendBatch(int numRecords, int epoch, long initialOffset) {
-        List<SimpleRecord> records = new ArrayList<>(numRecords);
-        for (int i = 0; i < numRecords; i++) {
-            records.add(new SimpleRecord(String.valueOf(i).getBytes()));
-        }
-
-        appendAsLeader(records, epoch, initialOffset);
     }
 }
