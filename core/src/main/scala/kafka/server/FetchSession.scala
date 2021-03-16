@@ -428,7 +428,7 @@ class IncrementalFetchContext(private val time: Time,
         val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
           nextElement = element
-          if (updateFetchContextAndRemoveUnselected) {
+          if (updateFetchContextAndRemoveUnselected && FetchResponse.recordsSize(respData) > 0) {
             session.partitionMap.remove(cachedPart)
             session.partitionMap.mustAdd(cachedPart)
           }

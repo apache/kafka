@@ -20,6 +20,9 @@ import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
@@ -28,6 +31,7 @@ import org.junit.jupiter.api.{Test, Timeout}
 
 import java.util
 import java.util.{Collections, Optional}
+import scala.collection.mutable.ArrayBuffer
 
 @Timeout(120)
 class FetchSessionTest {
@@ -277,7 +281,7 @@ class FetchSessionTest {
 
     // Verify that SESSIONLESS requests get a SessionlessFetchContext
     val context = fetchManager.newContext(JFetchMetadata.LEGACY,
-        new util.HashMap[TopicPartition, FetchRequest.PartitionData](), EMPTY_PART_LIST, true)
+      new util.HashMap[TopicPartition, FetchRequest.PartitionData](), EMPTY_PART_LIST, true)
     assertEquals(classOf[SessionlessFetchContext], context.getClass)
 
     // Create a new fetch session with a FULL fetch request
@@ -812,5 +816,97 @@ class FetchSessionTest {
     assertEquals(Errors.NONE, resp4.error)
     assertEquals(resp1.sessionId, resp4.sessionId)
     assertEquals(Utils.mkSet(tp1, tp2), resp4.responseData.keySet)
+  }
+
+  @Test
+  def testDeprioritizesPartitionsWithRecordsOnly(): Unit = {
+    val time = new MockTime()
+    val cache = new FetchSessionCache(10, 1000)
+    val fetchManager = new FetchManager(time, cache)
+    val tp1 = new TopicPartition("foo", 1)
+    val tp2 = new TopicPartition("bar", 2)
+    val tp3 = new TopicPartition("zar", 3)
+
+    val reqData = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    reqData.put(tp1, new FetchRequest.PartitionData(100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp2, new FetchRequest.PartitionData(100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp3, new FetchRequest.PartitionData(100, 0, 1000, Optional.of(5), Optional.of(4)))
+
+    // Full fetch context returns all partitions in the response
+    val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData, EMPTY_PART_LIST, isFollower = false)
+    assertEquals(classOf[FullFetchContext], context1.getClass)
+
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    respData1.put(tp1, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp1.partition)
+      .setHighWatermark(50)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0))
+    respData1.put(tp2, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp2.partition)
+      .setHighWatermark(50)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0))
+    respData1.put(tp3, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp3.partition)
+      .setHighWatermark(50)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0))
+
+    val resp1 = context1.updateAndGenerateResponseData(respData1)
+    assertEquals(Errors.NONE, resp1.error)
+    assertNotEquals(INVALID_SESSION_ID, resp1.sessionId)
+    assertEquals(Utils.mkSet(tp1, tp2, tp3), resp1.responseData.keySet())
+
+    // Incremental fetch context returns partitions with changes but only deprioritizes
+    // the partitions with records
+    val context2 = fetchManager.newContext(new JFetchMetadata(resp1.sessionId, 1), reqData, EMPTY_PART_LIST, isFollower = false)
+    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
+
+    // Partitions are ordered in the session as per last response
+    assertPartitionsOrder(context2, Seq(tp1, tp2, tp3))
+
+    // Response is empty
+    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    val resp2 = context2.updateAndGenerateResponseData(respData2)
+    assertEquals(Errors.NONE, resp2.error)
+    assertEquals(resp1.sessionId, resp2.sessionId)
+    assertEquals(Collections.emptySet(), resp2.responseData.keySet)
+
+    // All partitions with changes should be returned.
+    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    respData3.put(tp1, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp1.partition)
+      .setHighWatermark(60)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0))
+    respData3.put(tp2, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp2.partition)
+      .setHighWatermark(60)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0)
+      .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+        new SimpleRecord(100, null))))
+    respData3.put(tp3, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp3.partition)
+      .setHighWatermark(50)
+      .setLastStableOffset(50)
+      .setLogStartOffset(0))
+    val resp3 = context2.updateAndGenerateResponseData(respData3)
+    assertEquals(Errors.NONE, resp3.error)
+    assertEquals(resp1.sessionId, resp3.sessionId)
+    assertEquals(Utils.mkSet(tp1, tp2), resp3.responseData.keySet)
+
+    // Only the partitions whose returned records in the last response
+    // were deprioritized
+    assertPartitionsOrder(context2, Seq(tp1, tp3, tp2))
+  }
+
+  private def assertPartitionsOrder(context: FetchContext, partitions: Seq[TopicPartition]): Unit = {
+    val partitionsInContext = ArrayBuffer.empty[TopicPartition]
+    context.foreachPartition { (tp, _) =>
+      partitionsInContext += tp
+    }
+    assertEquals(partitions, partitionsInContext.toSeq)
   }
 }
