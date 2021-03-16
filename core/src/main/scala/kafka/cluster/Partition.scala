@@ -691,6 +691,7 @@ class Partition(val topicPartition: TopicPartition,
 ////            System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
 ////          }
 //        }
+        
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
