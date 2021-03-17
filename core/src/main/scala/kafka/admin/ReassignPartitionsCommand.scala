@@ -37,7 +37,6 @@ import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, Top
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
 
 
@@ -1215,7 +1214,7 @@ object ReassignPartitionsCommand extends Logging {
                                    reassignments: Set[TopicPartition])
   : Map[TopicPartition, Throwable] = {
     val results = adminClient.alterPartitionReassignments(reassignments.map {
-      (_, (None: Option[NewPartitionReassignment]).asJava)
+      (_, Optional.empty[NewPartitionReassignment]())
     }.toMap.asJava).values().asScala
     results.flatMap { case (part, future) =>
       try {
