@@ -45,11 +45,14 @@ class BaseHashTable<T> {
     final static int MIN_CAPACITY = 2;
 
     /**
-     * The maximum number of slots we can have in the hash table.
-     *
-     * This is set to the maximum 31-bit power of two.
+     * The maximum 31-bit power of two.
      */
-    final static int MAX_CAPACITY = 0x4000_0000;
+    private final static int MAX_SIGNED_POWER_OF_TWO = 0x4000_0000;
+
+    /**
+     * The maximum number of slots we can have in the hash table.
+     */
+    final static int MAX_CAPACITY = MAX_SIGNED_POWER_OF_TWO;
 
     private Object[] elements;
     private int size = 0;
@@ -71,17 +74,14 @@ class BaseHashTable<T> {
     }
 
     private static int roundUpToPowerOfTwo(int i) {
-        if (i < 0) {
+        if (i <= 0) {
             return 0;
+        } else if (i > MAX_SIGNED_POWER_OF_TWO) {
+            throw new ArithmeticException("There is no 31-bit power of two higher than " +
+                    "or equal to " + i);
+        } else {
+            return 1 << -Integer.numberOfLeadingZeros(i - 1);
         }
-        i = i - 1;
-        i |= i >> 1;
-        i |= i >> 2;
-        i |= i >> 4;
-        i |= i >> 8;
-        i |= i >> 16;
-        i = i + 1;
-        return i < 0 ? MAX_CAPACITY : i;
     }
 
     final int baseSize() {
