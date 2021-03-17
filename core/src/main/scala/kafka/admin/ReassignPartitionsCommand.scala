@@ -1190,8 +1190,8 @@ object ReassignPartitionsCommand extends Logging {
   def alterPartitionReassignments(adminClient: Admin,
                                   reassignments: Map[TopicPartition, Seq[Int]]): Map[TopicPartition, Throwable] = {
     val results = adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
-        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf).asJava)))
-      }.asJava).values().asScala
+      (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf).asJava)))
+    }.asJava).values().asScala
     results.flatMap {
       case (part, future) => {
         try {
@@ -1215,8 +1215,8 @@ object ReassignPartitionsCommand extends Logging {
                                    reassignments: Set[TopicPartition])
   : Map[TopicPartition, Throwable] = {
     val results = adminClient.alterPartitionReassignments(reassignments.map {
-          (_, (None: Option[NewPartitionReassignment]).asJava)
-        }.toMap.asJava).values().asScala
+      (_, (None: Option[NewPartitionReassignment]).asJava)
+    }.toMap.asJava).values().asScala
     results.flatMap { case (part, future) =>
       try {
         future.get()
