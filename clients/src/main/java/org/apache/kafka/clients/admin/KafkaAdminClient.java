@@ -1185,7 +1185,7 @@ public class KafkaAdminClient extends AdminClient {
                 // only one we need to check the timeout for.
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
-                    log.debug("Disconnecting from {} due to timeout while awaiting {}", nodeId, call);
+                    log.info("Disconnecting from {} due to timeout while awaiting {}", nodeId, call);
                     client.disconnect(nodeId);
                     numTimedOut++;
                     // We don't remove anything from the callsInFlight data structure. Because the connection
