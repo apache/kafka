@@ -408,21 +408,19 @@ object ReassignPartitionsCommand extends Logging {
                                           : String = {
     val bld = new mutable.ArrayBuffer[String]()
     bld.append("Status of partition reassignment:")
-    states.keySet.toBuffer.sortWith(compareTopicPartitions).foreach {
-      topicPartition => {
-        val state = states(topicPartition)
-        if (state.done) {
-          if (state.currentReplicas.equals(state.targetReplicas)) {
-            bld.append("Reassignment of partition %s is complete.".
-              format(topicPartition.toString))
-          } else {
-            bld.append(s"There is no active reassignment of partition ${topicPartition}, " +
-              s"but replica set is ${state.currentReplicas.mkString(",")} rather than " +
-              s"${state.targetReplicas.mkString(",")}.")
-          }
+    states.keySet.toBuffer.sortWith(compareTopicPartitions).foreach { topicPartition =>
+      val state = states(topicPartition)
+      if (state.done) {
+        if (state.currentReplicas.equals(state.targetReplicas)) {
+          bld.append("Reassignment of partition %s is complete.".
+            format(topicPartition.toString))
         } else {
-          bld.append("Reassignment of partition %s is still in progress.".format(topicPartition))
+          bld.append(s"There is no active reassignment of partition ${topicPartition}, " +
+            s"but replica set is ${state.currentReplicas.mkString(",")} rather than " +
+            s"${state.targetReplicas.mkString(",")}.")
         }
+      } else {
+        bld.append("Reassignment of partition %s is still in progress.".format(topicPartition))
       }
     }
     bld.mkString(System.lineSeparator())
@@ -454,10 +452,9 @@ object ReassignPartitionsCommand extends Logging {
           false))
     }
     val topicNamesToLookUp = new mutable.HashSet[String]()
-    notFoundReassignments.foreach {
-      case (part, _) =>
-        if (!currentReassignments.contains(part))
-          topicNamesToLookUp.add(part.topic)
+    notFoundReassignments.foreach { case (part, _) =>
+      if (!currentReassignments.contains(part))
+        topicNamesToLookUp.add(part.topic)
     }
     val topicDescriptions = adminClient.
       describeTopics(topicNamesToLookUp.asJava).values().asScala
@@ -491,12 +488,8 @@ object ReassignPartitionsCommand extends Logging {
         targetReplicas,
         true)
     } catch {
-      case t: ExecutionException =>
-        t.getCause match {
-          case _: UnknownTopicOrPartitionException =>
-            PartitionReassignmentState(Seq(), targetReplicas, true)
-          case e => throw e
-        }
+      case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
+        PartitionReassignmentState(Seq(), targetReplicas, true)
     }
   }
 
@@ -515,15 +508,13 @@ object ReassignPartitionsCommand extends Logging {
                                       : (Map[TopicPartition, PartitionReassignmentState], Boolean) = {
     val partitionsBeingReassigned = zkClient.getPartitionReassignment
     val results = new mutable.HashMap[TopicPartition, PartitionReassignmentState]()
-    targetReassignments.groupBy(_._1.topic).foreach {
-      case (topic, partitions) =>
-        val replicasForTopic = zkClient.getReplicaAssignmentForTopics(Set(topic))
-        partitions.foreach {
-          case (partition, targetReplicas) =>
-            val currentReplicas = replicasForTopic.getOrElse(partition, Seq())
-            results.put(partition, new PartitionReassignmentState(
-              currentReplicas, targetReplicas, !partitionsBeingReassigned.contains(partition)))
-        }
+    targetReassignments.groupBy(_._1.topic).forKeyValue { (topic, partitions) =>
+      val replicasForTopic = zkClient.getReplicaAssignmentForTopics(Set(topic))
+      partitions.forKeyValue { (partition, targetReplicas) =>
+        val currentReplicas = replicasForTopic.getOrElse(partition, Seq())
+        results.put(partition, new PartitionReassignmentState(
+          currentReplicas, targetReplicas, !partitionsBeingReassigned.contains(partition)))
+      }
     }
     (results, partitionsBeingReassigned.nonEmpty)
   }
@@ -596,32 +587,31 @@ object ReassignPartitionsCommand extends Logging {
   def replicaMoveStatesToString(states: Map[TopicPartitionReplica, LogDirMoveState])
                                 : String = {
     val bld = new mutable.ArrayBuffer[String]
-    states.keySet.toBuffer.sortWith(compareTopicPartitionReplicas).foreach {
-      replica =>
-        val state = states(replica)
-        state match {
-          case MissingLogDirMoveState(_) =>
-            bld.append(s"Partition ${replica.topic()}-${replica.partition()} is not found " +
-              s"in any live log dir on broker ${replica.brokerId()}. There is likely an " +
-              s"offline log directory on the broker.")
-          case MissingReplicaMoveState(_) =>
-            bld.append(s"Partition ${replica.topic()}-${replica.partition()} cannot be found " +
-              s"in any live log directory on broker ${replica.brokerId()}.")
-          case ActiveMoveState(_, targetLogDir, futureLogDir) =>
-            if (targetLogDir.equals(futureLogDir)) {
-              bld.append(s"Reassignment of replica ${replica} is still in progress.")
-            } else {
-              bld.append(s"Partition ${replica.topic()}-${replica.partition()} on broker " +
-                s"${replica.brokerId()} is being moved to log dir ${futureLogDir} " +
-                s"instead of ${targetLogDir}.")
-            }
-          case CancelledMoveState(currentLogDir, targetLogDir) =>
-            bld.append(s"Partition ${replica.topic()}-${replica.partition()} on broker " +
-              s"${replica.brokerId()} is not being moved from log dir ${currentLogDir} to " +
-              s"${targetLogDir}.")
-          case CompletedMoveState(_) =>
-            bld.append(s"Reassignment of replica ${replica} completed successfully.")
-        }
+    states.keySet.toBuffer.sortWith(compareTopicPartitionReplicas).foreach { replica =>
+      val state = states(replica)
+      state match {
+        case MissingLogDirMoveState(_) =>
+          bld.append(s"Partition ${replica.topic}-${replica.partition} is not found " +
+            s"in any live log dir on broker ${replica.brokerId}. There is likely an " +
+            s"offline log directory on the broker.")
+        case MissingReplicaMoveState(_) =>
+          bld.append(s"Partition ${replica.topic}-${replica.partition} cannot be found " +
+            s"in any live log directory on broker ${replica.brokerId}.")
+        case ActiveMoveState(_, targetLogDir, futureLogDir) =>
+          if (targetLogDir.equals(futureLogDir)) {
+            bld.append(s"Reassignment of replica $replica is still in progress.")
+          } else {
+            bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
+              s"${replica.brokerId} is being moved to log dir $futureLogDir " +
+              s"instead of $targetLogDir.")
+          }
+        case CancelledMoveState(currentLogDir, targetLogDir) =>
+          bld.append(s"Partition ${replica.topic}-${replica.partition} on broker " +
+            s"${replica.brokerId} is not being moved from log dir $currentLogDir to " +
+            s"$targetLogDir.")
+        case CompletedMoveState(_) =>
+          bld.append(s"Reassignment of replica $replica completed successfully.")
+      }
     }
     bld.mkString(System.lineSeparator())
   }
@@ -815,20 +805,13 @@ object ReassignPartitionsCommand extends Logging {
   private def describeTopics(adminClient: Admin,
                              topics: Set[String])
                              : Map[String, TopicDescription] = {
-    adminClient.describeTopics(topics.asJava).values.asScala.map {
-      case (topicName, topicDescriptionFuture) =>
-        try {
-          topicName -> topicDescriptionFuture.get
-        }
-        catch {
-          case t: ExecutionException =>
-            if (classOf[UnknownTopicOrPartitionException].isInstance(t.getCause)) {
-              throw new ExecutionException(
-                new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
-            } else {
-              throw t
-            }
-        }
+    adminClient.describeTopics(topics.asJava).values.asScala.map { case (topicName, topicDescriptionFuture) =>
+      try topicName -> topicDescriptionFuture.get
+      catch {
+        case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>
+          throw new ExecutionException(
+            new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
+      }
     }
   }
 
@@ -1253,7 +1236,7 @@ object ReassignPartitionsCommand extends Logging {
   private def calculateCurrentMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment]): MoveMap = {
     val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
     // Add the current reassignments to the move map.
-    currentReassignments.foreach { case (part, reassignment) =>
+    currentReassignments.forKeyValue { (part, reassignment) =>
       val allReplicas = reassignment.replicas().asScala.map(Int.unbox)
       val addingReplicas = reassignment.addingReplicas.asScala.map(Int.unbox)
 
@@ -1283,21 +1266,20 @@ object ReassignPartitionsCommand extends Logging {
                                currentParts: Map[TopicPartition, Seq[Int]]): MoveMap = {
     val moveMap = calculateCurrentMoveMap(currentReassignments)
 
-    proposedParts.foreach {
-      case (part, replicas) =>
-        val partMoves = moveMap.getOrElseUpdate(part.topic(), new mutable.HashMap[Int, PartitionMove])
+    proposedParts.forKeyValue { (part, replicas) =>
+      val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
 
-        // If there is a reassignment in progress, use the sources from moveMap, otherwise
-        // use the sources from currentParts
-        val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition()) match {
-          case Some(move) => move.sources.toSeq
-          case None => currentParts.getOrElse(part,
-            throw new RuntimeException(s"Trying to reassign a topic partition $part with 0 replicas"))
-        })
-        val destinations = mutable.Set[Int]() ++ replicas.diff(sources.toSeq)
+      // If there is a reassignment in progress, use the sources from moveMap, otherwise
+      // use the sources from currentParts
+      val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition) match {
+        case Some(move) => move.sources.toSeq
+        case None => currentParts.getOrElse(part,
+          throw new RuntimeException(s"Trying to reassign a topic partition $part with 0 replicas"))
+      })
+      val destinations = mutable.Set[Int]() ++ replicas.diff(sources.toSeq)
 
-        partMoves.put(part.partition,
-          PartitionMove(sources, destinations))
+      partMoves.put(part.partition,
+        PartitionMove(sources, destinations))
     }
     moveMap
   }
@@ -1312,9 +1294,8 @@ object ReassignPartitionsCommand extends Logging {
     moveMap.map {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
-        partMoveMap.foreach {
-          case (partId, move) =>
-            move.sources.foreach(source => components.add("%d:%d".format(partId, source)))
+        partMoveMap.forKeyValue { (partId, move) =>
+          move.sources.foreach(source => components.add("%d:%d".format(partId, source)))
         }
         (topicName, components.mkString(","))
       }
@@ -1331,12 +1312,11 @@ object ReassignPartitionsCommand extends Logging {
     moveMap.map {
       case (topicName, partMoveMap) => {
         val components = new mutable.TreeSet[String]
-        partMoveMap.foreach {
-          case (partId, move) =>
-            move.destinations.foreach(destination =>
-              if (!move.sources.contains(destination)) {
-                components.add("%d:%d".format(partId, destination))
-              })
+        partMoveMap.forKeyValue { (partId, move) =>
+          move.destinations.foreach(destination =>
+            if (!move.sources.contains(destination)) {
+              components.add("%d:%d".format(partId, destination))
+            })
         }
         (topicName, components.mkString(","))
       }
@@ -1383,18 +1363,17 @@ object ReassignPartitionsCommand extends Logging {
                            followerThrottles: Map[String, String]): Unit = {
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     val topicNames = leaderThrottles.keySet ++ followerThrottles.keySet
-    topicNames.foreach {
-      topicName =>
-        val ops = new util.ArrayList[AlterConfigOp]
-        leaderThrottles.get(topicName).foreach { value =>
-          ops.add(new AlterConfigOp(new ConfigEntry(topicLevelLeaderThrottle, value), OpType.SET))
-        }
-        followerThrottles.get(topicName).foreach { value =>
-          ops.add(new AlterConfigOp(new ConfigEntry(topicLevelFollowerThrottle, value), OpType.SET))
-        }
-        if (!ops.isEmpty) {
-          configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops)
-        }
+    topicNames.foreach { topicName =>
+      val ops = new util.ArrayList[AlterConfigOp]
+      leaderThrottles.get(topicName).foreach { value =>
+        ops.add(new AlterConfigOp(new ConfigEntry(topicLevelLeaderThrottle, value), OpType.SET))
+      }
+      followerThrottles.get(topicName).foreach { value =>
+        ops.add(new AlterConfigOp(new ConfigEntry(topicLevelFollowerThrottle, value), OpType.SET))
+      }
+      if (!ops.isEmpty) {
+        configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops)
+      }
     }
     adminClient.incrementalAlterConfigs(configs).all().get()
   }
@@ -1411,12 +1390,11 @@ object ReassignPartitionsCommand extends Logging {
                            followerThrottles: Map[String, String]): Unit = {
     val adminZkClient = new AdminZkClient(zkClient)
     val topicNames = leaderThrottles.keySet ++ followerThrottles.keySet
-    topicNames.foreach {
-      topicName =>
-        val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topicName)
-        leaderThrottles.get(topicName).map(configs.put(topicLevelLeaderThrottle, _))
-        followerThrottles.get(topicName).map(configs.put(topicLevelFollowerThrottle, _))
-        adminZkClient.changeTopicConfig(topicName, configs)
+    topicNames.foreach { topicName =>
+      val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topicName)
+      leaderThrottles.get(topicName).map(configs.put(topicLevelLeaderThrottle, _))
+      followerThrottles.get(topicName).map(configs.put(topicLevelFollowerThrottle, _))
+      adminZkClient.changeTopicConfig(topicName, configs)
     }
   }
 

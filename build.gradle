@@ -162,6 +162,7 @@ if (file('.git').exists()) {
   }
 }
 
+println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 
 subprojects {
 
@@ -751,8 +752,6 @@ tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" })
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 
 project(':core') {
-  println "Building project 'core' with Scala version ${versions.scala}"
-
   apply plugin: 'scala'
   
   // scaladoc generation is configured at the sub-module level with an artifacts
@@ -1554,7 +1553,6 @@ project(':streams') {
 }
 
 project(':streams:streams-scala') {
-  println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
