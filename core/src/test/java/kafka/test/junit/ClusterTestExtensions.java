@@ -128,23 +128,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
         }
 
-        generatedClusterConfigs.forEach(config -> {
-            switch (config.clusterType()) {
-                case RAFT:
-                    testInvocations.accept(new RaftClusterInvocationContext(config.copyOf()));
-                    break;
-                case BOTH:
-                    testInvocations.accept(new RaftClusterInvocationContext(config.copyOf()));
-                    testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
-                    break;
-                case ZK:
-                    testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
-                    break;
-                case DEFAULT: // Should not see DEFAULT here
-                default:
-                    throw new IllegalStateException("Unknown cluster type " + config.clusterType());
-            }
-        });
+        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(config, testInvocations));
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -208,27 +192,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             properties.put(property.key(), property.value());
         }
 
-        switch (type) {
-            case ZK: {
-                ClusterConfig config = builder.build();
-                config.serverProperties().putAll(properties);
-                testInvocations.accept(new ZkClusterInvocationContext(config));
-                break;
-            } case RAFT: {
-                ClusterConfig config = builder.build();
-                config.serverProperties().putAll(properties);
-                testInvocations.accept(new RaftClusterInvocationContext(config));
-                break;
-            } case BOTH: {
-                ClusterConfig zkConfig = builder.build();
-                zkConfig.serverProperties().putAll(properties);
-                testInvocations.accept(new ZkClusterInvocationContext(zkConfig));
-                ClusterConfig raftConfig = builder.build();
-                raftConfig.serverProperties().putAll(properties);
-                testInvocations.accept(new RaftClusterInvocationContext(raftConfig));
-                break;
-            }
-        }
+        ClusterConfig config = builder.build();
+        config.serverProperties().putAll(properties);
+        type.invocationContexts(config, testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

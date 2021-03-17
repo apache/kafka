@@ -162,7 +162,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Object getUnderlying() {
+        public KafkaClusterTestKit getUnderlying() {
             return clusterReference.get();
         }
 
@@ -177,7 +177,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 try {
                     clusterReference.get().startup();
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to start up Raft server", e);
+                    throw new RuntimeException("Failed to start Raft server", e);
                 }
             }
         }
@@ -188,7 +188,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 try {
                     clusterReference.get().close();
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to stop up Raft server", e);
+                    throw new RuntimeException("Failed to stop Raft server", e);
                 }
             }
         }
