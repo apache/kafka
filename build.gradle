@@ -1425,7 +1425,7 @@ project(':streams') {
       exclude module: 'javax.ws.rs-api'
     }
     
-    // `org.rocksdb.Options` is part of Kafka Streams public api via RocksDBConfigSetter
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
     
     implementation libs.slf4jApi
