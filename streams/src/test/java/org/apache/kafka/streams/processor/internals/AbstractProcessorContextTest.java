@@ -180,7 +180,6 @@ public class AbstractProcessorContextTest {
             equalTo("user-supplied-value"));
     }
 
-
     private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;
         static {
@@ -241,6 +240,11 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void commit() {}
+
+        @Override
+        public long currentStreamTimeMs() {
+            throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
+        }
 
         @Override
         public void logChange(final String storeName,

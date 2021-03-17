@@ -69,10 +69,6 @@ Generate coverage for a single module, i.e.:
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
-The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
-
-    ./gradlew clean releaseTarGz -x signArchives
-
 The release file can be found inside `./core/build/distributions/`.
 
 ### Building auto generated messages ###
@@ -125,6 +121,12 @@ build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory an
 to avoid known issues with this configuration.
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
+The recommended command is:
+
+    ./gradlewAll publish
+
+For backwards compatibility, the following also works:
+
     ./gradlewAll uploadArchives
 
 Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
@@ -167,6 +169,12 @@ Please note for this to work you should create/update user maven settings (typic
 
 
 ### Installing the jars to the local Maven repository ###
+The recommended command is:
+
+    ./gradlewAll publishToMavenLocal
+
+For backwards compatibility, the following also works:
+
     ./gradlewAll install
 
 ### Building the test jar ###

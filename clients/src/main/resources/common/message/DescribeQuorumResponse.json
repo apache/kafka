@@ -31,7 +31,7 @@
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+"},
-        { "name": "LeaderId", "type": "int32", "versions": "0+",
+        { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The ID of the current leader or -1 if the leader is unknown."},
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The latest known leader epoch"},
@@ -42,7 +42,7 @@
     ]}],
   "commonStructs": [
     { "name": "ReplicaState", "versions": "0+", "fields": [
-      { "name": "ReplicaId", "type": "int32", "versions": "0+"},
+      { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId" },
       { "name": "LogEndOffset", "type": "int64", "versions": "0+",
         "about": "The last known log end offset of the follower or -1 if it is unknown"}
     ]}

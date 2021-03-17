@@ -62,7 +62,7 @@ per second which can increase when you have make your code faster.
 
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
 
-    java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark
+    java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-*.jar -f2 LRUCacheBenchmark
 
 ### Writing benchmarks
 

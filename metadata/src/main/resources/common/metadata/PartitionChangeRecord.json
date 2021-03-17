@@ -24,10 +24,10 @@
       "about": "The partition id." },
     { "name": "TopicId", "type": "uuid", "versions": "0+",
       "about": "The unique ID of this topic." },
-    { "name": "Isr", "type":  "[]int32", "default": "null",
-      "versions": "0+", "nullableVersions":  "0+", "taggedVersions": "0+", "tag": 0,
+    { "name": "Isr", "type":  "[]int32", "default": "null", "entityType": "brokerId",
+      "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 0,
       "about": "null if the ISR didn't change; the new in-sync replicas otherwise." },
-    { "name": "Leader", "type": "int32", "default": "-2",
+    { "name": "Leader", "type": "int32", "default": "-2", "entityType": "brokerId",
       "versions": "0+", "taggedVersions": "0+", "tag": 1,
       "about": "-1 if there is now no leader; -2 if the leader didn't change; the new leader otherwise." }
   ]

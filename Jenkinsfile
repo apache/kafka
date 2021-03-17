@@ -66,7 +66,7 @@ def job = {
 
 
     stage("Compile and validate") {
-        sh "./gradlew clean assemble install spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
+        sh "./gradlew clean assemble publishToMavenLocal spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                 "--no-daemon --stacktrace -PxmlSpotBugsReport=true"
     }
 

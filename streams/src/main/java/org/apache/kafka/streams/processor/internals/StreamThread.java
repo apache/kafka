@@ -233,9 +233,8 @@ public class StreamThread extends Thread {
             state = newState;
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
-            } else {
-                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
+
             stateLock.notifyAll();
         }
 
@@ -720,7 +719,7 @@ public class StreamThread extends Thread {
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
-            log.debug("Thread state is already {}, skipping the run once call after poll request", state);
+            log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
@@ -1123,11 +1122,23 @@ public class StreamThread extends Thread {
                                       final Map<TaskId, Task> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            activeTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
+            ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            standbyTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
+            ));
         }
 
         final String adminClientId = threadMetadata.adminClientId();
@@ -1139,7 +1150,8 @@ public class StreamThread extends Thread {
             taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,
-            standbyTasksMetadata);
+            standbyTasksMetadata
+        );
     }
 
     public Map<TaskId, Task> activeTaskMap() {

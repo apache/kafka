@@ -20,7 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -32,10 +34,22 @@ public class TaskMetadata {
 
     private final Set<TopicPartition> topicPartitions;
 
+    private final Map<TopicPartition, Long> committedOffsets;
+
+    private final Map<TopicPartition, Long> endOffsets;
+
+    private final Optional<Long> timeCurrentIdlingStarted;
+
     public TaskMetadata(final String taskId,
-                        final Set<TopicPartition> topicPartitions) {
+                        final Set<TopicPartition> topicPartitions,
+                        final Map<TopicPartition, Long> committedOffsets,
+                        final Map<TopicPartition, Long> endOffsets,
+                        final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+        this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
+        this.endOffsets = Collections.unmodifiableMap(endOffsets);
+        this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
     public String taskId() {
@@ -44,6 +58,18 @@ public class TaskMetadata {
 
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
+    }
+
+    public Map<TopicPartition, Long> committedOffsets() {
+        return committedOffsets;
+    }
+
+    public Map<TopicPartition, Long> endOffsets() {
+        return endOffsets;
+    }
+
+    public Optional<Long> timeCurrentIdlingStarted() {
+        return timeCurrentIdlingStarted;
     }
 
     @Override
@@ -69,6 +95,9 @@ public class TaskMetadata {
         return "TaskMetadata{" +
                 "taskId=" + taskId +
                 ", topicPartitions=" + topicPartitions +
+                ", committedOffsets=" + committedOffsets +
+                ", endOffsets=" + endOffsets +
+                ", timeCurrentIdlingStarted=" + timeCurrentIdlingStarted +
                 '}';
     }
 }

@@ -55,6 +55,23 @@ public class MirrorCheckpointConnectorTest {
     }
 
     @Test
+    public void testMirrorCheckpointConnectorEnabled() {
+        // enable the checkpoint emission
+        MirrorConnectorConfig config = new MirrorConnectorConfig(
+                makeProps("emit.checkpoints.enabled", "true"));
+
+        List<String> knownConsumerGroups = new ArrayList<>();
+        knownConsumerGroups.add("consumer-group-1");
+        // MirrorCheckpointConnector as minimum to run taskConfig()
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
+                config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect 1 task will be created
+        assertEquals(1, output.size());
+        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
+    }
+
+    @Test
     public void testNoConsumerGroup() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new ArrayList<>(), config);
@@ -75,6 +92,21 @@ public class MirrorCheckpointConnectorTest {
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
         assertEquals(0, output.size());
+    }
+
+    @Test
+    public void testReplicationEnabled() {
+        // enable the replication
+        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("enabled", "true"));
+
+        List<String> knownConsumerGroups = new ArrayList<>();
+        knownConsumerGroups.add("consumer-group-1");
+        // MirrorCheckpointConnector as minimum to run taskConfig()
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect 1 task will be created
+        assertEquals(1, output.size());
+        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
     }
 
     @Test
