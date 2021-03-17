@@ -435,8 +435,7 @@ public class RaftEventSimulationTest {
             // Kill a random node and drop all of its persistent state. The Raft
             // protocol guarantees should still ensure we lose no committed data
             // as long as a new leader is elected before the failed node is restarted.
-            cluster.kill(node.nodeId);
-            cluster.deletePersistentState(node.nodeId);
+            cluster.killAndDeletePersistentState(node.nodeId);
             scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
 
             // Now restart the failed node and ensure that it recovers.
@@ -776,7 +775,8 @@ public class RaftEventSimulationTest {
             }
         }
 
-        void deletePersistentState(int nodeId) {
+        void killAndDeletePersistentState(int nodeId) {
+            kill(nodeId);
             nodes.put(nodeId, new PersistentState());
         }
 
