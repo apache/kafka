@@ -84,6 +84,7 @@ class ClientCompatibilityFeaturesTest(Test):
         self.dev_script_path = self.kafka.path.script("kafka-run-class.sh", self.kafka.nodes[0])
 
     def invoke_compatibility_program(self, features):
+        # Run the compatibility test on the first Kafka node.
         node = self.kafka.nodes[0]
         cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
