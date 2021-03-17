@@ -72,8 +72,6 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -781,21 +779,7 @@ public final class Utils {
      * @param properties A map of properties to add
      * @return The properties object
      */
-    public static Properties mkProperties(final Map<String, String> properties) {
-        final Properties result = new Properties();
-        for (final Map.Entry<String, String> entry : properties.entrySet()) {
-            result.setProperty(entry.getKey(), entry.getValue());
-        }
-        return result;
-    }
-
-    /**
-     * Creates a {@link Properties} from a map
-     *
-     * @param properties A map of properties to add
-     * @return The properties object
-     */
-    public static Properties mkObjectProperties(final Map<String, Object> properties) {
+    public static Properties mkProperties(final Map<String, Object> properties) {
         final Properties result = new Properties();
         for (final Map.Entry<String, Object> entry : properties.entrySet()) {
             result.put(entry.getKey(), entry.getValue());
@@ -861,15 +845,6 @@ public final class Utils {
         });
     }
 
-    /**
-     * Returns an empty collection if this list is null
-     * @param other
-     * @return
-     */
-    public static <T> List<T> safe(List<T> other) {
-        return other == null ? Collections.emptyList() : other;
-    }
-
    /**
     * Get the ClassLoader which loaded Kafka.
     */
@@ -932,18 +907,6 @@ public final class Utils {
         }
         if (exception != null)
             throw exception;
-    }
-
-    /**
-     * An {@link AutoCloseable} interface without a throws clause in the signature
-     *
-     * This is used with lambda expressions in try-with-resources clauses
-     * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
-     */
-    @FunctionalInterface
-    public interface UncheckedCloseable extends AutoCloseable {
-        @Override
-        void close();
     }
 
     /**
@@ -1151,15 +1114,6 @@ public final class Utils {
         return res;
     }
 
-    public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
-        return concatLists(left, right, Collections::unmodifiableList);
-    }
-
-    public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
-        return Stream.concat(left.stream(), right.stream())
-                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
-    }
-
     public static int to32BitField(final Set<Byte> bytes) {
         int value = 0;
         for (final byte b : bytes)
@@ -1183,18 +1137,6 @@ public final class Utils {
             count++;
         }
         return result;
-    }
-
-    public static <K1, V1, K2, V2> Map<K2, V2> transformMap(
-            Map<? extends K1, ? extends V1> map,
-            Function<K1, K2> keyMapper,
-            Function<V1, V2> valueMapper) {
-        return map.entrySet().stream().collect(
-            Collectors.toMap(
-                entry -> keyMapper.apply(entry.getKey()),
-                entry -> valueMapper.apply(entry.getValue())
-            )
-        );
     }
 
     /**
