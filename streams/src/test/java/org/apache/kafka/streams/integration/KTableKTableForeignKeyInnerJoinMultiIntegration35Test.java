@@ -207,6 +207,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
 
         assertEquals(expectedResult, result);
     }
+    
 
     private static Properties getStreamsConfig() {
         final Properties streamsConfig = new Properties();
