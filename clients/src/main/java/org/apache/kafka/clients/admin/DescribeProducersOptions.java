@@ -40,11 +40,6 @@ public class DescribeProducersOptions extends AbstractOptions<DescribeProducersO
         return brokerId;
     }
 
-    public DescribeProducersOptions timeoutMs(Integer timeoutMs) {
-        super.timeoutMs(timeoutMs);
-        return this;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

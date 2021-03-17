@@ -111,12 +111,10 @@ public class AdminApiDriver<K, V> {
 
     private void initializeKeys() {
         staticMapping.ifPresent(mapping -> {
-            for (Map.Entry<K, Integer> staticMapping : mapping.keys.entrySet()) {
-                K key = staticMapping.getKey();
-                Integer brokerId = staticMapping.getValue();
+            mapping.keys.forEach((key, brokerId) -> {
                 futures.put(key, new KafkaFutureImpl<>());
                 map(key, brokerId);
-            }
+            });
         });
 
         dynamicMapping.ifPresent(mapping -> {
@@ -366,7 +364,7 @@ public class AdminApiDriver<K, V> {
         @Override
         public String toString() {
             return "RequestSpec(" +
-                "name='" + name + '\'' +
+                "name=" + name +
                 ", scope=" + scope +
                 ", keys=" + keys +
                 ", request=" + request +

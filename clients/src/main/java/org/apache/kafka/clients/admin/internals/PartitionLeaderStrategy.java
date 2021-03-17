@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Base driver implementation for APIs which target partition leaders.
@@ -59,10 +58,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     public MetadataRequest.Builder buildRequest(Set<TopicPartition> partitions) {
         MetadataRequestData request = new MetadataRequestData();
         request.setAllowAutoTopicCreation(false);
-        Set<String> topics = partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
-        for (String topic : topics) {
-            request.topics().add(new MetadataRequestData.MetadataRequestTopic().setName(topic));
-        }
+        partitions.stream().map(TopicPartition::topic).distinct().forEach(topic ->
+            request.topics().add(new MetadataRequestData.MetadataRequestTopic().setName(topic))
+        );
         return new MetadataRequest.Builder(request);
     }
 
@@ -157,7 +155,6 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
             for (MetadataResponse.PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
                 TopicPartition topicPartition = partitionMetadata.topicPartition;
                 Errors partitionError = partitionMetadata.error;
-
 
                 if (!requestPartitions.contains(topicPartition)) {
                     // The `Metadata` response always returns all partitions for requested
