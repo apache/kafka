@@ -45,14 +45,9 @@ class BaseHashTable<T> {
     final static int MIN_CAPACITY = 2;
 
     /**
-     * The maximum 31-bit power of two.
-     */
-    private final static int MAX_SIGNED_POWER_OF_TWO = 0x4000_0000;
-
-    /**
      * The maximum number of slots we can have in the hash table.
      */
-    final static int MAX_CAPACITY = MAX_SIGNED_POWER_OF_TWO;
+    final static int MAX_CAPACITY = 1 << 30;
 
     private Object[] elements;
     private int size = 0;
@@ -64,23 +59,25 @@ class BaseHashTable<T> {
     /**
      * Calculate the capacity we should provision, given the expected size.
      *
-     * Our capacity must always be a power of 2, and never less than 2.
+     * Our capacity must always be a power of 2, and never less than 2 or more
+     * than MAX_CAPACITY.  We use 64-bit numbers here to avoid overflow
+     * concerns.
      */
+    @SuppressWarnings("unchecked")
     static int expectedSizeToCapacity(int expectedSize) {
-        if (expectedSize >= MAX_CAPACITY / 2) {
-            return MAX_CAPACITY;
-        }
-        return Math.max(MIN_CAPACITY, roundUpToPowerOfTwo(expectedSize * 2));
+        long minCapacity = (long) Math.ceil((float) expectedSize / MAX_LOAD_FACTOR);
+        return Math.max(MIN_CAPACITY,
+                (int) Math.min(MAX_CAPACITY, roundUpToPowerOfTwo(minCapacity)));
     }
 
-    private static int roundUpToPowerOfTwo(int i) {
+    private static long roundUpToPowerOfTwo(long i) {
         if (i <= 0) {
             return 0;
-        } else if (i > MAX_SIGNED_POWER_OF_TWO) {
-            throw new ArithmeticException("There is no 31-bit power of two higher than " +
+        } else if (i > (1L << 62)) {
+            throw new ArithmeticException("There are no 63-bit powers of 2 higher than " +
                     "or equal to " + i);
         } else {
-            return 1 << -Integer.numberOfLeadingZeros(i - 1);
+            return 1L << -Long.numberOfLeadingZeros(i - 1);
         }
     }
 
