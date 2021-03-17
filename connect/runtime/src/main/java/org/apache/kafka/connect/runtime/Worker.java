@@ -379,13 +379,7 @@ public class Worker {
 
     private void stopExecutor() {
         if (executor != null) {
-            executor.shutdown();
-            try {
-                executor.awaitTermination(1, TimeUnit.HOURS);
-            } catch (InterruptedException e) {
-                log.error("Graceful stop for cached thread pool executor failed", e);
-                executor.shutdownNow();
-            }
+            executor.shutdownNow();
         }
     }
 
