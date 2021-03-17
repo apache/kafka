@@ -80,7 +80,7 @@ object AlterIsrManager {
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterIsrChannel",
+      channelName = "alterIsr",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )

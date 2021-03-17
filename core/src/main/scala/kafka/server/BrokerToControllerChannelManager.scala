@@ -168,7 +168,7 @@ class BrokerToControllerChannelManagerImpl(
   threadNamePrefix: Option[String],
   retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
+  private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val currentNodeApiVersions = NodeApiVersions.create()
@@ -304,6 +304,9 @@ class BrokerToControllerRequestThread(
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
+    if (!this.isAlive) {
+      throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
+    }
     requestQueue.add(request)
     if (activeControllerAddress().isDefined) {
       wakeup()
