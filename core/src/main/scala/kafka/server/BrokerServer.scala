@@ -212,7 +212,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "alterisr",
+        channelName = "alterIsr",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
