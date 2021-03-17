@@ -178,6 +178,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration40Test {
     private enum JoinType {
         INNER
     }
+    
 
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
