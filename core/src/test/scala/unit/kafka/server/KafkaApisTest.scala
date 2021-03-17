@@ -1456,7 +1456,7 @@ class KafkaApisTest {
       assertEquals(1, response.data.responses.size)
       val topicProduceResponse = response.data.responses.asScala.head
       assertEquals(1, topicProduceResponse.partitionResponses.size)   
-      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
     }
   }

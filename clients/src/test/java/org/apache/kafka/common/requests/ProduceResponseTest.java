@@ -33,6 +33,7 @@ import java.util.Map;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProduceResponseTest {
 
@@ -60,7 +61,10 @@ public class ProduceResponseTest {
 
         assertEquals(100, partitionProduceResponse.logStartOffset());
         assertEquals(10000, partitionProduceResponse.baseOffset());
-        assertEquals(10, v5FromBytes.throttleTimeMs());
+        assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
+        assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
+        assertEquals(null, partitionProduceResponse.errorMessage());
+        assertTrue(partitionProduceResponse.recordErrors().isEmpty());
     }
 
     @SuppressWarnings("deprecation")

@@ -156,7 +156,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     assertEquals(1, produceResponse.data.responses.size, "One topic response should be returned")
     val topicProduceResponse = produceResponse.data.responses.asScala.head
     assertEquals(1, topicProduceResponse.partitionResponses.size, "One partition response should be returned")    
-    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
     assertNotNull(partitionProduceResponse)
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }

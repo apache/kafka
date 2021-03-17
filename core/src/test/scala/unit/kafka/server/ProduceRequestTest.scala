@@ -25,7 +25,7 @@ import kafka.message.ZStdCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.{ProduceRequestData, ProduceResponseData}
+import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
@@ -46,7 +46,7 @@ class ProduceRequestTest extends BaseRequestTest {
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
-    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponseData.PartitionProduceResponse = {
+    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
       val topicPartition = new TopicPartition("topic", partition)
       val produceResponse = sendProduceRequest(leader,
           ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -62,14 +62,13 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(1, produceResponse.data.responses.size)
       val topicProduceResponse = produceResponse.data.responses.asScala.head
       assertEquals(1, topicProduceResponse.partitionResponses.size)   
-      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
       assertEquals(topicPartition, tp)
       assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode))
       assertEquals(expectedOffset, partitionProduceResponse.baseOffset)
       assertEquals(-1, partitionProduceResponse.logAppendTimeMs)
       assertTrue(partitionProduceResponse.recordErrors.isEmpty)
-      partitionProduceResponse
     }
 
     sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
@@ -114,18 +113,15 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(1, produceResponse.data.responses.size)
     val topicProduceResponse = produceResponse.data.responses.asScala.head
     assertEquals(1, topicProduceResponse.partitionResponses.size)   
-    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
     val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, Errors.forCode(partitionProduceResponse.errorCode))
     // there are 3 records with InvalidTimestampException created from inner function createRecords
     assertEquals(3, partitionProduceResponse.recordErrors.size)
-    assertEquals(0, partitionProduceResponse.recordErrors.get(0).batchIndex)
-    assertEquals(1, partitionProduceResponse.recordErrors.get(1).batchIndex)
-    assertEquals(2, partitionProduceResponse.recordErrors.get(2).batchIndex)
-    for (recordError <- partitionProduceResponse.recordErrors.asScala) {
-      assertNotNull(recordError.batchIndexErrorMessage)
-    }
+    val recordErrors = partitionProduceResponse.recordErrors.asScala
+    recordErrors.indices.foreach(i => assertEquals(i, recordErrors(i).batchIndex))
+    recordErrors.foreach(recordError => assertNotNull(recordError.batchIndexErrorMessage))
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
@@ -159,7 +155,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(1, produceResponse.data.responses.size)
     val topicProduceResponse = produceResponse.data.responses.asScala.head
     assertEquals(1, topicProduceResponse.partitionResponses.size)   
-    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
   }
 
@@ -195,7 +191,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(1, produceResponse.data.responses.size)
     val topicProduceResponse = produceResponse.data.responses.asScala.head
     assertEquals(1, topicProduceResponse.partitionResponses.size)   
-    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head;
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
     val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
     assertEquals(topicPartition, tp)
     assertEquals(Errors.CORRUPT_MESSAGE, Errors.forCode(partitionProduceResponse.errorCode))
@@ -234,7 +230,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val produceResponse1 = sendProduceRequest(leader, new ProduceRequest.Builder(7, 7, partitionRecords).build())
 
     val topicProduceResponse1 = produceResponse1.data.responses.asScala.head
-    val partitionProduceResponse1 = topicProduceResponse1.partitionResponses.asScala.head;
+    val partitionProduceResponse1 = topicProduceResponse1.partitionResponses.asScala.head
     val tp1 = new TopicPartition(topicProduceResponse1.name, partitionProduceResponse1.index)
     assertEquals(topicPartition, tp1)
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
@@ -244,7 +240,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // produce request with v3: returns Errors.UNSUPPORTED_COMPRESSION_TYPE.
     val produceResponse2 = sendProduceRequest(leader, new ProduceRequest.Builder(3, 3, partitionRecords).buildUnsafe(3))
     val topicProduceResponse2 = produceResponse2.data.responses.asScala.head
-    val partitionProduceResponse2 = topicProduceResponse2.partitionResponses.asScala.head;
+    val partitionProduceResponse2 = topicProduceResponse2.partitionResponses.asScala.head
     val tp2 = new TopicPartition(topicProduceResponse2.name, partitionProduceResponse2.index)
     assertEquals(topicPartition, tp2)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, Errors.forCode(partitionProduceResponse2.errorCode))

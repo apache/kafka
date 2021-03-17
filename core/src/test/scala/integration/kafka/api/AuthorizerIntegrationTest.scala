@@ -160,7 +160,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => {
       Errors.forCode(
         resp.data
-          .responses.asScala.find(_.name == topic).get
+          .responses.find(topic)
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
       )      
