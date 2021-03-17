@@ -79,18 +79,16 @@ class ClientCompatibilityFeaturesTest(Test):
             "replication-factor": 3
             }}
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
+        # Always use the latest version of org.apache.kafka.tools.ClientCompatibilityTest
+        # so store away the path to the DEV version before we set the Kafka version
+        self.dev_script_path = self.kafka.path.script("kafka-run-class.sh", self.kafka.nodes[0])
 
     def invoke_compatibility_program(self, features):
-        if self.zk:
-            # kafka nodes are set to older version so resolved script path is linked to older assembly.
-            # run the compatibility test on the first zk node to get script path linked to latest(dev) assembly.
-            node = self.zk.nodes[0]
-        else:
-            node = self.kafka.nodes[0]
+        node = self.kafka.nodes[0]
         cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
                "--num-cluster-nodes %d "
-               "--topic %s " % (self.kafka.path.script("kafka-run-class.sh", node),
+               "--topic %s " % (self.dev_script_path,
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
                                list(self.topics.keys())[0]))
