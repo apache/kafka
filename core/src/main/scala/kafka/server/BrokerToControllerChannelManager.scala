@@ -226,8 +226,8 @@ class BrokerToControllerChannelManagerImpl(
       )
     }
     val threadName = threadNamePrefix match {
-      case None => s"broker-${config.brokerId}-to-controller-send-thread"
-      case Some(name) => s"$name:broker-${config.brokerId}-to-controller-send-thread"
+      case None => s"BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
+      case Some(name) => s"$name:BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
     }
 
     new BrokerToControllerRequestThread(
