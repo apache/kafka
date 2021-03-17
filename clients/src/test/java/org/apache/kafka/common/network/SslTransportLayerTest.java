@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.utils.Java;
+//import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -130,10 +130,11 @@ public class SslTransportLayerTest {
         public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
             List<Arguments> parameters = new ArrayList<>();
             parameters.add(Arguments.of(new Args("TLSv1.2", false)));
-            parameters.add(Arguments.of(new Args("TLSv1.2", true)));
-            if (Java.IS_JAVA11_COMPATIBLE) {
-                parameters.add(Arguments.of(new Args("TLSv1.3", false)));
-            }
+//            Disable temporarily to make debugging easier
+//            parameters.add(Arguments.of(new Args("TLSv1.2", true)));
+//            if (Java.IS_JAVA11_COMPATIBLE) {
+//                parameters.add(Arguments.of(new Args("TLSv1.3", false)));
+//            }
             return parameters.stream();
         }
     }
@@ -632,7 +633,6 @@ public class SslTransportLayerTest {
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(JRE.JAVA_16)
     public void testUnsupportedTlsVersion(Args args) throws Exception {
         server = createEchoServer(args, SecurityProtocol.SSL);
 
