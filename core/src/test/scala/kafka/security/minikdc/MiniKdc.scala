@@ -27,7 +27,7 @@ import java.util.{Locale, Properties, UUID}
 
 import kafka.utils.{CoreUtils, Exit, Logging}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.apache.commons.lang.text.StrSubstitutor
 import org.apache.directory.api.ldap.model.entry.{DefaultEntry, Entry}
 import org.apache.directory.api.ldap.model.ldif.LdifReader
@@ -94,7 +94,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   info("Configuration:")
   info("---------------------------------------------------------------")
-  config.asScala.foreach { case (key, value) =>
+  config.forEach { (key, value) =>
     info(s"\t$key: $value")
   }
   info("---------------------------------------------------------------")
@@ -359,7 +359,7 @@ object MiniKdc {
           throw new RuntimeException(s"Specified configuration does not exist: ${configFile.getAbsolutePath}")
 
         val userConfig = Utils.loadProps(configFile.getAbsolutePath)
-        userConfig.asScala.foreach { case (key, value) =>
+        userConfig.forEach { (key, value) =>
           config.put(key, value)
         }
         val keytabFile = new File(keytabPath).getAbsoluteFile
@@ -390,7 +390,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop)
+    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop())
     miniKdc
   }
 

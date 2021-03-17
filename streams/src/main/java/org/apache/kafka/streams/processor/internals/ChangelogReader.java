@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -28,7 +29,7 @@ public interface ChangelogReader extends ChangelogRegister {
     /**
      * Restore all registered state stores by reading from their changelogs
      */
-    void restore();
+    void restore(final Map<TaskId, Task> tasks);
 
     /**
      * Transit to restore active changelogs mode
@@ -44,12 +45,6 @@ public interface ChangelogReader extends ChangelogRegister {
      * @return the changelog partitions that have been completed restoring
      */
     Set<TopicPartition> completedChangelogs();
-
-    /**
-     * Removes the passed in partitions from the set of changelogs
-     * @param revokedPartitions the set of partitions to remove
-     */
-    void remove(Collection<TopicPartition> revokedPartitions);
 
     /**
      * Clear all partitions

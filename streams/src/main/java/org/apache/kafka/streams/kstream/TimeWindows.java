@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -27,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
@@ -56,6 +56,8 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see TimestampExtractor
  */
 public final class TimeWindows extends Windows<TimeWindow> {
+
+    private static final long EMPTY_GRACE_PERIOD = -1;
 
     private final long maintainDurationMs;
 
@@ -111,7 +113,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
         }
         // This is a static factory method, so we initialize grace and retention to the defaults.
-        return new TimeWindows(sizeMs, sizeMs, -1, DEFAULT_RETENTION_MS);
+        return new TimeWindows(sizeMs, sizeMs, EMPTY_GRACE_PERIOD, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -129,7 +131,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // removing #of(final long sizeMs) will fix this
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
-        return of(ApiUtils.validateMillisecondDuration(size, msgPrefix));
+        return of(validateMillisecondDuration(size, msgPrefix));
     }
 
     /**
@@ -167,7 +169,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // removing #advanceBy(final long advanceMs) will fix this
     public TimeWindows advanceBy(final Duration advance) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
-        return advanceBy(ApiUtils.validateMillisecondDuration(advance, msgPrefix));
+        return advanceBy(validateMillisecondDuration(advance, msgPrefix));
     }
 
     @Override
@@ -200,7 +202,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
-        final long afterWindowEndMs = ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
         if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
@@ -214,7 +216,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return graceMs != -1 ? graceMs : maintainMs() - size();
+        if (graceMs != EMPTY_GRACE_PERIOD) {
+            return graceMs;
+        }
+        return Math.max(maintainDurationMs - sizeMs, 0);
     }
 
     /**
@@ -245,7 +250,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Override
     @Deprecated
     public long maintainMs() {
-        return Math.max(maintainDurationMs, sizeMs);
+        return Math.max(maintainDurationMs, sizeMs + gracePeriodMs());
     }
 
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this

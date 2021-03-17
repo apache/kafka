@@ -15,7 +15,7 @@
 {
   "name": "SimpleExampleMessage",
   "type": "header",
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "1+",
   "fields": [
     { "name": "processId", "versions": "1+", "type": "uuid" },
@@ -30,12 +30,34 @@
     { "name": "myString", "type": "string", "taggedVersions": "1+", "tag": 4 },
     { "name": "myBytes", "type": "bytes",
         "nullableVersions": "1+", "taggedVersions": "1+", "tag": 5 },
-    { "name": "taggedUuid", "type": "uuid", "default": "212d5494-4a8b-4fdf-94b3-88b470beb367",
+    { "name": "taggedUuid", "type": "uuid", "default": "H3KKO4NTRPaCWtEmm3vW7A",
         "taggedVersions": "1+", "tag": 6 },
     { "name": "taggedLong", "type": "int64", "default": "0xcafcacafcacafca",
         "taggedVersions": "1+", "tag": 7 },
     { "name": "zeroCopyByteBuffer", "versions": "1", "type": "bytes", "zeroCopy": true },
     { "name": "nullableZeroCopyByteBuffer", "versions": "1", "nullableVersions": "0+",
-      "type": "bytes", "zeroCopy": true }
+      "type": "bytes", "zeroCopy": true },
+    { "name": "myStruct", "type": "MyStruct", "versions": "2+", "about": "Test Struct field",
+      "fields": [
+        { "name": "structId", "type": "int32", "versions": "2+", "about": "Int field in struct"},
+        { "name": "arrayInStruct", "type": "[]StructArray", "versions": "2+",
+          "fields": [
+            { "name": "arrayFieldId", "type": "int32", "versions": "2+"}
+          ]}
+    ]},
+    { "name": "myTaggedStruct", "type": "TaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
+      "taggedVersions": "2+", "tag": 8,
+      "fields": [
+        { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
+    ]},
+    { "name":  "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name":  "myUint16", "type": "uint16", "versions": "1+", "default":  "33000" }
+  ],
+  "commonStructs": [
+    { "name": "TestCommonStruct", "versions": "0+", "fields": [
+      { "name": "foo", "type": "int32", "default": "123", "versions": "0+" },
+      { "name": "bar", "type": "int32", "default": "123", "versions": "0+" }
+    ]}
   ]
 }

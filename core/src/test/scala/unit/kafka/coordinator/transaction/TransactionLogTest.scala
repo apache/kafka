@@ -20,11 +20,10 @@ package kafka.coordinator.transaction
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.junit.Assert.assertEquals
-import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
 
@@ -45,9 +44,7 @@ class TransactionLogTest {
     val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs, 0)
     txnMetadata.addPartitions(topicPartitions)
 
-    intercept[IllegalStateException] {
-      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
-    }
+    assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
   }
 
   @Test

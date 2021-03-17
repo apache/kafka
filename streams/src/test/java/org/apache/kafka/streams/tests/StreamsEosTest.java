@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -31,7 +32,7 @@ public class StreamsEosTest {
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsEosTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         final String propFileName = args[0];
@@ -39,10 +40,20 @@ public class StreamsEosTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        final String processingGuarantee = streamsProperties.getProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-            System.exit(1);
+            Exit.exit(1);
+        }
+
+        if ("process".equals(command) || "process-complex".equals(command)) {
+            if (!StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee)) {
+
+                System.err.println("processingGuarantee must be either " + StreamsConfig.EXACTLY_ONCE + " or " + StreamsConfig.EXACTLY_ONCE_BETA);
+                Exit.exit(1);
+            }
         }
 
         System.out.println("StreamsTest instance started");
@@ -52,7 +63,7 @@ public class StreamsEosTest {
         System.out.flush();
 
         if (command == null || propFileName == null) {
-            System.exit(-1);
+            Exit.exit(-1);
         }
 
         switch (command) {
@@ -74,7 +85,7 @@ public class StreamsEosTest {
             default:
                 System.out.println("unknown command: " + command);
                 System.out.flush();
-                System.exit(-1);
+                Exit.exit(-1);
         }
     }
 

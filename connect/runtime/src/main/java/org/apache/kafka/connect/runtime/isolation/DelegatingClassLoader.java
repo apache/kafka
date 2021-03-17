@@ -24,6 +24,7 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.reflections.Configuration;
 import org.reflections.Reflections;
 import org.reflections.ReflectionsException;
@@ -72,6 +73,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
+    private final SortedSet<PluginDesc<Predicate>> predicates;
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
@@ -92,6 +94,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
+        this.predicates = new TreeSet<>();
         this.configProviders = new TreeSet<>();
         this.restExtensions = new TreeSet<>();
         this.connectorClientConfigPolicies = new TreeSet<>();
@@ -119,6 +122,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public Set<PluginDesc<Transformation>> transformations() {
         return transformations;
+    }
+
+    public Set<PluginDesc<Predicate>> predicates() {
+        return predicates;
     }
 
     public Set<PluginDesc<ConfigProvider>> configProviders() {
@@ -269,6 +276,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             headerConverters.addAll(plugins.headerConverters());
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
+            addPlugins(plugins.predicates(), loader);
+            predicates.addAll(plugins.predicates());
             addPlugins(plugins.configProviders(), loader);
             configProviders.addAll(plugins.configProviders());
             addPlugins(plugins.restExtensions(), loader);
@@ -284,32 +293,29 @@ public class DelegatingClassLoader extends URLClassLoader {
         // Apply here what java.sql.DriverManager does to discover and register classes
         // implementing the java.sql.Driver interface.
         AccessController.doPrivileged(
-                new PrivilegedAction<Void>() {
-                    @Override
-                    public Void run() {
-                        ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
-                                Driver.class,
-                                loader
+            (PrivilegedAction<Void>) () -> {
+                ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
+                        Driver.class,
+                        loader
+                );
+                Iterator<Driver> driversIterator = loadedDrivers.iterator();
+                try {
+                    while (driversIterator.hasNext()) {
+                        Driver driver = driversIterator.next();
+                        log.debug(
+                                "Registered java.sql.Driver: {} to java.sql.DriverManager",
+                                driver
                         );
-                        Iterator<Driver> driversIterator = loadedDrivers.iterator();
-                        try {
-                            while (driversIterator.hasNext()) {
-                                Driver driver = driversIterator.next();
-                                log.debug(
-                                        "Registered java.sql.Driver: {} to java.sql.DriverManager",
-                                        driver
-                                );
-                            }
-                        } catch (Throwable t) {
-                            log.debug(
-                                    "Ignoring java.sql.Driver classes listed in resources but not"
-                                            + " present in class loader's classpath: ",
-                                    t
-                            );
-                        }
-                        return null;
                     }
+                } catch (Throwable t) {
+                    log.debug(
+                            "Ignoring java.sql.Driver classes listed in resources but not"
+                                    + " present in class loader's classpath: ",
+                            t
+                    );
                 }
+                return null;
+            }
         );
     }
 
@@ -329,6 +335,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader),
+                getPluginDesc(reflections, Predicate.class, loader),
                 getServiceLoaderPluginDesc(ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
                 getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
@@ -402,6 +409,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);
+        addAliases(predicates);
         addAliases(restExtensions);
         addAliases(connectorClientConfigPolicies);
     }

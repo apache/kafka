@@ -17,15 +17,17 @@
 
 package unit.kafka.controller
 
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{Before, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 
 
 class ControllerContextTest {
@@ -36,7 +38,7 @@ class ControllerContextTest {
   val tp2 = new TopicPartition("A", 1)
   val tp3 = new TopicPartition("B", 0)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     context = new ControllerContext
 
@@ -46,7 +48,7 @@ class ControllerContextTest {
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
 
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0
@@ -150,6 +152,20 @@ class ControllerContextTest {
   }
 
   @Test
+  def testReassignToIdempotence(): Unit = {
+    val assignment1 = ReplicaAssignment(Seq(1, 2, 3))
+    assertEquals(assignment1, assignment1.reassignTo(assignment1.targetReplicas))
+
+    val assignment2 = ReplicaAssignment(Seq(4, 5, 6, 1, 2, 3),
+      addingReplicas = Seq(4, 5, 6), removingReplicas = Seq(1, 2, 3))
+    assertEquals(assignment2, assignment2.reassignTo(assignment2.targetReplicas))
+
+    val assignment3 = ReplicaAssignment(Seq(4, 2, 3, 1),
+      addingReplicas = Seq(4), removingReplicas = Seq(1))
+    assertEquals(assignment3, assignment3.reassignTo(assignment3.targetReplicas))
+  }
+
+  @Test
   def testReassignTo(): Unit = {
     val assignment = ReplicaAssignment(Seq(1, 2, 3))
     val firstReassign = assignment.reassignTo(Seq(4, 5, 6))
@@ -160,4 +176,35 @@ class ControllerContextTest {
     assertEquals(assignment, firstReassign.reassignTo(Seq(1,2,3)))
   }
 
+  @Test
+  def testPreferredReplicaImbalanceMetric(): Unit = {
+    context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tp2, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tp3, ReplicaAssignment(Seq(1, 2, 3)))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(1, 2, 3)), 0))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(LeaderAndIsr(2, List(2, 3, 1)), 0))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(3, List(3, 1, 2)), 0))
+    assertEquals(2, context.preferredReplicaImbalanceCount)
+
+    context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(2, 3, 1)))
+    context.updatePartitionFullReplicaAssignment(tp2, ReplicaAssignment(Seq(2, 3, 1)))
+    assertEquals(2, context.preferredReplicaImbalanceCount)
+
+    context.queueTopicDeletion(Set(tp3.topic))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(3, 1, 2)), 0))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.removeTopic(tp1.topic)
+    context.removeTopic(tp2.topic)
+    context.removeTopic(tp3.topic)
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+  }
 }

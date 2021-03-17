@@ -31,12 +31,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
-import org.junit.After
-import org.junit.Assert._
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.concurrent.duration._
 
@@ -48,7 +48,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   val broker2 = 1
   val broker3 = 2
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -62,7 +62,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     }
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
 
@@ -197,111 +197,81 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicWithoutPartition(): Unit = {
-    try {
-      LeaderElectionCommand.main(
-        Array(
-          "--bootstrap-server", bootstrapServers(servers),
-          "--election-type", "unclean",
-          "--topic", "some-topic"
-        )
+    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--election-type", "unclean",
+        "--topic", "some-topic"
       )
-      fail()
-    } catch {
-      case e: Throwable =>
-        assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-        assertTrue(e.getMessage.contains(" partition"))
-    }
+    ))
+    assertTrue(e.getMessage.startsWith("Missing required option(s)"))
+    assertTrue(e.getMessage.contains(" partition"))
   }
 
   @Test
   def testPartitionWithoutTopic(): Unit = {
-    try {
-      LeaderElectionCommand.main(
-        Array(
-          "--bootstrap-server", bootstrapServers(servers),
-          "--election-type", "unclean",
-          "--all-topic-partitions",
-          "--partition", "0"
-        )
+    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--election-type", "unclean",
+        "--all-topic-partitions",
+        "--partition", "0"
       )
-      fail()
-    } catch {
-      case e: Throwable =>
-        assertEquals("Option partition is only allowed if topic is used", e.getMessage)
-    }
+    ))
+    assertEquals("Option partition is only allowed if topic is used", e.getMessage)
   }
 
   @Test
   def testTopicDoesNotExist(): Unit = {
-    try {
-      LeaderElectionCommand.main(
-        Array(
-          "--bootstrap-server", bootstrapServers(servers),
-          "--election-type", "preferred",
-          "--topic", "unknown-topic-name",
-          "--partition", "0"
-        )
+    val e = assertThrows(classOf[AdminCommandFailedException], () => LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--election-type", "preferred",
+        "--topic", "unknown-topic-name",
+        "--partition", "0"
       )
-      fail()
-    } catch {
-      case e: AdminCommandFailedException =>
-        assertTrue(e.getSuppressed()(0).isInstanceOf[UnknownTopicOrPartitionException])
-    }
+    ))
+    assertTrue(e.getSuppressed()(0).isInstanceOf[UnknownTopicOrPartitionException])
   }
 
   @Test
   def testMissingElectionType(): Unit = {
-    try {
-      LeaderElectionCommand.main(
-        Array(
-          "--bootstrap-server", bootstrapServers(servers),
-          "--topic", "some-topic",
-          "--partition", "0"
-        )
+    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--topic", "some-topic",
+        "--partition", "0"
       )
-      fail()
-    } catch {
-      case e: Throwable =>
-        assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-        assertTrue(e.getMessage.contains(" election-type"))
-    }
+    ))
+    assertTrue(e.getMessage.startsWith("Missing required option(s)"))
+    assertTrue(e.getMessage.contains(" election-type"))
   }
 
   @Test
   def testMissingTopicPartitionSelection(): Unit = {
-    try {
-      LeaderElectionCommand.main(
-        Array(
-          "--bootstrap-server", bootstrapServers(servers),
-          "--election-type", "preferred"
-        )
+    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", bootstrapServers(servers),
+        "--election-type", "preferred"
       )
-      fail()
-    } catch {
-      case e: Throwable =>
-        assertTrue(e.getMessage.startsWith("One and only one of the following options is required: "))
-        assertTrue(e.getMessage.contains(" all-topic-partitions"))
-        assertTrue(e.getMessage.contains(" topic"))
-        assertTrue(e.getMessage.contains(" path-to-json-file"))
-    }
+    ))
+    assertTrue(e.getMessage.startsWith("One and only one of the following options is required: "))
+    assertTrue(e.getMessage.contains(" all-topic-partitions"))
+    assertTrue(e.getMessage.contains(" topic"))
+    assertTrue(e.getMessage.contains(" path-to-json-file"))
   }
 
   @Test
   def testInvalidBroker(): Unit = {
-    try {
-      LeaderElectionCommand.run(
-        Array(
-          "--bootstrap-server", "example.com:1234",
-          "--election-type", "unclean",
-          "--all-topic-partitions"
-        ),
-        1.seconds
-      )
-      fail()
-    } catch {
-      case e: AdminCommandFailedException =>
-        assertTrue(e.getCause.isInstanceOf[TimeoutException])
-    }
+    val e = assertThrows(classOf[AdminCommandFailedException], () => LeaderElectionCommand.run(
+      Array(
+        "--bootstrap-server", "example.com:1234",
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      ),
+      1.seconds
+    ))
+    assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
 }
 

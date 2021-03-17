@@ -18,18 +18,18 @@
 package kafka.log
 
 import java.io.PrintWriter
-
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.collection.{Iterable, JavaConverters, Seq}
+import java.util.concurrent.TimeUnit
+import scala.collection.{Iterable, Seq}
+import scala.jdk.CollectionConverters._
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
@@ -41,15 +41,16 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
-  @After
+  @AfterEach
   def cleanup(): Unit = {
     TestUtils.clearYammerMetrics()
   }
 
-  @Test(timeout = DEFAULT_MAX_WAIT_MS)
+  @Timeout(value = DEFAULT_MAX_WAIT_MS, unit = TimeUnit.MILLISECONDS)
+  @Test
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20
-    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
 
@@ -90,7 +91,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(filter(_))
+      .filter { case (k, _) => filter(k) }
       .headOption
       .getOrElse { fail(s"Unable to find metric") }
       .asInstanceOf[(Any, Gauge[Any])]
@@ -138,7 +139,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     // advance to a time still less than maxCompactionLagMs from start
     time.sleep(maxCompactionLagMs/2)
     Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
-    assertEquals("There should be no cleaning until the max compaction lag has passed", startSizeBlock0, log.size)
+    assertEquals(startSizeBlock0, log.size, "There should be no cleaning until the max compaction lag has passed")
 
     // advance to time a bit more than one maxCompactionLagMs from start
     time.sleep(maxCompactionLagMs/2 + 1)
@@ -157,11 +158,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val read1 = readFromLog(log)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
-    assertTrue(s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, " +
-      s"but lastCleaned=$lastCleaned", lastCleaned >= firstBlockCleanableSegmentOffset)
+    assertTrue(lastCleaned >= firstBlockCleanableSegmentOffset,
+      s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned")
 
     //minCleanableDirtyRatio  will prevent second block of data from compacting
-    assertNotEquals(s"log should still contain non-zero keys", appends1, read1)
+    assertNotEquals(appends1, read1, s"log should still contain non-zero keys")
 
     time.sleep(maxCompactionLagMs + 1)
     // the second block should get cleaned. only zero keys left
@@ -169,16 +170,15 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val read2 = readFromLog(log)
 
-    assertEquals(s"log should only contains zero keys now", appends1, read2)
+    assertEquals(appends1, read2, s"log should only contains zero keys now")
 
     val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
     val secondBlockCleanableSegmentOffset = activeSegAtT1.baseOffset
-    assertTrue(s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, " +
-      s"but lastCleaned=$lastCleaned2", lastCleaned2 >= secondBlockCleanableSegmentOffset)
+    assertTrue(lastCleaned2 >= secondBlockCleanableSegmentOffset,
+      s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    import JavaConverters._
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt

@@ -17,24 +17,22 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class PayloadGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testConstantPayloadGenerator() {
@@ -206,16 +204,13 @@ public class PayloadGeneratorTest {
         List<RandomComponent> components2 = new ArrayList<>(Arrays.asList(
              nullConfig, constantConfig, uniformConfig, nullConfig, uniformConfig, uniformConfig));
      
-        assertThrows(IllegalArgumentException.class, () -> {
-            new PayloadIterator(new RandomComponentPayloadGenerator(1, new ArrayList<>()));
-        });
-        assertThrows(IllegalArgumentException.class, () -> {
-            new PayloadIterator(new RandomComponentPayloadGenerator(13, components2));
-        });
-        assertThrows(IllegalArgumentException.class, () -> {
-            new PayloadIterator(new RandomComponentPayloadGenerator(123, components1));
-        });
-    }  
+        assertThrows(IllegalArgumentException.class, () ->
+            new PayloadIterator(new RandomComponentPayloadGenerator(1, new ArrayList<>())));
+        assertThrows(IllegalArgumentException.class, () ->
+            new PayloadIterator(new RandomComponentPayloadGenerator(13, components2)));
+        assertThrows(IllegalArgumentException.class, () ->
+            new PayloadIterator(new RandomComponentPayloadGenerator(123, components1)));
+    }
 
     @Test
     public void testPayloadIterator() {
@@ -236,8 +231,8 @@ public class PayloadGeneratorTest {
     @Test
     public void testNullPayloadGenerator() {
         NullPayloadGenerator generator = new NullPayloadGenerator();
-        assertEquals(null, generator.generate(0));
-        assertEquals(null, generator.generate(1));
-        assertEquals(null, generator.generate(100));
+        assertNull(generator.generate(0));
+        assertNull(generator.generate(1));
+        assertNull(generator.generate(100));
     }
 }

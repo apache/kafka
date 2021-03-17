@@ -17,8 +17,8 @@
 
 package kafka.utils.json
 
-import scala.collection.{Iterator, JavaConverters}
-import JavaConverters._
+import scala.collection.Iterator
+import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.node.ArrayNode
 

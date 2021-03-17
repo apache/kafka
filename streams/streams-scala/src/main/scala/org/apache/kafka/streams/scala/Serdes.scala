@@ -24,6 +24,10 @@ import java.util
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
+@deprecated(
+  "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde, use explicit constructors.",
+  "2.7.0"
+)
 object Serdes {
   implicit def String: Serde[String] = JSerdes.String()
   implicit def Long: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]

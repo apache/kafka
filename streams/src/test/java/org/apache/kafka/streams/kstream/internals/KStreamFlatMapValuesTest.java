@@ -73,7 +73,7 @@ public class KStreamFlatMapValuesTest {
             new KeyValueTimestamp<>(2, "v2", 0), new KeyValueTimestamp<>(2, "V2", 0),
             new KeyValueTimestamp<>(3, "v3", 0), new KeyValueTimestamp<>(3, "V3", 0)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
 
@@ -114,6 +114,6 @@ public class KStreamFlatMapValuesTest {
             new KeyValueTimestamp<>(3, "v3", 0),
             new KeyValueTimestamp<>(3, "k3", 0)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 }

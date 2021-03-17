@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
@@ -31,28 +34,46 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     private final TaskManager taskManager;
     private final StreamThread streamThread;
     private final Logger log;
+    private final AtomicInteger assignmentErrorCode;
 
     StreamsRebalanceListener(final Time time,
                              final TaskManager taskManager,
                              final StreamThread streamThread,
-                             final Logger log) {
+                             final Logger log,
+                             final AtomicInteger assignmentErrorCode) {
         this.time = time;
         this.taskManager = taskManager;
         this.streamThread = streamThread;
         this.log = log;
+        this.assignmentErrorCode = assignmentErrorCode;
     }
 
     @Override
     public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
         // NB: all task management is already handled by:
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
-        if (streamThread.getAssignmentErrorCode() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-            log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
-            streamThread.shutdown();
-        } else {
-            streamThread.setState(State.PARTITIONS_ASSIGNED);
+        if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+            log.error("Received error code {}", AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA);
+            taskManager.handleRebalanceComplete();
+            throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
+        } else if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
+            log.info("Received version probing code {}", AssignorError.VERSION_PROBING);
+        }  else if (assignmentErrorCode.get() == AssignorError.ASSIGNMENT_ERROR.code()) {
+            log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
+            taskManager.handleRebalanceComplete();
+            throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
+        } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.error("A Kafka Streams client in this Kafka Streams application is requesting to shutdown the application");
+            taskManager.handleRebalanceComplete();
+            streamThread.shutdownToError();
+            return;
+        } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
+            log.error("Received unknown error code {}", assignmentErrorCode.get());
+            throw new TaskAssignmentException("Hit an unrecognized exception during rebalance");
         }
 
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+        streamThread.setPartitionAssignedTime(time.milliseconds());
         taskManager.handleRebalanceComplete();
     }
 
@@ -66,7 +87,9 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                   taskManager.activeTaskIds(),
                   taskManager.standbyTaskIds());
 
-        if (streamThread.setState(State.PARTITIONS_REVOKED) != null && !partitions.isEmpty()) {
+        // We need to still invoke handleRevocation if the thread has been told to shut down, but we shouldn't ever
+        // transition away from PENDING_SHUTDOWN once it's been initiated (to anything other than DEAD)
+        if ((streamThread.setState(State.PARTITIONS_REVOKED) != null || streamThread.state() == State.PENDING_SHUTDOWN) && !partitions.isEmpty()) {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);

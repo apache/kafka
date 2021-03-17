@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, Topology}
 import org.apache.kafka.streams.scala.kstream.{Consumed, KStream, KTable, Materialized}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.
@@ -176,10 +176,31 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */
+  @deprecated(
+    "Use #addGlobalStore(StoreBuilder, String, Consumed, org.apache.kafka.streams.processor.api.ProcessorSupplier) instead.",
+    "2.7.0"
+  )
   def addGlobalStore[K, V](storeBuilder: StoreBuilder[_ <: StateStore],
                            topic: String,
                            consumed: Consumed[K, V],
                            stateUpdateSupplier: ProcessorSupplier[K, V]): StreamsBuilderJ =
+    inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
+
+  /**
+   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor`, `Transformer`,
+   * or `ValueTransformer` (in contrast to regular stores).
+   * <p>
+   * It is not required to connect a global store to `Processor`, `Transformer`, or `ValueTransformer`;
+   * those have read-only access to all global stores by default.
+   *
+   * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
+   */
+  def addGlobalStore[K, V](
+    storeBuilder: StoreBuilder[_ <: StateStore],
+    topic: String,
+    consumed: Consumed[K, V],
+    stateUpdateSupplier: org.apache.kafka.streams.processor.api.ProcessorSupplier[K, V, Void, Void]
+  ): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()

@@ -37,7 +37,7 @@ import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
 import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
 
 /**
@@ -80,7 +80,7 @@ object ReplicationQuotasTestRig {
   def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
     val experiment = new Experiment()
     try {
-      experiment.setUp
+      experiment.setUp()
       experiment.run(config, journal, displayChartsOnScreen)
       journal.footer()
     }
@@ -88,7 +88,7 @@ object ReplicationQuotasTestRig {
       case e: Exception => e.printStackTrace()
     }
     finally {
-      experiment.tearDown
+      experiment.tearDown()
     }
   }
 
@@ -128,7 +128,7 @@ object ReplicationQuotasTestRig {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
       var count = 0
-      val shift = Math.round(config.brokers / 2)
+      val shift = Math.round(config.brokers / 2f)
 
       def nextReplicaRoundRobin(): Int = {
         count = count + 1
@@ -188,9 +188,9 @@ object ReplicationQuotasTestRig {
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
-      println("This is the current replica assignment:\n" + actual.mapValues(_.replicas).toMap.toSeq)
+      println("This is the current replica assignment:\n" + actual.map { case (k, v) => k -> v.replicas })
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assignment we ended up with" + actual.mapValues(_.replicas).toMap)
+      println("This is the assignment we ended up with" + actual.map { case (k, v) => k -> v.replicas })
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")
@@ -302,7 +302,7 @@ object ReplicationQuotasTestRig {
       val message = s"\n\n<h3>${config.name}</h3>" +
         s"<p>- BrokerCount: ${config.brokers}" +
         s"<p>- PartitionCount: ${config.partitions}" +
-        f"<p>- Throttle: ${config.throttle}%,.0f MB/s" +
+        f"<p>- Throttle: ${config.throttle.toDouble}%,.0f MB/s" +
         f"<p>- MsgCount: ${config.msgsPerPartition}%,.0f " +
         f"<p>- MsgSize: ${config.msgSize}%,.0f" +
         s"<p>- TargetBytesPerBrokerMB: ${config.targetBytesPerBrokerMB}<p>"

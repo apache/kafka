@@ -48,11 +48,12 @@ public class AssignmentInfo {
 
     private final int usedVersion;
     private final int commonlySupportedVersion;
-    private int errCode;
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
     private Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
+    private int errCode;
+    private Long nextRebalanceMs = Long.MAX_VALUE;
 
     // used for decoding and "future consumer" assignments during version probing
     public AssignmentInfo(final int version,
@@ -96,6 +97,10 @@ public class AssignmentInfo {
         }
     }
 
+    public void setNextRebalanceTime(final long nextRebalanceTimeMs) {
+        this.nextRebalanceMs = nextRebalanceTimeMs;
+    }
+
     public int version() {
         return usedVersion;
     }
@@ -122,6 +127,10 @@ public class AssignmentInfo {
 
     public Map<HostInfo, Set<TopicPartition>> standbyPartitionByHost() {
         return standbyPartitionsByHost;
+    }
+
+    public long nextRebalanceMs() {
+        return nextRebalanceMs;
     }
 
     /**
@@ -163,12 +172,21 @@ public class AssignmentInfo {
                     out.writeInt(errCode);
                     break;
                 case 6:
-                case 7:
                     out.writeInt(usedVersion);
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
                     encodeActiveAndStandbyHostPartitions(out);
                     out.writeInt(errCode);
+                    break;
+                case 7:
+                case 8:
+                case 9:
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodeActiveAndStandbyHostPartitions(out);
+                    out.writeInt(errCode);
+                    out.writeLong(nextRebalanceMs);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -328,13 +346,23 @@ public class AssignmentInfo {
                     assignmentInfo.errCode = in.readInt();
                     break;
                 case 6:
-                case 7:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeActiveTasks(assignmentInfo, in);
                     decodeStandbyTasks(assignmentInfo, in);
                     decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
+                    break;
+                case 7:
+                case 8:
+                case 9:
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
+                    assignmentInfo.nextRebalanceMs = in.readLong();
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +

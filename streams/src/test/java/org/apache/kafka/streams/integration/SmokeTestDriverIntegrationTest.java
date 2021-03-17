@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.apache.kafka.test.IntegrationTest;
-
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -80,6 +80,12 @@ public class SmokeTestDriverIntegrationTest {
 
     @Test
     public void shouldWorkWithRebalance() throws InterruptedException {
+        Exit.setExitProcedure((statusCode, message) -> {
+            throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
+        });
+        Exit.setHaltProcedure((statusCode, message) -> {
+            throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
+        });
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
@@ -103,10 +109,6 @@ public class SmokeTestDriverIntegrationTest {
             final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
             clients.add(smokeTestClient);
             smokeTestClient.start(props);
-
-            while (!clients.get(clients.size() - 1).started()) {
-                Thread.sleep(100);
-            }
 
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {

@@ -16,7 +16,7 @@
  */
 package kafka.admin
 
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutionException
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
+import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
@@ -85,7 +86,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     }
   }
 
-  def parsePreferredReplicaElectionData(jsonString: String): immutable.Set[TopicPartition] = {
+  def parsePreferredReplicaElectionData(jsonString: String): collection.immutable.Set[TopicPartition] = {
     Json.parseFull(jsonString) match {
       case Some(js) =>
         js.asJsonObject.get("partitions") match {
@@ -178,7 +179,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
             case Some(partitions) =>
               partitions.map(_.topic).toSet
             case None =>
-              zkClient.getAllPartitions().map(_.topic)
+              zkClient.getAllPartitions.map(_.topic)
           }
 
         val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
@@ -190,7 +191,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
             case Some(partitions) =>
               partitions.partition(partitionsFromZk.contains)
             case None =>
-              (zkClient.getAllPartitions(), Set.empty)
+              (zkClient.getAllPartitions, Set.empty)
           }
           PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, validPartitions)
 
@@ -269,7 +270,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
       if (!failed.isEmpty) {
         val rootException = new AdminCommandFailedException(s"${failed.size} preferred replica(s) could not be elected")
-        failed.foreach { case (topicPartition, exception) =>
+        failed.forKeyValue { (topicPartition, exception) =>
           println(s"Error completing preferred leader election for partition: $topicPartition: $exception")
           rootException.addSuppressed(exception)
         }

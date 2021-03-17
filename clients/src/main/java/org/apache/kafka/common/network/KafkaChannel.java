@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -28,7 +29,6 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -124,7 +124,7 @@ public class KafkaChannel implements AutoCloseable {
     private final MemoryPool memoryPool;
     private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
-    private Send send;
+    private NetworkSend send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
     // processed after the channel is disconnected.
     private boolean disconnected;
@@ -160,6 +160,10 @@ public class KafkaChannel implements AutoCloseable {
      */
     public KafkaPrincipal principal() {
         return authenticator.principal();
+    }
+
+    public Optional<KafkaPrincipalSerde> principalSerde() {
+        return authenticator.principalSerde();
     }
 
     /**
@@ -372,18 +376,18 @@ public class KafkaChannel implements AutoCloseable {
         return socket.getInetAddress().toString();
     }
 
-    public void setSend(Send send) {
+    public void setSend(NetworkSend send) {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
-    public Send maybeCompleteSend() {
+    public NetworkSend maybeCompleteSend() {
         if (send != null && send.completed()) {
             midWrite = false;
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-            Send result = send;
+            NetworkSend result = send;
             send = null;
             return result;
         }
@@ -471,12 +475,12 @@ public class KafkaChannel implements AutoCloseable {
             return false;
         }
         KafkaChannel that = (KafkaChannel) o;
-        return Objects.equals(id, that.id);
+        return id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return id.hashCode();
     }
 
     @Override

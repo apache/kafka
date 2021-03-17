@@ -39,7 +39,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private boolean sendOldValues = false;
 
-    KStreamAggregate(final String storeName, final Initializer<T> initializer, final Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamAggregate(final String storeName,
+                     final Initializer<T> initializer,
+                     final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -139,8 +141,5 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         public ValueAndTimestamp<T> get(final K key) {
             return store.get(key);
         }
-
-        @Override
-        public void close() {}
     }
 }

@@ -16,7 +16,6 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.concurrent._
-
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
@@ -33,10 +32,10 @@ import org.apache.kafka.common.resource.PatternType._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object SslAdminIntegrationTest {
@@ -102,6 +101,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     startSasl(jaasSections(List.empty, None, ZkSasl))
   }
 
+  @AfterEach
   override def tearDown(): Unit = {
     // Ensure semaphore doesn't block shutdown even if test has failed
     val semaphore = SslAdminIntegrationTest.semaphore
@@ -138,8 +138,8 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val aclFutures = mutable.Buffer[CreateAclsResult]()
     while (blockedRequestThreads.size < numRequestThreads) {
       aclFutures += createAdminClient.createAcls(List(acl2).asJava)
-      assertTrue(s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads",
-        aclFutures.size < numRequestThreads * 10)
+      assertTrue(aclFutures.size < numRequestThreads * 10,
+        s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads")
     }
     assertEquals(0, purgatoryMetric("NumDelayedOperations"))
     assertEquals(0, purgatoryMetric("PurgatorySize"))
@@ -206,30 +206,30 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       assertEquals(KafkaPrincipal.ANONYMOUS, context.principal)
       assertEquals(apiKey.id.toInt, context.requestType)
       assertEquals(apiKey.latestVersion.toInt, context.requestVersion)
-      assertTrue(s"Invalid correlation id: ${context.correlationId}", context.correlationId > 0)
-      assertTrue(s"Invalid client id: ${context.clientId}", context.clientId.startsWith("adminclient"))
-      assertTrue(s"Invalid host address: ${context.clientAddress}", context.clientAddress.isLoopbackAddress)
+      assertTrue(context.correlationId > 0, s"Invalid correlation id: ${context.correlationId}")
+      assertTrue(context.clientId.startsWith("adminclient"), s"Invalid client id: ${context.clientId}")
+      assertTrue(context.clientAddress.isLoopbackAddress, s"Invalid host address: ${context.clientAddress}")
     }
 
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
-    assertFalse(results.values().asScala.exists(_.isDone))
+    assertFalse(results.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
 
     testSemaphore.acquire()
     val results2 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
-    assertFalse(results2.values().asScala.exists(_.isDone))
+    assertFalse(results2.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     assertEquals(0, results2.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results2.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl3), results2.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
@@ -237,7 +237,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def createAdminClient: Admin = {
-    val config = createConfig()
+    val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     val client = Admin.create(config)
     adminClients += client
@@ -263,7 +263,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val metrics = allMetrics.filter { case (metricName, _) =>
       metricName.getMBeanName.contains("delayedOperation=AlterAcls") && metricName.getMBeanName.contains(s"name=$name")
     }.values.toList
-    assertTrue(s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}", metrics.nonEmpty)
+    assertTrue(metrics.nonEmpty, s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}")
     metrics.map(_.asInstanceOf[Gauge[Int]].value).sum
   }
 
@@ -306,7 +306,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       val clusterFilter = new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY)
       val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
       val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
-      Assert.assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
+      assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
         .get(0).toCompletableFuture.get.aclBindingDeleteResults().asScala.head.exception.isPresent)
       TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
     }

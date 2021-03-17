@@ -18,13 +18,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
+
+public class ValueAndTimestampSerializer<V> implements WrappingNullableSerializer<ValueAndTimestamp<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
 
@@ -32,6 +35,26 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
         Objects.requireNonNull(valueSerializer);
         this.valueSerializer = valueSerializer;
         timestampSerializer = new LongSerializer();
+    }
+
+    public static boolean valuesAreSameAndTimeIsIncreasing(final byte[] oldRecord, final byte[] newRecord) {
+        if (oldRecord == newRecord) {
+            // same reference, so they are trivially the same (might both be null)
+            return true;
+        } else if (oldRecord == null || newRecord == null) {
+            // only one is null, so they cannot be the same
+            return false;
+        } else if (newRecord.length != oldRecord.length) {
+            // they are different length, so they cannot be the same
+            return false;
+        } else if (timeIsDecreasing(oldRecord, newRecord)) {
+            // the record time represents the beginning of the validity interval, so if the time
+            // moves backwards, we need to do the update regardless of whether the value has changed
+            return false;
+        } else {
+            // all other checks have fallen through, so we actually compare the binary data of the two values
+            return valuesAreSame(oldRecord, newRecord);
+        }
     }
 
     @Override
@@ -79,5 +102,31 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
     public void close() {
         valueSerializer.close();
         timestampSerializer.close();
+    }
+
+    private static boolean timeIsDecreasing(final byte[] oldRecord, final byte[] newRecord) {
+        return extractTimestamp(newRecord) < extractTimestamp(oldRecord);
+    }
+
+    private static long extractTimestamp(final byte[] bytes) {
+        final byte[] timestampBytes = new byte[Long.BYTES];
+        System.arraycopy(bytes, 0, timestampBytes, 0, Long.BYTES);
+        return ByteBuffer.wrap(timestampBytes).getLong();
+    }
+
+    private static boolean valuesAreSame(final byte[] left, final byte[] right) {
+        for (int i = Long.BYTES; i < left.length; i++) {
+            if (left[i] != right[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
+        // ValueAndTimestampSerializer never wraps a null serializer (or configure would throw),
+        // but it may wrap a serializer that itself wraps a null serializer.
+        initNullableSerializer(valueSerializer, defaultKeySerializer, defaultValueSerializer);
     }
 }

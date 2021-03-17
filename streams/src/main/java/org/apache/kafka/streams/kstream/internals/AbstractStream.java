@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -24,9 +25,10 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -45,9 +47,9 @@ public abstract class AbstractStream<K, V> {
 
     protected final String name;
     protected final Serde<K> keySerde;
-    protected final Serde<V> valSerde;
+    protected final Serde<V> valueSerde;
     protected final Set<String> subTopologySourceNodes;
-    protected final StreamsGraphNode streamsGraphNode;
+    protected final GraphNode graphNode;
     protected final InternalStreamsBuilder builder;
 
     // This copy-constructor will allow to extend KStream
@@ -56,16 +58,16 @@ public abstract class AbstractStream<K, V> {
         this.name = stream.name;
         this.builder = stream.builder;
         this.keySerde = stream.keySerde;
-        this.valSerde = stream.valSerde;
+        this.valueSerde = stream.valueSerde;
         this.subTopologySourceNodes = stream.subTopologySourceNodes;
-        this.streamsGraphNode = stream.streamsGraphNode;
+        this.graphNode = stream.graphNode;
     }
 
     AbstractStream(final String name,
                    final Serde<K> keySerde,
-                   final Serde<V> valSerde,
+                   final Serde<V> valueSerde,
                    final Set<String> subTopologySourceNodes,
-                   final StreamsGraphNode streamsGraphNode,
+                   final GraphNode graphNode,
                    final InternalStreamsBuilder builder) {
         if (subTopologySourceNodes == null || subTopologySourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
@@ -74,9 +76,9 @@ public abstract class AbstractStream<K, V> {
         this.name = name;
         this.builder = builder;
         this.keySerde = keySerde;
-        this.valSerde = valSerde;
+        this.valueSerde = valueSerde;
         this.subTopologySourceNodes = subTopologySourceNodes;
-        this.streamsGraphNode = streamsGraphNode;
+        this.graphNode = graphNode;
     }
 
     // This method allows to expose the InternalTopologyBuilder instance
@@ -107,24 +109,33 @@ public abstract class AbstractStream<K, V> {
     static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
         final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return () -> {
-            final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-            return new ValueTransformerWithKey<K, V, VR>() {
-                @Override
-                public void init(final ProcessorContext context) {
-                    valueTransformer.init(context);
-                }
+        ApiUtils.checkSupplier(valueTransformerSupplier);
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+            @Override
+            public ValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+                return new ValueTransformerWithKey<K, V, VR>() {
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        valueTransformer.init(context);
+                    }
 
-                @Override
-                public VR transform(final K readOnlyKey, final V value) {
-                    return valueTransformer.transform(value);
-                }
+                    @Override
+                    public VR transform(final K readOnlyKey, final V value) {
+                        return valueTransformer.transform(value);
+                    }
 
-                @Override
-                public void close() {
-                    valueTransformer.close();
-                }
-            };
+                    @Override
+                    public void close() {
+                        valueTransformer.close();
+                    }
+                };
+            }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return valueTransformerSupplier.stores();
+            }
         };
     }
 
@@ -134,6 +145,6 @@ public abstract class AbstractStream<K, V> {
     }
 
     public Serde<V> valueSerde() {
-        return valSerde;
+        return valueSerde;
     }
 }

@@ -21,104 +21,66 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-
 public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
-
-    public final ArrayList<KeyValueTimestamp<Object, Object>> processed = new ArrayList<>();
-    public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
-
-    public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
-    public final ArrayList<Long> punctuatedSystemTime = new ArrayList<>();
-
-    public Cancellable scheduleCancellable;
-
-    private final PunctuationType punctuationType;
-    private final long scheduleInterval;
-
-    private boolean commitRequested = false;
+    private final MockApiProcessor<K, V, Object, Object> delegate;
 
     public MockProcessor(final PunctuationType punctuationType,
                          final long scheduleInterval) {
-        this.punctuationType = punctuationType;
-        this.scheduleInterval = scheduleInterval;
+        delegate = new MockApiProcessor<>(punctuationType, scheduleInterval);
     }
 
     public MockProcessor() {
-        this(PunctuationType.STREAM_TIME, -1);
+        delegate = new MockApiProcessor<>();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context) {
         super.init(context);
-        if (scheduleInterval > 0L) {
-            scheduleCancellable = context.schedule(
-                Duration.ofMillis(scheduleInterval),
-                punctuationType,
-                timestamp -> {
-                    if (punctuationType == PunctuationType.STREAM_TIME) {
-                        assertEquals(timestamp, context().timestamp());
-                    }
-                    assertEquals(-1, context().partition());
-                    assertEquals(-1L, context().offset());
-
-                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
-                            .add(timestamp);
-                });
-        }
+        delegate.init((org.apache.kafka.streams.processor.api.ProcessorContext<Object, Object>) context);
     }
 
     @Override
     public void process(final K key, final V value) {
-        KeyValueTimestamp<Object, Object> keyValueTimestamp = new KeyValueTimestamp<>(key, value, context().timestamp());
-
-        if (value != null) {
-            lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
-        } else {
-            lastValueAndTimestampPerKey.remove(key);
-        }
-
-        processed.add(keyValueTimestamp);
-
-        if (commitRequested) {
-            context().commit();
-            commitRequested = false;
-        }
+        delegate.process(new Record<>(key, value, context.timestamp(), context.headers()));
     }
 
-    public void checkAndClearProcessResult(final KeyValueTimestamp... expected) {
-        assertEquals("the number of outputs:" + processed, expected.length, processed.size());
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], processed.get(i));
-        }
-
-        processed.clear();
+    public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
+        delegate.checkAndClearProcessResult(expected);
     }
 
     public void requestCommit() {
-        commitRequested = true;
+        delegate.requestCommit();
     }
 
     public void checkEmptyAndClearProcessResult() {
-        assertEquals("the number of outputs:", 0, processed.size());
-        processed.clear();
+        delegate.checkEmptyAndClearProcessResult();
     }
 
     public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
-        final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertEquals("the number of outputs:", expected.length, punctuated.size());
+        delegate.checkAndClearPunctuateResult(type, expected);
+    }
 
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], (long) punctuated.get(i));
-        }
+    public Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey() {
+        return delegate.lastValueAndTimestampPerKey();
+    }
 
-        processed.clear();
+    public List<Long> punctuatedStreamTime() {
+        return delegate.punctuatedStreamTime();
+    }
+
+    public Cancellable scheduleCancellable() {
+        return delegate.scheduleCancellable();
+    }
+
+    public ArrayList<KeyValueTimestamp<K, V>> processed() {
+        return delegate.processed();
     }
 }

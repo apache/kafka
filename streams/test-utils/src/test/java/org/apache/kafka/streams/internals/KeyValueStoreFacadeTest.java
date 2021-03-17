@@ -20,14 +20,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.easymock.EasyMock;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static java.util.Arrays.asList;
 import static org.easymock.EasyMock.expect;
@@ -37,25 +35,34 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-@RunWith(EasyMockRunner.class)
 public class KeyValueStoreFacadeTest {
-    @Mock
-    private TimestampedKeyValueStore<String, String> mockedKeyValueTimestampStore;
-    @Mock
-    private KeyValueIterator<String, ValueAndTimestamp<String>> mockedKeyValueTimestampIterator;
+    private final TimestampedKeyValueStore<String, String> mockedKeyValueTimestampStore = EasyMock.mock(TimestampedKeyValueStore.class);
 
     private KeyValueStoreFacade<String, String> keyValueStoreFacade;
 
-    @Before
+    @BeforeEach
     public void setup() {
         keyValueStoreFacade = new KeyValueStoreFacade<>(mockedKeyValueTimestampStore);
     }
 
+    @SuppressWarnings("deprecation") // test of deprecated method
+    @Test
+    public void shouldForwardDeprecatedInit() {
+        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStore store = mock(StateStore.class);
+        mockedKeyValueTimestampStore.init(context, store);
+        expectLastCall();
+        replay(mockedKeyValueTimestampStore);
+
+        keyValueStoreFacade.init(context, store);
+        verify(mockedKeyValueTimestampStore);
+    }
+
     @Test
     public void shouldForwardInit() {
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStoreContext context = mock(StateStoreContext.class);
         final StateStore store = mock(StateStore.class);
         mockedKeyValueTimestampStore.init(context, store);
         expectLastCall();

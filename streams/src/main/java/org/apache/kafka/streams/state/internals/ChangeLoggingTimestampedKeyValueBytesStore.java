@@ -32,9 +32,9 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
     void log(final Bytes key,
              final byte[] valueAndTimestamp) {
         if (valueAndTimestamp != null) {
-            changeLogger.logChange(key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp));
+            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp));
         } else {
-            changeLogger.logChange(key, null);
+            context.logChange(name(), key, null, context.timestamp());
         }
     }
 }

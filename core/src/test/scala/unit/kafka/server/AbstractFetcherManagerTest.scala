@@ -22,20 +22,20 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class AbstractFetcherManagerTest {
 
-  @Before
+  @BeforeEach
   def cleanMetricRegistry(): Unit = {
     TestUtils.clearYammerMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getName == name).values.headOption.get.
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) => k.getName == name }.values.headOption.get.
       asInstanceOf[Gauge[Int]].value()
   }
 
@@ -57,10 +57,11 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
-    EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+    EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
+        .andReturn(Set(tp))
     EasyMock.expect(fetcher.fetchState(tp))
-      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating)))
-    EasyMock.expect(fetcher.removePartitions(Set(tp)))
+      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+    EasyMock.expect(fetcher.removePartitions(Set(tp))).andReturn(Map.empty)
     EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
 
@@ -115,7 +116,8 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
-    EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+    EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
+        .andReturn(Set(tp))
     EasyMock.expect(fetcher.isThreadFailed).andReturn(true)
     EasyMock.replay(fetcher)
 

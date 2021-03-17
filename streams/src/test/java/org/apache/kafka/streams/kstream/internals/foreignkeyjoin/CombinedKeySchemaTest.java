@@ -23,13 +23,16 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class CombinedKeySchemaTest {
 
     @Test
     public void nonNullPrimaryKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("fkTopic", Serdes.String(),
-                                                                               "pkTopic", Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final Integer primary = -999;
         final Bytes result = cks.toBytes("foreignKey", primary);
 
@@ -38,24 +41,30 @@ public class CombinedKeySchemaTest {
         assertEquals(primary, deserializedKey.getPrimaryKey());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullPrimaryKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("fkTopic", Serdes.String(),
-                                                                               "pkTopic", Serdes.Integer());
-        cks.toBytes("foreignKey", null);
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
+        assertThrows(NullPointerException.class, () -> cks.toBytes("foreignKey", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullForeignKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("fkTopic", Serdes.String(),
-                                                                               "pkTopic", Serdes.Integer());
-        cks.toBytes(null, 10);
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
+        assertThrows(NullPointerException.class, () -> cks.toBytes(null, 10));
     }
 
     @Test
     public void prefixKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("fkTopic", Serdes.String(),
-                                                                               "pkTopic", Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final String foreignKey = "someForeignKey";
         final byte[] foreignKeySerializedData =
             Serdes.String().serializer().serialize("fkTopic", foreignKey);
@@ -69,11 +78,13 @@ public class CombinedKeySchemaTest {
         assertEquals(expectedPrefixBytes, prefix);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullPrefixKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("fkTopic", Serdes.String(),
-                                                                               "pkTopic", Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final String foreignKey = null;
-        cks.prefixBytes(foreignKey);
+        assertThrows(NullPointerException.class, () -> cks.prefixBytes(foreignKey));
     }
 }

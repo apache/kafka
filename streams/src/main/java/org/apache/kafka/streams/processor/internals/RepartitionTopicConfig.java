@@ -42,6 +42,13 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         super(name, topicConfigs);
     }
 
+    RepartitionTopicConfig(final String name,
+                           final Map<String, String> topicConfigs,
+                           final int numberOfPartitions,
+                           final boolean enforceNumberOfPartitions) {
+        super(name, topicConfigs, numberOfPartitions, enforceNumberOfPartitions);
+    }
+
     /**
      * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
@@ -71,12 +78,13 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         }
         final RepartitionTopicConfig that = (RepartitionTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs);
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs);
+        return Objects.hash(name, topicConfigs, enforceNumberOfPartitions);
     }
 
     @Override
@@ -84,6 +92,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         return "RepartitionTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
+                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
                 ")";
     }
 }

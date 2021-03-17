@@ -32,7 +32,7 @@ fetch_jdk_tgz() {
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
@@ -79,8 +79,8 @@ get_kafka() {
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
-        curl -O $url
-        curl -O $url_streams_test || true
+        curl --retry 5 -O $url
+        curl --retry 5 -O $url_streams_test || true
         file_tgz=`basename $url`
         file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz
@@ -138,8 +138,14 @@ get_kafka 2.2.2 2.12
 chmod a+rw /opt/kafka-2.2.2
 get_kafka 2.3.1 2.12
 chmod a+rw /opt/kafka-2.3.1
-get_kafka 2.4.0 2.12
-chmod a+rw /opt/kafka-2.4.0
+get_kafka 2.4.1 2.12
+chmod a+rw /opt/kafka-2.4.1
+get_kafka 2.5.1 2.12
+chmod a+rw /opt/kafka-2.5.1
+get_kafka 2.6.1 2.12
+chmod a+rw /opt/kafka-2.6.1
+get_kafka 2.7.0 2.12
+chmod a+rw /opt/kafka-2.7.0
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

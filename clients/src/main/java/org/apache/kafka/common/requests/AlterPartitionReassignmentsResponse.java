@@ -18,11 +18,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -32,22 +30,17 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
 
     private final AlterPartitionReassignmentsResponseData data;
 
-    public AlterPartitionReassignmentsResponse(Struct struct) {
-        this(struct, ApiKeys.ALTER_PARTITION_REASSIGNMENTS.latestVersion());
-    }
-
     public AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
+        super(ApiKeys.ALTER_PARTITION_REASSIGNMENTS);
         this.data = data;
     }
 
-    AlterPartitionReassignmentsResponse(Struct struct, short version) {
-        this.data = new AlterPartitionReassignmentsResponseData(struct, version);
-    }
-
     public static AlterPartitionReassignmentsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterPartitionReassignmentsResponse(ApiKeys.ALTER_PARTITION_REASSIGNMENTS.responseSchema(version).read(buffer), version);
+        return new AlterPartitionReassignmentsResponse(
+            new AlterPartitionReassignmentsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    @Override
     public AlterPartitionReassignmentsResponseData data() {
         return data;
     }
@@ -65,20 +58,12 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        Errors topLevelErr = Errors.forCode(data.errorCode());
-        counts.put(topLevelErr, counts.getOrDefault(topLevelErr, 0) + 1);
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
 
-        for (ReassignableTopicResponse topicResponse : data.responses()) {
-            for (ReassignablePartitionResponse partitionResponse : topicResponse.partitions()) {
-                Errors error = Errors.forCode(partitionResponse.errorCode());
-                counts.put(error, counts.getOrDefault(error, 0) + 1);
-            }
-        }
+        data.responses().forEach(topicResponse ->
+            topicResponse.partitions().forEach(partitionResponse ->
+                updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
+        ));
         return counts;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 }

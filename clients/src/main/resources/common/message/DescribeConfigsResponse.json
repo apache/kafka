@@ -19,8 +19,9 @@
   "name": "DescribeConfigsResponse",
   // Version 1 adds ConfigSource and the synonyms.
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-2",
-  "flexibleVersions": "none",
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -59,7 +60,11 @@
             "about": "The synonym value." },
           { "name": "Source", "type": "int8", "versions": "1+",
             "about": "The synonym source." }
-        ]}
+        ]},
+        { "name": "ConfigType", "type": "int8", "versions": "3+", "default": "0", "ignorable": true,
+          "about": "The configuration data type. Type can be one of the following values - BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD" },
+        { "name": "Documentation", "type": "string", "versions": "3+", "nullableVersions": "0+", "ignorable": true,
+          "about": "The configuration documentation." }
       ]}
     ]}
   ]

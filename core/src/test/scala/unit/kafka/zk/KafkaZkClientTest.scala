@@ -16,7 +16,7 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties, UUID}
+import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
@@ -25,17 +25,16 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
@@ -46,6 +45,8 @@ import kafka.zookeeper._
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
@@ -58,6 +59,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   private val group = "my-group"
   private val topic1 = "topic1"
   private val topic2 = "topic2"
+  private val topicIds = Map(topic1 -> Uuid.randomUuid(), topic2 -> Uuid.randomUuid())
 
   val topicPartition10 = new TopicPartition(topic1, 0)
   val topicPartition11 = new TopicPartition(topic1, 1)
@@ -68,7 +70,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   var otherZkClient: KafkaZkClient = _
   var expiredSessionZkClient: ExpiredKafkaZkClient = _
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     zkClient.createControllerEpochRaw(1)
@@ -78,7 +80,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (otherZkClient != null)
       otherZkClient.close()
@@ -106,10 +108,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
-      intercept[Exception] {
-        KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig))
-      }
+      assertThrows(classOf[Exception],
+        () => KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig)))
     } finally {
       client.close()
     }
@@ -143,7 +144,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.deleteRecursive("/delete"))
     assertFalse(zkClient.pathExists("/delete"))
 
-    intercept[IllegalArgumentException](zkClient.deleteRecursive("delete-invalid-path"))
+    assertThrows(classOf[IllegalArgumentException], () => zkClient.deleteRecursive("delete-invalid-path"))
   }
 
   @Test
@@ -152,13 +153,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createRecursive("/delete/some/random/path")
     assertTrue(zkClient.pathExists("/delete/some/random/path"))
-    intercept[ControllerMovedException](
-      zkClient.deleteRecursive("/delete", controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteRecursive("/delete", controllerEpochZkVersion + 1))
 
     assertTrue(zkClient.deleteRecursive("/delete", controllerEpochZkVersion))
     assertFalse(zkClient.pathExists("/delete"))
 
-    intercept[IllegalArgumentException](zkClient.deleteRecursive(
+    assertThrows(classOf[IllegalArgumentException], () => zkClient.deleteRecursive(
       "delete-invalid-path", controllerEpochZkVersion))
   }
 
@@ -171,7 +171,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.pathExists("/create/some/random/long/path"))
     zkClient.createRecursive("/create/some/random/long/path", throwIfPathExists = false) // no errors if path already exists
 
-    intercept[IllegalArgumentException](zkClient.createRecursive("create-invalid-path"))
+    assertThrows(classOf[IllegalArgumentException], () => zkClient.createRecursive("create-invalid-path"))
   }
 
   @Test
@@ -192,7 +192,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     )
 
     // create a topic assignment
-    zkClient.createTopicAssignment(topic1, assignment)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), assignment)
 
     assertTrue(zkClient.topicExists(topic1))
 
@@ -203,13 +203,14 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     }
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
-    assertEquals(expectedAssignment, zkClient.getPartitionAssignmentForTopics(Set(topic1)).get(topic1).get)
-    assertEquals(Set(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1)).get(topic1).get.toSet)
+    assertEquals(expectedAssignment, zkClient.getPartitionAssignmentForTopics(Set(topic1))(topic1))
+    assertEquals(Set(0, 1, 2), zkClient.getPartitionsForTopics(Set(topic1))(topic1).toSet)
     assertEquals(Set(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition(topic1, 2)).toSet)
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => ReplicaAssignment(v, List(), List()) }.toMap)
+    zkClient.setTopicAssignment(topic1, topicIds.get(topic1), updatedAssignment.map {
+      case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
     // add second topic
@@ -218,7 +219,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       new TopicPartition(topic2, 1) -> Seq(0, 1)
     )
 
-    zkClient.createTopicAssignment(topic2, secondAssignment)
+    zkClient.createTopicAssignment(topic2, topicIds.get(topic2), secondAssignment)
 
     assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
   }
@@ -235,10 +236,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // not interfere with the previous registered watcher
     assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
 
-    zkClient.createTopicAssignment(topic1, Map.empty)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), Map.empty)
 
-    assertTrue("Failed to receive watch notification",
-      latch.await(5, TimeUnit.SECONDS))
+    assertTrue(latch.await(5, TimeUnit.SECONDS),
+      "Failed to receive watch notification")
 
     assertTrue(zkClient.topicExists(topic1))
   }
@@ -251,10 +252,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // Listing all the topics and don't register the watch
     assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
 
-    zkClient.createTopicAssignment(topic1, Map.empty)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), Map.empty)
 
-    assertFalse("Received watch notification",
-      latch.await(100, TimeUnit.MILLISECONDS))
+    assertFalse(latch.await(100, TimeUnit.MILLISECONDS),
+      "Received watch notification")
 
     assertTrue(zkClient.topicExists(topic1))
   }
@@ -353,8 +354,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testIsrChangeNotificationGetters(): Unit = {
-    assertEquals("Failed for non existing parent ZK node", Seq.empty, zkClient.getAllIsrChangeNotifications)
-    assertEquals("Failed for non existing parent ZK node", Seq.empty, zkClient.getPartitionsFromIsrChangeNotifications(Seq("0000000000")))
+    assertEquals(Seq.empty, zkClient.getAllIsrChangeNotifications, "Failed for non existing parent ZK node")
+    assertEquals(Seq.empty, zkClient.getPartitionsFromIsrChangeNotifications(Seq("0000000000")), "Failed for non existing parent ZK node")
 
     zkClient.createRecursive("/isr_change_notification")
 
@@ -380,7 +381,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.propagateIsrChanges(Set(topicPartition11))
 
     // Should throw exception if the controllerEpochZkVersion does not match
-    intercept[ControllerMovedException](zkClient.deleteIsrChangeNotifications(Seq("0000000001"), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteIsrChangeNotifications(Seq("0000000001"), controllerEpochZkVersion + 1))
     // Delete should not succeed
     assertEquals(Set("0000000000", "0000000001", "0000000002"), zkClient.getAllIsrChangeNotifications.toSet)
 
@@ -418,10 +419,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testLogDirGetters(): Unit = {
-    assertEquals("getAllLogDirEventNotifications failed for non existing parent ZK node",
-      Seq.empty, zkClient.getAllLogDirEventNotifications)
-    assertEquals("getBrokerIdsFromLogDirEvents failed for non existing parent ZK node",
-      Seq.empty, zkClient.getBrokerIdsFromLogDirEvents(Seq("0000000000")))
+    assertEquals(Seq.empty,
+      zkClient.getAllLogDirEventNotifications, "getAllLogDirEventNotifications failed for non existing parent ZK node")
+    assertEquals(Seq.empty,
+      zkClient.getBrokerIdsFromLogDirEvents(Seq("0000000000")), "getBrokerIdsFromLogDirEvents failed for non existing parent ZK node")
 
     zkClient.createRecursive("/log_dir_event_notification")
 
@@ -454,7 +455,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.propagateLogDirEvent(brokerId)
     zkClient.propagateLogDirEvent(anotherBrokerId)
 
-    intercept[ControllerMovedException](zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion + 1))
     assertEquals(Seq("0000000000", "0000000001", "0000000002"), zkClient.getAllLogDirEventNotifications)
 
     zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion)
@@ -481,7 +482,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     )
 
     // Should throw ControllerMovedException if the controller epoch zkVersion does not match
-    intercept[ControllerMovedException](zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion + 1))
 
     zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion)
     assertEquals(reassignment, zkClient.getPartitionReassignment)
@@ -548,15 +549,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     })
 
     // create acl paths
-    zkClient.createAclPaths
+    zkClient.createAclPaths()
 
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
       assertTrue(zkClient.pathExists(store.changeStore.aclChangePath))
       AclEntry.ResourceTypes.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
-      val resource1 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
-      val resource2 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
+      val resource1 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
+      val resource2 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
 
       // try getting acls for non-existing resource
       var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
@@ -654,7 +655,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.isTopicMarkedForDeletion(topic1))
     assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
 
-    intercept[ControllerMovedException](zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion + 1))
     assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
 
     zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion)
@@ -668,9 +669,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testCreateTokenChangeNotification(): Unit = {
-    intercept[NoNodeException] {
-      zkClient.createTokenChangeNotification("delegationToken")
-    }
+    assertThrows(classOf[NoNodeException], () => zkClient.createTokenChangeNotification("delegationToken"))
     zkClient.createDelegationTokenPaths()
 
     zkClient.createTokenChangeNotification("delegationToken")
@@ -725,56 +724,69 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testGetLogConfigs(): Unit = {
     val emptyConfig = LogConfig(Collections.emptyMap())
-    assertEquals("Non existent config, no defaults",
-      (Map(topic1 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Set(topic1), Collections.emptyMap()))
+    assertEquals((Map(topic1 -> emptyConfig), Map.empty),
+      zkClient.getLogConfigs(Set(topic1), Collections.emptyMap()),
+      "Non existent config, no defaults")
 
     val logProps2 = createLogProps(2048)
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals("One existing and one non-existent topic",
-      (Map(topic1 -> LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
+    assertEquals((Map(topic1 -> LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
+      "One existing and one non-existent topic")
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
-    assertEquals("Two existing topics",
-      (Map(topic1 -> LogConfig(logProps), topic2 -> LogConfig(logProps2)), Map.empty),
-      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
+    assertEquals((Map(topic1 -> LogConfig(logProps), topic2 -> LogConfig(logProps2)), Map.empty),
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
+      "Two existing topics")
 
     val logProps1WithMoreValues = createLogProps(1024)
     logProps1WithMoreValues.put(LogConfig.SegmentJitterMsProp, "100")
     logProps1WithMoreValues.put(LogConfig.SegmentBytesProp, "1024")
 
-    assertEquals("Config with defaults",
-      (Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
+    assertEquals((Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
       zkClient.getLogConfigs(Set(topic1),
-        Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava))
+        Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava),
+      "Config with defaults")
   }
 
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
-                               rack: Option[String] = None): BrokerInfo =
-    BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
-    (securityProtocol), securityProtocol)), rack = rack), ApiVersion.latestVersion, jmxPort = port + 10)
+                               rack: Option[String] = None,
+                               features: Features[SupportedVersionRange] = emptySupportedFeatures): BrokerInfo =
+    BrokerInfo(
+      Broker(
+        id,
+        Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)),
+        rack = rack,
+        features = features),
+      ApiVersion.latestVersion, jmxPort = port + 10)
 
   @Test
   def testRegisterBrokerInfo(): Unit = {
     zkClient.createTopLevelPaths()
 
-    val brokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
-    val differentBrokerInfoWithSameId = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
+    val brokerInfo = createBrokerInfo(
+      1, "test.host", 9999, SecurityProtocol.PLAINTEXT,
+      rack = None,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
+    val differentBrokerInfoWithSameId = createBrokerInfo(
+      1, "test.host2", 9995, SecurityProtocol.SSL,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(4, 7)).asJava))
 
     zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
-    assertEquals("Other ZK clients can read broker info", Some(brokerInfo.broker), otherZkClient.getBroker(1))
+    assertEquals(Some(brokerInfo.broker), otherZkClient.getBroker(1), "Other ZK clients can read broker info")
 
     // Node exists, owned by current session - no error, no update
     zkClient.registerBroker(differentBrokerInfoWithSameId)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
 
     // Other client tries to register broker with same id causes failure, info is not changed in ZK
-    intercept[NodeExistsException] {
-      otherZkClient.registerBroker(differentBrokerInfoWithSameId)
-    }
+    assertThrows(classOf[NodeExistsException], () => otherZkClient.registerBroker(differentBrokerInfoWithSameId))
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
   }
 
@@ -799,8 +811,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Some(expiredBrokerInfo.broker), expiredSessionZkClient.getBroker(brokerId))
     val newCzxid = expiredSessionZkClient.getPathCzxid(BrokerIdZNode.path(brokerId))
 
-    assertNotEquals("The Czxid of original ephemeral znode should be different " +
-      "from the new ephemeral znode Czxid", originalCzxid, newCzxid)
+    assertNotEquals(originalCzxid, newCzxid, "The Czxid of original ephemeral znode should be different " +
+      "from the new ephemeral znode Czxid")
   }
 
   @Test
@@ -811,8 +823,16 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Seq.empty, zkClient.getSortedBrokerList)
     assertEquals(None, zkClient.getBroker(0))
 
-    val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
-    val brokerInfo1 = createBrokerInfo(1, "test.host1", 9999, SecurityProtocol.SSL)
+    val brokerInfo0 = createBrokerInfo(
+      0, "test.host0", 9998, SecurityProtocol.PLAINTEXT,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
+    val brokerInfo1 = createBrokerInfo(
+      1, "test.host1", 9999, SecurityProtocol.SSL,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(3, 6)).asJava))
 
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)
@@ -831,9 +851,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     // Updating info of a broker not existing in ZK fails
     val originalBrokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
-    intercept[NoNodeException]{
-      zkClient.updateBrokerInfo(originalBrokerInfo)
-    }
+    assertThrows(classOf[NoNodeException], () => zkClient.updateBrokerInfo(originalBrokerInfo))
 
     zkClient.registerBroker(originalBrokerInfo)
 
@@ -864,10 +882,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     leaderIsrAndControllerEpochs(0, 0)
 
-  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] = initialLeaderIsrAndControllerEpochs.mapValues(_.leaderAndIsr).toMap
+  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] =
+    initialLeaderIsrAndControllerEpochs.map { case (k, v) => k -> v.leaderAndIsr }
 
   private def leaderIsrs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderAndIsr] =
-    leaderIsrAndControllerEpochs(state, zkVersion).mapValues(_.leaderAndIsr).toMap
+    leaderIsrAndControllerEpochs(state, zkVersion).map { case (k, v) => k -> v.leaderAndIsr }
 
   private def checkUpdateLeaderAndIsrResult(
                   expectedSuccessfulPartitions: Map[TopicPartition, LeaderAndIsr],
@@ -882,22 +901,23 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       case (partition, Right(leaderAndIsr)) => successfulPartitions += partition -> leaderAndIsr
     }
 
-    assertEquals("Permanently failed updates do not match expected",
-      expectedFailedPartitions, failedPartitionsExcerpt)
-    assertEquals("Retriable updates (due to BADVERSION) do not match expected",
-      expectedPartitionsToRetry, actualUpdateLeaderAndIsrResult.partitionsToRetry)
-    assertEquals("Successful updates do not match expected",
-      expectedSuccessfulPartitions, successfulPartitions)
+    assertEquals(expectedFailedPartitions,
+      failedPartitionsExcerpt, "Permanently failed updates do not match expected")
+    assertEquals(expectedPartitionsToRetry,
+      actualUpdateLeaderAndIsrResult.partitionsToRetry, "Retriable updates (due to BADVERSION) do not match expected")
+    assertEquals(expectedSuccessfulPartitions,
+      successfulPartitions, "Successful updates do not match expected")
   }
 
   @Test
   def testTopicAssignments(): Unit = {
+    val topicId = Some(Uuid.randomUuid())
     assertEquals(0, zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic())).size)
-    zkClient.createTopicAssignment(topicPartition.topic(),
+    zkClient.createTopicAssignment(topicPartition.topic(), topicId,
       Map(topicPartition -> Seq()))
 
     val expectedAssignment = ReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
-    val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(),
+    val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(), topicId,
       Map(topicPartition -> expectedAssignment), controllerEpochZkVersion)
     assertEquals(Code.OK, response.resultCode)
 
@@ -927,7 +947,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion)
 
     // Mismatch controller epoch zkVersion
-    intercept[ControllerMovedException](zkClient.updateLeaderAndIsr(initialLeaderIsrs, controllerEpoch = 4, controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.updateLeaderAndIsr(initialLeaderIsrs, controllerEpoch = 4, controllerEpochZkVersion + 1))
 
     // successful updates
     checkUpdateLeaderAndIsrResult(
@@ -993,7 +1013,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(TopicZNode.path(topic1))
 
     // Mismatch controller epoch zkVersion
-    intercept[ControllerMovedException](zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion + 1))
 
     assertEquals(
       Seq(
@@ -1041,7 +1061,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
         eraseMetadataAndStat}.toList)
 
     // Mismatch controller epoch zkVersion
-    intercept[ControllerMovedException](zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
 
     val getResponses = zkClient.getTopicPartitionStatesRaw(topicPartitions10_11)
     assertEquals(2, getResponses.size)
@@ -1104,27 +1124,27 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals(None, zkClient.getControllerEpoch)
 
-    assertEquals("Setting non existing nodes should return NONODE results",
-      SetDataResponse(Code.NONODE, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
+    assertEquals(SetDataResponse(Code.NONODE, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
+      "Setting non existing nodes should return NONODE results")
 
-    assertEquals("Creating non existing nodes is OK",
-      CreateResponse(Code.OK, ControllerEpochZNode.path, None, ControllerEpochZNode.path, ResponseMetadata(0, 0)),
-      eraseMetadata(zkClient.createControllerEpochRaw(0)))
+    assertEquals(CreateResponse(Code.OK, ControllerEpochZNode.path, None, ControllerEpochZNode.path, ResponseMetadata(0, 0)),
+      eraseMetadata(zkClient.createControllerEpochRaw(0)),
+      "Creating non existing nodes is OK")
     assertEquals(0, zkClient.getControllerEpoch.get._1)
 
-    assertEquals("Attemt to create existing nodes should return NODEEXISTS",
-      CreateResponse(Code.NODEEXISTS, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseMetadata(zkClient.createControllerEpochRaw(0)))
+    assertEquals(CreateResponse(Code.NODEEXISTS, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
+      eraseMetadata(zkClient.createControllerEpochRaw(0)),
+      "Attemt to create existing nodes should return NODEEXISTS")
 
-    assertEquals("Updating existing nodes is OK",
-      SetDataResponse(Code.OK, ControllerEpochZNode.path, None, statWithVersion(1), ResponseMetadata(0, 0)),
-      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
+    assertEquals(SetDataResponse(Code.OK, ControllerEpochZNode.path, None, statWithVersion(1), ResponseMetadata(0, 0)),
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
+      "Updating existing nodes is OK")
     assertEquals(1, zkClient.getControllerEpoch.get._1)
 
-    assertEquals("Updating with wrong ZK version returns BADVERSION",
-      SetDataResponse(Code.BADVERSION, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
+    assertEquals(SetDataResponse(Code.BADVERSION, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
+      "Updating with wrong ZK version returns BADVERSION")
   }
 
   @Test
@@ -1153,12 +1173,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.registerZNodeChangeHandlerAndCheckExistence(zNodeChangeHandler)
     zkClient.createRecursive(mockPath)
-    assertTrue("Failed to receive create notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
+    assertTrue(znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS), "Failed to receive create notification")
   }
 
   @Test
   def testClusterIdMethods(): Unit = {
-    val clusterId = CoreUtils.generateUuidAsBase64
+    val clusterId = CoreUtils.generateUuidAsBase64()
 
     zkClient.createOrGetClusterId(clusterId)
     assertEquals(clusterId, zkClient.getClusterId.getOrElse(fail("No cluster id found")))
@@ -1167,7 +1187,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testBrokerSequenceIdMethods(): Unit = {
     val sequenceId = zkClient.generateBrokerSequenceId()
-    assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId)
+    assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId())
   }
 
   @Test
@@ -1187,12 +1207,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createPreferredReplicaElection(electionPartitions)
     assertEquals(electionPartitions, zkClient.getPreferredReplicaElection)
 
-    intercept[NodeExistsException] {
-      zkClient.createPreferredReplicaElection(electionPartitions)
-    }
+    assertThrows(classOf[NodeExistsException], () => zkClient.createPreferredReplicaElection(electionPartitions))
 
     // Mismatch controller epoch zkVersion
-    intercept[ControllerMovedException](zkClient.deletePreferredReplicaElection(controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deletePreferredReplicaElection(controllerEpochZkVersion + 1))
     assertEquals(electionPartitions, zkClient.getPreferredReplicaElection)
 
     zkClient.deletePreferredReplicaElection(controllerEpochZkVersion)
@@ -1209,7 +1227,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.pathExists(DelegationTokensZNode.path))
     assertFalse(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
 
-    zkClient.createDelegationTokenPaths
+    zkClient.createDelegationTokenPaths()
     assertTrue(zkClient.pathExists(DelegationTokensZNode.path))
     assertTrue(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
 
@@ -1265,13 +1283,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testAclMethods(): Unit = {
     val mockPath = "/foo"
 
-    intercept[NoNodeException] {
-      zkClient.getAcl(mockPath)
-    }
+    assertThrows(classOf[NoNodeException], () => zkClient.getAcl(mockPath))
 
-    intercept[NoNodeException] {
-      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
-    }
+    assertThrows(classOf[NoNodeException], () => zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala))
 
     zkClient.createRecursive(mockPath)
 

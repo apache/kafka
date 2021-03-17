@@ -17,8 +17,11 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -26,11 +29,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class ConsumeBenchSpecTest {
 
@@ -62,17 +63,14 @@ public class ConsumeBenchSpecTest {
     @Test
     public void testInvalidTopicNameRaisesExceptionInMaterialize() {
         for (String invalidName : Arrays.asList("In:valid", "invalid:", ":invalid", "in:valid:1", "invalid:2:2", "invalid::1", "invalid[1-3]:")) {
-            try {
-                consumeBenchSpec(Collections.singletonList(invalidName)).materializeTopics();
-                fail(String.format("Invalid topic name (%s) should have raised an exception.", invalidName));
-            } catch (IllegalArgumentException ignored) { }
+            assertThrows(IllegalArgumentException.class, () -> consumeBenchSpec(Collections.singletonList(invalidName)).materializeTopics());
         }
-
     }
 
     private ConsumeBenchSpec consumeBenchSpec(List<String> activeTopics) {
         return new ConsumeBenchSpec(0, 0, "node", "localhost",
             123, 1234, "cg-1",
-            Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1, activeTopics);
+            Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+            Optional.empty(), activeTopics);
     }
 }

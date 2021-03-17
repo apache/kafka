@@ -20,12 +20,13 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntryData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,40 +35,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
 
     private final AlterClientQuotasResponseData data;
 
-    public AlterClientQuotasResponse(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
-        List<EntryData> entries = new ArrayList<>(result.size());
-        for (Map.Entry<ClientQuotaEntity, ApiError> entry : result.entrySet()) {
-            ApiError e = entry.getValue();
-            entries.add(new EntryData()
-                    .setErrorCode(e.error().code())
-                    .setErrorMessage(e.message())
-                    .setEntity(toEntityData(entry.getKey())));
-        }
-
-        this.data = new AlterClientQuotasResponseData()
-            .setThrottleTimeMs(throttleTimeMs)
-            .setEntries(entries);
-    }
-
-    public AlterClientQuotasResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
-        short errorCode = Errors.forException(e).code();
-        String errorMessage = e.getMessage();
-
-        List<EntryData> entries = new ArrayList<>(entities.size());
-        for (ClientQuotaEntity entity : entities) {
-            entries.add(new EntryData()
-                    .setErrorCode(errorCode)
-                    .setErrorMessage(errorMessage)
-                    .setEntity(toEntityData(entity)));
-        }
-
-        this.data = new AlterClientQuotasResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setEntries(entries);
-    }
-
-    public AlterClientQuotasResponse(Struct struct, short version) {
-        this.data = new AlterClientQuotasResponseData(struct, version);
+    public AlterClientQuotasResponse(AlterClientQuotasResponseData data) {
+        super(ApiKeys.ALTER_CLIENT_QUOTAS);
+        this.data = data;
     }
 
     public void complete(Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures) {
@@ -100,16 +70,15 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (EntryData entry : data.entries()) {
-            Errors error = Errors.forCode(entry.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
-        }
+        data.entries().forEach(entry ->
+            updateErrorCounts(counts, Errors.forCode(entry.errorCode()))
+        );
         return counts;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public AlterClientQuotasResponseData data() {
+        return data;
     }
 
     private static List<EntityData> toEntityData(ClientQuotaEntity entity) {
@@ -121,4 +90,24 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         }
         return entityData;
     }
+
+    public static AlterClientQuotasResponse parse(ByteBuffer buffer, short version) {
+        return new AlterClientQuotasResponse(new AlterClientQuotasResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    public static AlterClientQuotasResponse fromQuotaEntities(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
+        List<EntryData> entries = new ArrayList<>(result.size());
+        for (Map.Entry<ClientQuotaEntity, ApiError> entry : result.entrySet()) {
+            ApiError e = entry.getValue();
+            entries.add(new EntryData()
+                    .setErrorCode(e.error().code())
+                    .setErrorMessage(e.message())
+                    .setEntity(toEntityData(entry.getKey())));
+        }
+
+        return new AlterClientQuotasResponse(new AlterClientQuotasResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setEntries(entries));
+    }
+
 }

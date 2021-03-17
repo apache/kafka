@@ -85,16 +85,9 @@ public class RepartitionWithMergeOptimizingTest {
 
     @Before
     public void setUp() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            "maybe-optimized-with-merge-test-app",
-            "dummy-bootstrap-servers-config",
-            Serdes.String().getClass().getName(),
-            Serdes.String().getClass().getName(),
-            props);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        streamsConfiguration.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, Integer.toString(1024 * 10));
+        streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(5000));
     }
 
     @After
@@ -120,7 +113,7 @@ public class RepartitionWithMergeOptimizingTest {
 
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
 
         final StreamsBuilder builder = new StreamsBuilder();
 

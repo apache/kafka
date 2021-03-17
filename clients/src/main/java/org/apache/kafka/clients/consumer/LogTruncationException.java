@@ -17,32 +17,37 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
- * In the even of unclean leader election, the log will be truncated,
+ * In the event of an unclean leader election, the log will be truncated,
  * previously committed data will be lost, and new data will be written
  * over these offsets. When this happens, the consumer will detect the
  * truncation and raise this exception (if no automatic reset policy
- * has been defined) with the first offset to diverge from what the
- * consumer read.
+ * has been defined) with the first offset known to diverge from what the
+ * consumer previously read.
  */
 public class LogTruncationException extends OffsetOutOfRangeException {
 
     private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
 
-    public LogTruncationException(Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
-        super(Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset));
+    public LogTruncationException(String message,
+                                  Map<TopicPartition, Long> fetchOffsets,
+                                  Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
+        super(message, fetchOffsets);
         this.divergentOffsets = Collections.unmodifiableMap(divergentOffsets);
     }
 
     /**
-     * Get the offsets for the partitions which were truncated. This is the first offset which is known to diverge
-     * from what the consumer read.
+     * Get the divergent offsets for the partitions which were truncated. For each
+     * partition, this is the first offset which is known to diverge from what the
+     * consumer read.
+     *
+     * Note that there is no guarantee that this offset will be known. It is necessary
+     * to use {@link #partitions()} to see the set of partitions that were truncated
+     * and then check for the presence of a divergent offset in this map.
      */
     public Map<TopicPartition, OffsetAndMetadata> divergentOffsets() {
         return divergentOffsets;

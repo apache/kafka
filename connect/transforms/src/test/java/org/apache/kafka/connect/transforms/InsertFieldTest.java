@@ -22,29 +22,33 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertFieldTest {
     private InsertField<SourceRecord> xformKey = new InsertField.Key<>();
     private InsertField<SourceRecord> xformValue = new InsertField.Value<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xformValue.close();
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void topLevelStructRequired() {
         xformValue.configure(Collections.singletonMap("topic.field", "topic_field"));
-        xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
+        assertThrows(DataException.class,
+            () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
@@ -61,7 +65,7 @@ public class InsertFieldTest {
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final Struct simpleStruct = new Struct(simpleStructSchema).put("magic", 42L);
 
-        final SourceRecord record = new SourceRecord(null, null, "test", 0, simpleStructSchema, simpleStruct);
+        final SourceRecord record = new SourceRecord(null, null, "test", 0, null, null, simpleStructSchema, simpleStruct, 789L);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(simpleStructSchema.name(), transformedRecord.valueSchema().name());
@@ -78,7 +82,7 @@ public class InsertFieldTest {
         assertEquals(0, ((Struct) transformedRecord.value()).getInt32("partition_field").intValue());
 
         assertEquals(Timestamp.builder().optional().build(), transformedRecord.valueSchema().field("timestamp_field").schema());
-        assertEquals(null, ((Struct) transformedRecord.value()).getInt64("timestamp_field"));
+        assertEquals(789L, ((Date) ((Struct) transformedRecord.value()).get("timestamp_field")).getTime());
 
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, transformedRecord.valueSchema().field("instance_id").schema());
         assertEquals("my-instance-id", ((Struct) transformedRecord.value()).getString("instance_id"));
@@ -101,17 +105,16 @@ public class InsertFieldTest {
         xformValue.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-                null, Collections.singletonMap("magic", 42L));
+                null, null, null, Collections.singletonMap("magic", 42L), 123L);
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
         assertEquals("test", ((Map<?, ?>) transformedRecord.value()).get("topic_field"));
         assertEquals(0, ((Map<?, ?>) transformedRecord.value()).get("partition_field"));
-        assertEquals(null, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
+        assertEquals(123L, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
     }
-
 
     @Test
     public void insertConfiguredFieldsIntoTombstoneEventWithoutSchemaLeavesValueUnchanged() {
@@ -129,8 +132,8 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
-        assertEquals(null, transformedRecord.valueSchema());
+        assertNull(transformedRecord.value());
+        assertNull(transformedRecord.valueSchema());
     }
 
     @Test
@@ -151,7 +154,7 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
         assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
 
@@ -174,9 +177,9 @@ public class InsertFieldTest {
         assertEquals(42L, ((Map<?, ?>) transformedRecord.key()).get("magic"));
         assertEquals("test", ((Map<?, ?>) transformedRecord.key()).get("topic_field"));
         assertEquals(0, ((Map<?, ?>) transformedRecord.key()).get("partition_field"));
-        assertEquals(null, ((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
+        assertNull(((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.key()).get("instance_id"));
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
     }
 
     @Test

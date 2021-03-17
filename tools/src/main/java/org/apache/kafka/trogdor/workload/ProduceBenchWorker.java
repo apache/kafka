@@ -79,7 +79,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+                      KafkaFutureImpl<String> doneFuture) {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
@@ -195,7 +195,7 @@ public class ProduceBenchWorker implements TaskWorker {
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;
             this.partitionsIterator = activePartitions.iterator();
-            this.histogram = new Histogram(5000);
+            this.histogram = new Histogram(10000);
 
             this.transactionGenerator = spec.transactionGenerator();
             this.enableTransactions = this.transactionGenerator.isPresent();

@@ -16,26 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -45,14 +29,32 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
-
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Joined;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 public class KStreamKTableJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
+    private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
@@ -110,6 +112,38 @@ public class KStreamKTableJoinTest {
         for (int i = 0; i < 2; i++) {
             inputTableTopic.pipeInput(expectedKeys[i], null);
         }
+    }
+
+    @Test
+    public void shouldReuseRepartitionTopicWithGeneratedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
+        rekeyedStream.join(tableB, (value1, value2) -> value1 + value2).to("out-one");
+        rekeyedStream.join(tableC, (value1, value2) -> value1 + value2).to("out-two");
+        final Topology topology = builder.build(props);
+        assertEquals(expectedTopologyWithGeneratedRepartitionTopicNames, topology.describe().toString());
+    }
+
+    @Test
+    public void shouldCreateRepartitionTopicsWithUserProvidedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
+
+        rekeyedStream.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join")).to("out-one");
+        rekeyedStream.join(tableC, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "second-join")).to("out-two");
+        final Topology topology = builder.build(props);
+        System.out.println(topology.describe().toString());
+        assertEquals(expectedTopologyWithUserProvidedRepartitionTopicNames, topology.describe().toString());
     }
 
     @Test
@@ -205,24 +239,25 @@ public class KStreamKTableJoinTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullLeftKey(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        driver = new TopologyTestDriver(builder.build(), props);
-        final TestInputTopic<Integer, String> inputTopic =
-            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(null, "A");
-        LogCaptureAppender.unregister(appender);
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-            );
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            driver = new TopologyTestDriver(builder.build(), props);
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(null, "A");
+
+            if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+                assertEquals(
+                    1.0,
+                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+                );
+            }
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null join key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
+                    + "offset=[0]"));
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
-                + "offset=[0]"));
     }
 
     @Test
@@ -236,13 +271,21 @@ public class KStreamKTableJoinTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
+
         driver = new TopologyTestDriver(builder.build(), props);
         final TestInputTopic<Integer, String> inputTopic =
             driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(1, null);
-        LogCaptureAppender.unregister(appender);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            inputTopic.pipeInput(1, null);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null join key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
+                    + "offset=[0]")
+            );
+        }
 
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertEquals(
@@ -250,10 +293,92 @@ public class KStreamKTableJoinTest {
                 getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
-                + "offset=[0]")
-        );
     }
+
+
+    private final String expectedTopologyWithGeneratedRepartitionTopicNames =
+        "Topologies:\n"
+        + "   Sub-topology: 0\n"
+        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+        + "      --> KSTREAM-MAP-0000000007\n"
+        + "    Processor: KSTREAM-MAP-0000000007 (stores: [])\n"
+        + "      --> KSTREAM-FILTER-0000000009\n"
+        + "      <-- KSTREAM-SOURCE-0000000000\n"
+        + "    Processor: KSTREAM-FILTER-0000000009 (stores: [])\n"
+        + "      --> KSTREAM-SINK-0000000008\n"
+        + "      <-- KSTREAM-MAP-0000000007\n"
+        + "    Sink: KSTREAM-SINK-0000000008 (topic: KSTREAM-MAP-0000000007-repartition)\n"
+        + "      <-- KSTREAM-FILTER-0000000009\n"
+        + "\n"
+        + "  Sub-topology: 1\n"
+        + "    Source: KSTREAM-SOURCE-0000000010 (topics: [KSTREAM-MAP-0000000007-repartition])\n"
+        + "      --> KSTREAM-JOIN-0000000011, KSTREAM-JOIN-0000000016\n"
+        + "    Processor: KSTREAM-JOIN-0000000011 (stores: [topic2-STATE-STORE-0000000001])\n"
+        + "      --> KSTREAM-SINK-0000000012\n"
+        + "      <-- KSTREAM-SOURCE-0000000010\n"
+        + "    Processor: KSTREAM-JOIN-0000000016 (stores: [topic3-STATE-STORE-0000000004])\n"
+        + "      --> KSTREAM-SINK-0000000017\n"
+        + "      <-- KSTREAM-SOURCE-0000000010\n"
+        + "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic2])\n"
+        + "      --> KTABLE-SOURCE-0000000003\n"
+        + "    Source: KSTREAM-SOURCE-0000000005 (topics: [topic3])\n"
+        + "      --> KTABLE-SOURCE-0000000006\n"
+        + "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n"
+        + "      <-- KSTREAM-JOIN-0000000011\n"
+        + "    Sink: KSTREAM-SINK-0000000017 (topic: out-two)\n"
+        + "      <-- KSTREAM-JOIN-0000000016\n"
+        + "    Processor: KTABLE-SOURCE-0000000003 (stores: [topic2-STATE-STORE-0000000001])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-SOURCE-0000000002\n"
+        + "    Processor: KTABLE-SOURCE-0000000006 (stores: [topic3-STATE-STORE-0000000004])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-SOURCE-0000000005\n\n";
+
+
+    private final String expectedTopologyWithUserProvidedRepartitionTopicNames =
+            "Topologies:\n"
+                    + "   Sub-topology: 0\n"
+                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+                    + "      --> KSTREAM-MAP-0000000007\n"
+                    + "    Processor: KSTREAM-MAP-0000000007 (stores: [])\n"
+                    + "      --> first-join-repartition-filter, second-join-repartition-filter\n"
+                    + "      <-- KSTREAM-SOURCE-0000000000\n"
+                    + "    Processor: first-join-repartition-filter (stores: [])\n"
+                    + "      --> first-join-repartition-sink\n"
+                    + "      <-- KSTREAM-MAP-0000000007\n"
+                    + "    Processor: second-join-repartition-filter (stores: [])\n"
+                    + "      --> second-join-repartition-sink\n"
+                    + "      <-- KSTREAM-MAP-0000000007\n"
+                    + "    Sink: first-join-repartition-sink (topic: first-join-repartition)\n"
+                    + "      <-- first-join-repartition-filter\n"
+                    + "    Sink: second-join-repartition-sink (topic: second-join-repartition)\n"
+                    + "      <-- second-join-repartition-filter\n"
+                    + "\n"
+                    + "  Sub-topology: 1\n"
+                    + "    Source: first-join-repartition-source (topics: [first-join-repartition])\n"
+                    + "      --> first-join\n"
+                    + "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic2])\n"
+                    + "      --> KTABLE-SOURCE-0000000003\n"
+                    + "    Processor: first-join (stores: [topic2-STATE-STORE-0000000001])\n"
+                    + "      --> KSTREAM-SINK-0000000012\n"
+                    + "      <-- first-join-repartition-source\n"
+                    + "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n"
+                    + "      <-- first-join\n"
+                    + "    Processor: KTABLE-SOURCE-0000000003 (stores: [topic2-STATE-STORE-0000000001])\n"
+                    + "      --> none\n"
+                    + "      <-- KSTREAM-SOURCE-0000000002\n"
+                    + "\n"
+                    + "  Sub-topology: 2\n"
+                    + "    Source: second-join-repartition-source (topics: [second-join-repartition])\n"
+                    + "      --> second-join\n"
+                    + "    Source: KSTREAM-SOURCE-0000000005 (topics: [topic3])\n"
+                    + "      --> KTABLE-SOURCE-0000000006\n"
+                    + "    Processor: second-join (stores: [topic3-STATE-STORE-0000000004])\n"
+                    + "      --> KSTREAM-SINK-0000000017\n"
+                    + "      <-- second-join-repartition-source\n"
+                    + "    Sink: KSTREAM-SINK-0000000017 (topic: out-two)\n"
+                    + "      <-- second-join\n"
+                    + "    Processor: KTABLE-SOURCE-0000000006 (stores: [topic3-STATE-STORE-0000000004])\n"
+                    + "      --> none\n"
+                    + "      <-- KSTREAM-SOURCE-0000000005\n\n";
 }

@@ -22,6 +22,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -40,6 +41,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -85,6 +87,7 @@ public class ClientCompatibilityTest {
         final int numClusterNodes;
         final boolean createTopicsSupported;
         final boolean describeAclsSupported;
+        final boolean describeConfigsSupported;
 
         TestConfig(Namespace res) {
             this.bootstrapServer = res.getString("bootstrapServer");
@@ -95,6 +98,7 @@ public class ClientCompatibilityTest {
             this.numClusterNodes = res.getInt("numClusterNodes");
             this.createTopicsSupported = res.getBoolean("createTopicsSupported");
             this.describeAclsSupported = res.getBoolean("describeAclsSupported");
+            this.describeConfigsSupported = res.getBoolean("describeConfigsSupported");
         }
     }
 
@@ -161,6 +165,13 @@ public class ClientCompatibilityTest {
             .dest("describeAclsSupported")
             .metavar("DESCRIBE_ACLS_SUPPORTED")
             .help("Whether describeAcls is supported in the AdminClient.");
+        parser.addArgument("--describe-configs-supported")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("describeConfigsSupported")
+            .metavar("DESCRIBE_CONFIGS_SUPPORTED")
+            .help("Whether describeConfigs is supported in the AdminClient.");
 
         Namespace res = null;
         try {
@@ -260,6 +271,9 @@ public class ClientCompatibilityTest {
                 log.info("Saw only {} cluster nodes.  Waiting to see {}.",
                     nodes.size(), testConfig.numClusterNodes);
             }
+
+            testDescribeConfigsMethod(client);
+
             tryFeature("createTopics", testConfig.createTopicsSupported,
                 () -> {
                     try {
@@ -295,6 +309,29 @@ public class ClientCompatibilityTest {
                     }
                 });
         }
+    }
+
+    private void testDescribeConfigsMethod(final Admin client) throws Throwable {
+        tryFeature("describeConfigsSupported", testConfig.describeConfigsSupported,
+            () -> {
+                try {
+                    Collection<Node> nodes = client.describeCluster().nodes().get();
+
+                    final ConfigResource configResource = new ConfigResource(
+                        ConfigResource.Type.BROKER,
+                        nodes.iterator().next().idString()
+                    );
+
+                    Map<ConfigResource, Config> brokerConfig =
+                        client.describeConfigs(Collections.singleton(configResource)).all().get();
+
+                    if (brokerConfig.get(configResource).entries().isEmpty()) {
+                        throw new KafkaException("Expected to see config entries, but got zero entries");
+                    }
+                } catch (ExecutionException e) {
+                    throw e.getCause();
+                }
+            });
     }
 
     private void createTopicsResultTest(Admin client, Collection<String> topics)

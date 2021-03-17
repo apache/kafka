@@ -21,12 +21,13 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,47 +36,9 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
 
     private final DescribeClientQuotasResponseData data;
 
-    public DescribeClientQuotasResponse(Map<ClientQuotaEntity, Map<String, Double>> entities, int throttleTimeMs) {
-        List<EntryData> entries = new ArrayList<>(entities.size());
-        for (Map.Entry<ClientQuotaEntity, Map<String, Double>> entry : entities.entrySet()) {
-            ClientQuotaEntity quotaEntity = entry.getKey();
-            List<EntityData> entityData = new ArrayList<>(quotaEntity.entries().size());
-            for (Map.Entry<String, String> entityEntry : quotaEntity.entries().entrySet()) {
-                entityData.add(new EntityData()
-                        .setEntityType(entityEntry.getKey())
-                        .setEntityName(entityEntry.getValue()));
-            }
-
-            Map<String, Double> quotaValues = entry.getValue();
-            List<ValueData> valueData = new ArrayList<>(quotaValues.size());
-            for (Map.Entry<String, Double> valuesEntry : entry.getValue().entrySet()) {
-                valueData.add(new ValueData()
-                        .setKey(valuesEntry.getKey())
-                        .setValue(valuesEntry.getValue()));
-            }
-
-            entries.add(new EntryData()
-                    .setEntity(entityData)
-                    .setValues(valueData));
-        }
-
-        this.data = new DescribeClientQuotasResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode((short) 0)
-                .setErrorMessage(null)
-                .setEntries(entries);
-    }
-
-    public DescribeClientQuotasResponse(int throttleTimeMs, Throwable e) {
-        this.data = new DescribeClientQuotasResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code())
-                .setErrorMessage(e.getMessage())
-                .setEntries(null);
-    }
-
-    public DescribeClientQuotasResponse(Struct struct, short version) {
-        this.data = new DescribeClientQuotasResponseData(struct, version);
+    public DescribeClientQuotasResponse(DescribeClientQuotasResponseData data) {
+        super(ApiKeys.DESCRIBE_CLIENT_QUOTAS);
+        this.data = data;
     }
 
     public void complete(KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> future) {
@@ -108,12 +71,49 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
-    public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+    public DescribeClientQuotasResponseData data() {
+        return data;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
+
+    public static DescribeClientQuotasResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    public static DescribeClientQuotasResponse fromQuotaEntities(Map<ClientQuotaEntity, Map<String, Double>> entities,
+                                                                 int throttleTimeMs) {
+        List<EntryData> entries = new ArrayList<>(entities.size());
+        for (Map.Entry<ClientQuotaEntity, Map<String, Double>> entry : entities.entrySet()) {
+            ClientQuotaEntity quotaEntity = entry.getKey();
+            List<EntityData> entityData = new ArrayList<>(quotaEntity.entries().size());
+            for (Map.Entry<String, String> entityEntry : quotaEntity.entries().entrySet()) {
+                entityData.add(new EntityData()
+                        .setEntityType(entityEntry.getKey())
+                        .setEntityName(entityEntry.getValue()));
+            }
+
+            Map<String, Double> quotaValues = entry.getValue();
+            List<ValueData> valueData = new ArrayList<>(quotaValues.size());
+            for (Map.Entry<String, Double> valuesEntry : entry.getValue().entrySet()) {
+                valueData.add(new ValueData()
+                        .setKey(valuesEntry.getKey())
+                        .setValue(valuesEntry.getValue()));
+            }
+
+            entries.add(new EntryData()
+                    .setEntity(entityData)
+                    .setValues(valueData));
+        }
+
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode((short) 0)
+            .setErrorMessage(null)
+            .setEntries(entries));
+    }
+
 }

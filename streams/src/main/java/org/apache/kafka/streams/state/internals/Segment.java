@@ -17,16 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.IOException;
 
-public interface Segment extends KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
+public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore {
 
     void destroy() throws IOException;
 
-    KeyValueIterator<Bytes, byte[]> all();
-
-    KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to);
 }

@@ -17,13 +17,11 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(120)
 public class IsNullConditionalTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullCheck() throws Exception {
@@ -36,7 +34,7 @@ public class IsNullConditionalTest {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar == null) {%n",
             "    System.out.println(\"null\");%n",
             "}%n");
@@ -52,11 +50,11 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar == null) {%n",
             "    System.out.println(\"null\");%n",
             "} else {%n",
@@ -71,11 +69,11 @@ public class IsNullConditionalTest {
             forName("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar != null) {%n",
             "    System.out.println(\"not null\");%n",
             "}%n");
@@ -91,11 +89,11 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "System.out.println(\"not null\");%n");
     }
 
@@ -109,12 +107,12 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             alwaysEmitBlockScope(true).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "{%n",
             "    System.out.println(\"not null\");%n",
             "}%n");

@@ -35,14 +35,14 @@ final class TimeDefinitions {
         TimeDefinitionType type();
     }
 
-    public static class RecordTimeDefintion<K> implements TimeDefinition<K> {
-        private static final RecordTimeDefintion INSTANCE = new RecordTimeDefintion();
+    public static class RecordTimeDefinition<K> implements TimeDefinition<K> {
+        private static final RecordTimeDefinition INSTANCE = new RecordTimeDefinition();
 
-        private RecordTimeDefintion() {}
+        private RecordTimeDefinition() {}
 
         @SuppressWarnings("unchecked")
-        public static <K> RecordTimeDefintion<K> instance() {
-            return RecordTimeDefintion.INSTANCE;
+        public static <K> RecordTimeDefinition<K> instance() {
+            return RecordTimeDefinition.INSTANCE;
         }
 
         @Override

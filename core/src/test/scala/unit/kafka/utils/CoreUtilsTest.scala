@@ -24,14 +24,14 @@ import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.junit.Test
+import org.junit.jupiter.api.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -103,7 +103,7 @@ class CoreUtilsTest extends Logging {
     assertEquals(2, itl.next())
     assertEquals(1, itl.next())
     assertEquals(2, itl.next())
-    assertFalse(itl.hasDefiniteSize)
+    assertFalse(itl.isEmpty)
 
     val s = Set(1, 2)
     val its = CoreUtils.circularIterator(s)
@@ -145,7 +145,7 @@ class CoreUtilsTest extends Logging {
     val buffer = ByteBuffer.allocate(4 * values.size)
     for(i <- 0 until values.length) {
       buffer.putInt(i*4, values(i))
-      assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i*4))
+      assertEquals(values(i), CoreUtils.readInt(buffer.array, i*4), "Written value should match read value.")
     }
   }
 
@@ -201,11 +201,11 @@ class CoreUtilsTest extends Logging {
   def testInLock(): Unit = {
     val lock = new ReentrantLock()
     val result = inLock(lock) {
-      assertTrue("Should be in lock", lock.isHeldByCurrentThread)
+      assertTrue(lock.isHeldByCurrentThread, "Should be in lock")
       1 + 1
     }
     assertEquals(2, result)
-    assertFalse("Should be unlocked", lock.isLocked)
+    assertFalse(lock.isLocked, "Should be unlocked")
   }
 
   @Test
@@ -251,7 +251,7 @@ class CoreUtilsTest extends Logging {
       }, Duration(1, TimeUnit.MINUTES))
       assertEquals(count, map(0).get)
       val created = createdCount.get
-      assertTrue(s"Too many creations $created", created > 0 && created <= nThreads)
+      assertTrue(created > 0 && created <= nThreads, s"Too many creations $created")
     } finally {
       executionContext.shutdownNow()
     }

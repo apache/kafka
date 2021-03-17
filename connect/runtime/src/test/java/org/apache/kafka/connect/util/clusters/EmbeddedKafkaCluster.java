@@ -25,7 +25,9 @@ import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -33,31 +35,37 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.junit.rules.ExternalResource;
-import org.junit.rules.TemporaryFolder;
+import org.apache.kafka.metadata.BrokerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
@@ -71,7 +79,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
  * integration tests.
  */
-public class EmbeddedKafkaCluster extends ExternalResource {
+public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
@@ -96,16 +104,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         this.brokerConfig = brokerConfig;
     }
 
-    @Override
-    protected void before() {
-        start();
-    }
-
-    @Override
-    protected void after() {
-        stop();
-    }
-
     /**
      * Starts the Kafka cluster alone using the ports that were assigned during initialization of
      * the harness.
@@ -116,7 +114,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start() {
+    public void start() {
         // pick a random port
         zookeeper = new EmbeddedZookeeper();
         Arrays.fill(currentBrokerPorts, 0);
@@ -151,6 +149,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (sslEnabled()) {
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         producer = new KafkaProducer<>(producerProps);
     }
 
@@ -158,13 +161,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop(false, false);
     }
 
-    private void stop() {
+    public void stop() {
         stop(true, true);
     }
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
         try {
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         } catch (Exception e) {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);
@@ -212,10 +217,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     private String createLogDir() {
-        TemporaryFolder tmpFolder = new TemporaryFolder();
         try {
-            tmpFolder.create();
-            return tmpFolder.newFolder().getAbsolutePath();
+            return Files.createTempDirectory(getClass().getSimpleName()).toString();
         } catch (IOException e) {
             log.error("Unable to create temporary log directory", e);
             throw new ConnectException("Unable to create temporary log directory", e);
@@ -234,6 +237,89 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     public String zKConnectString() {
         return "127.0.0.1:" + zookeeper.port();
+    }
+
+    /**
+     * Get the brokers that have a {@link BrokerState#RUNNING} state.
+     *
+     * @return the list of {@link KafkaServer} instances that are running;
+     *         never null but  possibly empty
+     */
+    public Set<KafkaServer> runningBrokers() {
+        return brokersInState(state -> state == BrokerState.RUNNING);
+    }
+
+    /**
+     * Get the brokers whose state match the given predicate.
+     *
+     * @return the list of {@link KafkaServer} instances with states that match the predicate;
+     *         never null but  possibly empty
+     */
+    public Set<KafkaServer> brokersInState(Predicate<BrokerState> desiredState) {
+        return Arrays.stream(brokers)
+                     .filter(b -> hasState(b, desiredState))
+                     .collect(Collectors.toSet());
+    }
+
+    protected boolean hasState(KafkaServer server, Predicate<BrokerState> desiredState) {
+        try {
+            return desiredState.test(server.brokerState());
+        } catch (Throwable e) {
+            // Broker failed to respond.
+            return false;
+        }
+    }
+    
+    public boolean sslEnabled() {
+        final String listeners = brokerConfig.getProperty(KafkaConfig$.MODULE$.ListenersProp());
+        return listeners != null && listeners.contains("SSL");
+    }
+
+    /**
+     * Get the topic descriptions of the named topics. The value of the map entry will be empty
+     * if the topic does not exist.
+     *
+     * @param topicNames the names of the topics to describe
+     * @return the map of optional {@link TopicDescription} keyed by the topic name
+     */
+    public Map<String, Optional<TopicDescription>> describeTopics(String... topicNames) {
+        return describeTopics(new HashSet<>(Arrays.asList(topicNames)));
+    }
+
+    /**
+     * Get the topic descriptions of the named topics. The value of the map entry will be empty
+     * if the topic does not exist.
+     *
+     * @param topicNames the names of the topics to describe
+     * @return the map of optional {@link TopicDescription} keyed by the topic name
+     */
+    public Map<String, Optional<TopicDescription>> describeTopics(Set<String> topicNames) {
+        Map<String, Optional<TopicDescription>> results = new HashMap<>();
+        log.info("Describing topics {}", topicNames);
+        try (Admin admin = createAdminClient()) {
+            DescribeTopicsResult result = admin.describeTopics(topicNames);
+            Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+            for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : byName.entrySet()) {
+                String topicName = entry.getKey();
+                try {
+                    TopicDescription desc = entry.getValue().get();
+                    results.put(topicName, Optional.of(desc));
+                    log.info("Found topic {} : {}", topicName, desc);
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof UnknownTopicOrPartitionException) {
+                        results.put(topicName, Optional.empty());
+                        log.info("Found non-existant topic {}", topicName);
+                        continue;
+                    }
+                    throw new AssertionError("Could not describe topic(s)" + topicNames, e);
+                }
+            }
+        } catch (Exception e) {
+            throw new AssertionError("Could not describe topic(s) " + topicNames, e);
+        }
+        log.info("Found topics {}", results);
+        return results;
     }
 
     /**
@@ -354,7 +440,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
         putIfAbsent(props, KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         putIfAbsent(props, VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
+        if (sslEnabled()) {
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         KafkaConsumer<byte[], byte[]> consumer;
         try {
             consumer = new KafkaConsumer<>(props);

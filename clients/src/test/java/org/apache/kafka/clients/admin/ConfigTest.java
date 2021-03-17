@@ -17,81 +17,69 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfigTest {
     private static final ConfigEntry E1 = new ConfigEntry("a", "b");
     private static final ConfigEntry E2 = new ConfigEntry("c", "d");
     private Config config;
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        final Collection<ConfigEntry> entries = new ArrayList<>();
-        entries.add(E1);
-        entries.add(E2);
-
-        config = new Config(entries);
+        config = new Config(asList(E1, E2));
     }
 
     @Test
     public void shouldGetEntry() {
-        assertThat(config.get("a"), is(E1));
-        assertThat(config.get("c"), is(E2));
+        assertEquals(E1, config.get("a"));
+        assertEquals(E2, config.get("c"));
     }
 
     @Test
     public void shouldReturnNullOnGetUnknownEntry() {
-        assertThat(config.get("unknown"), is(nullValue()));
+        assertNull(config.get("unknown"));
     }
 
     @Test
     public void shouldGetAllEntries() {
-        assertThat(config.entries().size(), is(2));
-        assertThat(config.entries(), hasItems(E1, E2));
+        assertEquals(2, config.entries().size());
+        assertTrue(config.entries().contains(E1));
+        assertTrue(config.entries().contains(E2));
     }
 
     @Test
     public void shouldImplementEqualsProperly() {
-        final Collection<ConfigEntry> entries = new ArrayList<>();
-        entries.add(E1);
-
-        assertThat(config, is(equalTo(config)));
-        assertThat(config, is(equalTo(new Config(config.entries()))));
-        assertThat(config, is(not(equalTo(new Config(entries)))));
-        assertThat(config, is(not(equalTo((Object) "this"))));
+        assertEquals(config, config);
+        assertEquals(config, new Config(config.entries()));
+        assertNotEquals(new Config(asList(E1)), config);
+        assertNotEquals(config, "this");
     }
 
     @Test
     public void shouldImplementHashCodeProperly() {
-        final Collection<ConfigEntry> entries = new ArrayList<>();
-        entries.add(E1);
-
-        assertThat(config.hashCode(), is(config.hashCode()));
-        assertThat(config.hashCode(), is(new Config(config.entries()).hashCode()));
-        assertThat(config.hashCode(), is(not(new Config(entries).hashCode())));
+        assertEquals(config.hashCode(), config.hashCode());
+        assertEquals(config.hashCode(), new Config(config.entries()).hashCode());
+        assertNotEquals(new Config(asList(E1)).hashCode(), config.hashCode());
     }
 
     @Test
     public void shouldImplementToStringProperly() {
-        assertThat(config.toString(), containsString(E1.toString()));
-        assertThat(config.toString(), containsString(E2.toString()));
+        assertTrue(config.toString().contains(E1.toString()));
+        assertTrue(config.toString().contains(E2.toString()));
     }
 
     public static ConfigEntry newConfigEntry(String name, String value, ConfigEntry.ConfigSource source, boolean isSensitive,
                                              boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
-        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms);
+        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms, ConfigType.UNKNOWN, null);
     }
 }

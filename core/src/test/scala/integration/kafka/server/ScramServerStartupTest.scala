@@ -24,10 +24,10 @@ import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
 import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Tests that there are no failed authentications during broker startup. This is to verify
@@ -58,7 +58,7 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
   @Test
   def testAuthentications(): Unit = {
     val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
-    assertTrue("No successful authentications", successfulAuths > 0)
+    assertTrue(successfulAuths > 0, "No successful authentications")
     val failedAuths = TestUtils.totalMetricValue(servers.head, "failed-authentication-total")
     assertEquals(0, failedAuths)
   }

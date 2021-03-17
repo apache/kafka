@@ -19,12 +19,12 @@ package kafka.utils
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.{After, Test}
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class ShutdownableThreadTest {
 
-  @After
+  @AfterEach
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
@@ -38,13 +38,13 @@ class ShutdownableThreadTest {
     }
     val latch = new CountDownLatch(1)
     val thread = new ShutdownableThread("shutdownable-thread-test") {
-      override def doWork: Unit = {
+      override def doWork(): Unit = {
         latch.countDown()
         throw new FatalExitError
       }
     }
     thread.start()
-    assertTrue("doWork was not invoked", latch.await(10, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS), "doWork was not invoked")
 
     thread.shutdown()
     TestUtils.waitUntilTrue(() => statusCodeOption.isDefined, "Status code was not set by exit procedure")

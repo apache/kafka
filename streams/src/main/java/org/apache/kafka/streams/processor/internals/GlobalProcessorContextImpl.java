@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -23,62 +25,65 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KeyValueStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.SessionStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.TimestampedKeyValueStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.TimestampedWindowStoreReadWriteDecorator;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.WindowStoreReadWriteDecorator;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
 
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
+    private final GlobalStateManager stateManager;
+    private final Time time;
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
-                                      final StateManager stateMgr,
+                                      final GlobalStateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
-                                      final ThreadCache cache) {
-        super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
+                                      final ThreadCache cache,
+                                      final Time time) {
+        super(new TaskId(-1, -1), config, metrics, cache);
+        stateManager = stateMgr;
+        this.time = time;
     }
 
     @Override
-    public StateStore getStateStore(final String name) {
-        final StateStore store = stateManager.getGlobalStore(name);
-
-        if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
-        } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
-        } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
-        } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
-        } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
-        }
-
-        return store;
+    protected StateManager stateManager() {
+        return stateManager;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode<?, ?> previousNode = currentNode();
+    public <S extends StateStore> S getStateStore(final String name) {
+        final StateStore store = stateManager.getGlobalStore(name);
+        return (S) getReadWriteStore(store);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode<?, ?> child :  currentNode().children()) {
+            for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
-                ((ProcessorNode<K, V>) child).process(key, value);
+                ((ProcessorNode<K, V, ?, ?>) child).process(record);
             }
         } finally {
             setCurrentNode(previousNode);
         }
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <KIn, VIn> void forward(final KIn key, final VIn value) {
+        forward(new Record<>(key, value, timestamp(), headers()));
     }
 
     /**
@@ -114,6 +119,16 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         //no-op
     }
 
+    @Override
+    public long currentSystemTimeMs() {
+        return time.milliseconds();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("There is no concept of stream-time for a global processor.");
+    }
+
     /**
      * @throws UnsupportedOperationException on every invocation
      */
@@ -129,5 +144,28 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @Override
     public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToActive() not supported in global processor context.");
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToStandby() not supported in global processor context.");
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
     }
 }

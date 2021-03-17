@@ -19,6 +19,8 @@ package org.apache.kafka.common.utils;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -82,7 +84,8 @@ public class SecurityUtils {
         try {
             String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
             for (int index = 0; index < securityProviderClasses.length; index++) {
-                SecurityProviderCreator securityProviderCreator = (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).newInstance();
+                SecurityProviderCreator securityProviderCreator =
+                    (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).getConstructor().newInstance();
                 securityProviderCreator.configure(configs);
                 Security.insertProviderAt(securityProviderCreator.getProvider(), index + 1);
             }
@@ -91,7 +94,7 @@ public class SecurityUtils {
                     " are expected to be sub-classes of SecurityProviderCreator");
         } catch (ClassNotFoundException cnfe) {
             LOGGER.error("Unrecognized security provider creator class", cnfe);
-        } catch (IllegalAccessException | InstantiationException e) {
+        } catch (ReflectiveOperationException e) {
             LOGGER.error("Unexpected implementation of security provider creator class", e);
         }
     }
@@ -144,5 +147,33 @@ public class SecurityUtils {
                 builder.append(Character.toLowerCase(c));
         }
         return builder.toString();
+    }
+
+    public static void authorizeByResourceTypeCheckArgs(AclOperation op,
+                                                        ResourceType type) {
+        if (type == ResourceType.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter resource type for authorizeByResourceType");
+        }
+
+        if (type == ResourceType.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown resource type");
+        }
+
+        if (op == AclOperation.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter operation type for authorizeByResourceType");
+        }
+
+        if (op == AclOperation.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown operation type");
+        }
+    }
+
+    public static boolean denyAll(ResourcePattern pattern) {
+        return pattern.patternType() == PatternType.LITERAL
+            && pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE);
     }
 }

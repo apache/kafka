@@ -20,8 +20,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -33,13 +35,13 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
-public class ProcessorNode<K, V> {
+public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     // TODO: 'children' can be removed when #forward() via index is removed
-    private final List<ProcessorNode<?, ?>> children;
-    private final Map<String, ProcessorNode<?, ?>> childByName;
+    private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
+    private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
-    private final Processor<K, V> processor;
+    private final Processor<KIn, VIn, KOut, VOut> processor;
     private final String name;
     private final Time time;
 
@@ -53,13 +55,30 @@ public class ProcessorNode<K, V> {
     private Sensor destroySensor;
     private Sensor createSensor;
 
+    private boolean closed = true;
+
     public ProcessorNode(final String name) {
-        this(name, null, null);
+        this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
     }
 
-    public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
+    public ProcessorNode(final String name,
+                         final Processor<KIn, VIn, KOut, VOut> processor,
+                         final Set<String> stateStores) {
+
         this.name = name;
         this.processor = processor;
+        this.children = new ArrayList<>();
+        this.childByName = new HashMap<>();
+        this.stateStores = stateStores;
+        this.time = new SystemTime();
+    }
+
+    public ProcessorNode(final String name,
+                         final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         final Set<String> stateStores) {
+
+        this.name = name;
+        this.processor = ProcessorAdapter.adapt(processor);
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
@@ -70,31 +89,35 @@ public class ProcessorNode<K, V> {
         return name;
     }
 
-    public final Processor<K, V> processor() {
+    public final Processor<KIn, VIn, KOut, VOut> processor() {
         return processor;
     }
 
-    public List<ProcessorNode<?, ?>> children() {
+    public List<ProcessorNode<KOut, VOut, ?, ?>> children() {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
         return childByName.get(childName);
     }
 
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
         children.add(child);
         childByName.put(child.name, child);
     }
 
+    @SuppressWarnings("unchecked")
     public void init(final InternalProcessorContext context) {
+        if (!closed)
+            throw new IllegalStateException("The processor is not closed");
+
         try {
             internalProcessorContext = context;
             initSensors();
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(context);
+                        processor.init((ProcessorContext<KOut, VOut>) context);
                     }
                 },
                 time,
@@ -103,6 +126,10 @@ public class ProcessorNode<K, V> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
+
+        // revived tasks could re-initialize the topology,
+        // in which case we should reset the flag
+        closed = false;
     }
 
     private void initSensors() {
@@ -116,6 +143,8 @@ public class ProcessorNode<K, V> {
     }
 
     public void close() {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -134,15 +163,25 @@ public class ProcessorNode<K, V> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
+
+        closed = true;
+    }
+
+    protected void throwIfClosed() {
+        if (closed) {
+            throw new IllegalStateException("The processor is already closed");
+        }
     }
 
 
-    public void process(final K key, final V value) {
+    public void process(final Record<KIn, VIn> record) {
+        throwIfClosed();
+
         try {
-            maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
+            maybeMeasureLatency(() -> processor.process(record), time, processSensor);
         } catch (final ClassCastException e) {
-            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
+            final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
             throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
                     + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
                     + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "
@@ -159,6 +198,10 @@ public class ProcessorNode<K, V> {
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
         maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
+    }
+
+    public boolean isTerminalNode() {
+        return children.isEmpty();
     }
 
     /**

@@ -19,7 +19,6 @@
 -->
 
 <import-control pkg="org.apache.kafka.jmh">
-
     <allow pkg="java"/>
     <allow pkg="scala"/>
     <allow pkg="javax.management"/>
@@ -44,9 +43,14 @@
     <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
+    <allow pkg="kafka.common"/>
+    <allow pkg="kafka.message"/>
     <allow pkg="org.mockito"/>
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.clients"/>
+    <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.timeline" />
 
     <subpackage name="cache">
     </subpackage>

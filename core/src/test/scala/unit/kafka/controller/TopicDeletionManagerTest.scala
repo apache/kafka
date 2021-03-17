@@ -22,8 +22,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 class TopicDeletionManagerTest {
@@ -169,7 +169,7 @@ class TopicDeletionManagerTest {
     assertEquals(offlineReplicas, controllerContext.replicasInState("foo", OfflineReplica))
 
     // Broker 2 comes back online and deletion is resumed
-    controllerContext.addLiveBrokersAndEpochs(Map(offlineBroker -> (lastEpoch + 1L)))
+    controllerContext.addLiveBrokers(Map(offlineBroker -> (lastEpoch + 1L)))
     deletionManager.resumeDeletionForTopics(Set("foo"))
 
     assertEquals(onlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionSuccessful))
@@ -227,7 +227,7 @@ class TopicDeletionManagerTest {
 
     // Broker 2 is restarted. The offline replicas remain ineligable
     // (TODO: this is probably not desired)
-    controllerContext.addLiveBrokersAndEpochs(Map(offlineBroker -> (lastEpoch + 1L)))
+    controllerContext.addLiveBrokers(Map(offlineBroker -> (lastEpoch + 1L)))
     deletionManager.resumeDeletionForTopics(Set("foo"))
     assertEquals(Set("foo"), controllerContext.topicsToBeDeleted)
     assertEquals(Set("foo"), controllerContext.topicsWithDeletionStarted)
@@ -255,7 +255,7 @@ class TopicDeletionManagerTest {
         SecurityProtocol.PLAINTEXT)
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0

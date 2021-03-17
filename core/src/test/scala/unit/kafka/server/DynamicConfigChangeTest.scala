@@ -16,31 +16,36 @@
   */
 package kafka.server
 
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Properties
-
+import java.util.concurrent.ExecutionException
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
+import kafka.utils._
 import kafka.server.Constants._
-import org.junit.Assert._
+import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.internals.QuotaConfigs
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
-import org.junit.Test
-import kafka.integration.KafkaServerTestHarness
-import kafka.utils._
-import kafka.admin.AdminOperationException
-import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.TopicPartition
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.{Map, Seq}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testConfigChange(): Unit = {
-    assertTrue("Should contain a ConfigHandler for topics",
-      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic),
+      "Should contain a ConfigHandler for topics")
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -83,15 +88,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
     // Verify that the new config is used for all segments
-    assertTrue("Log segment size change not applied", log.logSegments.forall(_.size > 1000))
+    assertTrue(log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
-    assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
-               this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), "Should contain a ConfigHandler for " + rootEntityType)
     val props = new Properties()
-    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
-    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1000")
+    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
 
     val quotaManagers = servers.head.dataPlaneRequestProcessor.quotas
     rootEntityType match {
@@ -103,10 +107,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val overrideProducerQuota = quotaManagers.produce.quota(user, clientId)
       val overrideConsumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"User $user clientId $clientId must have overridden producer quota of 1000",
-        Quota.upperBound(1000), overrideProducerQuota)
-      assertEquals(s"User $user clientId $clientId must have overridden consumer quota of 2000",
-        Quota.upperBound(2000), overrideConsumerQuota)
+      assertEquals(Quota.upperBound(1000),
+        overrideProducerQuota, s"User $user clientId $clientId must have overridden producer quota of 1000")
+      assertEquals(Quota.upperBound(2000),
+        overrideConsumerQuota, s"User $user clientId $clientId must have overridden consumer quota of 2000")
     }
 
     val defaultProducerQuota = Long.MaxValue.asInstanceOf[Double]
@@ -121,10 +125,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val producerQuota = quotaManagers.produce.quota(user, clientId)
       val consumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota,
-        Quota.upperBound(defaultProducerQuota), producerQuota)
-      assertEquals(s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
-        Quota.upperBound(defaultConsumerQuota), consumerQuota)
+      assertEquals(Quota.upperBound(defaultProducerQuota),
+        producerQuota, s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota)
+      assertEquals(Quota.upperBound(defaultConsumerQuota),
+        consumerQuota, s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota)
     }
   }
 
@@ -163,14 +167,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val server = servers.head
     val clientIdProps = new Properties()
     server.shutdown()
-    clientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
-    clientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    clientIdProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1000")
+    clientIdProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
     val userProps = new Properties()
-    userProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "10000")
-    userProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "20000")
+    userProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "10000")
+    userProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "20000")
     val userClientIdProps = new Properties()
-    userClientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "100000")
-    userClientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "200000")
+    userClientIdProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
+    userClientIdProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "200000")
 
     adminZkClient.changeClientIdConfig("overriddenClientId", clientIdProps)
     adminZkClient.changeUserOrUserClientIdConfig("overriddenUser", userProps)
@@ -190,15 +194,91 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testIpHandlerUnresolvableAddress(): Unit = {
+    val configHandler = new IpConfigHandler(null)
+    val props: Properties = new Properties()
+    props.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
+
+    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
+  }
+
+  @Test
+  def testIpQuotaInitialization(): Unit = {
+    val server = servers.head
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "20")
+    server.shutdown()
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig("1.2.3.4", ipOverrideProps)
+
+    // Remove config change znodes to force quota initialization only through loading of ip quotas
+    zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p =>
+      zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p)
+    }
+    server.startup()
+
+    val connectionQuotas = server.socketServer.connectionQuotas
+    assertEquals(10L, connectionQuotas.connectionRateForIp(InetAddress.getByName("1.2.3.4")))
+    assertEquals(20L, connectionQuotas.connectionRateForIp(InetAddress.getByName("2.4.6.8")))
+  }
+
+  @Test
+  def testIpQuotaConfigChange(): Unit = {
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "20")
+
+    val overrideQuotaIp = InetAddress.getByName("1.2.3.4")
+    val defaultQuotaIp = InetAddress.getByName("2.3.4.5")
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, ipOverrideProps)
+
+    val connectionQuotas = servers.head.socketServer.connectionQuotas
+
+    def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer) = {
+      TestUtils.retry(10000) {
+        val quota = connectionQuotas.connectionRateForIp(ip)
+        assertEquals(expectedQuota, quota, s"Unexpected quota for IP $ip")
+      }
+    }
+
+    verifyConnectionQuota(overrideQuotaIp, 10)
+    verifyConnectionQuota(defaultQuotaIp, 20)
+
+    val emptyProps = new Properties()
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, 20)
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+  }
+
+  @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
-    val topic = TestUtils.tempTopic
+    val topic = TestUtils.tempTopic()
+    val logProps = new Properties()
+    logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
+  }
+
+  @Test
+  def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
+    val topic = TestUtils.tempTopic()
+    val admin = createAdminClient()
     try {
-      val logProps = new Properties()
-      logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
-      adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with AdminOperationException for topic doesn't exist")
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+      val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "10000"), AlterConfigOp.OpType.SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
-      case _: AdminOperationException => // expected
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
+    } finally {
+      admin.close()
     }
   }
 
@@ -222,36 +302,19 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
 
     // Incorrect Map. No version
-    try {
-      val jsonMap = Map("v" -> 1, "x" -> 2)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    var jsonMap: Map[String, Any] = Map("v" -> 1, "x" -> 2)
+
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
     // Version is provided. EntityType is incorrect
-    try {
-      val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // EntityName isn't provided
-    try {
-      val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // Everything is provided
-    val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
     configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
 
     // Verify that processConfigChanges was only called once
@@ -314,4 +377,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
     configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
+
+  private def createAdminClient(): Admin = {
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    Admin.create(props)
+  }
+
 }

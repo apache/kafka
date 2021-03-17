@@ -28,7 +28,11 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
+
+trait ApiRequestHandler {
+  def handle(request: RequestChannel.Request): Unit
+}
 
 /**
  * A thread that answers kafka requests.
@@ -38,7 +42,7 @@ class KafkaRequestHandler(id: Int,
                           val aggregateIdleMeter: Meter,
                           val totalHandlerThreads: AtomicInteger,
                           val requestChannel: RequestChannel,
-                          apis: KafkaApis,
+                          apis: ApiRequestHandler,
                           time: Time) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
   private val shutdownComplete = new CountDownLatch(1)
@@ -95,7 +99,7 @@ class KafkaRequestHandler(id: Int,
 
 class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
-                              val apis: KafkaApis,
+                              val apis: ApiRequestHandler,
                               time: Time,
                               numThreads: Int,
                               requestHandlerAvgIdleMetricName: String,
@@ -282,7 +286,7 @@ object BrokerTopicStats {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 
-class BrokerTopicStats {
+class BrokerTopicStats extends Logging {
   import BrokerTopicStats._
 
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
@@ -359,6 +363,7 @@ class BrokerTopicStats {
   def close(): Unit = {
     allTopicsStats.close()
     stats.values.foreach(_.close())
-  }
 
+    info("Broker and topic stats closed")
+  }
 }

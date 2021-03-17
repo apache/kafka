@@ -20,6 +20,7 @@ package kafka.admin
 import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
 import kafka.server.KafkaConfig
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
+import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -30,7 +31,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
@@ -128,11 +129,10 @@ object ZkSecurityMigrator extends Logging {
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
     info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
-    zkTlsConfigFileProps.entrySet().asScala.foreach(entry => {
-      val key = entry.getKey.toString
+    zkTlsConfigFileProps.asScala.forKeyValue { (key, value) =>
       info(s"Setting $key")
-      KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, entry.getValue.toString)
-    })
+      KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, value)
+    }
     zkClientConfig
   }
 
@@ -177,7 +177,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def setAclIndividually(path: String): Unit = {
-    val setPromise = Promise[String]
+    val setPromise = Promise[String]()
     futures.synchronized {
       futures += setPromise.future
     }
@@ -185,8 +185,8 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def setAclsRecursively(path: String): Unit = {
-    val setPromise = Promise[String]
-    val childrenPromise = Promise[String]
+    val setPromise = Promise[String]()
+    val childrenPromise = Promise[String]()
     futures.synchronized {
       futures += setPromise.future
       futures += childrenPromise.future
@@ -280,15 +280,15 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
         future match {
           case Some(a) =>
             Await.result(a, 6000 millis)
-            futures.synchronized { futures.dequeue }
-            recurse
+            futures.synchronized { futures.dequeue() }
+            recurse()
           case None =>
         }
       }
       recurse()
 
     } finally {
-      zkClient.close
+      zkClient.close()
     }
   }
 

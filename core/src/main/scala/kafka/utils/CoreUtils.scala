@@ -23,10 +23,9 @@ import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
-
 import com.typesafe.scalalogging.Logger
-import javax.management._
 
+import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
@@ -34,6 +33,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
+
+import scala.annotation.nowarn
 
 /**
  * General helper functions!
@@ -240,7 +241,7 @@ object CoreUtils {
   /**
    * Returns a list of duplicated items
    */
-  def duplicates[T](s: Traversable[T]): Iterable[T] = {
+  def duplicates[T](s: Iterable[T]): Iterable[T] = {
     s.groupBy(identity)
       .map { case (k, l) => (k, l.size)}
       .filter { case (_, l) => l > 1 }
@@ -248,14 +249,20 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    listenerListToEndPoints(listeners, securityProtocolMap, true)
+  }
+
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
       // filter port 0 for unit tests
       val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
-      val distinctPorts = portsExcludingZero.distinct
       val distinctListenerNames = endPoints.map(_.listenerName).distinct
 
-      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+      if (requireDistinctPorts) {
+        val distinctPorts = portsExcludingZero.distinct
+        require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      }
     }
 
     val endPoints = try {
@@ -309,4 +316,12 @@ object CoreUtils {
         map.putIfAbsent(key, value).getOrElse(value)
     }
   }
+
+  @nowarn("cat=unused") // see below for explanation
+  def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
+    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppress the unused warning
+    import scala.collection.compat._
+    elements.groupMapReduce(key)(f)(reduce)
+  }
+
 }

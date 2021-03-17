@@ -17,129 +17,117 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnPartitionResultCollection;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-
+/**
+ * Possible error codes:
+ *
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#INVALID_TXN_STATE}
+ *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=1
+ *   - {@link Errors#PRODUCER_FENCED}
+ *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ */
 public class AddPartitionsToTxnResponse extends AbstractResponse {
-    private static final String ERRORS_KEY_NAME = "errors";
-    private static final String PARTITION_ERRORS = "partition_errors";
 
-    private static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(ERRORS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITION_ERRORS, new ArrayOf(new Schema(
-                            PARTITION_ID,
-                            ERROR_CODE)))))));
+    private final AddPartitionsToTxnResponseData data;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V1 = ADD_PARTITIONS_TO_TXN_RESPONSE_V0;
+    private Map<TopicPartition, Errors> cachedErrorsMap = null;
 
-    public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_PARTITIONS_TO_TXN_RESPONSE_V0, ADD_PARTITIONS_TO_TXN_RESPONSE_V1};
+    public AddPartitionsToTxnResponse(AddPartitionsToTxnResponseData data) {
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN);
+        this.data = data;
     }
-
-    private final int throttleTimeMs;
-
-    // Possible error codes:
-    //   NotCoordinator
-    //   CoordinatorNotAvailable
-    //   CoordinatorLoadInProgress
-    //   InvalidTxnState
-    //   InvalidProducerIdMapping
-    //   TopicAuthorizationFailed
-    //   InvalidProducerEpoch
-    //   UnknownTopicOrPartition
-    //   TopicAuthorizationFailed
-    //   TransactionalIdAuthorizationFailed
-    private final Map<TopicPartition, Errors> errors;
 
     public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
-    }
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN);
 
-    public AddPartitionsToTxnResponse(Struct struct) {
-        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        errors = new HashMap<>();
-        for (Object topic : struct.getArray(ERRORS_KEY_NAME)) {
-            Struct topicStruct = (Struct) topic;
-            final String topicName = topicStruct.get(TOPIC_NAME);
-            for (Object partition : topicStruct.getArray(PARTITION_ERRORS)) {
-                Struct partitionStruct = (Struct) partition;
-                TopicPartition topicPartition = new TopicPartition(topicName, partitionStruct.get(PARTITION_ID));
-                errors.put(topicPartition, Errors.forCode(partitionStruct.get(ERROR_CODE)));
-            }
+        Map<String, AddPartitionsToTxnPartitionResultCollection> resultMap = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            String topicName = topicPartition.topic();
+
+            AddPartitionsToTxnPartitionResult partitionResult =
+                new AddPartitionsToTxnPartitionResult()
+                    .setErrorCode(entry.getValue().code())
+                    .setPartitionIndex(topicPartition.partition());
+
+            AddPartitionsToTxnPartitionResultCollection partitionResultCollection = resultMap.getOrDefault(
+                topicName, new AddPartitionsToTxnPartitionResultCollection()
+            );
+
+            partitionResultCollection.add(partitionResult);
+            resultMap.put(topicName, partitionResultCollection);
         }
+
+        AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
+        for (Map.Entry<String, AddPartitionsToTxnPartitionResultCollection> entry : resultMap.entrySet()) {
+            topicCollection.add(new AddPartitionsToTxnTopicResult()
+                                    .setName(entry.getKey())
+                                    .setResults(entry.getValue()));
+        }
+
+        this.data = new AddPartitionsToTxnResponseData()
+                        .setThrottleTimeMs(throttleTimeMs)
+                        .setResults(topicCollection);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     public Map<TopicPartition, Errors> errors() {
-        return errors;
+        if (cachedErrorsMap != null) {
+            return cachedErrorsMap;
+        }
+
+        cachedErrorsMap = new HashMap<>();
+
+        for (AddPartitionsToTxnTopicResult topicResult : this.data.results()) {
+            for (AddPartitionsToTxnPartitionResult partitionResult : topicResult.results()) {
+                cachedErrorsMap.put(new TopicPartition(
+                        topicResult.name(), partitionResult.partitionIndex()),
+                    Errors.forCode(partitionResult.errorCode()));
+            }
+        }
+        return cachedErrorsMap;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors.values());
+        return errorCounts(errors().values());
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-
-        Map<String, Map<Integer, Errors>> errorsByTopic = CollectionUtils.groupPartitionDataByTopic(errors);
-        List<Struct> topics = new ArrayList<>(errorsByTopic.size());
-        for (Map.Entry<String, Map<Integer, Errors>> entry : errorsByTopic.entrySet()) {
-            Struct topicErrorCodes = struct.instance(ERRORS_KEY_NAME);
-            topicErrorCodes.set(TOPIC_NAME, entry.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, Errors> partitionErrors : entry.getValue().entrySet()) {
-                final Struct partitionData = topicErrorCodes.instance(PARTITION_ERRORS)
-                        .set(PARTITION_ID, partitionErrors.getKey())
-                        .set(ERROR_CODE, partitionErrors.getValue().code());
-                partitionArray.add(partitionData);
-
-            }
-            topicErrorCodes.set(PARTITION_ERRORS, partitionArray.toArray());
-            topics.add(topicErrorCodes);
-        }
-        struct.set(ERRORS_KEY_NAME, topics.toArray());
-        return struct;
+    public AddPartitionsToTxnResponseData data() {
+        return data;
     }
 
     public static AddPartitionsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddPartitionsToTxnResponse(ApiKeys.ADD_PARTITIONS_TO_TXN.parseResponse(version, buffer));
+        return new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
     public String toString() {
-        return "AddPartitionsToTxnResponse(" +
-                "errors=" + errors +
-                ", throttleTimeMs=" + throttleTimeMs +
-                ')';
+        return data.toString();
     }
 
     @Override

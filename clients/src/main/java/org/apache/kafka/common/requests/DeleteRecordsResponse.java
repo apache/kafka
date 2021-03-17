@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -36,24 +36,17 @@ public class DeleteRecordsResponse extends AbstractResponse {
      *
      * OFFSET_OUT_OF_RANGE (1)
      * UNKNOWN_TOPIC_OR_PARTITION (3)
-     * NOT_LEADER_FOR_PARTITION (6)
+     * NOT_LEADER_OR_FOLLOWER (6)
      * REQUEST_TIMED_OUT (7)
      * UNKNOWN (-1)
      */
 
     public DeleteRecordsResponse(DeleteRecordsResponseData data) {
+        super(ApiKeys.DELETE_RECORDS);
         this.data = data;
     }
 
-    public DeleteRecordsResponse(Struct struct, short version) {
-        this.data = new DeleteRecordsResponseData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public DeleteRecordsResponseData data() {
         return data;
     }
@@ -66,16 +59,16 @@ public class DeleteRecordsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (DeleteRecordsResponseData.DeleteRecordsTopicResult topicResponses : data.topics()) {
-            for (DeleteRecordsResponseData.DeleteRecordsPartitionResult response : topicResponses.partitions()) {
-                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()));
-            }
-        }
+        data.topics().forEach(topicResponses ->
+            topicResponses.partitions().forEach(response ->
+                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()))
+            )
+        );
         return errorCounts;
     }
 
     public static DeleteRecordsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteRecordsResponse(ApiKeys.DELETE_RECORDS.parseResponse(version, buffer), version);
+        return new DeleteRecordsResponse(new DeleteRecordsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

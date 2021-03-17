@@ -120,7 +120,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", MaskField.Value.class.getName());
         connProps.put("transforms.example.fields", "field");
-
+        connProps.put("transforms.example.replacement", "nothing");
 
         Plugins plugins = null; // Safe when we're only constructing the config
         new ConnectorConfig(plugins, connProps);

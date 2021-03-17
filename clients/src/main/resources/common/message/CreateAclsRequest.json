@@ -16,6 +16,7 @@
 {
   "apiKey": 30,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "CreateAclsRequest",
   // Version 1 adds resource pattern type.
   // Version 2 enables flexible versions.

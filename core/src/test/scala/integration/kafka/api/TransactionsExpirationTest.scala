@@ -26,9 +26,9 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.InvalidPidMappingException
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 // Test class that uses a very small transaction timeout to trigger InvalidPidMapping errors
@@ -45,7 +45,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(3, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -58,7 +58,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkClient, topic2, numPartitions, 3, servers, new Properties())
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     consumer.close()

@@ -16,124 +16,55 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
-import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
-import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
-import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
-
 public class AddOffsetsToTxnRequest extends AbstractRequest {
-    private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
-            TRANSACTIONAL_ID,
-            PRODUCER_ID,
-            PRODUCER_EPOCH,
-            GROUP_ID);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V1 = ADD_OFFSETS_TO_TXN_REQUEST_V0;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0, ADD_OFFSETS_TO_TXN_REQUEST_V1};
-    }
+    private final AddOffsetsToTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
-        private final String transactionalId;
-        private final long producerId;
-        private final short producerEpoch;
-        private final String consumerGroupId;
+        public AddOffsetsToTxnRequestData data;
 
-        public Builder(String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
+        public Builder(AddOffsetsToTxnRequestData data) {
             super(ApiKeys.ADD_OFFSETS_TO_TXN);
-            this.transactionalId = transactionalId;
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.consumerGroupId = consumerGroupId;
-        }
-
-        public String consumerGroupId() {
-            return consumerGroupId;
+            this.data = data;
         }
 
         @Override
         public AddOffsetsToTxnRequest build(short version) {
-            return new AddOffsetsToTxnRequest(version, transactionalId, producerId, producerEpoch, consumerGroupId);
+            return new AddOffsetsToTxnRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=AddOffsetsToTxnRequest").
-                    append(", transactionalId=").append(transactionalId).
-                    append(", producerId=").append(producerId).
-                    append(", producerEpoch=").append(producerEpoch).
-                    append(", consumerGroupId=").append(consumerGroupId).
-                    append(")");
-            return bld.toString();
+            return data.toString();
         }
     }
 
-    private final String transactionalId;
-    private final long producerId;
-    private final short producerEpoch;
-    private final String consumerGroupId;
-
-    private AddOffsetsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
+    public AddOffsetsToTxnRequest(AddOffsetsToTxnRequestData data, short version) {
         super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
-        this.transactionalId = transactionalId;
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.consumerGroupId = consumerGroupId;
-    }
-
-    public AddOffsetsToTxnRequest(Struct struct, short version) {
-        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
-        this.transactionalId = struct.get(TRANSACTIONAL_ID);
-        this.producerId = struct.get(PRODUCER_ID);
-        this.producerEpoch = struct.get(PRODUCER_EPOCH);
-        this.consumerGroupId = struct.get(GROUP_ID);
-    }
-
-    public String transactionalId() {
-        return transactionalId;
-    }
-
-    public long producerId() {
-        return producerId;
-    }
-
-    public short producerEpoch() {
-        return producerEpoch;
-    }
-
-    public String consumerGroupId() {
-        return consumerGroupId;
+        this.data = data;
     }
 
     @Override
-    protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.requestSchema(version()));
-        struct.set(TRANSACTIONAL_ID, transactionalId);
-        struct.set(PRODUCER_ID, producerId);
-        struct.set(PRODUCER_EPOCH, producerEpoch);
-        struct.set(GROUP_ID, consumerGroupId);
-        return struct;
+    public AddOffsetsToTxnRequestData data() {
+        return data;
     }
 
     @Override
     public AddOffsetsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new AddOffsetsToTxnResponse(throttleTimeMs, Errors.forException(e));
+        return new AddOffsetsToTxnResponse(new AddOffsetsToTxnResponseData()
+                                               .setErrorCode(Errors.forException(e).code())
+                                               .setThrottleTimeMs(throttleTimeMs));
     }
 
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnRequest(ApiKeys.ADD_OFFSETS_TO_TXN.parseRequest(version, buffer), version);
+        return new AddOffsetsToTxnRequest(new AddOffsetsToTxnRequestData(new ByteBufferAccessor(buffer), version), version);
     }
-
 }

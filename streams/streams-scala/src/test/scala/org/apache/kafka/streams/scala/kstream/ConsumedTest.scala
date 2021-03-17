@@ -21,8 +21,8 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.streams.Topology
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp
-import org.apache.kafka.streams.scala.Serdes._
-import org.apache.kafka.streams.scala.Serdes
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
@@ -34,8 +34,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long]
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalConsumed.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.longSerde.getClass
   }
 
   "Create a Consumed with timestampExtractor and resetPolicy" should "create a Consumed with Serdes, timestampExtractor and resetPolicy" in {
@@ -45,8 +45,8 @@ class ConsumedTest extends FlatSpec with Matchers {
       Consumed.`with`[String, Long](timestampExtractor, resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalConsumed.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalConsumed.timestampExtractor shouldBe timestampExtractor
     internalConsumed.offsetResetPolicy shouldBe resetPolicy
   }
@@ -56,8 +56,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long](timestampExtractor)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalConsumed.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalConsumed.timestampExtractor shouldBe timestampExtractor
   }
 
@@ -66,8 +66,8 @@ class ConsumedTest extends FlatSpec with Matchers {
     val consumed: Consumed[String, Long] = Consumed.`with`[String, Long](resetPolicy)
 
     val internalConsumed = new ConsumedInternal(consumed)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalConsumed.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalConsumed.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalConsumed.offsetResetPolicy shouldBe resetPolicy
   }
 }

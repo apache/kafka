@@ -16,23 +16,35 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * ConnectorContext for use with a Herder
  */
-public class HerderConnectorContext implements ConnectorContext {
+public class HerderConnectorContext implements CloseableConnectorContext {
+
+    private static final Logger log = LoggerFactory.getLogger(HerderConnectorContext.class);
 
     private final AbstractHerder herder;
     private final String connectorName;
+    private volatile boolean closed;
 
     public HerderConnectorContext(AbstractHerder herder, String connectorName) {
         this.herder = herder;
         this.connectorName = connectorName;
+        this.closed = false;
     }
 
     @Override
     public void requestTaskReconfiguration() {
+        if (closed) {
+            throw new ConnectException("The request for task reconfiguration has been rejected " 
+                    + "because this instance of the connector '" + connectorName + "' has already " 
+                    + "been shut down.");
+        }
+
         // Local herder runs in memory in this process
         // Distributed herder will forward the request to the leader if needed
         herder.requestTaskReconfiguration(connectorName);
@@ -40,6 +52,18 @@ public class HerderConnectorContext implements ConnectorContext {
 
     @Override
     public void raiseError(Exception e) {
+        if (closed) {
+            log.warn("Connector {} attempted to raise error after shutdown:", connectorName, e);
+            throw new ConnectException("The request to fail the connector has been rejected " 
+                    + "because this instance of the connector '" + connectorName + "' has already " 
+                    + "been shut down.");
+        }
+
         herder.onFailure(connectorName, e);
+    }
+
+    @Override
+    public void close() {
+        closed = true;
     }
 }

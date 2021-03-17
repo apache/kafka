@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.common.network;
 
-import static org.junit.Assert.assertEquals;
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -35,6 +36,7 @@ import org.apache.kafka.test.TestUtils;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -49,7 +51,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
@@ -60,11 +62,7 @@ public class NioEchoServer extends Thread {
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;
 
-        private final String metricNameSuffix;
-
-        private MetricType() {
-            metricNameSuffix = "-" + name().toLowerCase(Locale.ROOT);
-        }
+        private final String metricNameSuffix = "-" + name().toLowerCase(Locale.ROOT);
 
         public String metricNameSuffix() {
             return metricNameSuffix;
@@ -79,7 +77,7 @@ public class NioEchoServer extends Thread {
     private final List<SocketChannel> socketChannels;
     private final AcceptorThread acceptorThread;
     private final Selector selector;
-    private volatile WritableByteChannel outputChannel;
+    private volatile TransferableChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
     private volatile int numSent = 0;
@@ -95,7 +93,7 @@ public class NioEchoServer extends Thread {
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
                          int failedAuthenticationDelayMs, Time time) throws Exception {
-        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time,
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, failedAuthenticationDelayMs, time,
                 new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
@@ -121,7 +119,8 @@ public class NioEchoServer extends Thread {
         LogContext logContext = new LogContext();
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
-                    securityProtocol, config, credentialCache, tokenCache, time, logContext);
+                securityProtocol, config, credentialCache, tokenCache, time, logContext,
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         this.metrics = new Metrics();
         this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                 "MetricGroup", channelBuilder, logContext);
@@ -191,8 +190,8 @@ public class NioEchoServer extends Thread {
                 if (metricType == MetricType.MAX || metricType == MetricType.AVG)
                     expected = Double.NaN;
 
-                assertEquals("Metric not updated " + metricName + " expected:<" + expectedValue + "> but was:<"
-                    + metricValue(metricName) + ">", expected, metricValue(metricName), EPS);
+                assertEquals(expected, metricValue(metricName), EPS, "Metric not updated " + metricName +
+                    " expected:<" + expectedValue + "> but was:<" + metricValue(metricName) + ">");
             } else if (metricType == MetricType.TOTAL)
                 TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
                         thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
@@ -229,18 +228,17 @@ public class NioEchoServer extends Thread {
                     if (!maybeBeginServerReauthentication(channel, rcv, time)) {
                         String channelId = channel.id();
                         selector.mute(channelId);
-                        NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
+                        NetworkSend send = new NetworkSend(rcv.source(), ByteBufferSend.sizePrefixed(rcv.payload()));
                         if (outputChannel == null)
                             selector.send(send);
                         else {
-                            for (ByteBuffer buffer : send.buffers)
-                                outputChannel.write(buffer);
+                            send.writeTo(outputChannel);
                             selector.unmute(channelId);
                         }
                     }
                 }
-                for (Send send : selector.completedSends()) {
-                    selector.unmute(send.destination());
+                for (NetworkSend send : selector.completedSends()) {
+                    selector.unmute(send.destinationId());
                     numSent += 1;
                 }
             }
@@ -256,7 +254,7 @@ public class NioEchoServer extends Thread {
     private static boolean maybeBeginServerReauthentication(KafkaChannel channel, NetworkReceive networkReceive, Time time) {
         try {
             if (TestUtils.apiKeyFrom(networkReceive) == ApiKeys.SASL_HANDSHAKE) {
-                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.nanoseconds());
+                return channel.maybeBeginServerReauthentication(networkReceive, time::nanoseconds);
             }
         } catch (Exception e) {
             // ignore
@@ -280,14 +278,53 @@ public class NioEchoServer extends Thread {
      * the responses (eg. testing graceful close).
      */
     public void outputChannel(WritableByteChannel channel) {
-        this.outputChannel = channel;
+        this.outputChannel = new TransferableChannel() {
+
+            @Override
+            public boolean hasPendingWrites() {
+                return false;
+            }
+
+            @Override
+            public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+                return fileChannel.transferTo(position, count, channel);
+            }
+
+            @Override
+            public boolean isOpen() {
+                return channel.isOpen();
+            }
+
+            @Override
+            public void close() throws IOException {
+                channel.close();
+            }
+
+            @Override
+            public int write(ByteBuffer src) throws IOException {
+                return channel.write(src);
+            }
+
+            @Override
+            public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+                long result = 0;
+                for (int i = offset; i < offset + length; ++i)
+                    result += write(srcs[i]);
+                return result;
+            }
+
+            @Override
+            public long write(ByteBuffer[] srcs) throws IOException {
+                return write(srcs, 0, srcs.length);
+            }
+        };
     }
 
     public Selector selector() {
         return selector;
     }
 
-    public void closeKafkaChannels() throws IOException {
+    public void closeKafkaChannels() {
         closeKafkaChannels = true;
         selector.wakeup();
         try {
@@ -316,9 +353,10 @@ public class NioEchoServer extends Thread {
     }
 
     private class AcceptorThread extends Thread {
-        public AcceptorThread() throws IOException {
+        public AcceptorThread() {
             setName("acceptor");
         }
+        @Override
         public void run() {
             try {
                 java.nio.channels.Selector acceptSelector = java.nio.channels.Selector.open();

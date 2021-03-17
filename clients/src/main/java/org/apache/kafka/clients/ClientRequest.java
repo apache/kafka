@@ -83,14 +83,14 @@ public final class ClientRequest {
     }
 
     public RequestHeader makeHeader(short version) {
-        short requestApiKey = requestBuilder.apiKey().id;
+        ApiKeys requestApiKey = apiKey();
         return new RequestHeader(
-            new RequestHeaderData().
-                setRequestApiKey(requestApiKey).
-                setRequestApiVersion(version).
-                setClientId(clientId).
-                setCorrelationId(correlationId),
-            ApiKeys.forId(requestApiKey).requestHeaderVersion(version));
+            new RequestHeaderData()
+                .setRequestApiKey(requestApiKey.id)
+                .setRequestApiVersion(version)
+                .setClientId(clientId)
+                .setCorrelationId(correlationId),
+            requestApiKey.requestHeaderVersion(version));
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {

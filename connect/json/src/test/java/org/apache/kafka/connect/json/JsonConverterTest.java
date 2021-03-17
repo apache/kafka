@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.json;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,8 +24,6 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -32,13 +31,11 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
-import org.junit.Before;
-import org.junit.Test;
-import org.powermock.reflect.Whitebox;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URISyntaxException;
@@ -54,21 +51,24 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class JsonConverterTest {
     private static final String TOPIC = "topic";
 
-    ObjectMapper objectMapper = new ObjectMapper();
-    JsonConverter converter = new JsonConverter();
+    private final ObjectMapper objectMapper = new ObjectMapper()
+        .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+        .setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
 
-    @Before
+    private final JsonConverter converter = new JsonConverter();
+
+    @BeforeEach
     public void setUp() {
         converter.configure(Collections.emptyMap(), false);
     }
@@ -127,8 +127,8 @@ public class JsonConverterTest {
 
 
     @Test
-    public void bytesToConnect() throws UnsupportedEncodingException {
-        ByteBuffer reference = ByteBuffer.wrap("test-string".getBytes("UTF-8"));
+    public void bytesToConnect() {
+        ByteBuffer reference = ByteBuffer.wrap(Utils.utf8("test-string"));
         String msg = "{ \"schema\": { \"type\": \"bytes\" }, \"payload\": \"dGVzdC1zdHJpbmc=\" }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         ByteBuffer converted = ByteBuffer.wrap((byte[]) schemaAndValue.value());
@@ -189,6 +189,36 @@ public class JsonConverterTest {
         // to keep compatibility with the record
         SchemaAndValue converted = converter.toConnectData(TOPIC, null);
         assertEquals(SchemaAndValue.NULL, converted);
+    }
+
+    /**
+     * When schemas are disabled, empty data should be decoded to an empty envelope.
+     * This test verifies the case where `schemas.enable` configuration is set to false, and
+     * {@link JsonConverter} converts empty bytes to {@link SchemaAndValue#NULL}.
+     */
+    @Test
+    public void emptyBytesToConnect() {
+        // This characterizes the messages with empty data when Json schemas is disabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        SchemaAndValue converted = converter.toConnectData(TOPIC, "".getBytes());
+        assertEquals(SchemaAndValue.NULL, converted);
+    }
+
+    /**
+     * When schemas are disabled, fields are mapped to Connect maps.
+     */
+    @Test
+    public void schemalessWithEmptyFieldValueToConnect() {
+        // This characterizes the messages with empty data when Json schemas is disabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        String input = "{ \"a\": \"\", \"b\": null}";
+        SchemaAndValue converted = converter.toConnectData(TOPIC, input.getBytes());
+        Map<String, String> expected = new HashMap<>();
+        expected.put("a", "");
+        expected.put("b", null);
+        assertEquals(new SchemaAndValue(null, expected), converted);
     }
 
     @Test
@@ -267,6 +297,16 @@ public class JsonConverterTest {
         BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
         Schema schema = Decimal.schema(2);
         String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }, \"payload\": 1.56 }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void numericDecimalWithTrailingZerosToConnect() {
+        BigDecimal reference = new BigDecimal(new BigInteger("15600"), 4);
+        Schema schema = Decimal.schema(4);
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"4\" } }, \"payload\": 1.5600 }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, schemaAndValue.value());
@@ -418,7 +458,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
 
         converted = parse(converter.fromConnectData(TOPIC, Schema.OPTIONAL_BOOLEAN_SCHEMA, null));
         validateEnvelope(converted);
@@ -428,34 +468,33 @@ public class JsonConverterTest {
         converted = parse(converter.fromConnectData(TOPIC, SchemaBuilder.bool().defaultValue(true).build(), true));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"default\": true }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
 
         converted = parse(converter.fromConnectData(TOPIC, SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").parameter("foo", "bar").build(), true));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
 
 
     @Test
     public void testCacheSchemaToConnectConversion() {
-        Cache<JsonNode, Schema> cache = Whitebox.getInternalState(converter, "toConnectSchemaCache");
-        assertEquals(0, cache.size());
+        assertEquals(0, converter.sizeOfToConnectSchemaCache());
 
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes());
-        assertEquals(1, cache.size());
+        assertEquals(1, converter.sizeOfToConnectSchemaCache());
 
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes());
-        assertEquals(1, cache.size());
+        assertEquals(1, converter.sizeOfToConnectSchemaCache());
 
         // Different schema should also get cached
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": true }".getBytes());
-        assertEquals(2, cache.size());
+        assertEquals(2, converter.sizeOfToConnectSchemaCache());
 
         // Even equivalent, but different JSON encoding of schema, should get different cache entry
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false }, \"payload\": true }".getBytes());
-        assertEquals(3, cache.size());
+        assertEquals(3, converter.sizeOfToConnectSchemaCache());
     }
 
     // Schema types
@@ -465,7 +504,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
 
     @Test
@@ -618,7 +657,7 @@ public class JsonConverterTest {
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertTrue("expected node to be base64 text", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isTextual());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isTextual(), "expected node to be base64 text");
         assertArrayEquals(new byte[]{0, -100}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
     }
 
@@ -629,16 +668,27 @@ public class JsonConverterTest {
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
             converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        assertTrue("expected node to be numeric", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber(), "expected node to be numeric");
         assertEquals(new BigDecimal("1.56"), converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).decimalValue());
     }
 
     @Test
-    public void decimalToJsonWithoutSchema() throws IOException {
+    public void decimalWithTrailingZerosToNumericJson() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.DECIMAL_FORMAT_CONFIG, DecimalFormat.NUMERIC.name()), false);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, Decimal.schema(4), new BigDecimal(new BigInteger("15600"), 4)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"4\" } }"),
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber(), "expected node to be numeric");
+        assertEquals(new BigDecimal("1.5600"), converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).decimalValue());
+    }
+
+    @Test
+    public void decimalToJsonWithoutSchema() {
         assertThrows(
-            "expected data exception when serializing BigDecimal without schema",
             DataException.class,
-            () -> converter.fromConnectData(TOPIC, null, new BigDecimal(new BigInteger("156"), 2)));
+            () -> converter.fromConnectData(TOPIC, null, new BigDecimal(new BigInteger("156"), 2)),
+            "expected data exception when serializing BigDecimal without schema");
     }
 
     @Test
@@ -697,7 +747,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, null, true));
         validateEnvelopeNullSchema(converted);
         assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
-        assertEquals(true, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
+        assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
 
     @Test
@@ -768,10 +818,11 @@ public class JsonConverterTest {
         assertNull(converted);
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void mismatchSchemaJson() {
         // If we have mismatching schema info, we should properly convert to a DataException
-        converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true));
     }
 
     @Test
@@ -787,25 +838,24 @@ public class JsonConverterTest {
         converter.configure(props, true);
         JsonNode converted = parse(converter.fromConnectData(TOPIC, null, true));
         assertTrue(converted.isBoolean());
-        assertEquals(true, converted.booleanValue());
+        assertTrue(converted.booleanValue());
     }
 
     @Test
     public void testCacheSchemaToJsonConversion() {
-        Cache<Schema, ObjectNode> cache = Whitebox.getInternalState(converter, "fromConnectSchemaCache");
-        assertEquals(0, cache.size());
+        assertEquals(0, converter.sizeOfFromConnectSchemaCache());
 
         // Repeated conversion of the same schema, even if the schema object is different should return the same Java
         // object
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().build(), true);
-        assertEquals(1, cache.size());
+        assertEquals(1, converter.sizeOfFromConnectSchemaCache());
 
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().build(), true);
-        assertEquals(1, cache.size());
+        assertEquals(1, converter.sizeOfFromConnectSchemaCache());
 
         // Validate that a similar, but different schema correctly returns a different schema.
         converter.fromConnectData(TOPIC, SchemaBuilder.bool().optional().build(), true);
-        assertEquals(2, cache.size());
+        assertEquals(2, converter.sizeOfFromConnectSchemaCache());
     }
 
     @Test
@@ -814,7 +864,7 @@ public class JsonConverterTest {
         File propFile = new File(url.toURI());
         String workerPropsFile = propFile.getAbsolutePath();
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
 
         JsonConverter rc = new JsonConverter();
         rc.configure(workerProps, false);

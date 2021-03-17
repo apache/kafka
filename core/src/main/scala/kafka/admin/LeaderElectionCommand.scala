@@ -23,6 +23,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.utils.CommandDefaultOptions
 import kafka.utils.CommandLineUtils
 import kafka.utils.CoreUtils
+import kafka.utils.Implicits._
 import kafka.utils.Json
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -32,7 +33,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
 
@@ -171,7 +172,7 @@ object LeaderElectionCommand extends Logging {
 
     if (failed.nonEmpty) {
       val rootException = new AdminCommandFailedException(s"${failed.size} replica(s) could not be elected")
-      failed.foreach { case (topicPartition, exception) =>
+      failed.forKeyValue { (topicPartition, exception) =>
         println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
         rootException.addSuppressed(exception)
       }

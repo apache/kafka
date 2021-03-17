@@ -192,7 +192,7 @@ public class RepartitionTopicNamingTest {
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Topology topology = builder.build(properties);
         assertThat(getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern), is(1));
     }
@@ -224,7 +224,7 @@ public class RepartitionTopicNamingTest {
     public void shouldPassWithSameRepartitionTopicNameUsingSameKGroupedStreamOptimized() {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
                                                                      .selectKey((k, v) -> k)
                                                                      .groupByKey(Grouped.as("grouping"));
@@ -500,7 +500,7 @@ public class RepartitionTopicNamingTest {
 
         final Properties properties = new Properties();
 
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
         return builder.build(properties);
     }
 

@@ -21,20 +21,28 @@ import kafka.controller.KafkaController;
 import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.AdminManager;
+import kafka.network.RequestConvertToJson;
+import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
+import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
+import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
+import kafka.server.SimpleApiVersionManager;
+import kafka.server.ZkAdminManager;
+import kafka.server.ZkSupport;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -91,19 +99,21 @@ public class MetadataRequestBenchmark {
     private RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
     private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
-    private AdminManager adminManager = Mockito.mock(AdminManager.class);
+    private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
-    private MetadataCache metadataCache = new MetadataCache(brokerId);
+    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
+    private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
     private ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
     private QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
-        clientQuotaManager, clientRequestQuotaManager, replicaQuotaManager, replicaQuotaManager,
-        replicaQuotaManager, Option.empty());
+        clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
+        replicaQuotaManager, replicaQuotaManager, Option.empty());
     private FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
@@ -145,7 +155,7 @@ public class MetadataRequestBenchmark {
         UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(
             ApiKeys.UPDATE_METADATA.latestVersion(),
             1, 1, 1,
-            partitionStates, liveBrokers).build();
+            partitionStates, liveBrokers, Collections.emptyMap()).build();
         metadataCache.updateMetadata(100, updateMetadataRequest);
     }
 
@@ -163,14 +173,14 @@ public class MetadataRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         return new KafkaApis(requestChannel,
+            new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache),
             replicaManager,
-            adminManager,
             groupCoordinator,
             transactionCoordinator,
-            kafkaController,
-            kafkaZkClient,
+            autoTopicCreationManager,
             brokerId,
             new KafkaConfig(kafkaProps),
+            new CachedConfigRepository(),
             metadataCache,
             metrics,
             Option.empty(),
@@ -179,7 +189,8 @@ public class MetadataRequestBenchmark {
             brokerTopicStats,
             "clusterId",
             new SystemTime(),
-            null);
+            null,
+            new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER));
     }
 
     @TearDown(Level.Trial)
@@ -190,17 +201,22 @@ public class MetadataRequestBenchmark {
 
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
-        ByteBuffer buffer = metadataRequest.serialize(new RequestHeader(metadataRequest.api,
-            metadataRequest.version(), "", 0));
-        RequestHeader header = RequestHeader.parse(buffer);
+        RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
+        ByteBuffer bodyBuffer = metadataRequest.serialize();
 
         RequestContext context = new RequestContext(header, "1", null, principal,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, bodyBuffer, requestChannelMetrics, Option.empty());
     }
 
     @Benchmark
     public void testMetadataRequestForAllTopics() {
         kafkaApis.handleTopicMetadataRequest(allTopicMetadataRequest);
+    }
+
+    @Benchmark
+    public String testRequestToJson() {
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
 }

@@ -59,9 +59,9 @@
     <li><a href="#protocol_philosophy">Some Common Philosophical Questions</a></li>
 </ul>
 
-<h4><a id="protocol_preliminaries" href="#protocol_preliminaries">Preliminaries</a></h4>
+<h4 class="anchor-heading"><a id="protocol_preliminaries" class="anchor-link"></a><a href="#protocol_preliminaries">Preliminaries</a></h4>
 
-<h5><a id="protocol_network" href="#protocol_network">Network</a></h5>
+<h5 class="anchor-heading"><a id="protocol_network" class="anchor-link"></a><a href="#protocol_network">Network</a></h5>
 
 <p>Kafka uses a binary protocol over TCP. The protocol defines all APIs as request response message pairs. All messages are size delimited and are made up of the following primitive types.</p>
 
@@ -73,9 +73,9 @@
 
 <p>The server has a configurable maximum limit on request size and any request that exceeds this limit will result in the socket being disconnected.</p>
 
-<h5><a id="protocol_partitioning" href="#protocol_partitioning">Partitioning and bootstrapping</a></h5>
+<h5 class="anchor-heading"><a id="protocol_partitioning" class="anchor-link"></a><a href="#protocol_partitioning">Partitioning and bootstrapping</a></h5>
 
-<p>Kafka is a partitioned system so not all servers have the complete data set. Instead recall that topics are split into a pre-defined number of partitions, P, and each partition is replicated with some replication factor, N. Topic partitions themselves are just ordered "commit logs" numbered 0, 1, ..., P.</p>
+<p>Kafka is a partitioned system so not all servers have the complete data set. Instead recall that topics are split into a pre-defined number of partitions, P, and each partition is replicated with some replication factor, N. Topic partitions themselves are just ordered "commit logs" numbered 0, 1, ..., P-1.</p>
 
 <p>All systems of this nature have the question of how a particular piece of data is assigned to a particular partition. Kafka clients directly control this assignment, the brokers themselves enforce no particular semantics of which messages should be published to a particular partition. Rather, to publish messages the client directly addresses messages to a particular partition, and when fetching messages, fetches from a particular partition. If two clients want to use the same partitioning scheme they must use the same method to compute the mapping of key to partition.</p>
 
@@ -92,7 +92,7 @@
     <li>If we get an appropriate error, refresh the metadata and try again.</li>
 </ol>
 
-<h5><a id="protocol_partitioning_strategies" href="#protocol_partitioning_strategies">Partitioning Strategies</a></h5>
+<h5 class="anchor-heading"><a id="protocol_partitioning_strategies" class="anchor-link"></a><a href="#protocol_partitioning_strategies">Partitioning Strategies</a></h5>
 
 <p>As mentioned above the assignment of messages to partitions is something the producing client controls. That said, how should this functionality be exposed to the end-user?</p>
 
@@ -108,13 +108,13 @@
 
 <p>Semantic partitioning means using some key in the message to assign messages to partitions. For example if you were processing a click message stream you might want to partition the stream by the user id so that all data for a particular user would go to a single consumer. To accomplish this the client can take a key associated with the message and use some hash of this key to choose the partition to which to deliver the message.</p>
 
-<h5><a id="protocol_batching" href="#protocol_batching">Batching</a></h5>
+<h5 class="anchor-heading"><a id="protocol_batching" class="anchor-link"></a><a href="#protocol_batching">Batching</a></h5>
 
 <p>Our APIs encourage batching small things together for efficiency. We have found this is a very significant performance win. Both our API to send messages and our API to fetch messages always work with a sequence of messages not a single message to encourage this. A clever client can make use of this and support an "asynchronous" mode in which it batches together messages sent individually and sends them in larger clumps. We go even further with this and allow the batching across multiple topics and partitions, so a produce request may contain data to append to many partitions and a fetch request may pull data from many partitions all at once.</p>
 
 <p>The client implementer can choose to ignore this and send everything one at a time if they like.</p>
 
-<h5><a id="protocol_compatibility" href="#protocol_compatibility">Compatibility</a></h5>
+<h5 class="anchor-heading"><a id="protocol_compatibility" class="anchor-link"></a><a href="#protocol_compatibility">Compatibility</a></h5>
 
 <p>Kafka has a "bidirectional" client compatibility policy.  In other words, new clients can talk to old servers, and old clients can talk to new servers.  This allows users to upgrade either clients or servers without experiencing any downtime.
 
@@ -128,7 +128,7 @@
 
 <p>Note that <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A+The+Kafka+Protocol+should+Support+Optional+Tagged+Fields">KIP-482 tagged fields</a> can be added to a request without incrementing the version number.  This offers an additional way of evolving the message schema without breaking compatibility.  Tagged fields do not take up any space when the field is not set.  Therefore, if a field is rarely used, it is more efficient to make it a tagged field than to put it in the mandatory schema.  However, tagged fields are ignored by recipients that don't know about them, which could pose a challenge if this is not the behavior that the sender wants.  In such cases, a version bump may be more appropriate.
 
-<h5><a id="api_versions" href="#api_versions">Retrieving Supported API versions</a></h5>
+<h5 class="anchor-heading"><a id="api_versions" class="anchor-link"></a><a href="#api_versions">Retrieving Supported API versions</a></h5>
 <p>In order to work against multiple broker versions, clients need to know what versions of various APIs a
     broker supports. The broker exposes this information since 0.10.0.0 as described in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-35+-+Retrieving+protocol+version">KIP-35</a>.
     Clients should use the supported API versions information to choose the highest API version supported by both client and broker. If no such version
@@ -151,7 +151,7 @@
         upgraded/downgraded in the mean time.</li>
 </ol>
 
-<h5><a id="sasl_handshake" href="#sasl_handshake">SASL Authentication Sequence</a></h5>
+<h5 class="anchor-heading"><a id="sasl_handshake" class="anchor-link"></a><a href="#sasl_handshake">SASL Authentication Sequence</a></h5>
 <p>The following sequence is used for SASL authentication:
 <ol>
   <li>Kafka <code>ApiVersionsRequest</code> may be sent by the client to obtain the version ranges of requests supported by the broker. This is optional.</li>
@@ -167,50 +167,48 @@
 Kafka request. SASL/GSSAPI authentication is performed starting with this packet, skipping the first two steps above.</p>
 
 
-<h4><a id="protocol_details" href="#protocol_details">The Protocol</a></h4>
+<h4 class="anchor-heading"><a id="protocol_details" class="anchor-link"></a><a href="#protocol_details">The Protocol</a></h4>
 
-<h5><a id="protocol_types" href="#protocol_types">Protocol Primitive Types</a></h5>
+<h5 class="anchor-heading"><a id="protocol_types" class="anchor-link"></a><a href="#protocol_types">Protocol Primitive Types</a></h5>
 
 <p>The protocol is built out of the following primitive types.</p>
 <!--#include virtual="generated/protocol_types.html" -->
 
-<h5><a id="protocol_grammar" href="#protocol_grammar">Notes on reading the request format grammars</a></h5>
+<h5 class="anchor-heading"><a id="protocol_grammar" class="anchor-link"></a><a href="#protocol_grammar">Notes on reading the request format grammars</a></h5>
 
 <p>The <a href="https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_Form">BNF</a>s below give an exact context free grammar for the request and response binary format. The BNF is intentionally not compact in order to give human-readable name. As always in a BNF a sequence of productions indicates concatenation. When there are multiple possible productions these are separated with '|' and may be enclosed in parenthesis for grouping. The top-level definition is always given first and subsequent sub-parts are indented.</p>
 
-<h5><a id="protocol_common" href="#protocol_common">Common Request and Response Structure</a></h5>
+<h5 class="anchor-heading"><a id="protocol_common" class="anchor-link"></a><a href="#protocol_common">Common Request and Response Structure</a></h5>
 
 <p>All requests and responses originate from the following grammar which will be incrementally describe through the rest of this document:</p>
 
-<pre>
-RequestOrResponse => Size (RequestMessage | ResponseMessage)
-  Size => int32
-</pre>
+<pre class="line-numbers"><code class="language-text">RequestOrResponse => Size (RequestMessage | ResponseMessage)
+  Size => int32</code></pre>
 
 <table class="data-table"><tbody>
 <tr><th>Field</th><th>Description</th></tr>
 <tr><td>message_size</td><td>The message_size field gives the size of the subsequent request or response message in bytes. The client can read requests by first reading this 4 byte size as an integer N, and then reading and parsing the subsequent N bytes of the request.</td></tr>
 </table>
 
-<h5><a id="protocol_recordbatch" href="#protocol_recordbatch">Record Batch</a></h5>
+<h5 class="anchor-heading"><a id="protocol_recordbatch" class="anchor-link"></a><a href="#protocol_recordbatch">Record Batch</a></h5>
 <p>A description of the record batch format can be found <a href="/documentation/#recordbatch">here</a>.</p>
 
-<h4><a id="protocol_constants" href="#protocol_constants">Constants</a></h4>
+<h4 class="anchor-heading"><a id="protocol_constants" class="anchor-link"></a><a href="#protocol_constants">Constants</a></h4>
 
-<h5><a id="protocol_error_codes" href="#protocol_error_codes">Error Codes</a></h5>
+<h5 class="anchor-heading"><a id="protocol_error_codes" class="anchor-link"></a><a href="#protocol_error_codes">Error Codes</a></h5>
 <p>We use numeric codes to indicate what problem occurred on the server. These can be translated by the client into exceptions or whatever the appropriate error handling mechanism in the client language. Here is a table of the error codes currently in use:</p>
 <!--#include virtual="generated/protocol_errors.html" -->
 
-<h5><a id="protocol_api_keys" href="#protocol_api_keys">Api Keys</a></h5>
+<h5 class="anchor-heading"><a id="protocol_api_keys" class="anchor-link"></a><a href="#protocol_api_keys">Api Keys</a></h5>
 <p>The following are the numeric codes that the ApiKey in the request can take for each of the below request types.</p>
 <!--#include virtual="generated/protocol_api_keys.html" -->
 
-<h4><a id="protocol_messages" href="#protocol_messages">The Messages</a></h4>
+<h4 class="anchor-heading"><a id="protocol_messages" class="anchor-link"></a><a href="#protocol_messages">The Messages</a></h4>
 
 <p>This section gives details on each of the individual API Messages, their usage, their binary format, and the meaning of their fields.</p>
 <!--#include virtual="generated/protocol_messages.html" -->
 
-<h4><a id="protocol_philosophy" href="#protocol_philosophy">Some Common Philosophical Questions</a></h4>
+<h4 class="anchor-heading"><a id="protocol_philosophy" class="anchor-link"></a><a href="#protocol_philosophy">Some Common Philosophical Questions</a></h4>
 
 <p>Some people have asked why we don't use HTTP. There are a number of reasons, the best is that client implementors can make use of some of the more advanced TCP features--the ability to multiplex requests, the ability to simultaneously poll many connections, etc. We have also found HTTP libraries in many languages to be surprisingly shabby.</p>
 

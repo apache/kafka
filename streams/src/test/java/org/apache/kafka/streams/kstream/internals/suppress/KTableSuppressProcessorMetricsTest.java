@@ -19,12 +19,15 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
@@ -237,9 +240,11 @@ public class KTableSuppressProcessorMetricsTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final MockInternalProcessorContext context =
             new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final Time time = new SystemTime();
         context.setCurrentNode(new ProcessorNode("testNode"));
+        context.setSystemTimeMs(time.milliseconds());
 
-        buffer.init(context, buffer);
+        buffer.init((StateStoreContext) context, buffer);
         processor.init(context);
 
         final long timestamp = 100L;

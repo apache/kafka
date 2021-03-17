@@ -18,9 +18,8 @@ package kafka.admin
 
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidReplicationFactorException
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.Map
 
@@ -31,7 +30,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val rackMap = Map(0 -> "rack1", 1 -> "rack3", 2 -> "rack3", 3 -> "rack2", 4 -> "rack2", 5 -> "rack1")
     val newList = AdminUtils.getRackAlternatedBrokerList(rackMap)
     assertEquals(List(0, 3, 1, 5, 4, 2), newList)
-    val anotherList = AdminUtils.getRackAlternatedBrokerList(rackMap - 5)
+    val anotherList = AdminUtils.getRackAlternatedBrokerList(rackMap.toMap - 5)
     assertEquals(List(0, 3, 1, 4, 2), anotherList)
     val assignment = AdminUtils.assignReplicasToBrokers(toBrokerMetadata(rackMap), 7, 3, 0, 0)
     val expected = Map(0 -> List(0, 3, 1),
@@ -200,14 +199,12 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
 
     // test 0 replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0)
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0))
 
     // test wrong replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6)
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6))
 
     // correct assignment
     val expectedAssignment = Map(

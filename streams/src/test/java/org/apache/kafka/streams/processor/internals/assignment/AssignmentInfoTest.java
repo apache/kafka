@@ -30,20 +30,25 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class AssignmentInfoTest {
     private final List<TaskId> activeTasks = Arrays.asList(
-        new TaskId(0, 0),
-        new TaskId(0, 1),
-        new TaskId(1, 0),
-        new TaskId(1, 1));
+        TASK_0_0,
+        TASK_0_1,
+        TASK_1_0,
+        TASK_1_0);
 
     private final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(
-        mkEntry(new TaskId(1, 0), mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
-        mkEntry(new TaskId(1, 1), mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
+        mkEntry(TASK_1_0, mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
+        mkEntry(TASK_1_1, mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
     );
 
     private final Map<HostInfo, Set<TopicPartition>> activeAssignment = mkMap(
@@ -72,14 +77,16 @@ public class AssignmentInfoTest {
         assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion1() {
-        new AssignmentInfo(0, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
+        assertThrows(IllegalArgumentException.class, () -> new AssignmentInfo(0, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion2() {
-        new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
+        assertThrows(IllegalArgumentException.class, () -> new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1,
+            activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0));
     }
 
     @Test
@@ -129,6 +136,15 @@ public class AssignmentInfoTest {
     }
 
     @Test
+    public void shouldEncodeAndDecodeVersion7() {
+        final AssignmentInfo info =
+            new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo =
+            new AssignmentInfo(7, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
     public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
         final int usedVersion = 5;
         final int commonlySupportedVersion = 5;
@@ -137,5 +153,24 @@ public class AssignmentInfoTest {
         final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,
             activeAssignment, Collections.emptyMap(), 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void nextRebalanceTimeShouldBeMaxValueByDefault() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldDecodeDefaultNextRebalanceTime() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeNextRebalanceTime() {
+        final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        info.setNextRebalanceTime(1000L);
+        assertEquals(1000L, AssignmentInfo.decode(info.encode()).nextRebalanceMs());
     }
 }

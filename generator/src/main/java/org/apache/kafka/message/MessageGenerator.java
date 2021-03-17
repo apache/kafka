@@ -22,14 +22,22 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.io.BufferedWriter;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+
+import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 /**
  * The Kafka message generator.
@@ -42,6 +50,12 @@ public final class MessageGenerator {
     static final String JAVA_SUFFIX = ".java";
 
     static final String API_MESSAGE_TYPE_JAVA = "ApiMessageType.java";
+
+    static final String API_SCOPE_JAVA = "ApiScope.java";
+
+    static final String METADATA_RECORD_TYPE_JAVA = "MetadataRecordType.java";
+
+    static final String METADATA_JSON_CONVERTERS_JAVA = "MetadataJsonConverters.java";
 
     static final String API_MESSAGE_CLASS = "org.apache.kafka.common.protocol.ApiMessage";
 
@@ -72,6 +86,8 @@ public final class MessageGenerator {
 
     static final String ITERATOR_CLASS = "java.util.Iterator";
 
+    static final String ENUM_SET_CLASS = "java.util.EnumSet";
+
     static final String TYPE_CLASS = "org.apache.kafka.common.protocol.types.Type";
 
     static final String FIELD_CLASS = "org.apache.kafka.common.protocol.types.Field";
@@ -82,11 +98,13 @@ public final class MessageGenerator {
 
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
 
-    static final String STRUCT_CLASS = "org.apache.kafka.common.protocol.types.Struct";
-
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
-    static final String UUID_CLASS = "java.util.UUID";
+    static final String UUID_CLASS = "org.apache.kafka.common.Uuid";
+
+    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
+
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 
@@ -100,6 +118,8 @@ public final class MessageGenerator {
 
     static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
 
+    static final String MESSAGE_SIZE_ACCUMULATOR_CLASS = "org.apache.kafka.common.protocol.MessageSizeAccumulator";
+
     static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
 
     static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedFieldWriter";
@@ -111,6 +131,30 @@ public final class MessageGenerator {
     static final String NAVIGABLE_MAP_CLASS = "java.util.NavigableMap";
 
     static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
+
+    static final String JSON_NODE_CLASS = "com.fasterxml.jackson.databind.JsonNode";
+
+    static final String OBJECT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ObjectNode";
+
+    static final String JSON_NODE_FACTORY_CLASS = "com.fasterxml.jackson.databind.node.JsonNodeFactory";
+
+    static final String BOOLEAN_NODE_CLASS = "com.fasterxml.jackson.databind.node.BooleanNode";
+
+    static final String SHORT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ShortNode";
+
+    static final String INT_NODE_CLASS = "com.fasterxml.jackson.databind.node.IntNode";
+
+    static final String LONG_NODE_CLASS = "com.fasterxml.jackson.databind.node.LongNode";
+
+    static final String TEXT_NODE_CLASS = "com.fasterxml.jackson.databind.node.TextNode";
+
+    static final String BINARY_NODE_CLASS = "com.fasterxml.jackson.databind.node.BinaryNode";
+
+    static final String NULL_NODE_CLASS = "com.fasterxml.jackson.databind.node.NullNode";
+
+    static final String ARRAY_NODE_CLASS = "com.fasterxml.jackson.databind.node.ArrayNode";
+
+    static final String DOUBLE_NODE_CLASS = "com.fasterxml.jackson.databind.node.DoubleNode";
 
     /**
      * The Jackson serializer we use for JSON objects.
@@ -125,10 +169,57 @@ public final class MessageGenerator {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    public static void processDirectories(String packageName, String outputDir, String inputDir) throws Exception {
+    private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
+                                                                      List<String> types) {
+        if (types == null) return Collections.emptyList();
+        List<TypeClassGenerator> generators = new ArrayList<>();
+        for (String type : types) {
+            switch (type) {
+                case "ApiMessageTypeGenerator":
+                    generators.add(new ApiMessageTypeGenerator(packageName));
+                    break;
+                case "MetadataRecordTypeGenerator":
+                    generators.add(new MetadataRecordTypeGenerator(packageName));
+                    break;
+                case "MetadataJsonConvertersGenerator":
+                    generators.add(new MetadataJsonConvertersGenerator(packageName));
+                    break;
+                default:
+                    throw new RuntimeException("Unknown type class generator type '" + type + "'");
+            }
+        }
+        return generators;
+    }
+
+    private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
+                                                                            List<String> types) {
+        if (types == null) return Collections.emptyList();
+        List<MessageClassGenerator> generators = new ArrayList<>();
+        for (String type : types) {
+            switch (type) {
+                case "MessageDataGenerator":
+                    generators.add(new MessageDataGenerator(packageName));
+                    break;
+                case "JsonConverterGenerator":
+                    generators.add(new JsonConverterGenerator(packageName));
+                    break;
+                default:
+                    throw new RuntimeException("Unknown message class generator type '" + type + "'");
+            }
+        }
+        return generators;
+    }
+
+    public static void processDirectories(String packageName,
+                                          String outputDir,
+                                          String inputDir,
+                                          List<String> typeClassGeneratorTypes,
+                                          List<String> messageClassGeneratorTypes) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        ApiMessageTypeGenerator messageTypeGenerator = new ApiMessageTypeGenerator(packageName);
+
+        List<TypeClassGenerator> typeClassGenerators =
+                createTypeClassGenerators(packageName, typeClassGeneratorTypes);
         HashSet<String> outputFileNames = new HashSet<>();
         try (DirectoryStream<Path> directoryStream = Files
                 .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
@@ -136,29 +227,29 @@ public final class MessageGenerator {
                 try {
                     MessageSpec spec = JSON_SERDE.
                         readValue(inputPath.toFile(), MessageSpec.class);
-                    String javaName = spec.generatedClassName() + JAVA_SUFFIX;
-                    outputFileNames.add(javaName);
-                    Path outputPath = Paths.get(outputDir, javaName);
-                    try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                        MessageDataGenerator generator = new MessageDataGenerator(packageName);
-                        generator.generate(spec);
-                        generator.write(writer);
+                    List<MessageClassGenerator> generators =
+                        createMessageClassGenerators(packageName, messageClassGeneratorTypes);
+                    for (MessageClassGenerator generator : generators) {
+                        String name = generator.outputName(spec) + JAVA_SUFFIX;
+                        outputFileNames.add(name);
+                        Path outputPath = Paths.get(outputDir, name);
+                        try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+                            generator.generateAndWrite(spec, writer);
+                        }
                     }
                     numProcessed++;
-                    messageTypeGenerator.registerMessageType(spec);
+                    typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
             }
         }
-        if (messageTypeGenerator.hasRegisteredTypes()) {
-            Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_TYPE_JAVA);
-            outputFileNames.add(API_MESSAGE_TYPE_JAVA);
+        for (TypeClassGenerator typeClassGenerator : typeClassGenerators) {
+            outputFileNames.add(typeClassGenerator.outputName());
+            Path factoryOutputPath = Paths.get(outputDir, typeClassGenerator.outputName());
             try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
-                messageTypeGenerator.generate();
-                messageTypeGenerator.write(writer);
+                typeClassGenerator.generateAndWrite(writer);
             }
-            numProcessed++;
         }
         try (DirectoryStream<Path> directoryStream = Files.
                 newDirectoryStream(Paths.get(outputDir))) {
@@ -237,16 +328,39 @@ public final class MessageGenerator {
         return bytes;
     }
 
-    private final static String USAGE = "MessageGenerator: [output Java package] [output Java file] [input JSON file]";
-
     public static void main(String[] args) throws Exception {
-        if (args.length == 0) {
-            System.out.println(USAGE);
-            System.exit(0);
-        } else if (args.length != 3) {
-            System.out.println(USAGE);
-            System.exit(1);
-        }
-        processDirectories(args[0], args[1], args[2]);
+        ArgumentParser parser = ArgumentParsers
+            .newArgumentParser("message-generator")
+            .defaultHelp(true)
+            .description("The Kafka message generator");
+        parser.addArgument("--package", "-p")
+            .action(store())
+            .required(true)
+            .metavar("PACKAGE")
+            .help("The java package to use in generated files.");
+        parser.addArgument("--output", "-o")
+            .action(store())
+            .required(true)
+            .metavar("OUTPUT")
+            .help("The output directory to create.");
+        parser.addArgument("--input", "-i")
+            .action(store())
+            .required(true)
+            .metavar("INPUT")
+            .help("The input directory to use.");
+        parser.addArgument("--typeclass-generators", "-t")
+            .nargs("+")
+            .action(store())
+            .metavar("TYPECLASS_GENERATORS")
+            .help("The type class generators to use, if any.");
+        parser.addArgument("--message-class-generators", "-m")
+            .nargs("+")
+            .action(store())
+            .metavar("MESSAGE_CLASS_GENERATORS")
+            .help("The message class generators to use.");
+        Namespace res = parser.parseArgsOrFail(args);
+        processDirectories(res.getString("package"), res.getString("output"),
+            res.getString("input"), res.getList("typeclass_generators"),
+            res.getList("message_class_generators"));
     }
 }

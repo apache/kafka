@@ -68,12 +68,13 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         }
         final UnwindowedChangelogTopicConfig that = (UnwindowedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs);
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs);
+        return Objects.hash(name, topicConfigs, enforceNumberOfPartitions);
     }
 
     @Override
@@ -81,6 +82,7 @@ public class UnwindowedChangelogTopicConfig extends InternalTopicConfig {
         return "UnwindowedChangelogTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
+                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
                 ")";
     }
 }

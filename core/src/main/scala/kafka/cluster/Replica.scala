@@ -17,10 +17,10 @@
 
 package kafka.cluster
 
-import kafka.log.{Log}
+import kafka.log.Log
+import kafka.server.LogOffsetMetadata
 import kafka.utils.Logging
-import kafka.server.{LogOffsetMetadata}
-import org.apache.kafka.common.{TopicPartition}
+import org.apache.kafka.common.TopicPartition
 
 class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
   // the log end offset value, kept in all replicas;
@@ -42,10 +42,6 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
-  // highWatermark is the leader's high watermark after the most recent FetchRequest from this follower. This is
-  // used to determine the maximum HW this follower knows about. See KIP-392
-  @volatile private[this] var _lastSentHighWatermark = 0L
-
   def logStartOffset: Long = _logStartOffset
 
   def logEndOffsetMetadata: LogOffsetMetadata = _logEndOffsetMetadata
@@ -53,8 +49,6 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def logEndOffset: Long = logEndOffsetMetadata.messageOffset
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
-
-  def lastSentHighWatermark: Long = _lastSentHighWatermark
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -71,8 +65,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
                        followerStartOffset: Long,
                        followerFetchTimeMs: Long,
-                       leaderEndOffset: Long,
-                       lastSentHighwatermark: Long): Unit = {
+                       leaderEndOffset: Long): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -82,21 +75,6 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     _logEndOffsetMetadata = followerFetchOffsetMetadata
     lastFetchLeaderLogEndOffset = leaderEndOffset
     lastFetchTimeMs = followerFetchTimeMs
-    updateLastSentHighWatermark(lastSentHighwatermark)
-    trace(s"Updated state of replica to $this")
-  }
-
-  /**
-    * Update the high watermark of this remote replica. This is used to track what we think is the last known HW to
-    * a remote follower. Since this is recorded when we send a response, there is no way to guarantee that the follower
-    * actually receives this HW. So we consider this to be an upper bound on what the follower knows.
-    *
-    * When handling fetches, the last sent high watermark for a replica is checked to see if we should return immediately
-    * in order to propagate the HW more expeditiously. See KIP-392
-    */
-  private def updateLastSentHighWatermark(highWatermark: Long): Unit = {
-    _lastSentHighWatermark = highWatermark
-    trace(s"Updated HW of replica to $highWatermark")
   }
 
   def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
@@ -117,7 +95,6 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     replicaString.append(s", logEndOffsetMetadata=$logEndOffsetMetadata")
     replicaString.append(s", lastFetchLeaderLogEndOffset=$lastFetchLeaderLogEndOffset")
     replicaString.append(s", lastFetchTimeMs=$lastFetchTimeMs")
-    replicaString.append(s", lastSentHighWatermark=$lastSentHighWatermark")
     replicaString.append(")")
     replicaString.toString
   }

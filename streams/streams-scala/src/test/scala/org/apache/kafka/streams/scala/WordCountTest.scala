@@ -25,6 +25,7 @@ import java.util.regex.Pattern
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
+import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
@@ -66,7 +67,7 @@ class WordCountTest extends WordCountTestData {
 
   @Test
   def testShouldCountWords(): Unit = {
-    import Serdes._
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -93,13 +94,13 @@ class WordCountTest extends WordCountTestData {
 
     streams.close()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
   @Test
   def testShouldCountWordsMaterialized(): Unit = {
-    import Serdes._
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -126,7 +127,7 @@ class WordCountTest extends WordCountTestData {
 
     streams.close()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
@@ -140,11 +141,11 @@ class WordCountTest extends WordCountTestData {
       KGroupedStream => KGroupedStreamJ,
       _
     }
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
@@ -161,7 +162,7 @@ class WordCountTest extends WordCountTestData {
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(NewSerdes.stringSerde, NewSerdes.javaLongSerde))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()
@@ -188,7 +189,6 @@ class WordCountTest extends WordCountTestData {
     val p = new Properties()
     p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     p.put(ProducerConfig.ACKS_CONFIG, "all")
-    p.put(ProducerConfig.RETRIES_CONFIG, "0")
     p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p
@@ -208,7 +208,7 @@ class WordCountTest extends WordCountTestData {
 
     val linesProducerConfig: Properties = getProducerConfig()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues.asJava, linesProducerConfig, mockTime)
 
     val consumerConfig = getConsumerConfig()

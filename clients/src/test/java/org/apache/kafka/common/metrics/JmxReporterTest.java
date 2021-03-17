@@ -19,17 +19,20 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.junit.Test;
+import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxReporterTest {
 
@@ -121,7 +124,7 @@ public class JmxReporterTest {
 
         Map<String, String> configs = new HashMap<>();
 
-        configs.put(JmxReporter.BLACKLIST_CONFIG,
+        configs.put(JmxReporter.EXCLUDE_CONFIG,
                     JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
 
         try {
@@ -140,7 +143,7 @@ public class JmxReporterTest {
 
             sensor.record();
 
-            configs.put(JmxReporter.BLACKLIST_CONFIG,
+            configs.put(JmxReporter.EXCLUDE_CONFIG,
                         JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
 
             reporter.reconfigure(configs);
@@ -151,6 +154,42 @@ public class JmxReporterTest {
 
             metrics.removeMetric(metrics.metricName("pack.bean2.total", "grp2"));
             assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testJmxPrefix() throws Exception {
+        JmxReporter reporter = new JmxReporter();
+        MetricsContext metricsContext = new KafkaMetricsContext("kafka.server");
+        MetricConfig metricConfig = new MetricConfig();
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM, metricsContext);
+
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            Sensor sensor = metrics.sensor("kafka.requests");
+            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
+            assertEquals("kafka.server", server.getObjectInstance(new ObjectName("kafka.server:type=grp1")).getObjectName().getDomain());
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testDeprecatedJmxPrefixWithDefaultMetrics() throws Exception {
+        @SuppressWarnings("deprecation")
+        JmxReporter reporter = new JmxReporter("my-prefix");
+
+        // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
+        MetricConfig metricConfig = new MetricConfig();
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM);
+
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            Sensor sensor = metrics.sensor("my-sensor");
+            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
+            assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
         } finally {
             metrics.close();
         }

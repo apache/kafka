@@ -18,8 +18,13 @@ package org.apache.kafka.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
+
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
@@ -32,7 +37,22 @@ public class JsonSerializer implements Serializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonSerializer() {
+        this(Collections.emptySet(), JsonNodeFactory.withExactBigDecimals(true));
+    }
 
+    /**
+     * A constructor that additionally specifies some {@link SerializationFeature}
+     * for the serializer
+     *
+     * @param serializationFeatures the specified serialization features
+     * @param jsonNodeFactory the json node factory to use.
+     */
+    JsonSerializer(
+        final Set<SerializationFeature> serializationFeatures,
+        final JsonNodeFactory jsonNodeFactory
+    ) {
+        serializationFeatures.forEach(objectMapper::enable);
+        objectMapper.setNodeFactory(jsonNodeFactory);
     }
 
     @Override

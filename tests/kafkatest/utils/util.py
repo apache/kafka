@@ -14,9 +14,7 @@
 
 from kafkatest import __version__ as __kafkatest_version__
 
-import math
 import re
-import time
 
 
 def kafkatest_version():

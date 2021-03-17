@@ -20,8 +20,8 @@ import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
 
@@ -46,8 +46,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, None,
-      time.milliseconds()).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, None)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(0, txnMetadata.producerEpoch)
@@ -69,14 +68,14 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds()).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, None)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, txnMetadata.lastProducerEpoch)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testBumpEpochNotAllowedIfEpochsExhausted(): Unit = {
     val producerEpoch = (Short.MaxValue - 1).toShort
 
@@ -92,7 +91,8 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds())
+    assertThrows(classOf[IllegalStateException], () => txnMetadata.prepareIncrementProducerEpoch(30000,
+      None, time.milliseconds()))
   }
 
   @Test
@@ -111,7 +111,8 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     // let new time be smaller
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Option(producerEpoch), time.milliseconds() - 1).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, Option(producerEpoch),
+      Some(time.milliseconds() - 1))
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -160,7 +161,7 @@ class TransactionMetadataTest {
       txnStartTimestamp = time.milliseconds(),
       txnLastUpdateTimestamp = time.milliseconds())
 
-    // let new time be smaller; when transting from Empty the start time would be updated to the update-time
+    // let new time be smaller; when transiting from Empty the start time would be updated to the update-time
     var transitMetadata = txnMetadata.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0)), time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(Set[TopicPartition](new TopicPartition("topic1", 0)), txnMetadata.topicPartitions)
@@ -197,7 +198,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     // let new time be smaller
-    var transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareCommit, time.milliseconds() - 1)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareCommit, time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(PrepareCommit, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -223,7 +224,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     // let new time be smaller
-    var transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds() - 1)
+    val transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(PrepareAbort, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -249,7 +250,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     // let new time be smaller
-    var transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
+    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(CompleteCommit, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -275,7 +276,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     // let new time be smaller
-    var transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
+    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(CompleteAbort, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
@@ -314,7 +315,7 @@ class TransactionMetadataTest {
     assertEquals(producerId, transitMetadata.producerId)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testFenceProducerNotAllowedIfItWouldOverflow(): Unit = {
     val producerEpoch = Short.MaxValue
 
@@ -329,7 +330,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
-    txnMetadata.prepareFenceProducerEpoch()
+    assertThrows(classOf[IllegalStateException], () => txnMetadata.prepareFenceProducerEpoch())
   }
 
   @Test
@@ -356,19 +357,19 @@ class TransactionMetadataTest {
     assertEquals(producerEpoch, txnMetadata.lastProducerEpoch)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInOngoingState(): Unit = {
-    testRotateProducerIdInOngoingState(Ongoing)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(Ongoing))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInPrepareAbortState(): Unit = {
-    testRotateProducerIdInOngoingState(PrepareAbort)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(PrepareAbort))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInPrepareCommitState(): Unit = {
-    testRotateProducerIdInOngoingState(PrepareCommit)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(PrepareCommit))
   }
 
   @Test
@@ -386,8 +387,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(producerEpoch),
-      time.milliseconds()).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, Some(producerEpoch))
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(0, txnMetadata.producerEpoch)
@@ -409,8 +409,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(producerEpoch),
-      time.milliseconds()).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, Some(producerEpoch))
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -433,8 +432,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(lastProducerEpoch),
-      time.milliseconds()).right.get
+    val transitMetadata = prepareSuccessfulIncrementProducerEpoch(txnMetadata, Some(lastProducerEpoch))
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch, txnMetadata.producerEpoch)
@@ -457,9 +455,46 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val error = txnMetadata.prepareIncrementProducerEpoch(30000, Some((lastProducerEpoch - 1).toShort),
-      time.milliseconds()).left.get
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
+    val result = txnMetadata.prepareIncrementProducerEpoch(30000, Some((lastProducerEpoch - 1).toShort),
+      time.milliseconds())
+    assertEquals(Left(Errors.PRODUCER_FENCED), result)
+  }
+
+  @Test
+  def testTransactionStateIdAndNameMapping(): Unit = {
+    for (state <- TransactionState.AllStates) {
+      assertEquals(state, TransactionState.fromId(state.id))
+      assertEquals(Some(state), TransactionState.fromName(state.name))
+    }
+  }
+
+  @Test
+  def testAllTransactionStatesAreMapped(): Unit = {
+    val unmatchedStates = mutable.Set(
+      Empty,
+      Ongoing,
+      PrepareCommit,
+      PrepareAbort,
+      CompleteCommit,
+      CompleteAbort,
+      PrepareEpochFence,
+      Dead
+    )
+
+    // The exhaustive match is intentional here to ensure that we are
+    // forced to update the test case if a new state is added.
+    TransactionState.AllStates.foreach {
+      case Empty => assertTrue(unmatchedStates.remove(Empty))
+      case Ongoing => assertTrue(unmatchedStates.remove(Ongoing))
+      case PrepareCommit => assertTrue(unmatchedStates.remove(PrepareCommit))
+      case PrepareAbort => assertTrue(unmatchedStates.remove(PrepareAbort))
+      case CompleteCommit => assertTrue(unmatchedStates.remove(CompleteCommit))
+      case CompleteAbort => assertTrue(unmatchedStates.remove(CompleteAbort))
+      case PrepareEpochFence => assertTrue(unmatchedStates.remove(PrepareEpochFence))
+      case Dead => assertTrue(unmatchedStates.remove(Dead))
+    }
+
+    assertEquals(Set.empty, unmatchedStates)
   }
 
   private def testRotateProducerIdInOngoingState(state: TransactionState): Unit = {
@@ -479,5 +514,12 @@ class TransactionMetadataTest {
     txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds(), recordLastEpoch = false)
   }
 
+  private def prepareSuccessfulIncrementProducerEpoch(txnMetadata: TransactionMetadata,
+                                                      expectedProducerEpoch: Option[Short],
+                                                      now: Option[Long] = None): TxnTransitMetadata = {
+    val result = txnMetadata.prepareIncrementProducerEpoch(30000, expectedProducerEpoch,
+      now.getOrElse(time.milliseconds()))
+    result.getOrElse(throw new AssertionError(s"prepareIncrementProducerEpoch failed with $result"))
+  }
 
 }

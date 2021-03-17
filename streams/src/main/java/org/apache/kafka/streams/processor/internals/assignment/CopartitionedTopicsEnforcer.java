@@ -22,10 +22,13 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class CopartitionedTopicsEnforcer {
@@ -64,25 +67,94 @@ public class CopartitionedTopicsEnforcer {
                             }));
 
         final int numPartitionsToUseForRepartitionTopics;
+        final Collection<InternalTopicConfig> internalTopicConfigs = repartitionTopicConfigs.values();
+
         if (copartitionGroup.equals(repartitionTopicConfigs.keySet())) {
-            // If all topics for this co-partition group is repartition topics,
-            // then set the number of partitions to be the maximum of the number of partitions.
-            numPartitionsToUseForRepartitionTopics = getMaxPartitions(repartitionTopicConfigs);
+            final Collection<InternalTopicConfig> internalTopicConfigsWithEnforcedNumberOfPartitions = internalTopicConfigs
+                .stream()
+                .filter(InternalTopicConfig::hasEnforcedNumberOfPartitions)
+                .collect(Collectors.toList());
+
+            // if there's at least one repartition topic with enforced number of partitions
+            // validate that they all have same number of partitions
+            if (!internalTopicConfigsWithEnforcedNumberOfPartitions.isEmpty()) {
+                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
+                    repartitionTopicConfigs,
+                    internalTopicConfigsWithEnforcedNumberOfPartitions
+                );
+            } else {
+                // If all topics for this co-partition group are repartition topics,
+                // then set the number of partitions to be the maximum of the number of partitions.
+                numPartitionsToUseForRepartitionTopics = getMaxPartitions(repartitionTopicConfigs);
+            }
         } else {
             // Otherwise, use the number of partitions from external topics (which must all be the same)
             numPartitionsToUseForRepartitionTopics = getSamePartitions(nonRepartitionTopicPartitions);
-
         }
 
         // coerce all the repartition topics to use the decided number of partitions.
-        for (final InternalTopicConfig config : repartitionTopicConfigs.values()) {
+        for (final InternalTopicConfig config : internalTopicConfigs) {
+            maybeSetNumberOfPartitionsForInternalTopic(numPartitionsToUseForRepartitionTopics, config);
+
+            final int numberOfPartitionsOfInternalTopic = config
+                .numberOfPartitions()
+                .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(config.name()));
+
+            if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
+                final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
+                                                 "doesn't match number of partitions [%s] of the source topic.",
+                                                 logPrefix,
+                                                 numberOfPartitionsOfInternalTopic,
+                                                 config.name(),
+                                                 numPartitionsToUseForRepartitionTopics);
+                throw new TopologyException(msg);
+            }
+        }
+    }
+
+    private static void maybeSetNumberOfPartitionsForInternalTopic(final int numPartitionsToUseForRepartitionTopics,
+                                                                   final InternalTopicConfig config) {
+        if (!config.hasEnforcedNumberOfPartitions()) {
             config.setNumberOfPartitions(numPartitionsToUseForRepartitionTopics);
         }
     }
 
+    private int validateAndGetNumOfPartitions(final Map<Object, InternalTopicConfig> repartitionTopicConfigs,
+                                              final Collection<InternalTopicConfig> internalTopicConfigs) {
+        final InternalTopicConfig firstInternalTopicConfig = internalTopicConfigs.iterator().next();
+
+        final int firstNumberOfPartitionsOfInternalTopic = firstInternalTopicConfig
+            .numberOfPartitions()
+            .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(firstInternalTopicConfig.name()));
+
+        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigs) {
+            final Integer numberOfPartitions = internalTopicConfig
+                .numberOfPartitions()
+                .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(internalTopicConfig.name()));
+
+            if (numberOfPartitions != firstNumberOfPartitionsOfInternalTopic) {
+                final Map<Object, Integer> repartitionTopics = repartitionTopicConfigs
+                    .entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().numberOfPartitions().get()));
+
+                final String msg = String.format("%sFollowing topics do not have the same number of partitions: [%s]",
+                                                 logPrefix,
+                                                 new TreeMap<>(repartitionTopics));
+                throw new TopologyException(msg);
+            }
+        }
+
+        return firstNumberOfPartitionsOfInternalTopic;
+    }
+
+    private static Supplier<TopologyException> emptyNumberOfPartitionsExceptionSupplier(final String topic) {
+        return () -> new TopologyException("Number of partitions is not set for topic: " + topic);
+    }
+
     private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {
         final int partitions = nonRepartitionTopicsInCopartitionGroup.values().iterator().next();
-        for (final Map.Entry<String, Integer> entry : nonRepartitionTopicsInCopartitionGroup.entrySet()) {
+        for (final Entry<String, Integer> entry : nonRepartitionTopicsInCopartitionGroup.entrySet()) {
             if (entry.getValue() != partitions) {
                 final TreeMap<String, Integer> sorted = new TreeMap<>(nonRepartitionTopicsInCopartitionGroup);
                 throw new TopologyException(

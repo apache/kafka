@@ -34,7 +34,7 @@ class DelayedElectLeader(
   responseCallback: Map[TopicPartition, ApiError] => Unit
 ) extends DelayedOperation(delayMs) {
 
-  private var waitingPartitions = expectedLeaders
+  private val waitingPartitions = mutable.Map() ++= expectedLeaders
   private val fullResults = mutable.Map() ++= results
 
 
@@ -52,7 +52,7 @@ class DelayedElectLeader(
     updateWaiting()
     val timedOut = waitingPartitions.map {
       case (tp, _) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
-    }.toMap
+    }
     responseCallback(timedOut ++ fullResults)
   }
 

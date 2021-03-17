@@ -23,8 +23,8 @@ import javax.crypto.SecretKeyFactory
 import kafka.server.Defaults
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class PasswordEncoderTest {
 
@@ -108,7 +108,7 @@ class PasswordEncoderTest {
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/OFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/PKCS5Padding", keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/NoPadding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), Defaults.PasswordEncoderCipherAlgorithm, keyLength = 128)
   }
@@ -116,9 +116,9 @@ class PasswordEncoderTest {
   private def verifyEncodedPassword(encoder: PasswordEncoder, password: String, encoded: String): Unit = {
     val encodedMap = CoreUtils.parseCsvMap(encoded)
     assertEquals(password.length.toString, encodedMap(PasswordEncoder.PasswordLengthProp))
-    assertNotNull("Invalid salt", encoder.base64Decode(encodedMap("salt")))
-    assertNotNull("Invalid encoding parameters", encoder.base64Decode(encodedMap(PasswordEncoder.InitializationVectorProp)))
-    assertNotNull("Invalid encoded password", encoder.base64Decode(encodedMap(PasswordEncoder.EncyrptedPasswordProp)))
+    assertNotNull(encoder.base64Decode(encodedMap("salt")), "Invalid salt")
+    assertNotNull(encoder.base64Decode(encodedMap(PasswordEncoder.InitializationVectorProp)), "Invalid encoding parameters")
+    assertNotNull(encoder.base64Decode(encodedMap(PasswordEncoder.EncyrptedPasswordProp)), "Invalid encoded password")
     assertEquals(password, encoder.decode(encoded).value)
   }
 }

@@ -29,7 +29,7 @@ import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpda
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
@@ -89,7 +89,9 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       brokerConfig.replicaSocketReceiveBufferBytes,
       brokerConfig.requestTimeoutMs,
-      ClientDnsLookup.DEFAULT,
+      brokerConfig.connectionSetupTimeoutMs,
+      brokerConfig.connectionSetupTimeoutMaxMs,
+      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,
       new ApiVersions,

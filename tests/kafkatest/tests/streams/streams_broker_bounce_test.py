@@ -17,7 +17,7 @@ from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
-from ducktape.mark import parametrize, ignore
+from ducktape.mark import ignore
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
@@ -119,7 +119,7 @@ class StreamsBrokerBounceTest(Test):
     def fail_broker_type(self, failure_mode, broker_type):
         # Pick a random topic and bounce it's leader
         topic_index = randint(0, len(self.topics.keys()) - 1)
-        topic = self.topics.keys()[topic_index]
+        topic = list(self.topics.keys())[topic_index]
         failures[failure_mode](self, topic, broker_type)
 
     def fail_many_brokers(self, failure_mode, num_failures):
@@ -164,7 +164,7 @@ class StreamsBrokerBounceTest(Test):
 
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, "at_least_once", num_threads)
 
         self.driver.start()
 
@@ -275,7 +275,14 @@ class StreamsBrokerBounceTest(Test):
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
         """
-        self.setup_system() 
+
+        # Set min.insync.replicas to 1 because in the last stage of the test there is only one broker left.
+        # Otherwise the last offset commit will never succeed and time out and potentially take longer as
+        # duration passed to the close method of the Kafka Streams client.
+        self.topics['__consumer_offsets'] = { 'partitions': 50, 'replication-factor': self.replication,
+                                              'configs': {"min.insync.replicas": 1} }
+
+        self.setup_system()
 
         # Sleep to allow test to run for a bit
         time.sleep(120)

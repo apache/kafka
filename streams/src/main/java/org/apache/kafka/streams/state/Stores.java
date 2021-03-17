@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -37,6 +36,7 @@ import java.time.Duration;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -150,6 +150,7 @@ public final class Stores {
      * @param maxCacheSize  maximum number of items in the LRU (cannot be negative)
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used to build
      * an LRU Map based store
+     * @throws IllegalArgumentException if {@code maxCacheSize} is negative
      */
     public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
         Objects.requireNonNull(name, "name cannot be null");
@@ -187,7 +188,8 @@ public final class Stores {
      *                              is not stored with the records, so this value is used to compute the keys that
      *                              the store returns. No effort is made to validate this parameter, so you must be
      *                              careful to set it the same as the windowed keys you're actually storing.
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
@@ -226,9 +228,11 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period)
      * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final Duration retentionPeriod,
@@ -251,9 +255,11 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period)
      * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates.
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier persistentTimestampedWindowStore(final String name,
                                                                             final Duration retentionPeriod,
@@ -269,9 +275,9 @@ public final class Stores {
                                                                   final boolean timestampedStore) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
         final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
@@ -321,8 +327,11 @@ public final class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period.
      * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
                                                                final Duration retentionPeriod,
@@ -331,13 +340,13 @@ public final class Stores {
         Objects.requireNonNull(name, "name cannot be null");
 
         final String repartitionPeriodErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, repartitionPeriodErrorMessagePrefix);
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, repartitionPeriodErrorMessagePrefix);
         if (retentionMs < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
 
         final String windowSizeErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, windowSizeErrorMessagePrefix);
+        final long windowSizeMs = validateMillisecondDuration(windowSize, windowSizeErrorMessagePrefix);
         if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
@@ -384,7 +393,7 @@ public final class Stores {
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+        return persistentSessionStore(name, validateMillisecondDuration(retentionPeriod, msgPrefix));
     }
 
     /**
@@ -400,7 +409,7 @@ public final class Stores {
         Objects.requireNonNull(name, "name cannot be null");
 
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionPeriodMs = ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
+        final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
@@ -476,7 +485,7 @@ public final class Stores {
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for
      * {@link WindowStore WindowStores}. For this case, passed in timestamps will be dropped and not stored in the
-     * windows-store. On read, no valid timestamp but a dummy timestamp will be returned.
+     * window-store. On read, no valid timestamp but a dummy timestamp will be returned.
      *
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use

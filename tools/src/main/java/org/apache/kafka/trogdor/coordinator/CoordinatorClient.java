@@ -174,7 +174,7 @@ public class CoordinatorClient {
 
     public TasksResponse tasks(TasksRequest request) throws Exception {
         UriBuilder uriBuilder = UriBuilder.fromPath(url("/coordinator/tasks"));
-        uriBuilder.queryParam("taskId", (Object[]) request.taskIds().toArray(new String[0]));
+        uriBuilder.queryParam("taskId", request.taskIds().toArray(new Object[0]));
         uriBuilder.queryParam("firstStartMs", request.firstStartMs());
         uriBuilder.queryParam("lastStartMs", request.lastStartMs());
         uriBuilder.queryParam("firstEndMs", request.firstEndMs());

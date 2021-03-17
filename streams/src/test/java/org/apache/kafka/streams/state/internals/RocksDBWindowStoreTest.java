@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -44,7 +45,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 @SuppressWarnings("PointlessArithmeticExpression")
-public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
+public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
     private static final String METRICS_SCOPE = "test-state-id";
@@ -389,7 +390,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
 
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
             Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         context.setTime(0L);
         setCurrentTime(0);
@@ -479,7 +480,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
         windowStore.close();
 
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         // put something in the store to advance its stream time and expire the old segments
         windowStore.put(1, "v", 6L * SEGMENT_INTERVAL);
@@ -546,7 +547,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
                                        false,
                                        Serdes.Integer(),
                                        Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         assertEquals(
             new HashSet<>(Collections.emptyList()),

@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,26 +28,33 @@ import java.util.ListIterator;
 import java.util.Random;
 import java.util.Set;
 
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * A unit test for ImplicitLinkedHashCollection.
  */
+@Timeout(120)
 public class ImplicitLinkedHashCollectionTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     final static class TestElement implements ImplicitLinkedHashCollection.Element {
         private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
         private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private final int key;
         private final int val;
 
-        TestElement(int val) {
+        TestElement(int key) {
+            this.key = key;
+            this.val = 0;
+        }
+
+        TestElement(int key, int val) {
+            this.key = key;
             this.val = val;
         }
 
@@ -74,21 +79,30 @@ public class ImplicitLinkedHashCollectionTest {
         }
 
         @Override
+        public boolean elementKeysAreEqual(Object o) {
+            if (this == o) return true;
+            if ((o == null) || (o.getClass() != TestElement.class)) return false;
+            TestElement that = (TestElement) o;
+            return key == that.key;
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if ((o == null) || (o.getClass() != TestElement.class)) return false;
             TestElement that = (TestElement) o;
-            return val == that.val;
+            return key == that.key && val == that.val;
         }
 
         @Override
         public String toString() {
-            return "TestElement(" + val + ")";
+            return "TestElement(key=" + key + ", val=" + val + ")";
         }
 
         @Override
         public int hashCode() {
-            return val;
+            long hashCode = 2654435761L * key;
+            return (int) (hashCode >> 32);
         }
     }
 
@@ -122,29 +136,27 @@ public class ImplicitLinkedHashCollectionTest {
         int i = 0;
         while (iterator.hasNext()) {
             TestElement element = iterator.next();
-            Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                    sequence.length + " were expected.", i < sequence.length);
-            Assert.assertEquals("Iterator value number " + (i + 1) + " was incorrect.",
-                    sequence[i].intValue(), element.val);
+            assertTrue(i < sequence.length, "Iterator yieled " + (i + 1) + " elements, but only " +
+                sequence.length + " were expected.");
+            assertEquals(sequence[i].intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but " +
-                sequence.length + " were expected.", i == sequence.length);
+        assertTrue(i == sequence.length, "Iterator yieled " + (i + 1) + " elements, but " +
+            sequence.length + " were expected.");
     }
 
     static void expectTraversal(Iterator<TestElement> iter, Iterator<Integer> expectedIter) {
         int i = 0;
         while (iter.hasNext()) {
             TestElement element = iter.next();
-            Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                    i + " were expected.", expectedIter.hasNext());
+            assertTrue(expectedIter.hasNext(), "Iterator yieled " + (i + 1) + " elements, but only " + i +
+                " were expected.");
             Integer expected = expectedIter.next();
-            Assert.assertEquals("Iterator value number " + (i + 1) + " was incorrect.",
-                    expected.intValue(), element.val);
+            assertEquals(expected.intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        Assert.assertFalse("Iterator yieled " + i + " elements, but at least " +
-                (i + 1) + " were expected.", expectedIter.hasNext());
+        assertFalse(expectedIter.hasNext(), "Iterator yieled " + i + " elements, but at least " + (i + 1) +
+            " were expected.");
     }
 
     @Test
@@ -221,10 +233,10 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(3, set.size());
 
         // Ordering in the collection is maintained
-        int val = 3;
+        int key = 3;
         for (TestElement e : coll) {
-            assertEquals(val, e.val);
-            ++val;
+            assertEquals(key, e.key);
+            ++key;
         }
     }
 
@@ -236,9 +248,9 @@ public class ImplicitLinkedHashCollectionTest {
         coll.add(new TestElement(3));
 
         List<TestElement> list = coll.valuesList();
-        assertEquals(1, list.get(0).val);
-        assertEquals(2, list.get(1).val);
-        assertEquals(3, list.get(2).val);
+        assertEquals(1, list.get(0).key);
+        assertEquals(2, list.get(1).key);
+        assertEquals(3, list.get(2).key);
         assertEquals(3, list.size());
     }
 
@@ -259,13 +271,13 @@ public class ImplicitLinkedHashCollectionTest {
 
         // Removal from collection is reflected in list
         coll.remove(new TestElement(1));
-        assertEquals(3, list.get(0).val);
+        assertEquals(3, list.get(0).key);
         assertEquals(1, list.size());
 
         // Addition to collection is reflected in list
         coll.add(new TestElement(4));
-        assertEquals(3, list.get(0).val);
-        assertEquals(4, list.get(1).val);
+        assertEquals(3, list.get(0).key);
+        assertEquals(4, list.get(1).key);
         assertEquals(2, list.size());
     }
 
@@ -322,52 +334,52 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(0, iter.nextIndex());
         assertEquals(-1, iter.previousIndex());
 
-        assertEquals(1, iter.next().val);
+        assertEquals(1, iter.next().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(1, iter.nextIndex());
         assertEquals(0, iter.previousIndex());
 
-        assertEquals(2, iter.next().val);
+        assertEquals(2, iter.next().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        assertEquals(3, iter.next().val);
+        assertEquals(3, iter.next().key);
         assertFalse(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(3, iter.nextIndex());
         assertEquals(2, iter.previousIndex());
 
         // Step back to the middle of the list
-        assertEquals(3, iter.previous().val);
+        assertEquals(3, iter.previous().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        assertEquals(2, iter.previous().val);
+        assertEquals(2, iter.previous().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(1, iter.nextIndex());
         assertEquals(0, iter.previousIndex());
 
         // Step forward one and then back one, return value should remain the same
-        assertEquals(2, iter.next().val);
+        assertEquals(2, iter.next().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        assertEquals(2, iter.previous().val);
+        assertEquals(2, iter.previous().key);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(1, iter.nextIndex());
         assertEquals(0, iter.previousIndex());
 
         // Step back to the front of the list
-        assertEquals(1, iter.previous().val);
+        assertEquals(1, iter.previous().key);
         assertTrue(iter.hasNext());
         assertFalse(iter.hasPrevious());
         assertEquals(0, iter.nextIndex());
@@ -409,7 +421,7 @@ public class ImplicitLinkedHashCollectionTest {
         }
 
         // Remove after previous()
-        assertEquals(2, iter.previous().val);
+        assertEquals(2, iter.previous().key);
         iter.remove();
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
@@ -417,7 +429,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(0, iter.previousIndex());
 
         // Remove the first element of the list
-        assertEquals(1, iter.previous().val);
+        assertEquals(1, iter.previous().key);
         iter.remove();
         assertTrue(iter.hasNext());
         assertFalse(iter.hasPrevious());
@@ -425,8 +437,8 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(-1, iter.previousIndex());
 
         // Remove the last element of the list
-        assertEquals(4, iter.next().val);
-        assertEquals(5, iter.next().val);
+        assertEquals(4, iter.next().key);
+        assertEquals(5, iter.next().key);
         iter.remove();
         assertFalse(iter.hasNext());
         assertTrue(iter.hasPrevious());
@@ -434,7 +446,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(0, iter.previousIndex());
 
         // Remove the final remaining element of the list
-        assertEquals(4, iter.previous().val);
+        assertEquals(4, iter.previous().key);
         iter.remove();
         assertFalse(iter.hasNext());
         assertFalse(iter.hasPrevious());
@@ -470,7 +482,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(6, coll.size());
         expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5);
         for (int i = 0; i < 6; i++) {
-            assertTrue("Failed to find element " + i, coll.contains(new TestElement(i)));
+            assertTrue(coll.contains(new TestElement(i)), "Failed to find element " + i);
         }
         coll.remove(new TestElement(3));
         assertEquals(23, coll.numSlots());
@@ -487,7 +499,7 @@ public class ImplicitLinkedHashCollectionTest {
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
-            removeRandomElement(random, existing, coll);
+            removeRandomElement(random, existing);
             expectTraversal(coll.iterator(), existing.iterator());
         }
     }
@@ -546,8 +558,7 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @SuppressWarnings("unlikely-arg-type")
-    private void removeRandomElement(Random random, Collection<Integer> existing,
-                                     ImplicitLinkedHashCollection<TestElement> coll) {
+    private void removeRandomElement(Random random, Collection<Integer> existing) {
         int removeIdx = random.nextInt(existing.size());
         Iterator<Integer> iter = existing.iterator();
         Integer element = null;
@@ -555,5 +566,51 @@ public class ImplicitLinkedHashCollectionTest {
             element = iter.next();
         }
         existing.remove(new TestElement(element));
+    }
+
+    @Test
+    public void testSameKeysDifferentValues() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        assertTrue(coll.add(new TestElement(1, 1)));
+        assertFalse(coll.add(new TestElement(1, 2)));
+        TestElement element2 = new TestElement(1, 2);
+        TestElement element1 = coll.find(element2);
+        assertFalse(element2.equals(element1));
+        assertTrue(element2.elementKeysAreEqual(element1));
+    }
+
+    @Test
+    public void testMoveToEnd() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        TestElement e1 = new TestElement(1, 1);
+        TestElement e2 = new TestElement(2, 2);
+        TestElement e3 = new TestElement(3, 3);
+        assertTrue(coll.add(e1));
+        assertTrue(coll.add(e2));
+        assertTrue(coll.add(e3));
+        coll.moveToEnd(e1);
+        expectTraversal(coll.iterator(), 2, 3, 1);
+        assertThrows(RuntimeException.class, () -> coll.moveToEnd(new TestElement(4, 4)));
+    }
+
+    @Test
+    public void testRemovals() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        List<TestElement> elements  = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            TestElement element  = new TestElement(i, i);
+            elements.add(element);
+            coll.add(element);
+        }
+        assertEquals(100, coll.size());
+        Iterator<TestElement> iter = coll.iterator();
+        for (int i = 0; i < 50; i++) {
+            iter.next();
+            iter.remove();
+        }
+        assertEquals(50, coll.size());
+        for (int i = 50; i < 100; i++) {
+            assertEquals(new TestElement(i, i), coll.find(elements.get(i)));
+        }
     }
 }

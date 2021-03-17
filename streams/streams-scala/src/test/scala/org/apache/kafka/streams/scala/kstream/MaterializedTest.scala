@@ -21,7 +21,8 @@ package org.apache.kafka.streams.scala.kstream
 import java.time.Duration
 
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal
-import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala._
 import org.apache.kafka.streams.state.Stores
 import org.junit.runner.RunWith
@@ -36,8 +37,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.`with`[String, Long, ByteArrayKeyValueStore]
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
-    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalMaterialized.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.longSerde.getClass
   }
 
   "Create a Materialize with a store name" should "create a Materialized with Serdes and a store name" in {
@@ -46,8 +47,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long, ByteArrayKeyValueStore](storeName)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
-    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalMaterialized.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalMaterialized.storeName shouldBe storeName
   }
 
@@ -57,8 +58,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
-    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalMaterialized.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 
@@ -68,8 +69,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
-    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalMaterialized.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 
@@ -79,8 +80,8 @@ class MaterializedTest extends FlatSpec with Matchers {
       Materialized.as[String, Long](storeSupplier)
 
     val internalMaterialized = new MaterializedInternal(materialized)
-    internalMaterialized.keySerde.getClass shouldBe Serdes.String.getClass
-    internalMaterialized.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalMaterialized.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalMaterialized.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalMaterialized.storeSupplier shouldBe storeSupplier
   }
 }

@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 
@@ -42,13 +41,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private final FindCoordinatorResponseData data;
 
     public FindCoordinatorResponse(FindCoordinatorResponseData data) {
+        super(ApiKeys.FIND_COORDINATOR);
         this.data = data;
     }
 
-    public FindCoordinatorResponse(Struct struct, short version) {
-        this.data = new FindCoordinatorResponseData(struct, version);
-    }
-
+    @Override
     public FindCoordinatorResponseData data() {
         return data;
     }
@@ -72,16 +69,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(error(), 1);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+        return errorCounts(error());
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer), version);
+        return new FindCoordinatorResponse(new FindCoordinatorResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
