@@ -19,7 +19,7 @@
   "name": "FenceBrokerRecord",
   "validVersions": "0",
   "fields": [
-    { "name": "Id", "type": "int32", "versions": "0+",
+    { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID to fence. It will be removed from all ISRs." },
 	{ "name": "Epoch", "type": "int64", "versions": "0+",
       "about": "The epoch of the broker to fence." }
