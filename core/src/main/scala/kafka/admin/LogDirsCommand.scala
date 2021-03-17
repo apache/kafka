@@ -45,7 +45,7 @@ object LogDirsCommand {
             val (existingBrokers, nonExistingBrokers) = Option(opts.options.valueOf(opts.brokerListOpt)) match {
                 case Some(brokerListStr) =>
                     val inputBrokers = brokerListStr.split(',').filter(_.nonEmpty).map(_.toInt).toSet
-                    (inputBrokers, inputBrokers.diff(clusterBrokers))
+                    (inputBrokers.intersect(clusterBrokers), inputBrokers.diff(clusterBrokers))
                 case None => (clusterBrokers, Set.empty)
             }
 
