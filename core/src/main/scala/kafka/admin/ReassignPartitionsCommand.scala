@@ -37,7 +37,6 @@ import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, Top
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
 
 
@@ -443,7 +442,7 @@ object ReassignPartitionsCommand extends Logging {
     val (foundReassignments, notFoundReassignments) = targetReassignments.partition {
       case (part, _) => currentReassignments.contains(part)
     }
-    val foundResults: Seq[(TopicPartition, PartitionReassignmentState)] = foundReassignments.map {
+    val foundResults = foundReassignments.map {
       case (part, targetReplicas) => (part,
         PartitionReassignmentState(
           currentReassignments(part).replicas.
@@ -458,7 +457,7 @@ object ReassignPartitionsCommand extends Logging {
     }
     val topicDescriptions = adminClient.
       describeTopics(topicNamesToLookUp.asJava).values().asScala
-    val notFoundResults: Seq[(TopicPartition, PartitionReassignmentState)] = notFoundReassignments.map {
+    val notFoundResults = notFoundReassignments.map {
       case (part, targetReplicas) =>
         currentReassignments.get(part) match {
           case Some(reassignment) => (part,
@@ -557,7 +556,7 @@ object ReassignPartitionsCommand extends Logging {
     val replicaLogDirInfos = adminClient.describeReplicaLogDirs(
       targetMoves.keySet.asJava).all().get().asScala
     targetMoves.map { case (replica, targetLogDir) =>
-      val moveState: LogDirMoveState = replicaLogDirInfos.get(replica) match {
+      val moveState = replicaLogDirInfos.get(replica) match {
         case None => MissingReplicaMoveState(targetLogDir)
         case Some(info) => if (info.getCurrentReplicaLogDir == null) {
             MissingLogDirMoveState(targetLogDir)
@@ -1189,10 +1188,9 @@ object ReassignPartitionsCommand extends Logging {
    */
   def alterPartitionReassignments(adminClient: Admin,
                                   reassignments: Map[TopicPartition, Seq[Int]]): Map[TopicPartition, Throwable] = {
-    val results: Map[TopicPartition, KafkaFuture[Void]] =
-      adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
-        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf).asJava)))
-      }.asJava).values().asScala
+    val results = adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
+      (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf).asJava)))
+    }.asJava).values().asScala
     results.flatMap {
       case (part, future) => {
         try {
@@ -1215,10 +1213,9 @@ object ReassignPartitionsCommand extends Logging {
   def cancelPartitionReassignments(adminClient: Admin,
                                    reassignments: Set[TopicPartition])
   : Map[TopicPartition, Throwable] = {
-    val results: Map[TopicPartition, KafkaFuture[Void]] =
-      adminClient.alterPartitionReassignments(reassignments.map {
-          (_, (None: Option[NewPartitionReassignment]).asJava)
-        }.toMap.asJava).values().asScala
+    val results = adminClient.alterPartitionReassignments(reassignments.map {
+      (_, Optional.empty[NewPartitionReassignment]())
+    }.toMap.asJava).values().asScala
     results.flatMap { case (part, future) =>
       try {
         future.get()
