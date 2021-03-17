@@ -63,7 +63,7 @@ class GroupMetadataManager(brokerId: Int,
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 
-  /* lock protecting access to loading and owned partition sets */
+  /* loack protecting access to loading and owned partition sets */
   private val partitionLock = new ReentrantLock()
 
   /* partitions of conasumer grouaps that are being loaded, its lock should be always called BEFORE the group lock if needed */
