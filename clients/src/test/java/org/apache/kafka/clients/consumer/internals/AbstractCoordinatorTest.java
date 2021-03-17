@@ -737,7 +737,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
 
-        coordinator.requestRejoin();
+        coordinator.requestRejoin("test");
 
         TestUtils.waitForCondition(() -> {
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));

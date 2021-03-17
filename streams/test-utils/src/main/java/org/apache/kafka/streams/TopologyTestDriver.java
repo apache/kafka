@@ -458,7 +458,7 @@ public class TopologyTestDriver implements Closeable {
             );
 
             final GlobalProcessorContextImpl globalProcessorContext =
-                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache, mockWallClockTime);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(

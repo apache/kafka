@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,11 @@ public class MockLogTest {
     @BeforeEach
     public void setup() {
         log = new MockLog(topicPartition);
+    }
+
+    @AfterEach
+    public void cleanup() {
+        log.close();
     }
 
     @Test
@@ -125,6 +131,16 @@ public class MockLogTest {
         log.truncateTo(1);
         assertEquals(0L, log.startOffset());
         assertEquals(0L, log.endOffset().offset);
+    }
+
+    @Test
+    public void testTruncateBelowHighWatermark() {
+        appendBatch(5, 1);
+        LogOffsetMetadata highWatermark = new LogOffsetMetadata(5L);
+        log.updateHighWatermark(highWatermark);
+        assertEquals(highWatermark, log.highWatermark());
+        assertThrows(IllegalArgumentException.class, () -> log.truncateTo(4L));
+        assertEquals(highWatermark, log.highWatermark());
     }
 
     @Test
@@ -592,6 +608,53 @@ public class MockLogTest {
         }
 
         assertFalse(log.truncateToLatestSnapshot());
+    }
+
+    @Test
+    public void testTruncateWillRemoveOlderSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 0;
+
+        OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(sameEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+
+        OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(greaterEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.truncateToLatestSnapshot());
+        assertEquals(Optional.empty(), log.readSnapshot(sameEpochSnapshotId));
+    }
+
+    @Test
+    public void testUpdateLogStartOffsetWillRemoveOlderSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 0;
+
+        OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(sameEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+
+        OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(greaterEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+
+        log.updateHighWatermark(new LogOffsetMetadata(greaterEpochSnapshotId.offset));
+        assertTrue(log.deleteBeforeSnapshot(greaterEpochSnapshotId));
+        assertEquals(Optional.empty(), log.readSnapshot(sameEpochSnapshotId));
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
