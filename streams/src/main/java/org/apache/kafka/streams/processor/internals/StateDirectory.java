@@ -70,8 +70,8 @@ public class StateDirectory {
         @JsonProperty
         private final UUID processId;
 
-        StateDirectoryProcessFile() {
-            processId = null;
+        public StateDirectoryProcessFile() {
+            this.processId = null;
         }
 
         StateDirectoryProcessFile(final UUID processId) {
