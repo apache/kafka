@@ -27,7 +27,7 @@ public class DescribeFeaturesResult {
 
     private final KafkaFuture<FeatureMetadata> future;
 
-    DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
+    public DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
         this.future = future;
     }
 

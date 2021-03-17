@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.feature.FeatureAndVersionRange;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.apache.kafka.streams.processor.internals.assignment.StreamConsumerFeatureVersion;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
@@ -80,6 +82,8 @@ public class TaskManager {
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
     private final StreamThread.ProcessingMode processingMode;
+    private Map<String, StreamConsumerFeatureVersion> featureMetadata;
+
     private final Tasks tasks;
 
     private Consumer<byte[], byte[]> mainConsumer;
@@ -111,8 +115,8 @@ public class TaskManager {
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
         this.processingMode = processingMode;
+        initFeatureMetadata();
         this.tasks = new Tasks(logPrefix, builder,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
-
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
     }
@@ -132,6 +136,20 @@ public class TaskManager {
 
     boolean isRebalanceInProgress() {
         return rebalanceInProgress;
+    }
+
+    private void initFeatureMetadata() {
+        final Map<String, StreamConsumerFeatureVersion> featureMetadataMap = new HashMap<>();
+        if (processingMode != null) {
+            final String feature = FeatureAndVersionRange.EOS_FEATURE.feature();
+            final StreamConsumerFeatureVersion eosFeatureMetadata = new StreamConsumerFeatureVersion(processingMode.versionLevel, StreamConsumerFeatureVersion.NOT_EXIST);
+            featureMetadataMap.put(feature, eosFeatureMetadata);
+        }
+        featureMetadata = featureMetadataMap;
+    }
+
+    public Map<String, StreamConsumerFeatureVersion> featureMetadata() {
+        return featureMetadata;
     }
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {

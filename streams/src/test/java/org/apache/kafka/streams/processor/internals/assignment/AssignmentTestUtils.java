@@ -19,10 +19,16 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Collection;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
+import org.apache.kafka.clients.admin.FeatureMetadata;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.feature.FeatureAndVersionRange;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.easymock.EasyMock;
@@ -34,6 +40,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -86,6 +93,7 @@ public final class AssignmentTestUtils {
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
+    public static final Map<String, StreamConsumerFeatureVersion> EMPTY_MAP = emptyMap();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
 
     private AssignmentTestUtils() {}
@@ -105,7 +113,7 @@ public final class AssignmentTestUtils {
     public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets) {
         final AdminClient adminClient = EasyMock.createMock(AdminClient.class);
 
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final ListOffsetsResult listOffsetResult = EasyMock.createNiceMock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
             Entry::getKey,
@@ -117,11 +125,26 @@ public final class AssignmentTestUtils {
             }))
         );
 
-        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andStubReturn(allFuture);
+        final DescribeFeaturesResult describeFeaturesResult = EasyMock.createNiceMock(DescribeFeaturesResult.class);
+        final KafkaFutureImpl<FeatureMetadata> featureMetadataFuture = new KafkaFutureImpl<>();
+        final FeatureMetadata featureMetadata = defaultFeatureMetadata();
+        featureMetadataFuture.complete(featureMetadata);
 
-        EasyMock.replay(result);
+        expect(adminClient.listOffsets(anyObject())).andStubReturn(listOffsetResult);
+        expect(listOffsetResult.all()).andStubReturn(allFuture);
+        expect(adminClient.describeFeatures()).andStubReturn(describeFeaturesResult);
+        expect(describeFeaturesResult.featureMetadata()).andStubReturn(featureMetadataFuture);
+
+        EasyMock.replay(listOffsetResult, describeFeaturesResult);
         return adminClient;
+    }
+
+    private static FeatureMetadata defaultFeatureMetadata() {
+        final String feature = FeatureAndVersionRange.EOS_FEATURE.feature();
+        return new FeatureMetadata(
+                Utils.mkMap(Utils.mkEntry(feature, new FinalizedVersionRange((short) 1, (short) 3))),
+                Optional.of(1L),
+                Utils.mkMap(Utils.mkEntry(feature, new SupportedVersionRange((short) 1, (short) 3))));
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,

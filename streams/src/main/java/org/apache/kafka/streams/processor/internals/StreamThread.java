@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.FeatureMetadata;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -31,6 +33,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.feature.FeatureAndVersionRange;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -58,9 +61,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
@@ -303,6 +311,8 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
+    private ScheduledExecutorService featureMetadataFetcher;
+    private FeatureMetadata featureMetadataCache;
     private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
 
@@ -426,16 +436,27 @@ public class StreamThread extends Thread {
     }
 
     public enum ProcessingMode {
-        AT_LEAST_ONCE("AT_LEAST_ONCE"),
+        AT_LEAST_ONCE("AT_LEAST_ONCE", 1),
 
-        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
+        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA", 2),
 
-        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA");
+        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA", 3);
 
         public final String name;
 
-        ProcessingMode(final String name) {
+        public final int versionLevel;
+
+        ProcessingMode(final String name, final int versionLevel) {
             this.name = name;
+            this.versionLevel = versionLevel;
+        }
+
+        private static Map<Integer, ProcessingMode> processingModeMap() {
+            return new HashSet<>(Arrays.asList(AT_LEAST_ONCE, EXACTLY_ONCE_ALPHA, EXACTLY_ONCE_BETA)).stream().collect(Collectors.toMap(processingMode -> processingMode.versionLevel, Function.identity()));
+        }
+
+        public static ProcessingMode getProcessingMode(final int versionLevel) {
+            return processingModeMap().get(versionLevel);
         }
     }
 
@@ -527,6 +548,7 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+        this.featureMetadataFetcher = setupFeatureMetadataFetcher(threadId);
     }
 
     @SuppressWarnings("deprecation")
@@ -565,6 +587,7 @@ public class StreamThread extends Thread {
      */
     boolean runLoop() {
         subscribeConsumer();
+        startFeatureMetadataFetcher();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
@@ -1087,6 +1110,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
+        featureMetadataFetcher.shutdownNow();
 
         setState(State.DEAD);
 
@@ -1164,6 +1188,65 @@ public class StreamThread extends Thread {
 
     public Map<TaskId, Task> allTasks() {
         return taskManager.tasks();
+    }
+
+    private ScheduledExecutorService setupFeatureMetadataFetcher(final String threadId) {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            final Thread thread = new Thread(r, threadId + "-FeatureMetadataFetcherThread");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    private void fetchFeatureMetadata() {
+        try {
+            final String eosFeature = FeatureAndVersionRange.EOS_FEATURE.feature();
+            final FeatureMetadata latestFeatureMetadata = adminClient.describeFeatures().featureMetadata().get();
+            final FinalizedVersionRange eosFinalizedFeature = latestFeatureMetadata.finalizedFeatures().get(eosFeature);
+            final ProcessingMode minProcessingMode = ProcessingMode.getProcessingMode(eosFinalizedFeature.minVersionLevel());
+            final ProcessingMode maxProcessingMode = ProcessingMode.getProcessingMode(eosFinalizedFeature.maxVersionLevel());
+            log.info("minProcessingMode = {}, maxProcessingMode = {}", minProcessingMode, maxProcessingMode);
+            final FeatureMetadata oldFeatureMetadataCache = featureMetadataCache;
+            featureMetadataCache = latestFeatureMetadata;
+            if (featureMetadataUpgraded(latestFeatureMetadata, oldFeatureMetadataCache, eosFeature)) {
+                log.info("StreamThread leader detected version upgrade, trigger rebalance!");
+                // cannot call mainConsumer.enforceRebalance() directly here because the KafkaConsumer doesn't support multi thread access
+                final long now = time.milliseconds();
+                nextProbingRebalanceMs.set(now);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Got exception: {} when fetching featureMetadata!", e);
+        }
+    }
+
+    // Don't bother check the downgrade case here, because it's not supported here
+    private boolean featureMetadataUpgraded(final FeatureMetadata latestFeatureMetadata, final FeatureMetadata oldFeatureMetadataCache, final String feature) {
+        // ignore this since this is supposed to be featureMetadataCache initialization
+        if (oldFeatureMetadataCache == null) return false;
+
+        final long notExistingEpoch = -1;
+        boolean updateNeeded = false;
+        if (latestFeatureMetadata.finalizedFeaturesEpoch().orElse(notExistingEpoch) > oldFeatureMetadataCache.finalizedFeaturesEpoch().orElse(notExistingEpoch)) {
+            final FinalizedVersionRange existingFinalizedFeatureVersionRange = latestFeatureMetadata.finalizedFeatures().get(feature);
+            final FinalizedVersionRange finalizedFeatureVersionRangeInCache = oldFeatureMetadataCache.finalizedFeatures().get(feature);
+            if (existingFinalizedFeatureVersionRange != null && (existingFinalizedFeatureVersionRange.maxVersionLevel() > finalizedFeatureVersionRangeInCache.maxVersionLevel())) {
+                updateNeeded = true;
+            }
+        }
+        return updateNeeded;
+    }
+
+    private void startFeatureMetadataFetcher() {
+        final long fetchDelay = 30000; // TimeUnit.MILLISECONDS
+        featureMetadataFetcher.scheduleAtFixedRate(() -> {
+            try {
+                if (state.isAlive()) {
+                    fetchFeatureMetadata();
+                }
+            } catch (final Exception e) {
+                log.info("There's bug in FeatureMetadataFetcher, {}", e);
+            }
+        }, fetchDelay, fetchDelay, TimeUnit.MILLISECONDS);
     }
 
     /**

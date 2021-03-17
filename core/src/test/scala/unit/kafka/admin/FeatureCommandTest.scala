@@ -26,11 +26,19 @@ import org.apache.kafka.common.utils.Utils
 
 import java.util.Properties
 
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, assertThrows}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class FeatureCommandTest extends BaseRequestTest {
   override def brokerCount: Int = 3
+  // clean up the existing features would increase the epoch from 0 to 1
+  private val epochAfterCleanUp = 1
+
+  @BeforeEach
+  override def setUp(): Unit = {
+    super.setUp()
+    cleanUpBrokerFeatures()
+  }
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
@@ -39,6 +47,15 @@ class FeatureCommandTest extends BaseRequestTest {
   private val defaultSupportedFeatures: Features[SupportedVersionRange] =
     Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
                                            Utils.mkEntry("feature_2", new SupportedVersionRange(1, 5))))
+
+  // in current version brokers start up with non empty broker features, this will clean up the features for easy testing
+  private def cleanUpBrokerFeatures() = {
+    updateSupportedFeaturesInAllBrokers(Features.emptySupportedFeatures())
+    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--describe")))
+    featureApis.setSupportedFeatures(Features.emptySupportedFeatures())
+    featureApis.downgradeAllFeatures()
+    featureApis.close()
+  }
 
   private def updateSupportedFeatures(features: Features[SupportedVersionRange],
                                       targetServers: Set[KafkaServer]): Unit = {
@@ -80,14 +97,14 @@ class FeatureCommandTest extends BaseRequestTest {
     try {
       val initialDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
       val expectedInitialDescribeOutput =
-        "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: 0\n" +
-        "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: 0\n"
+        s"Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: $epochAfterCleanUp\n" +
+        s"Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: -\tFinalizedMaxVersionLevel: -\tEpoch: $epochAfterCleanUp\n"
       assertEquals(expectedInitialDescribeOutput, initialDescribeOutput)
       featureApis.upgradeAllFeatures()
       val finalDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
       val expectedFinalDescribeOutput =
-        "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 3\tEpoch: 1\n" +
-        "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 5\tEpoch: 1\n"
+        s"Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 3\tEpoch: ${epochAfterCleanUp + 1}\n" +
+        s"Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedMinVersionLevel: 1\tFinalizedMaxVersionLevel: 5\tEpoch: ${epochAfterCleanUp + 1}\n"
       assertEquals(expectedFinalDescribeOutput, finalDescribeOutput)
     } finally {
       featureApis.close()

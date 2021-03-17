@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.feature.FeatureAndVersionRange;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -47,6 +49,7 @@ import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopi
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.StreamConsumerFeatureVersion;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
@@ -71,6 +74,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -255,7 +259,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             userEndPoint,
             taskManager.getTaskOffsetSums(),
             uniqueField,
-            assignmentErrorCode.get()
+            assignmentErrorCode.get(),
+            taskManager.featureMetadata()
         ).encode();
     }
 
@@ -268,6 +273,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     Collections.emptyList(),
                     new AssignmentInfo(LATEST_SUPPORTED_VERSION,
                         Collections.emptyList(),
+                        Collections.emptyMap(),
                         Collections.emptyMap(),
                         Collections.emptyMap(),
                         Collections.emptyMap(),
@@ -299,7 +305,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
 
         // ---------------- Step Zero ---------------- //
-
         // construct the client metadata from the decoded subscription info
 
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
@@ -310,11 +315,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         boolean shutdownRequested = false;
         int futureMetadataVersion = UNKNOWN;
+
+        final Map<String, Map<String, StreamConsumerFeatureVersion>> consumerToFeatureMetadataMap = new HashMap<>();
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            consumerToFeatureMetadataMap.put(consumerId, info.featureMetaMap());
             if (info.errorCode() == AssignorError.SHUTDOWN_REQUESTED.code()) {
                 shutdownRequested = true;
             }
@@ -412,7 +420,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
                 versionProbing,
-                probingRebalanceNeeded
+                probingRebalanceNeeded,
+                consumerToFeatureMetadataMap
             );
 
             return new GroupAssignment(assignment);
@@ -750,7 +759,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
                                                          final boolean versionProbing,
-                                                         final boolean shouldTriggerProbingRebalance) {
+                                                         final boolean shouldTriggerProbingRebalance,
+                                                         final Map<String, Map<String, StreamConsumerFeatureVersion>> consumerToFeatureMetadataMap) {
         boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
         final Map<String, Assignment> assignment = new HashMap<>();
 
@@ -792,7 +802,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskAssignment,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime
+                encodeNextProbingRebalanceTime,
+                consumerToFeatureMetadataMap
             );
 
             if (tasksRevoked || encodeNextProbingRebalanceTime) {
@@ -840,7 +851,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
                                          final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded) {
+                                         final boolean probingRebalanceNeeded,
+                                         final Map<String, Map<String, StreamConsumerFeatureVersion>> consumerToFeatureMetadataMap
+    ) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
@@ -873,6 +886,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     clientMetadata.state
                 );
 
+
+            final String eosFeature = FeatureAndVersionRange.EOS_FEATURE.feature();
+            maybeUpdateTheFeatureMetadataSuggestedVersion(consumerToFeatureMetadataMap, eosFeature);
+            final Map<String, StreamConsumerFeatureVersion> featureVersionMap = consumerToFeatureMetadataMap.getOrDefault(consumer, Collections.emptyMap());
             final AssignmentInfo info = new AssignmentInfo(
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
@@ -880,6 +897,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskMap,
                 partitionsByHostState,
                 standbyPartitionsByHost,
+                featureVersionMap,
                 AssignorError.NONE.code()
             );
 
@@ -907,6 +925,42 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
         }
         return followupRebalanceRequiredForRevokedTasks;
+    }
+
+    private Map<String, FinalizedVersionRange> getFinalizedFeatures() {
+        try {
+            return adminClient.describeFeatures().featureMetadata().get().finalizedFeatures();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Failed to call describeFeatures with exception: ", e);
+            return Collections.emptyMap();
+        }
+    }
+
+    private void maybeUpdateTheFeatureMetadataSuggestedVersion(final Map<String, Map<String, StreamConsumerFeatureVersion>> consumerToFeatureMetadataMap,
+                                                               final String feature) {
+        final Map<String, FinalizedVersionRange> finalizedFeatures = getFinalizedFeatures();
+        log.info("finalizedFeatures: ", finalizedFeatures, "finalizedFeatures size: ", finalizedFeatures.size());
+        for (final Map.Entry<String, Map<String, StreamConsumerFeatureVersion>> entry: consumerToFeatureMetadataMap.entrySet()) {
+            final String consumer = entry.getKey();
+            final Map<String, StreamConsumerFeatureVersion> streamConsumerFeatureMetadataMap = entry.getValue();
+            if (finalizedFeatures.containsKey(feature)) {
+                final short finalizedMaxVersionLevel = finalizedFeatures.get(feature).maxVersionLevel();
+                final StreamConsumerFeatureVersion streamConsumerFeatureVersion = streamConsumerFeatureMetadataMap.get(feature);
+                if (streamConsumerFeatureMetadataMap.containsKey(feature)) {
+                    final int currentlyUsedFeatureVersion = streamConsumerFeatureVersion.currentlyUsedFeatureVersion();
+                    final int suggestedFeatureVersion = streamConsumerFeatureVersion.leaderSuggestedFeatureVersion();
+                    if (finalizedMaxVersionLevel > suggestedFeatureVersion && streamConsumerFeatureVersion.pendingUpgrade()) {
+                        log.info("Detect finalizedMaxVersionLevel={} which is greater than current suggestedFeatureVersion={}," +
+                                " but consumer: {} is pending client side feature upgrade, just ignore", finalizedMaxVersionLevel, suggestedFeatureVersion, consumer);
+                    } else if (finalizedMaxVersionLevel > currentlyUsedFeatureVersion) {
+                        log.info("Set suggestedFeatureVersion={} for consumer: {}", finalizedMaxVersionLevel, consumer);
+                        final StreamConsumerFeatureVersion updatedStreamConsumerFeatureVersion = new StreamConsumerFeatureVersion(currentlyUsedFeatureVersion, finalizedMaxVersionLevel);
+                        streamConsumerFeatureMetadataMap.put(feature, updatedStreamConsumerFeatureVersion);
+                    }
+                    consumerToFeatureMetadataMap.put(consumer, streamConsumerFeatureMetadataMap);
+                }
+            }
+        }
     }
 
     /**
@@ -1221,6 +1275,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
         final long encodedNextScheduledRebalanceMs;
+        // version 3 fields;
+        final Map<String, StreamConsumerFeatureVersion> featureVersionMap;
 
         switch (receivedAssignmentMetadataVersion) {
             case 1:
@@ -1231,6 +1287,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = Collections.emptyMap();
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
+                featureVersionMap = Collections.emptyMap();
                 break;
             case 2:
             case 3:
@@ -1243,6 +1300,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = Collections.emptyMap();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
+                featureVersionMap = Collections.emptyMap();
                 break;
             case 6:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
@@ -1252,6 +1310,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
+                featureVersionMap = Collections.emptyMap();
                 break;
             case 7:
             case 8:
@@ -1263,6 +1322,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
+                featureVersionMap = Collections.emptyMap();
+                break;
+            case 10:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
+                partitionsByHost = info.partitionsByHost();
+                standbyPartitionsByHost = info.standbyPartitionByHost();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
+                featureVersionMap = info.featureVersionMap();
                 break;
             default:
                 throw new IllegalStateException(
@@ -1278,6 +1348,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsByHost.keySet()
         );
 
+        if (receivedAssignmentMetadataVersion > 9) {
+            log.info("decoded featureVersionMap: ", featureVersionMap);
+            final String eosFeature = FeatureAndVersionRange.EOS_FEATURE.feature();
+            final StreamConsumerFeatureVersion streamConsumerFeatureVersion = featureVersionMap.get(eosFeature);
+            log.info("On assignment, has receive new streamConsumerFeatureMetadata: {}", streamConsumerFeatureVersion);
+        }
+       // TODO KAFKA-9689 Based on the update info, decide whether to update the featureMetadata, if yes, probably call the
+        //  taskManager.maybeRollToNewFeatureVersion to update, neeed to think how to dynamically switch to the new feature
         final Cluster fakeCluster = Cluster.empty().withPartitions(topicToPartitionInfo);
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, fakeCluster);
 

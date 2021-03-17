@@ -26,11 +26,6 @@ import scala.jdk.CollectionConverters._
 class BrokerFeaturesTest {
 
   @Test
-  def testEmpty(): Unit = {
-    assertTrue(BrokerFeatures.createDefault().supportedFeatures.empty)
-  }
-
-  @Test
   def testIncompatibilitiesDueToAbsentFeature(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
