@@ -40,6 +40,11 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
+        public Builder setMetadataDirectory(String metadataDirectory) {
+            this.metadataDirectory = metadataDirectory;
+            return this;
+        }
+
         public BrokerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id");
@@ -47,12 +52,12 @@ public class BrokerNode implements TestKitNode {
             if (incarnationId == null) {
                 incarnationId = Uuid.randomUuid();
             }
-            if (metadataDirectory == null) {
-                metadataDirectory = String.format("kip500broker_%d_meta", id);
-            }
             if (logDataDirectories == null) {
-                logDataDirectories  = Collections.
-                    singletonList(String.format("kip500broker_%d_data0", id));
+                logDataDirectories = Collections.
+                    singletonList(String.format("broker_%d_data0", id));
+            }
+            if (metadataDirectory == null) {
+                metadataDirectory = logDataDirectories.get(0);
             }
             return new BrokerNode(id, incarnationId, metadataDirectory,
                 logDataDirectories);

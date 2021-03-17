@@ -24,7 +24,6 @@ import org.apache.kafka.common.network.ListenerName;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -35,7 +34,7 @@ public class TestKitNodes {
     public static class Builder {
         private Uuid clusterId = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-        private final NavigableMap<Integer, BrokerNode> kip500BrokerNodes = new TreeMap<>();
+        private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -55,7 +54,7 @@ public class TestKitNodes {
                 controllerNodes.put(node.id(), controllerNode);
             } else if (node instanceof BrokerNode) {
                 BrokerNode brokerNode = (BrokerNode) node;
-                kip500BrokerNodes.put(node.id(), brokerNode);
+                brokerNodes.put(node.id(), brokerNode);
             } else {
                 throw new RuntimeException("Can't handle TestKitNode subclass " +
                         node.getClass().getSimpleName());
@@ -67,11 +66,9 @@ public class TestKitNodes {
             if (numControllerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numControllerNodes");
             }
+
             while (controllerNodes.size() > numControllerNodes) {
-                Iterator<Entry<Integer, ControllerNode>> iter =
-                    controllerNodes.entrySet().iterator();
-                iter.next();
-                iter.remove();
+                controllerNodes.pollFirstEntry();
             }
             while (controllerNodes.size() < numControllerNodes) {
                 int nextId = 3000;
@@ -88,18 +85,15 @@ public class TestKitNodes {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
-            while (kip500BrokerNodes.size() > numBrokerNodes) {
-                Iterator<Entry<Integer, BrokerNode>> iter =
-                    kip500BrokerNodes.entrySet().iterator();
-                iter.next();
-                iter.remove();
+            while (brokerNodes.size() > numBrokerNodes) {
+                brokerNodes.pollFirstEntry();
             }
-            while (kip500BrokerNodes.size() < numBrokerNodes) {
+            while (brokerNodes.size() < numBrokerNodes) {
                 int nextId = 0;
-                if (!kip500BrokerNodes.isEmpty()) {
-                    nextId = kip500BrokerNodes.lastKey() + 1;
+                if (!brokerNodes.isEmpty()) {
+                    nextId = brokerNodes.lastKey() + 1;
                 }
-                kip500BrokerNodes.put(nextId, new BrokerNode.Builder().
+                brokerNodes.put(nextId, new BrokerNode.Builder().
                     setId(nextId).build());
             }
             return this;
@@ -109,7 +103,7 @@ public class TestKitNodes {
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid();
             }
-            return new TestKitNodes(clusterId, controllerNodes, kip500BrokerNodes);
+            return new TestKitNodes(clusterId, controllerNodes, brokerNodes);
         }
     }
 

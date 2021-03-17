@@ -190,6 +190,7 @@ class BrokerServer(
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
+      clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
       val apiVersionManager = ApiVersionManager(

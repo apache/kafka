@@ -59,7 +59,7 @@ class RaftClusterTest {
       TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
-      "RaftManager was not initialized.")
+        "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(cluster.nodes().clusterId().toString,
@@ -73,7 +73,7 @@ class RaftClusterTest {
   }
 
   @Test
-  def testCreateClusterAndCreateAndListTopic(): Unit = {
+  def testCreateClusterAndCreateListDeleteTopic(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumKip500BrokerNodes(3).
@@ -86,6 +86,7 @@ class RaftClusterTest {
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
+
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
@@ -104,6 +105,23 @@ class RaftClusterTest {
           }
           result
         }, "Topics created were not listed.")
+
+        // Delete topic
+        val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
+        deleteResult.all().get(60, TimeUnit.SECONDS)
+
+        // List again
+        TestUtils.waitUntilTrue(() => {
+          val listTopicsResult = admin.listTopics()
+          val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() != newTopic.size()
+          if (result) {
+            newTopic forEach(topic => {
+              assertFalse(listTopicsResult.names().get().contains(topic.name()))
+            })
+          }
+          result
+        }, "Topic was not removed from list.")
+
       } finally {
         admin.close()
       }

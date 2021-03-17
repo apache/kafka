@@ -73,6 +73,7 @@ class ForwardingManagerImpl(
       serializedPrincipal,
       request.context.clientAddress.getAddress
     )
+    debug(s"Forwarding ${request.header} as ${envelopeRequest}")
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {

@@ -304,6 +304,7 @@ class BrokerToControllerRequestThread(
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
+    debug(s"Enqueuing ${request.request} when controller is ${activeControllerAddress()}")
     requestQueue.add(request)
     if (activeControllerAddress().isDefined) {
       wakeup()
@@ -320,10 +321,12 @@ class BrokerToControllerRequestThread(
     while (requestIter.hasNext) {
       val request = requestIter.next
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
+        warn(s"Removing ${request.request}")
         requestIter.remove()
         request.callback.onTimeout()
       } else {
         val controllerAddress = activeControllerAddress()
+        debug(s"Sending ${request.request} to controller ${controllerAddress}")
         if (controllerAddress.isDefined) {
           requestIter.remove()
           return Some(RequestAndCompletionHandler(
@@ -332,6 +335,8 @@ class BrokerToControllerRequestThread(
             request.request,
             handleResponse(request)
           ))
+        } else {
+          warn(s"No controller address, trying ${request.request} again later")
         }
       }
     }
