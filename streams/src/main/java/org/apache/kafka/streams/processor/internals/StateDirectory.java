@@ -293,9 +293,12 @@ public class StateDirectory {
                 // another thread owns the lock
                 return false;
             }
+        } else if (!stateDir.exists()) {
+            log.warn("Tried to lock task directory for {} but the state directory does not exist", taskId);
+            return false;
         } else {
             lockedTasksToStreamThreadOwner.put(taskId, Thread.currentThread().getName());
-            // make sure the directory actually exists, and create it if not
+            // make sure the task directory actually exists, and create it if not
             getOrCreateDirectoryForTask(taskId);
             return true;
         }

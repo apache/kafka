@@ -219,6 +219,14 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldNotLockTaskDirectoryIfStateDirectoryHasBeenDeleted() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        Utils.delete(stateDir);
+        assertFalse(directory.lock(taskId));
+    }
+
+    @Test
     public void shouldLockMultipleTaskDirectories() {
         final TaskId taskId = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(1, 0);
