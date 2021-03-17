@@ -191,7 +191,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     });
                     raftManagers.put(node.id(), raftManager);
                 }
-                for (Kip500BrokerNode node : nodes.brokerNodes().values()) {
+                for (BrokerNode node : nodes.brokerNodes().values()) {
                     Map<String, String> props = new HashMap<>(configProps);
                     props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "broker");
                     props.put(KafkaConfig$.MODULE$.BrokerIdProp(),

@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class Kip500BrokerNode implements TestKitNode {
+public class BrokerNode implements TestKitNode {
     public static class Builder {
         private int id = -1;
         private Uuid incarnationId = null;
@@ -40,7 +40,7 @@ public class Kip500BrokerNode implements TestKitNode {
             return this;
         }
 
-        public Kip500BrokerNode build() {
+        public BrokerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id");
             }
@@ -54,7 +54,7 @@ public class Kip500BrokerNode implements TestKitNode {
                 logDataDirectories  = Collections.
                     singletonList(String.format("kip500broker_%d_data0", id));
             }
-            return new Kip500BrokerNode(id, incarnationId, metadataDirectory,
+            return new BrokerNode(id, incarnationId, metadataDirectory,
                 logDataDirectories);
         }
     }
@@ -64,10 +64,10 @@ public class Kip500BrokerNode implements TestKitNode {
     private final String metadataDirectory;
     private final List<String> logDataDirectories;
 
-    Kip500BrokerNode(int id,
-                     Uuid incarnationId,
-                     String metadataDirectory,
-                     List<String> logDataDirectories) {
+    BrokerNode(int id,
+               Uuid incarnationId,
+               String metadataDirectory,
+               List<String> logDataDirectories) {
         this.id = id;
         this.incarnationId = incarnationId;
         this.metadataDirectory = metadataDirectory;

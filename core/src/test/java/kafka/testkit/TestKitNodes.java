@@ -35,7 +35,7 @@ public class TestKitNodes {
     public static class Builder {
         private Uuid clusterId = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-        private final NavigableMap<Integer, Kip500BrokerNode> kip500BrokerNodes = new TreeMap<>();
+        private final NavigableMap<Integer, BrokerNode> kip500BrokerNodes = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -53,8 +53,8 @@ public class TestKitNodes {
             if (node instanceof ControllerNode) {
                 ControllerNode controllerNode = (ControllerNode) node;
                 controllerNodes.put(node.id(), controllerNode);
-            } else if (node instanceof Kip500BrokerNode) {
-                Kip500BrokerNode brokerNode = (Kip500BrokerNode) node;
+            } else if (node instanceof BrokerNode) {
+                BrokerNode brokerNode = (BrokerNode) node;
                 kip500BrokerNodes.put(node.id(), brokerNode);
             } else {
                 throw new RuntimeException("Can't handle TestKitNode subclass " +
@@ -89,7 +89,7 @@ public class TestKitNodes {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
             while (kip500BrokerNodes.size() > numBrokerNodes) {
-                Iterator<Entry<Integer, Kip500BrokerNode>> iter =
+                Iterator<Entry<Integer, BrokerNode>> iter =
                     kip500BrokerNodes.entrySet().iterator();
                 iter.next();
                 iter.remove();
@@ -99,7 +99,7 @@ public class TestKitNodes {
                 if (!kip500BrokerNodes.isEmpty()) {
                     nextId = kip500BrokerNodes.lastKey() + 1;
                 }
-                kip500BrokerNodes.put(nextId, new Kip500BrokerNode.Builder().
+                kip500BrokerNodes.put(nextId, new BrokerNode.Builder().
                     setId(nextId).build());
             }
             return this;
@@ -115,11 +115,11 @@ public class TestKitNodes {
 
     private final Uuid clusterId;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
-    private final NavigableMap<Integer, Kip500BrokerNode> brokerNodes;
+    private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(Uuid clusterId,
                          NavigableMap<Integer, ControllerNode> controllerNodes,
-                         NavigableMap<Integer, Kip500BrokerNode> brokerNodes) {
+                         NavigableMap<Integer, BrokerNode> brokerNodes) {
         this.clusterId = clusterId;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
@@ -133,7 +133,7 @@ public class TestKitNodes {
         return controllerNodes;
     }
 
-    public NavigableMap<Integer, Kip500BrokerNode> brokerNodes() {
+    public NavigableMap<Integer, BrokerNode> brokerNodes() {
         return brokerNodes;
     }
 
@@ -155,15 +155,15 @@ public class TestKitNodes {
 
     public TestKitNodes copyWithAbsolutePaths(String baseDirectory) {
         NavigableMap<Integer, ControllerNode> newControllerNodes = new TreeMap<>();
-        NavigableMap<Integer, Kip500BrokerNode> newBrokerNodes = new TreeMap<>();
+        NavigableMap<Integer, BrokerNode> newBrokerNodes = new TreeMap<>();
         for (Entry<Integer, ControllerNode> entry : controllerNodes.entrySet()) {
             ControllerNode node = entry.getValue();
             newControllerNodes.put(entry.getKey(), new ControllerNode(node.id(),
                 absolutize(baseDirectory, node.metadataDirectory())));
         }
-        for (Entry<Integer, Kip500BrokerNode> entry : brokerNodes.entrySet()) {
-            Kip500BrokerNode node = entry.getValue();
-            newBrokerNodes.put(entry.getKey(), new Kip500BrokerNode(node.id(),
+        for (Entry<Integer, BrokerNode> entry : brokerNodes.entrySet()) {
+            BrokerNode node = entry.getValue();
+            newBrokerNodes.put(entry.getKey(), new BrokerNode(node.id(),
                 node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
                 absolutize(baseDirectory, node.logDataDirectories())));
         }
