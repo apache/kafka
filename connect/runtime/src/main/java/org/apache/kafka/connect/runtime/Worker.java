@@ -73,6 +73,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 
@@ -215,6 +216,7 @@ public class Worker {
 
         offsetBackingStore.stop();
         metrics.stop();
+        stopExecutor();
 
         log.info("Worker stopped");
 
@@ -338,6 +340,18 @@ public class Worker {
         }
 
         return result;
+    }
+
+    private void stopExecutor() {
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                executor.awaitTermination(1, TimeUnit.HOURS);
+            } catch (InterruptedException e) {
+                log.error("Graceful stop for cached thread pool executor failed", e);
+                executor.shutdownNow();
+            }
+        }
     }
 
     private void stopConnectors() {
