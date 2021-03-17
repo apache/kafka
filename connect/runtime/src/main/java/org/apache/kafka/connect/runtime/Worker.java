@@ -389,13 +389,6 @@ public class Worker {
         }
     }
 
-    private void stopConnectors() {
-        // Herder is responsible for stopping connectors. This is an internal method to sequentially
-        // stop connectors that have not explicitly been stopped.
-        for (String connector: connectors.keySet())
-            stopConnector(connector);
-    }
-
     /**
      * Stop a connector managed by this worker.
      *
