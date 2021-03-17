@@ -33,7 +33,7 @@ import scala.collection.mutable
 
 class TransactionsBounce11Test extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
-  private val rebalanceTimeout = 60000
+  private val rebalanceTimeout = 30000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3
