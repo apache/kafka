@@ -30,15 +30,12 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FetchRequest extends AbstractRequest {
@@ -53,7 +50,6 @@ public class FetchRequest extends AbstractRequest {
 
     // These are immutable read-only structures derived from FetchRequestData
     private final Map<TopicPartition, PartitionData> fetchData;
-    private final List<TopicPartition> toForget;
     private final FetchMetadata metadata;
 
     public static final class PartitionData {
@@ -137,17 +133,6 @@ public class FetchRequest extends AbstractRequest {
                     ));
         }));
         return Collections.unmodifiableMap(result);
-    }
-
-    // Only used when version is lower than 13.
-    private List<TopicPartition> toForgottenTopicList(List<FetchRequestData.ForgottenTopic> forgottenTopics) {
-        List<TopicPartition> result = new ArrayList<>();
-        forgottenTopics.forEach(forgottenTopic ->
-                forgottenTopic.partitions().forEach(partitionId ->
-                        result.add(new TopicPartition(forgottenTopic.topic(), partitionId))
-                )
-        );
-        return result;
     }
 
     /**
@@ -251,52 +236,6 @@ public class FetchRequest extends AbstractRequest {
             }
         });
         return new FetchDataAndError(fetchData, unresolvedPartitions);
-    }
-
-    // For Fetch versions 13+, this object holds the toForget list used in previous Fetch iterations as well as
-    // a list of unresolved IDs to forget.
-    // For Fetch versions < 13, this will only wrap the toForgetList.
-    public static final class ToForgetAndIds {
-        private final List<TopicPartition> toForget;
-        private final Map<Uuid, Set<Integer>> toForgetIds;
-
-        public ToForgetAndIds(List<TopicPartition> toForget, Map<Uuid, Set<Integer>> toForgetIds) {
-            this.toForget = toForget;
-            this.toForgetIds = toForgetIds;
-        }
-
-        public final List<TopicPartition> toForget() {
-            return toForget;
-        }
-
-        public final Map<Uuid, Set<Integer>> toForgetIds() {
-            return toForgetIds;
-        }
-    }
-
-    // Only used when Fetch is version 13 or greater.
-    private ToForgetAndIds toForgottenTopicListAndIds(List<FetchRequestData.ForgottenTopic> forgottenTopics, Map<Uuid, String> topicNames) {
-        List<TopicPartition> result = new ArrayList<>();
-        Map<Uuid, Set<Integer>> unresolvedIds = new HashMap<>();
-        forgottenTopics.forEach(forgottenTopic -> {
-            Set<Integer> unresolvedPartitions = new HashSet<>();
-            forgottenTopic.partitions().forEach(partitionId -> {
-                String name = topicNames.get(forgottenTopic.topicId());
-                // If topic name is resolved, add to result. Otherwise, add to unresolvedPartitions.
-                if (name != null)
-                    result.add(new TopicPartition(forgottenTopic.topic(), partitionId));
-                else
-                    unresolvedPartitions.add(partitionId);
-            });
-            // If unresolvedIds already contains an entry for a topic ID, add unresolvedPartitions to the set.
-            // Otherwise, create a new entry and use unresolvedPartitions as the set.
-            if (unresolvedIds.containsKey(forgottenTopic.topicId())) {
-                unresolvedIds.get(forgottenTopic.topicId()).addAll(unresolvedPartitions);
-            } else {
-                unresolvedIds.put(forgottenTopic.topicId(), unresolvedPartitions);
-            }
-        });
-        return new ToForgetAndIds(result, unresolvedIds);
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
@@ -445,13 +384,11 @@ public class FetchRequest extends AbstractRequest {
         if (version < 13) {
             this.data = fetchRequestData;
             this.fetchData = toPartitionDataMap(fetchRequestData.topics());
-            this.toForget = toForgottenTopicList(fetchRequestData.forgottenTopicsData());
             this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
         } else {
             this.data = fetchRequestData;
             // We need topic name map to fill these data structures, so we will build on fetchData() and toForget()
             this.fetchData = Collections.emptyMap();
-            this.toForget = Collections.emptyList();
             this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
         }
     }
@@ -475,14 +412,7 @@ public class FetchRequest extends AbstractRequest {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         data.topics().forEach(topic -> {
             List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
-                    new FetchResponseData.PartitionData()
-                            .setPartitionIndex(partition.partition())
-                            .setErrorCode(error.code())
-                            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
-                            .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                            .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
-                            .setAbortedTransactions(null)
-                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)).collect(Collectors.toList());
+                    FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                     .setTopicId(topic.topicId())
                     .setPartitions(partitionResponses));
@@ -523,10 +453,11 @@ public class FetchRequest extends AbstractRequest {
         return toPartitionDataMapAndError(data.topics(), topicNames);
     }
 
-    public ToForgetAndIds toForgetAndIds(Map<Uuid, String> topicNames) {
-        if (version() < 13)
-            return new ToForgetAndIds(toForget, Collections.emptyMap());
-        return toForgottenTopicListAndIds(data.forgottenTopicsData(), topicNames);
+    public List<FetchRequestData.ForgottenTopic> forgottenTopics(Map<Uuid, String> topicNames) {
+        if (version() >= 13)
+          data.forgottenTopicsData().forEach(forgottenTopic ->
+                  forgottenTopic.setTopic(topicNames.getOrDefault(forgottenTopic.topicId(), "")));
+        return data.forgottenTopicsData();
     }
 
     public boolean isFromFollower() {

@@ -20,10 +20,10 @@ package kafka.server
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.{FetchRequestData, FetchResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
-import org.apache.kafka.common.requests.FetchRequest.{FetchDataAndError, ToForgetAndIds}
+import org.apache.kafka.common.requests.FetchRequest.FetchDataAndError
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 import java.util
@@ -319,7 +319,7 @@ class FetchSession(val id: Int,
   // Update the cached partition data based on the request.
   def update(version: Short,
              fetchDataAndError: FetchDataAndError,
-             toForgetAndIds: ToForgetAndIds,
+             toForget: util.List[FetchRequestData.ForgottenTopic],
              reqMetadata: JFetchMetadata,
              topicIds: util.Map[String, Uuid],
              topicNames: util.Map[Uuid, String]): (TL, TL, TL) = synchronized {
@@ -334,11 +334,7 @@ class FetchSession(val id: Int,
       while (unresolvedIterator.hasNext()) {
         val partition = unresolvedIterator.next()
 
-        // Remove from unresolvedPartitions if ID is unresolved in toForgetIds
-        val forgetPartitions = toForgetAndIds.toForgetIds.get(partition.topicId)
-        if (forgetPartitions != null && forgetPartitions.contains(partition.partition))
-          unresolvedIterator.remove()
-        else if (topicNames.get(partition.topicId) != null) {
+        if (topicNames.get(partition.topicId) != null) {
           // Try to resolve ID, if there is a name for the given ID, add or update a CachedPartition in partitionMap
           // and remove from unresolvedPartitions.
           val newTp = new TopicPartition(topicNames.get(partition.topicId), partition.partition)
@@ -374,9 +370,18 @@ class FetchSession(val id: Int,
         updated.add(topicPart)
       }
     }
-    toForgetAndIds.toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topic, p.partition)))
-        removed.add(p)
+
+    toForget.forEach { topicToForget =>
+      if (topicToForget.topic() == "") {
+        topicToForget.partitions().forEach { partitionToForget =>
+          unresolvedPartitions.remove(new CachedUnresolvedPartition(topicToForget.topicId(), partitionToForget))
+        }
+      } else {
+        topicToForget.partitions().forEach { partitionToForget =>
+          if (partitionMap.remove(new CachedPartition(topicToForget.topic(), partitionToForget)))
+            removed.add(new TopicPartition(topicToForget.topic(), partitionToForget))
+        }
+      }
     }
     (added, updated, removed)
   }
@@ -990,7 +995,7 @@ class FetchManager(private val time: Time,
                  reqMetadata: JFetchMetadata,
                  isFollower: Boolean,
                  fetchDataAndError: FetchDataAndError,
-                 toForgetAndIds: ToForgetAndIds,
+                 toForget: util.List[FetchRequestData.ForgottenTopic],
                  topicNames: util.Map[Uuid, String],
                  topicIds: util.Map[String, Uuid]): FetchContext = {
     val context = if (reqMetadata.isFull) {
@@ -1025,7 +1030,7 @@ class FetchManager(private val time: Time,
                 s"${session.epoch}, but got ${reqMetadata.epoch} instead.");
               new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH, reqMetadata)
             } else {
-              val (added, updated, removed) = session.update(reqVersion, fetchDataAndError, toForgetAndIds, reqMetadata, topicIds, topicNames)
+              val (added, updated, removed) = session.update(reqVersion, fetchDataAndError, toForget, reqMetadata, topicIds, topicNames)
               if (session.isEmpty) {
                 debug(s"Created a new sessionless FetchContext and closing session id ${session.id}, " +
                   s"epoch ${session.epoch}: after removing ${partitionsToLogString(removed)}, " +

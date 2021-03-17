@@ -181,7 +181,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNames),
-      request1.toForgetAndIds(topicNames),
+      request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -217,7 +217,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -239,7 +239,7 @@ class FetchSessionTest {
       request3.metadata,
       request3.isFromFollower,
       request3.fetchDataAndError(topicNames),
-      request3.toForgetAndIds(topicNames),
+      request3.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -284,7 +284,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNames),
-      request1.toForgetAndIds(topicNames),
+      request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -320,7 +320,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -341,7 +341,7 @@ class FetchSessionTest {
       request3.metadata,
       request3.isFromFollower,
       request3.fetchDataAndError(topicNames),
-      request3.toForgetAndIds(topicNames),
+      request3.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -366,7 +366,7 @@ class FetchSessionTest {
       request.metadata,
       request.isFromFollower,
       request.fetchDataAndError(topicNames),
-      request.toForgetAndIds(topicNames),
+      request.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -384,7 +384,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -422,7 +422,7 @@ class FetchSessionTest {
       request3.metadata,
       request3.isFromFollower,
       request3.fetchDataAndError(topicNames),
-      request3.toForgetAndIds(topicNames),
+      request3.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -437,7 +437,7 @@ class FetchSessionTest {
       request4.metadata,
       request4.isFromFollower,
       request4.fetchDataAndError(topicNames),
-      request4.toForgetAndIds(topicNames),
+      request4.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -452,7 +452,7 @@ class FetchSessionTest {
       request5.metadata,
       request5.isFromFollower,
       request5.fetchDataAndError(topicNames),
-      request5.toForgetAndIds(topicNames),
+      request5.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -476,7 +476,7 @@ class FetchSessionTest {
       request6.metadata,
       request6.isFromFollower,
       request6.fetchDataAndError(topicNames),
-      request6.toForgetAndIds(topicNames),
+      request6.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -492,7 +492,7 @@ class FetchSessionTest {
       request7.metadata,
       request7.isFromFollower,
       request7.fetchDataAndError(topicNames),
-      request7.toForgetAndIds(topicNames),
+      request7.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -516,7 +516,7 @@ class FetchSessionTest {
         request8.metadata,
         request8.isFromFollower,
         request8.fetchDataAndError(topicNames),
-        request8.toForgetAndIds(topicNames),
+        request8.forgottenTopics(topicNames),
         topicNames,
         topicIds
       )
@@ -561,7 +561,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNames),
-      request1.toForgetAndIds(topicNames),
+      request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -594,7 +594,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -648,7 +648,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNamesOnlyBar),
-      request1.toForgetAndIds(topicNamesOnlyBar),
+      request1.forgottenTopics(topicNamesOnlyBar),
       topicNamesOnlyBar,
       topicIdsOnlyBar
     )
@@ -683,7 +683,7 @@ class FetchSessionTest {
         request2.metadata,
         request2.isFromFollower,
         request2.fetchDataAndError(topicNamesOnlyBar),
-        request2.toForgetAndIds(topicNamesOnlyBar),
+        request2.forgottenTopics(topicNamesOnlyBar),
         topicNamesOnlyBar,
         topicIdsOnlyBar
       )
@@ -726,7 +726,7 @@ class FetchSessionTest {
       request3.metadata,
       request3.isFromFollower,
       request3.fetchDataAndError(topicNames),
-      request3.toForgetAndIds(topicNames),
+      request3.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -766,7 +766,7 @@ class FetchSessionTest {
       request4.metadata,
       request4.isFromFollower,
       request4.fetchDataAndError(topicNames),
-      request4.toForgetAndIds(topicNames),
+      request4.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -814,7 +814,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNamesOnlyBar),
-      request1.toForgetAndIds(topicNamesOnlyBar),
+      request1.forgottenTopics(topicNamesOnlyBar),
       topicNamesOnlyBar,
       topicIdsOnlyBar
     )
@@ -862,7 +862,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(emptyNameMap),
-      request1.toForgetAndIds(emptyNameMap),
+      request1.forgottenTopics(emptyNameMap),
       emptyNameMap,
       emptyIdMap
     )
@@ -897,7 +897,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNamesFoo),
-      request2.toForgetAndIds(topicNamesFoo),
+      request2.forgottenTopics(topicNamesFoo),
       topicNamesFoo,
       topicIdsFoo
     )
@@ -931,7 +931,7 @@ class FetchSessionTest {
       request3.metadata,
       request3.isFromFollower,
       request3.fetchDataAndError(topicNames),
-      request3.toForgetAndIds(topicNames),
+      request3.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -977,7 +977,7 @@ class FetchSessionTest {
       session1request1.metadata,
       session1request1.isFromFollower,
       session1request1.fetchDataAndError(topicNames),
-      session1request1.toForgetAndIds(topicNames),
+      session1request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1014,7 +1014,7 @@ class FetchSessionTest {
       session2request1.metadata,
       session2request1.isFromFollower,
       session2request1.fetchDataAndError(topicNames),
-      session2request1.toForgetAndIds(topicNames),
+      session2request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1051,7 +1051,7 @@ class FetchSessionTest {
       session1request2.metadata,
       session1request2.isFromFollower,
       session1request2.fetchDataAndError(topicNames),
-      session1request2.toForgetAndIds(topicNames),
+      session1request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1074,7 +1074,7 @@ class FetchSessionTest {
       session3request1.metadata,
       session3request1.isFromFollower,
       session3request1.fetchDataAndError(topicNames),
-      session3request1.toForgetAndIds(topicNames),
+      session3request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1122,7 +1122,7 @@ class FetchSessionTest {
       session1request.metadata,
       session1request.isFromFollower,
       session1request.fetchDataAndError(topicNames),
-      session1request.toForgetAndIds(topicNames),
+      session1request.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1159,7 +1159,7 @@ class FetchSessionTest {
       session2request.metadata,
       session2request.isFromFollower,
       session2request.fetchDataAndError(topicNames),
-      session2request.toForgetAndIds(topicNames),
+      session2request.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1200,7 +1200,7 @@ class FetchSessionTest {
       session3request.metadata,
       session3request.isFromFollower,
       session3request.fetchDataAndError(topicNames),
-      session3request.toForgetAndIds(topicNames),
+      session3request.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1244,7 +1244,7 @@ class FetchSessionTest {
       session4request.metadata,
       session4request.isFromFollower,
       session4request.fetchDataAndError(topicNames),
-      session4request.toForgetAndIds(topicNames),
+      session4request.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1293,7 +1293,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNames),
-      request1.toForgetAndIds(topicNames),
+      request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1326,7 +1326,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1359,7 +1359,7 @@ class FetchSessionTest {
       request1.metadata,
       request1.isFromFollower,
       request1.fetchDataAndError(topicNames),
-      request1.toForgetAndIds(topicNames),
+      request1.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )
@@ -1390,7 +1390,7 @@ class FetchSessionTest {
       request2.metadata,
       request2.isFromFollower,
       request2.fetchDataAndError(topicNames),
-      request2.toForgetAndIds(topicNames),
+      request2.forgottenTopics(topicNames),
       topicNames,
       topicIds
     )

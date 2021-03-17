@@ -672,7 +672,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.metadata,
       fetchRequest.isFromFollower,
       fetchRequest.fetchDataAndError(topicNames),
-      fetchRequest.toForgetAndIds(topicNames),
+      fetchRequest.forgottenTopics(topicNames),
       topicNames,
       topicIds)
 

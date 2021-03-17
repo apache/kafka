@@ -61,7 +61,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
-import org.apache.kafka.common.requests.FetchRequest.{FetchDataAndError, ToForgetAndIds}
+import org.apache.kafka.common.requests.FetchRequest.FetchDataAndError
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -2123,7 +2123,7 @@ class KafkaApisTest {
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[FetchDataAndError],
-      anyObject[ToForgetAndIds],
+      anyObject[util.List[FetchRequestData.ForgottenTopic]],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
@@ -2686,7 +2686,7 @@ class KafkaApisTest {
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[FetchDataAndError],
-      anyObject[ToForgetAndIds],
+      anyObject[util.List[FetchRequestData.ForgottenTopic]],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
