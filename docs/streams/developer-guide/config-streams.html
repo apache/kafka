@@ -294,7 +294,7 @@
           <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
             <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default),
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>, or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code></td>.
+              <code class="docutils literal"><span class="pre">"exactly_once"</span></code> (for EOS version 1), or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> (for EOS version 2)</td>.
             <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantedd"><span class="std std-ref">Processing Guarantee</span></a></td>
           </tr>
           <tr class="row-odd"><td>poll.ms</td>
@@ -668,8 +668,8 @@
           <blockquote>
             <div>The processing guarantee that should be used.
               Possible values are <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default),
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>,
-              and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code>.
+              <code class="docutils literal"><span class="pre">"exactly_once"</span></code> (for EOS version 1),
+              and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> (for EOS version 2).
               Using <code class="docutils literal"><span class="pre">"exactly_once"</span></code> requires broker
               version 0.11.0 or newer, while using <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code>
               requires broker version 2.5 or newer.
@@ -865,10 +865,6 @@
           <td>Producer</td>
           <td>100</td>
         </tr>
-        <tr class="row-odd"><td>max.poll.interval.ms</td>
-          <td>Consumer</td>
-          <td>Integer.MAX_VALUE</td>
-        </tr>
         <tr class="row-even"><td>max.poll.records</td>
           <td>Consumer</td>
           <td>1000</td>
@@ -911,10 +907,6 @@
         <tr class="row-odd"><td>linger.ms</td>
           <td>Producer</td>
           <td>100</td>
-        </tr>
-        <tr class="row-even"><td>max.poll.interval.ms</td>
-          <td>Consumer</td>
-          <td>300000</td>
         </tr>
         <tr class="row-odd"><td>max.poll.records</td>
           <td>Consumer</td>

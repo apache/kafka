@@ -335,11 +335,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
    * @param channelThrottlingCallback Callback for channel throttling
    */
-  def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: Response => Unit): Unit = {
+  def throttle(
+    request: RequestChannel.Request,
+    throttleCallback: ThrottleCallback,
+    throttleTimeMs: Int
+  ): Unit = {
     if (throttleTimeMs > 0) {
       val clientSensors = getOrCreateQuotaSensors(request.session, request.headerForLoggingOrThrottling().clientId)
       clientSensors.throttleTimeSensor.record(throttleTimeMs)
-      val throttledChannel = new ThrottledChannel(request, time, throttleTimeMs, channelThrottlingCallback)
+      val throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback)
       delayQueue.add(throttledChannel)
       delayQueueSensor.record()
       debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))

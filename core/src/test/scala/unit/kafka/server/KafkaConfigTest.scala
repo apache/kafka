@@ -33,9 +33,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 
+import org.apache.kafka.common.Node
 import org.junit.jupiter.api.function.Executable
+
+import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
@@ -259,6 +262,30 @@ class KafkaConfigTest {
     // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName
     assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
+  }
+
+  @Test
+  def testControllerListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000")
+    props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLPLANE")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    assertTrue(isValidKafkaConfig(props))
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val controlPlaneEndpoint = serverConfig.controlPlaneListener.get
+    assertEquals("localhost", controlPlaneEndpoint.host)
+    assertEquals(4000, controlPlaneEndpoint.port)
+    assertEquals(SecurityProtocol.SSL, controlPlaneEndpoint.securityProtocol)
+
+    val controllerEndpoints = serverConfig.controllerListeners
+    assertEquals(1, controllerEndpoints.size)
+    val controllerEndpoint = controllerEndpoints.iterator.next()
+    assertEquals("localhost", controllerEndpoint.host)
+    assertEquals(5000, controllerEndpoint.port)
+    assertEquals(SecurityProtocol.SASL_SSL, controllerEndpoint.securityProtocol)
   }
 
   @Test
@@ -619,8 +646,13 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
           // KIP-500 Configurations
+        case KafkaConfig.ProcessRolesProp => // ignore
+        case KafkaConfig.InitialBrokerRegistrationTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataLogDirProp => // ignore string
+        case KafkaConfig.ControllerListenerNamesProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
@@ -747,6 +779,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
         //Sasl Configs
+        case KafkaConfig.SaslMechanismControllerProtocolProp => // ignore
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
         case KafkaConfig.SaslClientCallbackHandlerClassProp =>
@@ -962,8 +995,60 @@ class KafkaConfigTest {
     }
   }
 
+  def assertDistinctControllerAndAdvertisedListeners(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://A:9092,SSL://B:9093")
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Still valid
+    val controllerListeners = "SASL_SSL"
+    props.put(KafkaConfig.ControllerListenerNamesProp, controllerListeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
   @Test
-  def testInvalidQuorumVotersConfig(): Unit = {
+  def assertAllControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL,SASL_SSL")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertEvenOneControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testControllerQuorumVoterStringsToNodes(): Unit = {
+    assertThrows(classOf[ConfigException], () => RaftConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
+    assertEquals(Seq(new Node(3000, "example.com", 9093)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093")).asScala.toSeq)
+    assertEquals(Seq(new Node(3000, "example.com", 9093),
+      new Node(3001, "example.com", 9094)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093","3001@example.com:9094")).asScala.toSeq)
+  }
+
+  @Test
+  def testInvalidQuorumVoterConfig(): Unit = {
     assertInvalidQuorumVoters("1")
     assertInvalidQuorumVoters("1@")
     assertInvalidQuorumVoters("1:")
@@ -975,6 +1060,7 @@ class KafkaConfigTest {
     assertInvalidQuorumVoters("1@kafka1:9092,2@")
     assertInvalidQuorumVoters("1@kafka1:9092,2@blah")
     assertInvalidQuorumVoters("1@kafka1:9092,2@blah,")
+    assertInvalidQuorumVoters("1@kafka1:9092:1@kafka2:9092")
   }
 
   private def assertInvalidQuorumVoters(value: String): Unit = {
@@ -1007,6 +1093,102 @@ class KafkaConfigTest {
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+  }
+
+  @Test
+  def testAcceptsLargeNodeIdForRaftBasedCase(): Unit = {
+    // Generation of Broker IDs is not supported when using Raft-based controller quorums,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is allowed despite broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedBrokerCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedControllerCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForRaftBasedCaseWithAutoGenDisabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsLargeNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // Generation of Broker IDs is supported when using ZooKeeper-based controllers,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is not allowed with broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testAcceptsNegativeOneNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // -1 is the default for both node.id and broker.id; it implies "auto-generate" and should succeed
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeTwoNodeIdForZkBasedCaseWithAutoGenEnabled(): Unit = {
+    // -1 implies "auto-generate" and should succeed, but -2 does not and should fail
+    val negativeTwoNodeId = -2
+    val props = TestUtils.createBrokerConfig(negativeTwoNodeId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.NodeIdProp, negativeTwoNodeId.toString)
+    props.put(KafkaConfig.BrokerIdProp, negativeTwoNodeId.toString)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testAcceptsLargeNodeIdForZkBasedCaseWithAutoGenDisabled(): Unit = {
+    // Ensure a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // is allowed with broker.id.generation.enable=false
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeNodeIdForZkBasedCaseWithAutoGenDisabled(): Unit = {
+    // -1 is the default for both node.id and broker.id
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertFalse(isValidKafkaConfig(props))
   }
 
   @Test

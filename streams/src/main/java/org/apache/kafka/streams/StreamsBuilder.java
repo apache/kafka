@@ -491,29 +491,6 @@ public class StreamsBuilder {
     }
 
     /**
-     * @deprecated Use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
-     */
-    @Deprecated
-    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                              final String topic,
-                                                              final String sourceName,
-                                                              final Consumed<K, V> consumed,
-                                                              final String processorName,
-                                                              final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
-        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            new ConsumedInternal<>(consumed),
-            processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
-        );
-        return this;
-    }
-
-    /**
      * Adds a global {@link StateStore} to the topology.
      * The {@link StateStore} sources its data from all partitions of the provided input topic.
      * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.

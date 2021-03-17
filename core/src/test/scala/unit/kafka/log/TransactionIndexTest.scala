@@ -17,7 +17,7 @@
 package kafka.log
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.message.FetchResponseData
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -136,7 +136,7 @@ class TransactionIndexTest {
     assertEquals(abortedTransactions.take(3), index.collectAbortedTxns(0L, 100L).abortedTransactions)
 
     index.reset()
-    assertEquals(List.empty[AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
+    assertEquals(List.empty[FetchResponseData.AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
   }
 
   @Test

@@ -85,6 +85,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -175,7 +176,6 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         defaultProducerConfigs.put(
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        defaultProducerConfigs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         defaultProducerConfigs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         defaultProducerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
         defaultProducerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
@@ -1390,7 +1390,8 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
                 anyObject(RetryWithToleranceOperator.class),
-                anyObject(StatusBackingStore.class))
+                anyObject(StatusBackingStore.class),
+                anyObject(Executor.class))
                 .andReturn(workerTask);
     }
 

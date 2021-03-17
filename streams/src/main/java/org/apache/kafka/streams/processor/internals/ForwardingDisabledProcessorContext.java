@@ -166,4 +166,14 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
     }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return delegate.currentSystemTimeMs();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        return delegate.currentStreamTimeMs();
+    }
 }

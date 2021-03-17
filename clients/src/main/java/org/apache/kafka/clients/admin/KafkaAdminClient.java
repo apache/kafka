@@ -756,6 +756,11 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
+        void abortAndFail(TimeoutException timeoutException) {
+            this.aborted = true;
+            fail(time.milliseconds(), timeoutException);
+        }
+
         /**
          * Handle a failure.
          *
@@ -818,8 +823,12 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
                     new Exception(prettyPrintException(cause)));
             }
-            handleFailure(new TimeoutException(this + " timed out at " + now
-                + " after " + tries + " attempt(s)", cause));
+            if (cause instanceof TimeoutException) {
+                handleFailure(cause);
+            } else {
+                handleFailure(new TimeoutException(this + " timed out at " + now
+                    + " after " + tries + " attempt(s)", cause));
+            }
         }
 
         /**
@@ -1130,7 +1139,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (call.aborted) {
                         log.warn("Aborted call {} is still in callsInFlight.", call);
                     } else {
-                        log.debug("Closing connection to {} to time out {}", nodeId, call);
+                        log.debug("Closing connection to {} due to timeout while awaiting {}", nodeId, call);
                         call.aborted = true;
                         client.disconnect(nodeId);
                         numTimedOut++;
@@ -1375,7 +1384,7 @@ public class KafkaAdminClient extends AdminClient {
                 client.wakeup(); // wake the thread if it is in poll()
             } else {
                 log.debug("The AdminClient thread has exited. Timing out {}.", call);
-                call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread has exited."));
+                call.abortAndFail(new TimeoutException("The AdminClient thread has exited."));
             }
         }
 
@@ -1390,7 +1399,7 @@ public class KafkaAdminClient extends AdminClient {
         void call(Call call, long now) {
             if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
                 log.debug("The AdminClient is not accepting new calls. Timing out {}.", call);
-                call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread is not accepting new calls."));
+                call.abortAndFail(new TimeoutException("The AdminClient thread is not accepting new calls."));
             } else {
                 enqueue(call, now);
             }
@@ -2569,13 +2578,13 @@ public class KafkaAdminClient extends AdminClient {
                 brokerId -> new DescribeLogDirsRequestData());
             DescribableLogDirTopic describableLogDirTopic = requestData.topics().find(replica.topic());
             if (describableLogDirTopic == null) {
-                List<Integer> partitionIndex = new ArrayList<>();
-                partitionIndex.add(replica.partition());
+                List<Integer> partitions = new ArrayList<>();
+                partitions.add(replica.partition());
                 describableLogDirTopic = new DescribableLogDirTopic().setTopic(replica.topic())
-                        .setPartitionIndex(partitionIndex);
+                        .setPartitions(partitions);
                 requestData.topics().add(describableLogDirTopic);
             } else {
-                describableLogDirTopic.partitionIndex().add(replica.partition());
+                describableLogDirTopic.partitions().add(replica.partition());
             }
         }
 
@@ -2585,7 +2594,7 @@ public class KafkaAdminClient extends AdminClient {
             final DescribeLogDirsRequestData topicPartitions = entry.getValue();
             final Map<TopicPartition, ReplicaLogDirInfo> replicaDirInfoByPartition = new HashMap<>();
             for (DescribableLogDirTopic topicPartition: topicPartitions.topics()) {
-                for (Integer partitionId : topicPartition.partitionIndex()) {
+                for (Integer partitionId : topicPartition.partitions()) {
                     replicaDirInfoByPartition.put(new TopicPartition(topicPartition.topic(), partitionId), new ReplicaLogDirInfo());
                 }
             }
@@ -4531,7 +4540,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
         for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             final String feature = entry.getKey();
-            if (feature.trim().isEmpty()) {
+            if (Utils.isBlank(feature)) {
                 throw new IllegalArgumentException("Provided feature can not be empty.");
             }
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
