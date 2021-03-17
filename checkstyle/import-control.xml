@@ -244,7 +244,6 @@
   </subpackage>
 
   <subpackage name="clients">
-    <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
@@ -266,7 +265,6 @@
   </subpackage>
 
   <subpackage name="server">
-    <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
@@ -283,7 +281,6 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.shell"/>
-    <allow pkg="org.apache.log4j" />
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
   </subpackage>
@@ -310,7 +307,6 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
-    <allow pkg="org.apache.log4j" />
     <allow pkg="org.eclipse.jetty" />
     <allow pkg="org.glassfish.jersey" />
   </subpackage>
@@ -373,7 +369,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
-        <allow pkg="org.apache.log4j" />
         <subpackage name="testutil">
           <allow pkg="org.apache.log4j" />
         </subpackage>
