@@ -83,7 +83,7 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
-        return new ControllerResult<>(outputRecords, outputResults);
+        return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 
     private void incrementalAlterConfigResource(ConfigResource configResource,
@@ -171,7 +171,7 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
-        return new ControllerResult<>(outputRecords, outputResults);
+        return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 
     private void legacyAlterConfigResource(ConfigResource configResource,
@@ -303,7 +303,7 @@ public class ConfigurationControlManager {
      *
      * @param record            The ConfigRecord.
      */
-    void replay(ConfigRecord record) {
+    public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
         TimelineHashMap<String, String> configs = configData.get(configResource);
@@ -363,5 +363,9 @@ public class ConfigurationControlManager {
             results.put(resource, new ResultOrError<>(foundConfigs));
         }
         return results;
+    }
+
+    void deleteTopicConfigs(String name) {
+        configData.remove(new ConfigResource(Type.TOPIC, name));
     }
 }

@@ -348,7 +348,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         return prev;
     }
 
-    Object snapshottableRemove(Object object) {
+    T snapshottableRemove(Object object) {
         T prev = baseRemove(object);
         if (prev == null) {
             return null;

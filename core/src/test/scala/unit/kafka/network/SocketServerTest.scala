@@ -1562,8 +1562,15 @@ class SocketServerTest {
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
+      val sleepTimeMs = idleTimeMs / 2 + 1
       val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
-      time.sleep(idleTimeMs + 1)
+      // advance mock time in increments to verify that muted sockets with buffered data dont have their idle time updated
+      // additional calls to poll() should not update the channel last idle time
+      for (_ <- 0 to 3) {
+        time.sleep(sleepTimeMs)
+        testableSelector.operationCounts.clear()
+        testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      }
       testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = false)
 
       val otherSocket = sslConnect(testableServer)
@@ -1575,7 +1582,30 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
     }
   }
-
+  
+  @Test
+  def testUnmuteChannelWithBufferedReceives(): Unit = {
+    val time = new MockTime()
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(time = time)
+    testableServer.startup()
+    val proxyServer = new ProxyServer(testableServer)
+    try {
+      val testableSelector = testableServer.testableSelector
+      val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
+      assertEquals(Set.empty, keysWithBufferedRead.asScala)
+      processRequest(testableServer.dataPlaneRequestChannel, request)
+      // buffered requests should be processed after channel is unmuted
+      receiveRequest(testableServer.dataPlaneRequestChannel)
+      socket.close()
+    } finally {
+      proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
+    }
+  }
   /**
    * Tests exception handling in [[Processor.processCompletedReceives]]. Exception is
    * injected into [[Selector.mute]] which is used to mute the channel when a receive is complete.
@@ -1743,7 +1773,7 @@ class SocketServerTest {
       // In each iteration, SocketServer processes at most connectionQueueSize (1 in this test)
       // new connections and then does poll() to process data from existing connections. So for
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
-      // we can safely check that there were atleast 4 polls prior to the 5th connection.
+      // we can safely check that there were at least 4 polls prior to the 5th connection.
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
       assertTrue(pollCount >= numConnections - 1, s"Connections created too quickly: $pollCount")
       verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = true)

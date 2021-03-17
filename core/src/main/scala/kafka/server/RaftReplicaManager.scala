@@ -132,8 +132,8 @@ class RaftReplicaManager(config: KafkaConfig,
 
   def endMetadataChangeDeferral(onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
     val startMs = time.milliseconds()
-    val partitionsMadeFollower = mutable.Set[Partition]()
-    val partitionsMadeLeader = mutable.Set[Partition]()
+    var partitionsMadeFollower = Set.empty[Partition]
+    var partitionsMadeLeader = Set.empty[Partition]
     replicaStateChangeLock synchronized {
       stateChangeLogger.info(s"Applying deferred metadata changes")
       val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
@@ -156,14 +156,10 @@ class RaftReplicaManager(config: KafkaConfig,
           }
         }
 
-        val partitionsMadeLeader = if (leaderPartitionStates.nonEmpty)
-          delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints, None)
-        else
-          Set.empty[Partition]
-        val partitionsMadeFollower = if (followerPartitionStates.nonEmpty)
-          delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints, None)
-        else
-          Set.empty[Partition]
+        if (leaderPartitionStates.nonEmpty)
+          partitionsMadeLeader = delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints, None)
+        if (followerPartitionStates.nonEmpty)
+          partitionsMadeFollower = delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints, None)
 
         // We need to transition anything that hasn't transitioned from Deferred to Offline to the Online state.
         deferredPartitionsIterator.foreach { deferredPartition =>
@@ -331,6 +327,8 @@ class RaftReplicaManager(config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
+        stateChangeLogger.info(s"Metadata batch $metadataOffset: applied ${partitionsBecomeLeader.size + partitionsBecomeFollower.size} partitions: " +
+          s"${partitionsBecomeLeader.size} leader(s) and ${partitionsBecomeFollower.size} follower(s)")
       }
       // TODO: we should move aside log directories which have been deleted rather than
       // purging them from the disk immediately.

@@ -103,7 +103,7 @@ public class OffsetFetchResponseTest {
 
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             OffsetFetchResponseData data = new OffsetFetchResponseData(
                 new ByteBufferAccessor(latestResponse.serialize(version)), version);
 
@@ -154,7 +154,7 @@ public class OffsetFetchResponseTest {
     @Test
     public void testShouldThrottle() {
         OffsetFetchResponse response = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             if (version >= 4) {
                 assertTrue(response.shouldClientThrottle(version));
             } else {

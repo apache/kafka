@@ -89,10 +89,10 @@ public class ProduceResponseTest {
                 "Produce failed");
         responseData.put(tp, partResponse);
 
-        for (short ver = 0; ver <= PRODUCE.latestVersion(); ver++) {
+        for (short version : PRODUCE.allVersions()) {
             ProduceResponse response = new ProduceResponse(responseData);
-            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serialize(ver), ver).responses().get(tp);
-            if (ver >= 8) {
+            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serialize(version), version).responses().get(tp);
+            if (version >= 8) {
                 assertEquals(1, deserialized.recordErrors.size());
                 assertEquals(3, deserialized.recordErrors.get(0).batchIndex);
                 assertEquals("Record error", deserialized.recordErrors.get(0).message);

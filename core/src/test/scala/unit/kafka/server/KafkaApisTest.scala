@@ -26,7 +26,7 @@ import java.util.{Collections, Optional, Properties, Random}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
-import kafka.controller.KafkaController
+import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -75,6 +75,8 @@ import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
@@ -1070,7 +1072,7 @@ class KafkaApisTest {
 
       val response = capturedResponse.getValue.asInstanceOf[OffsetCommitResponse]
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data().topics().get(0).partitions().get(0).errorCode()))
+        Errors.forCode(response.data.topics().get(0).partitions().get(0).errorCode))
     }
 
     checkInvalidPartition(-1)
@@ -1423,9 +1425,9 @@ class KafkaApisTest {
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName(tp.topic()).setPartitionData(Collections.singletonList(
+            .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
-              .setIndex(tp.partition())
+              .setIndex(tp.partition)
               .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
@@ -1630,21 +1632,21 @@ class KafkaApisTest {
 
     val topicStates = Seq(
       new StopReplicaTopicState()
-        .setTopicName(groupMetadataPartition.topic())
+        .setTopicName(groupMetadataPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(groupMetadataPartition.partition())
+          .setPartitionIndex(groupMetadataPartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
-        .setTopicName(txnStatePartition.topic())
+        .setTopicName(txnStatePartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(txnStatePartition.partition())
+          .setPartitionIndex(txnStatePartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic())
+        .setTopicName(fooPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition())
+          .setPartitionIndex(fooPartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava)
     ).asJava
@@ -1804,8 +1806,8 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
 
-    val group = response.data().groups().get(0)
-    assertEquals(Errors.NONE, Errors.forCode(group.errorCode()))
+    val group = response.data.groups().get(0)
+    assertEquals(Errors.NONE, Errors.forCode(group.errorCode))
     assertEquals(groupId, group.groupId())
     assertEquals(groupSummary.state, group.groupState())
     assertEquals(groupSummary.protocolType, group.protocolType())
@@ -1871,7 +1873,7 @@ class KafkaApisTest {
     val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
     def errorForPartition(topic: String, partition: Int): Errors = {
-      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode())
+      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode)
     }
 
     assertEquals(2, response.data.topics.size)
@@ -1912,7 +1914,7 @@ class KafkaApisTest {
       val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode()))
+        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode))
     }
 
     checkInvalidPartition(-1)
@@ -1940,7 +1942,7 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
-    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode()))
+    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode))
   }
 
   private def testListOffsetFailedGetLeaderReplica(error: Errors): Unit = {
@@ -2128,16 +2130,15 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
     createKafkaApis().handleFetchRequest(request)
 
-    val response = capturedResponse.getValue.asInstanceOf[FetchResponse[BaseRecords]]
+    val response = capturedResponse.getValue.asInstanceOf[FetchResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(hw, partitionData.highWatermark)
     assertEquals(-1, partitionData.lastStableOffset)
     assertEquals(0, partitionData.logStartOffset)
-    assertEquals(timestamp,
-      partitionData.records.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
+    assertEquals(timestamp, FetchResponse.recordsOrFail(partitionData).batches.iterator.next.maxTimestamp)
     assertNull(partitionData.abortedTransactions)
   }
 
@@ -2561,7 +2562,7 @@ class KafkaApisTest {
         .setPartitions(Collections.singletonList(
           new OffsetCommitResponseData.OffsetCommitResponsePartition()
             .setPartitionIndex(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
         ))
     )
     val response = capturedResponse.getValue.asInstanceOf[OffsetCommitResponse]
@@ -2869,9 +2870,9 @@ class KafkaApisTest {
     val fooPartition = new TopicPartition("foo", 0)
     val topicStates = Seq(
       new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic())
+        .setTopicName(fooPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition())
+          .setPartitionIndex(fooPartition.partition)
           .setLeaderEpoch(1)
           .setDeletePartition(false)).asJava)
     ).asJava
@@ -3244,15 +3245,18 @@ class KafkaApisTest {
 
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
-    def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
-      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
+
+    def fetchResponse(data: Map[TopicPartition, String]): FetchResponse = {
+      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData](
         data.map { case (tp, raw) =>
-          tp -> new FetchResponse.PartitionData(Errors.NONE,
-            105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(),
-            MemoryRecords.withRecords(CompressionType.NONE,
-              new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))).asInstanceOf[Records])
+          tp -> new FetchResponseData.PartitionData()
+            .setPartitionIndex(tp.partition)
+            .setHighWatermark(105)
+            .setLastStableOffset(105)
+            .setLogStartOffset(0)
+            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
       }.toMap.asJava)
-      new FetchResponse(Errors.NONE, responseData, 100, 100)
+      FetchResponse.of(Errors.NONE, 100, 100, responseData)
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)
@@ -3477,6 +3481,228 @@ class KafkaApisTest {
     assertEquals("Ongoing", fooState.transactionState)
     assertEquals(10000, fooState.transactionTimeoutMs)
     assertEquals(List(mkTopicData(topic = "foo", Seq(1, 2))), fooState.topics.asScala.toList)
+  }
+
+  @Test
+  def testListTransactionsErrorResponse(): Unit = {
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+      .andReturn(new ListTransactionsResponseData()
+        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+    createKafkaApis().handleListTransactionsRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[ListTransactionsResponse]
+    assertEquals(0, response.data.transactionStates.size)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testListTransactionsAuthorization(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("foo")
+      .setProducerId(12345L)
+      .setTransactionState("Ongoing"))
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("bar")
+      .setProducerId(98765)
+      .setTransactionState("PrepareAbort"))
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+      .andReturn(new ListTransactionsResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setTransactionStates(transactionStates))
+
+    def buildExpectedActions(transactionalId: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
+      val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("foo"))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("bar"))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleListTransactionsRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[ListTransactionsResponse]
+    assertEquals(1, response.data.transactionStates.size())
+    val transactionState = response.data.transactionStates.get(0)
+    assertEquals("foo", transactionState.transactionalId)
+    assertEquals(12345L, transactionState.producerId)
+    assertEquals("Ongoing", transactionState.transactionState)
+  }
+
+  @Test
+  def testDeleteTopicsByIdAuthorization(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val controllerContext: ControllerContext = EasyMock.mock(classOf[ControllerContext])
+
+    EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
+      EasyMock.anyObject(classOf[RequestChannel.Request]),
+      EasyMock.anyShort()
+    )).andReturn(UnboundedControllerMutationQuota)
+    EasyMock.expect(controller.isActive).andReturn(true)
+    EasyMock.expect(controller.controllerContext).andStubReturn(controllerContext)
+
+    // Try to delete three topics:
+    // 1. One without describe permission
+    // 2. One without delete permission
+    // 3. One which is authorized, but doesn't exist
+
+    expectTopicAuthorization(authorizer, AclOperation.DESCRIBE, Map(
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.ALLOWED
+    ))
+
+    expectTopicAuthorization(authorizer, AclOperation.DELETE, Map(
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.DENIED
+    ))
+
+    val topicIdsMap = Map(
+      Uuid.randomUuid() -> Some("foo"),
+      Uuid.randomUuid() -> Some("bar"),
+      Uuid.randomUuid() -> None
+    )
+
+    topicIdsMap.foreach { case (topicId, topicNameOpt) =>
+      EasyMock.expect(controllerContext.topicName(topicId)).andReturn(topicNameOpt)
+    }
+
+    val topicDatas = topicIdsMap.keys.map { topicId =>
+      new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId)
+    }.toList
+    val deleteRequest = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
+      .setTopics(topicDatas.asJava))
+      .build(ApiKeys.DELETE_TOPICS.latestVersion)
+
+    val request = buildRequest(deleteRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
+      requestChannel, txnCoordinator, controller, controllerContext, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
+
+    val deleteResponse = capturedResponse.getValue.asInstanceOf[DeleteTopicsResponse]
+
+    topicIdsMap.foreach { case (topicId, nameOpt) =>
+      val response = deleteResponse.data.responses.asScala.find(_.topicId == topicId).get
+      nameOpt match {
+        case Some("foo") =>
+          assertNull(response.name)
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
+        case Some("bar") =>
+          assertEquals("bar", response.name)
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
+        case None =>
+          assertNull(response.name)
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(response.errorCode))
+        case _ =>
+          fail("Unexpected topic id/name mapping")
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeleteTopicsByNameAuthorization(usePrimitiveTopicNameArray: Boolean): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
+      EasyMock.anyObject(classOf[RequestChannel.Request]),
+      EasyMock.anyShort()
+    )).andReturn(UnboundedControllerMutationQuota)
+    EasyMock.expect(controller.isActive).andReturn(true)
+
+    // Try to delete three topics:
+    // 1. One without describe permission
+    // 2. One without delete permission
+    // 3. One which is authorized, but doesn't exist
+
+    expectTopicAuthorization(authorizer, AclOperation.DESCRIBE, Map(
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.ALLOWED,
+      "baz" -> AuthorizationResult.ALLOWED
+    ))
+
+    expectTopicAuthorization(authorizer, AclOperation.DELETE, Map(
+      "foo" -> AuthorizationResult.DENIED,
+      "bar" -> AuthorizationResult.DENIED,
+      "baz" -> AuthorizationResult.ALLOWED
+    ))
+
+    val deleteRequest = if (usePrimitiveTopicNameArray) {
+      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
+        .setTopicNames(List("foo", "bar", "baz").asJava))
+        .build(5.toShort)
+    } else {
+      val topicDatas = List(
+        new DeleteTopicsRequestData.DeleteTopicState().setName("foo"),
+        new DeleteTopicsRequestData.DeleteTopicState().setName("bar"),
+        new DeleteTopicsRequestData.DeleteTopicState().setName("baz")
+      )
+      new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
+        .setTopics(topicDatas.asJava))
+        .build(ApiKeys.DELETE_TOPICS.latestVersion)
+    }
+
+    val request = buildRequest(deleteRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
+      requestChannel, txnCoordinator, controller, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
+
+    val deleteResponse = capturedResponse.getValue.asInstanceOf[DeleteTopicsResponse]
+
+    def lookupErrorCode(topic: String): Option[Errors] = {
+      Option(deleteResponse.data.responses().find(topic))
+        .map(result => Errors.forCode(result.errorCode))
+    }
+
+    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("foo"))
+    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), lookupErrorCode("bar"))
+    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), lookupErrorCode("baz"))
+  }
+
+  def expectTopicAuthorization(
+    authorizer: Authorizer,
+    aclOperation: AclOperation,
+    topicResults: Map[String, AuthorizationResult]
+  ): Unit = {
+    val expectedActions = topicResults.keys.map { topic =>
+      val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+      topic -> new Action(aclOperation, pattern, 1, true, true)
+    }.toMap
+
+    val actionsCapture: Capture[util.List[Action]] = EasyMock.newCapture()
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.capture(actionsCapture)))
+      .andAnswer(() => {
+        actionsCapture.getValue.asScala.map { action =>
+          val topic = action.resourcePattern.name
+          assertEquals(expectedActions(topic), action)
+          topicResults(topic)
+        }.asJava
+      })
+      .once()
   }
 
   private def createMockRequest(): RequestChannel.Request = {

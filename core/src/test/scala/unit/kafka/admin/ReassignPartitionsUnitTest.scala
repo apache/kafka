@@ -287,6 +287,20 @@ class ReassignPartitionsUnitTest {
   }
 
   @Test
+  def testGenerateAssignmentWithInvalidPartitionsFails(): Unit = {
+    val adminClient = new MockAdminClient.Builder().numBrokers(5).build()
+    try {
+      addTopics(adminClient)
+      assertStartsWith("Topic quux not found",
+        assertThrows(classOf[ExecutionException],
+          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"quux"}]}""", "0,1", false),
+          () => "Expected generateAssignment to fail").getCause.getMessage)
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  @Test
   def testGenerateAssignmentWithInconsistentRacks(): Unit = {
     val adminClient = new MockAdminClient.Builder().
       brokers(Arrays.asList(

@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -70,6 +69,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1087,6 +1088,15 @@ public class TaskManagerTest {
         expect(consumer.groupMetadata()).andReturn(groupMetadata);
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
+
+        task00.committedOffsets();
+        EasyMock.expectLastCall();
+        task01.committedOffsets();
+        EasyMock.expectLastCall();
+        task02.committedOffsets();
+        EasyMock.expectLastCall();
+        task10.committedOffsets();
+        EasyMock.expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
@@ -3113,6 +3123,27 @@ public class TaskManagerTest {
         }
 
         @Override
+        public Map<TopicPartition, Long> committedOffsets() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> highWaterMark() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public Optional<Long> timeCurrentIdlingStarted() {
+            return Optional.empty();
+        }
+
+        @Override
+        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+            Objects.requireNonNull(topicPartition);
+            assertThat("It must be from an owned topic", inputPartitions.contains(topicPartition));
+        }
+
+        @Override
         public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
             if (isActive()) {
                 final Deque<ConsumerRecord<byte[], byte[]>> partitionQueue =
@@ -3124,11 +3155,6 @@ public class TaskManagerTest {
             } else {
                 throw new IllegalStateException("Can't add records to an inactive task.");
             }
-        }
-
-        @Override
-        public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
-            // do nothing
         }
 
         @Override
