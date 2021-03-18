@@ -517,7 +517,7 @@ final class KafkaMetadataLogTest {
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch - 1)
     assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)
-    assertEquals(new OffsetAndEpoch(numberOfRecords, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
   }
 
   @Test
@@ -538,7 +538,7 @@ final class KafkaMetadataLogTest {
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
     assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)
-    assertEquals(new OffsetAndEpoch(offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
   }
 
   @Test
@@ -559,7 +559,7 @@ final class KafkaMetadataLogTest {
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch)
     assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind)
-    assertEquals(new OffsetAndEpoch(offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
   }
 
   @Test
@@ -593,8 +593,8 @@ final class KafkaMetadataLogTest {
 
     val log = buildMetadataLog(tempDir, mockTime)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
-    val newSnapshotId = new OffsetAndEpoch(offset, 1)
-    TestUtils.resource(log.createSnapshot(newSnapshotId)) { snapshot =>
+    val snapshotId = new OffsetAndEpoch(offset, 1)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
       snapshot.freeze()
     }
     log.truncateToLatestSnapshot()
@@ -604,7 +604,7 @@ final class KafkaMetadataLogTest {
     // offset is not equal to oldest snapshot's offset
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2)
     assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
-    assertEquals(new OffsetAndEpoch(10, 1), resultOffsetAndEpoch.offsetAndEpoch())
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
   }
 
   @Test

@@ -681,7 +681,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch - 1);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, olderEpochSnapshotId),
                 resultOffsetAndEpoch);
     }
 
@@ -697,7 +697,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.SNAPSHOT, olderEpochSnapshotId),
                 resultOffsetAndEpoch);
     }
 
@@ -713,7 +713,7 @@ public class MockLogTest {
         log.truncateToLatestSnapshot();
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.VALID, new OffsetAndEpoch(offset, epoch)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.VALID, olderEpochSnapshotId),
                 resultOffsetAndEpoch);
     }
 
@@ -753,7 +753,7 @@ public class MockLogTest {
 
         // offset is not equal to oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
-        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, new OffsetAndEpoch(10, 1)),
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Kind.DIVERGING, olderEpochSnapshotId),
                 resultOffsetAndEpoch);
     }
 
