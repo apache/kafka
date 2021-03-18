@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets
 
 buildscript {
   repositories {
-    mavenCentral()
     jcenter()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
@@ -53,7 +52,7 @@ spotless {
 allprojects {
 
   repositories {
-    mavenCentral()
+    jcenter()
   }
 
   dependencyUpdates {
