@@ -85,7 +85,7 @@ public class AdminApiDriver<K, V> {
     private final Map<K, KafkaFutureImpl<V>> futures;
 
     private final BiMultimap<ApiRequestScope, K> lookupMap = new BiMultimap<>();
-    private final BiMultimap<BrokerScope, K> fulfillmentMap = new BiMultimap<>();
+    private final BiMultimap<FulfillmentScope, K> fulfillmentMap = new BiMultimap<>();
     private final Map<ApiRequestScope, RequestState> requestStates = new HashMap<>();
 
     public AdminApiDriver(
@@ -130,7 +130,7 @@ public class AdminApiDriver<K, V> {
      */
     private void map(K key, Integer brokerId) {
         lookupMap.remove(key);
-        fulfillmentMap.put(new BrokerScope(brokerId), key);
+        fulfillmentMap.put(new FulfillmentScope(brokerId), key);
     }
 
     /**
@@ -151,7 +151,7 @@ public class AdminApiDriver<K, V> {
     }
 
     OptionalInt keyToBrokerId(K key) {
-        Optional<BrokerScope> scope = fulfillmentMap.getKey(key);
+        Optional<FulfillmentScope> scope = fulfillmentMap.getKey(key);
         if (scope.isPresent()) {
             return OptionalInt.of(scope.get().destinationBrokerId);
         } else {
@@ -220,10 +220,8 @@ public class AdminApiDriver<K, V> {
     ) {
         clearInflightRequest(currentTimeMs, spec);
 
-        // Note that `BrokerScope` is internal to this class and only used for fulfillment
-        // requests. Hence we use this to distinguish them from lookup requests.
-        if (spec.scope instanceof BrokerScope) {
-            int brokerId = ((BrokerScope) spec.scope).destinationBrokerId;
+        if (spec.scope instanceof FulfillmentScope) {
+            int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
                 brokerId,
                 spec.keys,
@@ -406,10 +404,10 @@ public class AdminApiDriver<K, V> {
      * fulfillment request to. Each destination broker in the Fulfillment stage
      * gets its own request scope.
      */
-    private static class BrokerScope implements ApiRequestScope {
+    private static class FulfillmentScope implements ApiRequestScope {
         public final int destinationBrokerId;
 
-        private BrokerScope(int destinationBrokerId) {
+        private FulfillmentScope(int destinationBrokerId) {
             this.destinationBrokerId = destinationBrokerId;
         }
 
@@ -422,7 +420,7 @@ public class AdminApiDriver<K, V> {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            BrokerScope that = (BrokerScope) o;
+            FulfillmentScope that = (FulfillmentScope) o;
             return destinationBrokerId == that.destinationBrokerId;
         }
 
