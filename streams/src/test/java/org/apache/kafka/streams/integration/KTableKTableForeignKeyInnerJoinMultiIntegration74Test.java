@@ -66,7 +66,6 @@ import static org.junit.Assert.assertEquals;
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegration74Test {
     private final static int NUM_BROKERS = 1;
-
     @ClassRule
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final static MockTime MOCK_TIME = CLUSTER.time;
