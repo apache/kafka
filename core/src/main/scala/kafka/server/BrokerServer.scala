@@ -186,7 +186,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "controllerForwardingChannel",
+        channelName = "forwarding",
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
@@ -212,7 +212,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "alterisr",
+        channelName = "alterIsr",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )

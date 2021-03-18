@@ -79,6 +79,9 @@ class ClientCompatibilityFeaturesTest(Test):
             "replication-factor": 3
             }}
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
+        # Always use the latest version of org.apache.kafka.tools.ClientCompatibilityTest
+        # so store away the path to the DEV version before we set the Kafka version
+        self.dev_script_path = self.kafka.path.script("kafka-run-class.sh", self.kafka.nodes[0])
 
     def invoke_compatibility_program(self, features):
         # Run the compatibility test on the first Kafka node.
@@ -86,7 +89,7 @@ class ClientCompatibilityFeaturesTest(Test):
         cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
                "--num-cluster-nodes %d "
-               "--topic %s " % (self.kafka.path.script("kafka-run-class.sh", node),
+               "--topic %s " % (self.dev_script_path,
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
                                list(self.topics.keys())[0]))
@@ -130,4 +133,8 @@ class ClientCompatibilityFeaturesTest(Test):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         features = get_broker_features(broker_version)
+        if not self.zk:
+            #  this check/disabling is only necessary due to the fact that we are in early access mode with
+            #  KIP-500 and we should remove the special casing when that his fully implemented
+            features["describe-acls-supported"] = False
         self.invoke_compatibility_program(features)
