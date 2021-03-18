@@ -131,7 +131,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private final RebalanceProtocol protocol;
+    private RebalanceProtocol protocol;
 
     /**
      * Initialize the coordination manager.
@@ -198,6 +198,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Collections.sort(supportedProtocols);
 
             protocol = supportedProtocols.get(supportedProtocols.size() - 1);
+            log.debug("Using rebalance protocol {}", protocol);
         } else {
             protocol = null;
         }
@@ -355,6 +356,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+
+        log.debug("{} assignor selected by the group coordinator", assignor);
+
+        List<RebalanceProtocol> assignorSupportedProtocols = assignor.supportedProtocols();
+        Collections.sort(assignorSupportedProtocols);
+        RebalanceProtocol newProtocol = assignorSupportedProtocols.get(assignorSupportedProtocols.size() - 1);
+        if (newProtocol.id() < protocol.id()) {
+            log.error("Latest commonly supported rebalance protocol is {} which is lower than the current commonly supported rebalance protocol {}. "
+                          + "Downgrading rebalance protocol is not supported; once you are on {} you must make sure that all consumers are configured "
+                          + "with an assignor that supports this protocol. The group coordinator selected the {} assignor. If multiple assignors are "
+                          + "supported by all consumers, make sure the first assignor in the partition.assignment.strategy list is one that supports {}.",
+                      newProtocol, protocol, protocol, protocol);
+            throw new IllegalStateException("Can't downgrade the consumer group rebalance protocol");
+        } else if (protocol != newProtocol) {
+            protocol = newProtocol;
+            log.info("Updating rebalance protocol to {} as highest commonly supported protocol", protocol);
+        }
 
         // Give the assignor a chance to update internal state based on the received assignment
         groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
