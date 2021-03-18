@@ -127,7 +127,7 @@ class LogTest {
 
     val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
     val logManager: LogManager = interceptedLogManager(logConfig, logDirs)
-    log = logManager.getOrCreateLog(topicPartition, isNew = true)
+    log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
 
     // Load logs after a clean shutdown
     Files.createFile(cleanShutdownFile.toPath)

@@ -1377,8 +1377,7 @@ class ReplicaManager(val config: KafkaConfig,
               val requestLeaderEpoch = partitionState.leaderEpoch
               val requestTopicId = topicIds.get(topicPartition.topic)
 
-              val (topicIdOpt, partitionLogOpt) = partition.topicIdAndLog
-              if (!checkTopicId(requestTopicId, topicIdOpt, partitionLogOpt)) {
+              if (!checkTopicId(requestTopicId, partition.topicId)) {
                 stateChangeLogger.error(s"Topic Id in memory: ${partition.topicId.get} does not" +
                   s" match the topic Id for partition $topicPartition received: " +
                   s"$requestTopicId.")
@@ -1492,24 +1491,17 @@ class ReplicaManager(val config: KafkaConfig,
    * The topic ID was not inconsistent, so return true.
    * If the log does not exist or the topic ID is not yet set, logTopicIdOpt will be None.
    * In both cases, the ID is not inconsistent so return true.
-   * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
    *
    * @param requestTopicId the topic ID from the LeaderAndIsr request
-   * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exists
-   * @param partitionLog the log for the partition being checked if it exists
+   * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exist
    * @return true if the request topic id is consistent, false otherwise
    */
-  private def checkTopicId(requestTopicId: Uuid, logTopicIdOpt: Option[Uuid], partitionLog: Option[Log]): Boolean = {
+  private def checkTopicId(requestTopicId: Uuid, logTopicIdOpt: Option[Uuid]): Boolean = {
     if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID) {
       true
     } else
       logTopicIdOpt match {
         case None =>
-          // if we have valid request ID, log exists, but log topic ID is not yet assigned, write to log
-          partitionLog.foreach(log => {
-            log.partitionMetadataFile.write(requestTopicId)
-            log.topicId = Some(requestTopicId)
-          })
           true
         case Some(logTopicId)  =>
            requestTopicId == logTopicId
