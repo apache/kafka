@@ -18,7 +18,7 @@ package kafka.raft
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-import java.util.concurrent.ConcurrentSkipListMap
+import java.util.concurrent.ConcurrentSkipListSet
 import java.util.{Optional, Properties}
 
 import kafka.api.ApiVersion
@@ -37,9 +37,8 @@ final class KafkaMetadataLog private (
   log: Log,
   scheduler: Scheduler,
   // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
-  // polling thread when snapshots are created. Using a Map instead of a Set so that there is no
-  // need to handle NoSuchElementException.
-  snapshotIds: ConcurrentSkipListMap[OffsetAndEpoch, Unit],
+  // polling thread when snapshots are created.
+  snapshotIds: ConcurrentSkipListSet[OffsetAndEpoch],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int,
   val fileDeleteDelayMs: Long // Visible for testing,
@@ -237,7 +236,7 @@ final class KafkaMetadataLog private (
 
   override def readSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotReader] = {
     try {
-      if (snapshotIds.containsKey(snapshotId)) {
+      if (snapshotIds.contains(snapshotId)) {
         Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
       } else {
         Optional.empty()
@@ -249,20 +248,30 @@ final class KafkaMetadataLog private (
   }
 
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
-    Optional.ofNullable(snapshotIds.lastEntry).map(_.getKey)
+    val descending = snapshotIds.descendingIterator
+    if (descending.hasNext) {
+      Optional.of(descending.next)
+    } else {
+      Optional.empty()
+    }
   }
 
   override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
-      Optional.ofNullable(snapshotIds.firstEntry).map(_.getKey)
+    val ascendingIterator = snapshotIds.iterator
+    if (ascendingIterator.hasNext) {
+      Optional.of(ascendingIterator.next)
+    } else {
+      Optional.empty()
+    }
   }
 
   override def onSnapshotFrozen(snapshotId: OffsetAndEpoch): Unit = {
-    snapshotIds.put(snapshotId, ())
+    snapshotIds.add(snapshotId)
   }
 
   override def deleteBeforeSnapshot(logStartSnapshotId: OffsetAndEpoch): Boolean = {
     latestSnapshotId().asScala match {
-      case Some(snapshotId) if (snapshotIds.containsKey(logStartSnapshotId) &&
+      case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
         startOffset < logStartSnapshotId.offset &&
         logStartSnapshotId.offset <= snapshotId.offset &&
         log.maybeIncrementLogStartOffset(logStartSnapshotId.offset, SnapshotGenerated)) =>
@@ -281,9 +290,9 @@ final class KafkaMetadataLog private (
    * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
   private def removeSnapshotFilesBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
-    val expiredSnapshotIdsIter = snapshotIds.headMap(logStartSnapshotId, false).entrySet.iterator
+    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator
     while (expiredSnapshotIdsIter.hasNext) {
-      val snapshotId = expiredSnapshotIdsIter.next().getKey
+      val snapshotId = expiredSnapshotIdsIter.next()
       // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
       // on the file system, so we should first remove snapshotId and then delete snapshot file.
       expiredSnapshotIdsIter.remove()
@@ -357,8 +366,8 @@ object KafkaMetadataLog {
 
   private def recoverSnapshots(
     log: Log
-  ): ConcurrentSkipListMap[OffsetAndEpoch, Unit] = {
-    val snapshotIds = new ConcurrentSkipListMap[OffsetAndEpoch, Unit]()
+  ): ConcurrentSkipListSet[OffsetAndEpoch] = {
+    val snapshotIds = new ConcurrentSkipListSet[OffsetAndEpoch]()
     // Scan the log directory; deleting partial snapshots and older snapshot, only remembering immutable snapshots start
     // from logStartOffset
     Files
@@ -378,7 +387,7 @@ object KafkaMetadataLog {
             // Delete partial snapshot, deleted snapshot and older snapshot
             Files.deleteIfExists(snapshotPath.path)
           } else {
-            snapshotIds.put(snapshotPath.snapshotId, ())
+            snapshotIds.add(snapshotPath.snapshotId)
           }
         }
       }
