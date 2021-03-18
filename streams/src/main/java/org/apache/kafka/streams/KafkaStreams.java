@@ -972,6 +972,7 @@ public class KafkaStreams implements AutoCloseable {
             synchronized (changeThreadCount) {
                 threadIdx = getNextThreadIndex();
                 cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads() + 1);
+                log.info("Adding a new StreamThread with thread id {}; new cache size per thread is {}", threadIdx, cacheSizePerThread);
                 resizeThreadCache(cacheSizePerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
@@ -983,14 +984,17 @@ public class KafkaStreams implements AutoCloseable {
                     streamThread.start();
                     return Optional.of(streamThread.getName());
                 } else {
+                    log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
                     streamThread.shutdown();
                     threads.remove(streamThread);
                     resizeThreadCache(getCacheSizePerThread(getNumLiveStreamThreads()));
+                    return Optional.empty();
                 }
             }
+        } else {
+            log.warn("Cannot add a stream thread when Kafka Streams client is in state {}", state);
+            return Optional.empty();
         }
-        log.warn("Cannot add a stream thread when Kafka Streams client is in state  " + state());
-        return Optional.empty();
     }
 
     /**
