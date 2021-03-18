@@ -16,14 +16,14 @@
 
 if [ $# -lt 1 ];
 then
-        echo "USAGE: $0 [-daemon] connect-distributed.properties"
-        exit 1
+  echo "USAGE: $0 [-daemon] connect-distributed.properties"
+  exit 1
 fi
 
 base_dir=$(dirname $0)
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
-    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
+  export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
 fi
 
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
