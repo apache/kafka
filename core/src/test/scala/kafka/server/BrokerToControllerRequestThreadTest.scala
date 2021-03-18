@@ -34,6 +34,11 @@ import org.mockito.Mockito._
 class BrokerToControllerRequestThreadTest {
 
   @Test
+  def testAlwaysFails(): Unit = {
+    fail("This fails")
+  }
+
+  @Test
   def testRetryTimeoutWhileControllerNotAvailable(): Unit = {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
