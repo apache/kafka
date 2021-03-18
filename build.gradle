@@ -1431,9 +1431,11 @@ project(':streams') {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
-
+    
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+    
     implementation libs.slf4jApi
-    implementation libs.rocksDBJni
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
 
