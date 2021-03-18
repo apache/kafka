@@ -181,13 +181,12 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
               zkClient.getAllPartitions.map(_.topic)
           }
 
-        val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
-          partitions.map(new TopicPartition(topic, _))
-        }.toSet
-
         val (validPartitions, invalidPartitions) =
           partitionsFromUser match {
             case Some(partitions) =>
+              val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
+                partitions.map(new TopicPartition(topic, _))
+              }.toSet
               partitions.partition(partitionsFromZk.contains)
             case None =>
               (zkClient.getAllPartitions, Set.empty)
