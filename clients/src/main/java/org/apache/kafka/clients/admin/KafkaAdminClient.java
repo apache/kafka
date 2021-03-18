@@ -3360,7 +3360,7 @@ public class KafkaAdminClient extends AdminClient {
                             String protocolType = group.protocolType();
                             if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                 final String groupId = group.groupId();
-                               final Optional<ConsumerGroupState> state = (group.groupState()==null || "".equals(group.groupState()))
+                               final Optional<ConsumerGroupState> state = "".equals(group.groupState())
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
                                 final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty(), state);
