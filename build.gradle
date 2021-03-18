@@ -2581,6 +2581,7 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':streams').sourceSets.test.output
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi

@@ -194,6 +194,14 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         commitOffsets();
     }
 
+    /**
+     * @return whether an attempt to commit offsets should be made for the task (i.e., there are pending uncommitted
+     * offsets and the task's producer has not already failed to send a record with a non-retriable error).
+     */
+    public boolean shouldCommitOffsets() {
+        return !isFailed();
+    }
+
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
