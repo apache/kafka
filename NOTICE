@@ -6,3 +6,7 @@ The Apache Software Foundation (https://www.apache.org/).
 
 This distribution has a binary dependency on jersey, which is available under the CDDL
 License. The source code of jersey can be found at https://github.com/jersey/jersey/.
+
+This distribution has a binary test dependency on jqwik, which is available under
+the Eclipse Public License 2.0. The source code can be found at
+https://github.com/jlink/jqwik.
