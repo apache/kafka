@@ -20,9 +20,7 @@ import java.nio.charset.StandardCharsets
 buildscript {
   repositories {
     mavenCentral()
-    jcenter()
   }
-  apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
@@ -1255,6 +1253,7 @@ project(':raft') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1305,6 +1304,12 @@ project(':raft') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
     }
   }
 
@@ -1424,9 +1429,11 @@ project(':streams') {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
-
+    
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+    
     implementation libs.slf4jApi
-    implementation libs.rocksDBJni
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
 
@@ -1966,7 +1973,7 @@ project(':connect:transforms') {
 
   dependencies {
     api project(':connect:api')
-    
+
     implementation libs.slf4jApi
 
     testImplementation libs.easymock
