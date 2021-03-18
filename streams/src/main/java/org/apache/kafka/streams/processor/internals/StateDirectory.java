@@ -31,6 +31,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -385,14 +386,18 @@ public class StateDirectory {
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
-            locks.remove(taskId);
-            lockAndOwner.lock.release();
+            try {
+                lockAndOwner.lock.release();
+            } catch (final ClosedChannelException cce) {
+                log.warn("{} Channel closed unexpectedly before lock release.", logPrefix(), cce);
+            }
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
 
             final FileChannel fileChannel = channels.remove(taskId);
             if (fileChannel != null) {
                 fileChannel.close();
             }
+            locks.remove(taskId);
         }
     }
 
