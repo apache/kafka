@@ -82,7 +82,7 @@ public class ProduceResponseTest {
         assertEquals(10, v2Response.throttleTimeMs(), "Throttle time must be 10");
 
         List<ProduceResponse> arrResponse = Arrays.asList(v0Response, v1Response, v2Response);
-        for(ProduceResponse produceResponse:arrResponse) {
+        for (ProduceResponse produceResponse : arrResponse) {
             assertEquals(1, produceResponse.data().responses().size());
             ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();
             assertEquals(1, topicProduceResponse.partitionResponses().size());  
