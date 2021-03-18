@@ -219,11 +219,11 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotLockTaskDirectoryIfStateDirectoryHasBeenDeleted() throws IOException {
+    public void shouldNotThrowIfStateDirectoryHasBeenDeleted() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
-        assertFalse(directory.lock(taskId));
+        assertThrows(IllegalStateException.class, () -> directory.lock(taskId));
     }
 
     @Test

@@ -201,7 +201,6 @@ public class StateManagerUtilTest {
         expectLastCall().andThrow(new ProcessorStateException("state manager failed to close"));
 
         stateDirectory.unlock(taskId);
-        expectLastCall();
 
         ctrl.checkOrder(true);
         ctrl.replay();

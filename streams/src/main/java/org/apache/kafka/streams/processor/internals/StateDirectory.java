@@ -294,8 +294,8 @@ public class StateDirectory {
                 return false;
             }
         } else if (!stateDir.exists()) {
-            log.warn("Tried to lock task directory for {} but the state directory does not exist", taskId);
-            return false;
+            log.error("Tried to lock task directory for {} but the state directory does not exist", taskId);
+            throw new IllegalStateException("The state directory has been deleted");
         } else {
             lockedTasksToStreamThreadOwner.put(taskId, Thread.currentThread().getName());
             // make sure the task directory actually exists, and create it if not
