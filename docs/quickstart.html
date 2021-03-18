@@ -189,7 +189,7 @@ This is my second event</code></pre>
 
         <p>To give you a first taste, here's how one would implement the popular <code>WordCount</code> algorithm:</p>
 
-        <pre class="line-numbers"><code class="language-bash">KStream&lt;String, String&gt; textLines = builder.stream("quickstart-events");
+        <pre class="line-numbers"><code class="language-java">KStream&lt;String, String&gt; textLines = builder.stream("quickstart-events");
 
 KTable&lt;String, Long&gt; wordCounts = textLines
             .flatMapValues(line -&gt; Arrays.asList(line.toLowerCase().split(" ")))
