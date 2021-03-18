@@ -500,7 +500,7 @@ public class KafkaStreams implements AutoCloseable {
                             "longer in a well-defined state. Attempting to send the shutdown command anyway.", throwable);
                 }
 
-                if (Thread.currentThread().equals(globalStreamThread) && countStreamThread(StreamThread::isRunning) == 0) {
+                if (Thread.currentThread().equals(globalStreamThread) && getNumLiveStreamThreads() == 0) {
                     log.error("Exception in global thread caused the application to attempt to shutdown." +
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
@@ -839,8 +839,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, internalTopologyBuilder.describe().toString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
-        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
-            Math.toIntExact(countStreamThread(thread -> thread.state().isAlive())));
+        ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> getNumLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(
             internalTopologyBuilder,
@@ -1104,9 +1103,17 @@ public class KafkaStreams implements AutoCloseable {
         return Optional.empty();
     }
 
-    // Returns the number of threads that are not in the DEAD or PENDING_SHUTDOWN state -- use this over threads.size()
+    /**
+     * Takes a snapshot and counts the number of stream threads which are not in PENDING_SHUTDOWN or DEAD
+     *
+     * note: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
+     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
+     * threads lock when looping threads.
+     * @return number of alive stream threads
+     */
     private int getNumLiveStreamThreads() {
         final AtomicInteger numLiveThreads = new AtomicInteger(0);
+
         synchronized (threads) {
             processStreamThread(thread -> {
                 if (thread.state() == StreamThread.State.DEAD) {
@@ -1626,19 +1633,6 @@ public class KafkaStreams implements AutoCloseable {
     private void processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
-    }
-
-    /**
-     * count the snapshot of threads.
-     * noted: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
-     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
-     * threads lock when looping threads.
-     * @param predicate predicate
-     * @return number of matched threads
-     */
-    private long countStreamThread(final Predicate<StreamThread> predicate) {
-        final List<StreamThread> copy = new ArrayList<>(threads);
-        return copy.stream().filter(predicate).count();
     }
 
     /**
