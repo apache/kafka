@@ -65,8 +65,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
-    private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
     private static final String CONNECTOR_NAME = "seq-source1";
@@ -83,7 +83,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, COMPATIBLE.toString());
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(30)));
-        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(5)));
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(60)));
 
         // setup Kafka broker properties
         Properties brokerProps = new Properties();
@@ -298,11 +298,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-        System.out.println("!!! add worker");
+
         connect.addWorker();
-        System.out.println("!!! sleep");
-        Thread.sleep(4000);
-        System.out.println("!!! sleep done");
+
         connect.addWorker();
 
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
@@ -310,9 +308,921 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-        for (int i = 0; i < 4; ++i) {
-            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
-        }
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining1() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining2() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining3() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining4() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining5() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining6() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining7() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining8() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining9() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining10() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining11() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining12() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining13() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining14() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining15() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining16() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining17() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining18() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+    }
+
+    @Test
+    public void testMultipleWorkersRejoining19() throws Exception {
+        // create test topic
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        // start a source connector
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
+
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+            "Connector tasks did not start in time.");
+
+        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+        connect.removeWorker();
+        connect.removeWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 2,
+            "Connect workers did not stop in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+
+        connect.addWorker();
+
+        connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+            "Connect workers did not start in time.");
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+//        for (int i = 0; i < 4; ++i) {
+//            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
+//        }
 
         waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
             WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
