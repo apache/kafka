@@ -101,7 +101,9 @@ class WorkerSourceTask extends WorkerTask {
     // A second buffer is used while an offset flush is running
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean flushing;
-    private CountDownLatch stopRequestedLatch;
+    private final CountDownLatch stopRequestedLatch;
+    private volatile boolean currentBatchFailed = false;
+    private volatile boolean backlogBatchFailed = false;
 
     private Map<String, String> taskConfig;
     private boolean started = false;
@@ -372,6 +374,7 @@ class WorkerSourceTask extends WorkerTask {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
                             log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             producerSendException.compareAndSet(null, e);
+                            recordSendFailed(producerRecord);
                         } else {
                             recordSent(producerRecord);
                             counter.completeRecord();
@@ -399,6 +402,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
+                recordSendFailed(producerRecord);
                 throw new ConnectException("Unrecoverable exception trying to send", e);
             }
             processed++;
@@ -480,6 +484,18 @@ class WorkerSourceTask extends WorkerTask {
             // flush thread may be waiting on the outstanding messages to clear
             this.notifyAll();
         }
+    }
+
+    private synchronized void recordSendFailed(ProducerRecord<byte[], byte[]> record) {
+        if (outstandingMessages.containsKey(record)) {
+            currentBatchFailed = true;
+        } else if (outstandingMessagesBacklog.containsKey(record)) {
+            backlogBatchFailed = true;
+        }
+    }
+
+    public boolean shouldCommitOffsets() {
+        return offsetWriter.willFlush() && !currentBatchFailed;
     }
 
     public boolean commitOffsets() {
@@ -604,6 +620,7 @@ class WorkerSourceTask extends WorkerTask {
         outstandingMessages.putAll(outstandingMessagesBacklog);
         outstandingMessagesBacklog.clear();
         flushing = false;
+        currentBatchFailed |= backlogBatchFailed;
     }
 
     private synchronized void finishSuccessfulFlush() {
@@ -612,6 +629,7 @@ class WorkerSourceTask extends WorkerTask {
         outstandingMessages = outstandingMessagesBacklog;
         outstandingMessagesBacklog = temp;
         flushing = false;
+        currentBatchFailed = backlogBatchFailed;
     }
 
     @Override
