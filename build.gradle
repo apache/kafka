@@ -1255,6 +1255,7 @@ project(':raft') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1305,6 +1306,12 @@ project(':raft') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
     }
   }
 

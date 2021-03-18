@@ -404,6 +404,7 @@
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="net.jqwik"/>
   </subpackage>
 
   <subpackage name="snapshot">
