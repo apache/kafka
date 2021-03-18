@@ -304,48 +304,43 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
     }
 
-    @Test
-    public void checkSingleNodeCommittedDataLossQuorumSizeThree() {
-        checkSingleNodeCommittedDataLoss(new QuorumConfig(3, 0));
-    }
+    @Property(tries = 100)
+    void canRecoverFromSingleNodeCommittedDataLoss(
+        @ForAll Random random,
+        @ForAll @IntRange(min = 3, max = 5) int numVoters,
+        @ForAll @IntRange(min = 0, max = 2) int numObservers
+    ) {
+        // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
+        // invariants since the loss of committed data on one node can violate them.
 
-    private void checkSingleNodeCommittedDataLoss(QuorumConfig config) {
-        assertTrue(config.numVoters > 2,
-            "This test requires the cluster to be able to recover from one failed node");
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
+        scheduler.addInvariant(new MonotonicHighWatermark(cluster));
+        scheduler.addInvariant(new SingleLeader(cluster));
+        scheduler.addValidation(new ConsistentCommittedData(cluster));
 
-        for (int seed = 0; seed < 100; seed++) {
-            // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
-            // invariants since the loss of committed data on one node can violate them.
+        MessageRouter router = new MessageRouter(cluster);
 
-            Cluster cluster = new Cluster(config, seed);
-            EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
-            scheduler.addInvariant(new MonotonicHighWatermark(cluster));
-            scheduler.addInvariant(new SingleLeader(cluster));
-            scheduler.addValidation(new ConsistentCommittedData(cluster));
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 5);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-            MessageRouter router = new MessageRouter(cluster);
+        RaftNode node = cluster.randomRunning().orElseThrow(() ->
+            new AssertionError("Failed to find running node")
+        );
 
-            cluster.startAll();
-            schedulePolling(scheduler, cluster, 3, 5);
-            scheduler.schedule(router::deliverAll, 0, 2, 5);
-            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        // Kill a random node and drop all of its persistent state. The Raft
+        // protocol guarantees should still ensure we lose no committed data
+        // as long as a new leader is elected before the failed node is restarted.
+        cluster.killAndDeletePersistentState(node.nodeId);
+        scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
 
-            RaftNode node = cluster.randomRunning().orElseThrow(() ->
-                new AssertionError("Failed to find running node")
-            );
-
-            // Kill a random node and drop all of its persistent state. The Raft
-            // protocol guarantees should still ensure we lose no committed data
-            // as long as a new leader is elected before the failed node is restarted.
-            cluster.killAndDeletePersistentState(node.nodeId);
-            scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
-
-            // Now restart the failed node and ensure that it recovers.
-            long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
-            cluster.start(node.nodeId);
-            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
-        }
+        // Now restart the failed node and ensure that it recovers.
+        long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
+        cluster.start(node.nodeId);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
     }
 
     private EventScheduler schedulerWithDefaultInvariants(Cluster cluster) {
