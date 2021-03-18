@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.DynamicKeyMapping;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.KeyMappings;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
-import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.RequestScope;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -421,7 +420,7 @@ class AdminApiDriverTest {
         }
     }
 
-    private static class MockRequestScope implements RequestScope {
+    private static class MockRequestScope implements ApiRequestScope {
         private final OptionalInt destinationBrokerId;
 
         private MockRequestScope(OptionalInt destinationBrokerId) {
@@ -563,7 +562,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public RequestScope lookupScope(K key) {
+        public ApiRequestScope lookupScope(K key) {
             return lookupScopes.get(key);
         }
 

@@ -117,7 +117,7 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
                     // explicitly, then they are fatal.
                     int brokerId = options.brokerId().getAsInt();
                     log.error("Not leader error in `DescribeProducers` response for partition {} " +
-                            "for brokerId {} set in options", topicPartition, brokerId, apiError.exception());
+                        "for brokerId {} set in options", topicPartition, brokerId, apiError.exception());
                     failed.put(topicPartition, apiError.error().exception("Failed to describe active producers " +
                         "for partition " + topicPartition + " on brokerId " + brokerId));
                 } else {

@@ -21,7 +21,6 @@ import org.apache.kafka.common.requests.AbstractResponse;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.OptionalInt;
 import java.util.Set;
 
 public interface AdminApiLookupStrategy<T> {
@@ -33,7 +32,7 @@ public interface AdminApiLookupStrategy<T> {
      * order to discover partitions leaders. This can be supported by returning
      * a single scope object for all keys.
      *
-     * On the other hand, `FindCoordinator` request only supports lookup of a
+     * On the other hand, `FindCoordinator` requests only support lookup of a
      * single key. This can be supported by returning a different scope object
      * for each lookup key.
      *
@@ -41,7 +40,7 @@ public interface AdminApiLookupStrategy<T> {
      *
      * @return request scope indicating how lookup requests can be batched together
      */
-    RequestScope lookupScope(T key);
+    ApiRequestScope lookupScope(T key);
 
     /**
      * Build the lookup request for a set of keys. The grouping of the keys is controlled
@@ -86,9 +85,4 @@ public interface AdminApiLookupStrategy<T> {
         }
     }
 
-    interface RequestScope {
-        default OptionalInt destinationBrokerId() {
-            return OptionalInt.empty();
-        }
-    }
 }

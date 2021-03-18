@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.DynamicKeyMapping;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.KeyMappings;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.StaticKeyMapping;
-import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.RequestScope;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -85,10 +84,9 @@ public class AdminApiDriver<K, V> {
     private final Optional<DynamicKeyMapping<K>> dynamicMapping;
     private final Map<K, KafkaFutureImpl<V>> futures;
 
-    private final BiMultimap<RequestScope, K> lookupMap = new BiMultimap<>();
+    private final BiMultimap<ApiRequestScope, K> lookupMap = new BiMultimap<>();
     private final BiMultimap<BrokerScope, K> fulfillmentMap = new BiMultimap<>();
-    private final Map<RequestScope, RequestState> requestStates = new HashMap<>();
-
+    private final Map<ApiRequestScope, RequestState> requestStates = new HashMap<>();
 
     public AdminApiDriver(
         AdminApiHandler<K, V> handler,
@@ -221,7 +219,10 @@ public class AdminApiDriver<K, V> {
         AbstractResponse response
     ) {
         clearInflightRequest(currentTimeMs, spec);
-        if (spec.scope instanceof AdminApiDriver.BrokerScope) {
+
+        // Note that `BrokerScope` is internal to this class and only used for fulfillment
+        // requests. Hence we use this to distinguish them from lookup requests.
+        if (spec.scope instanceof BrokerScope) {
             int brokerId = ((BrokerScope) spec.scope).destinationBrokerId;
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
                 brokerId,
@@ -277,7 +278,7 @@ public class AdminApiDriver<K, V> {
         }
     }
 
-    private <T extends RequestScope> void collectRequests(
+    private <T extends ApiRequestScope> void collectRequests(
         List<RequestSpec<K>> requests,
         BiMultimap<T, K> multimap,
         BiFunction<Set<K>, T, AbstractRequest.Builder<?>> buildRequest
@@ -336,7 +337,7 @@ public class AdminApiDriver<K, V> {
      */
     public static class RequestSpec<K> {
         public final String name;
-        public final RequestScope scope;
+        public final ApiRequestScope scope;
         public final Set<K> keys;
         public final AbstractRequest.Builder<?> request;
         public final long nextAllowedTryMs;
@@ -345,7 +346,7 @@ public class AdminApiDriver<K, V> {
 
         public RequestSpec(
             String name,
-            RequestScope scope,
+            ApiRequestScope scope,
             Set<K> keys,
             AbstractRequest.Builder<?> request,
             long nextAllowedTryMs,
@@ -405,7 +406,7 @@ public class AdminApiDriver<K, V> {
      * fulfillment request to. Each destination broker in the Fulfillment stage
      * gets its own request scope.
      */
-    private static class BrokerScope implements RequestScope {
+    private static class BrokerScope implements ApiRequestScope {
         public final int destinationBrokerId;
 
         private BrokerScope(int destinationBrokerId) {

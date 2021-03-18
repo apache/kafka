@@ -38,7 +38,7 @@ import java.util.function.Function;
  * Base driver implementation for APIs which target partition leaders.
  */
 public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPartition> {
-    private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
+    private static final ApiRequestScope SINGLE_REQUEST_SCOPE = new ApiRequestScope() {
     };
 
     private final Logger log;
@@ -48,7 +48,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     }
 
     @Override
-    public RequestScope lookupScope(TopicPartition key) {
+    public ApiRequestScope lookupScope(TopicPartition key) {
         // Metadata requests can group topic partitions arbitrarily, so they can all share
         // the same request context
         return SINGLE_REQUEST_SCOPE;
