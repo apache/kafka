@@ -91,6 +91,8 @@ public class FetchSessionHandler {
         return sessionTopicNames;
     }
 
+    public boolean requestUsedTopicIds = false;
+
     public static class FetchRequestData {
         /**
          * The partitions to send in the fetch request.
@@ -133,14 +135,15 @@ public class FetchSessionHandler {
                          Map<TopicPartition, PartitionData> sessionPartitions,
                          Map<String, Uuid> topicIds,
                          Map<Uuid, String> topicNames,
-                         FetchMetadata metadata) {
+                         FetchMetadata metadata,
+                         boolean canUseTopicIds) {
             this.toSend = toSend;
             this.toForget = toForget;
             this.sessionPartitions = sessionPartitions;
             this.topicIds = topicIds;
             this.topicNames = topicNames;
             this.metadata = metadata;
-            this.canUseTopicIds = topicIds.keySet().containsAll(toSend.keySet().stream().map(tp -> tp.topic()).collect(Collectors.toSet()));
+            this.canUseTopicIds = canUseTopicIds;
         }
 
         /**
@@ -274,13 +277,15 @@ public class FetchSessionHandler {
                 topicIds.forEach((name, id) -> sessionTopicNames.put(id, name));
                 next = null;
                 topicIds = null;
+                requestUsedTopicIds = sessionTopicIds.keySet().containsAll(sessionPartitions.keySet().stream().map(
+                    tp -> tp.topic()).collect(Collectors.toSet()));
                 Map<TopicPartition, PartitionData> toSend =
                         Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 Map<String, Uuid> toSendTopicIds =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
                 Map<Uuid, String> toSendTopicNames =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata);
+                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
             }
 
             List<TopicPartition> added = new ArrayList<>();
@@ -340,10 +345,12 @@ public class FetchSessionHandler {
             Map<Uuid, String> toSendTopicNames =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
 
+            requestUsedTopicIds = requestUsedTopicIds && toSendTopicIds.keySet().containsAll(toSend.keySet().stream().map(
+                tp -> tp.topic()).collect(Collectors.toSet()));
             next = null;
             topicIds = null;
             return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
-                    curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata);
+                    curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
         }
     }
 

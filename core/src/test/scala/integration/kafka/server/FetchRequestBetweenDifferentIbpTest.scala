@@ -50,7 +50,8 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV0, and then create a topic where leader of partition 0 is not the controller.
+    // Ensure controller version < KAFKA_2_8_IV0, and then create a topic where leader of partition 0 is not the controller,
+    // leader of partition 1 is.
     ensureControllerIn(Seq(0))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
@@ -75,7 +76,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV1, and then create a topic where leader of partition 1 is the old version.
+    // Ensure controller version = KAFKA_2_8_IV2, and then create a topic where leader of partition 1 is the old version.
     ensureControllerIn(Seq(2))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
@@ -101,7 +102,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV1
+    // Ensure controller version = KAFKA_2_8_IV2
     ensureControllerIn(Seq(1))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
@@ -118,10 +119,10 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
 
-    // Make the broker whose version=KAFKA_2_8_IV0 controller
+    // Make the broker whose version < KAFKA_2_8_IV0 controller
     ensureControllerIn(Seq(0))
 
-    // Restart the broker whose version=KAFKA_2_8_IV1, and the controller will send metadata request to it
+    // Restart the broker whose version=KAFKA_2_8_IV2, and the controller will send an updateMetadata request to it
     killBroker(1)
     restartDeadBrokers()
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
@@ -139,13 +140,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     TestUtils.waitUntilControllerElected(zkClient)
     while (!brokerIds.contains(controllerSocketServer.config.brokerId)) {
       zkClient.deleteController(ZkVersion.MatchAnyVersion)
-
-      TestUtils.waitUntilTrue(() => try {
-        controllerSocketServer
-        true
-      } catch {
-        case _: IllegalStateException => false
-      }, "No controller broker is elected in time period")
+      TestUtils.waitUntilControllerElected(zkClient)
     }
   }
 
