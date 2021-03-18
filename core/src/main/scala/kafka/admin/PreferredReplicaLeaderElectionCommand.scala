@@ -102,7 +102,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
             partitions.toSet
           case None => throw new AdminOperationException("Preferred replica election data is empty")
         }
-      case None => throw new AdminOperationException("Preferred replica election data is empty")
+      case None => throw new AdminOperationException("The JSON file with the list of partitions is empty or invalid")
     }
   }
 
