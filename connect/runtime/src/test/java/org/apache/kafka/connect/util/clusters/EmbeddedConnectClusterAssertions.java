@@ -44,7 +44,7 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 public class EmbeddedConnectClusterAssertions {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
-    public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(3);
     public static final long VALIDATION_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     public static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
