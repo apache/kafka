@@ -63,7 +63,6 @@ class BaseHashTable<T> {
      * than MAX_CAPACITY.  We use 64-bit numbers here to avoid overflow
      * concerns.
      */
-    @SuppressWarnings("unchecked")
     static int expectedSizeToCapacity(int expectedSize) {
         long minCapacity = (long) Math.ceil((float) expectedSize / MAX_LOAD_FACTOR);
         return Math.max(MIN_CAPACITY,
