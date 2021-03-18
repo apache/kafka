@@ -18,13 +18,14 @@
 package kafka.testkit;
 
 import kafka.raft.KafkaRaftManager;
-import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
-import kafka.server.Server;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
+import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfig$;
 import kafka.server.MetaProperties;
+import kafka.server.Server;
 import kafka.tools.StorageTool;
+import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -67,6 +68,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -124,7 +126,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> kip500Brokers = new HashMap<>();
             Map<Integer, KafkaRaftManager> raftManagers = new HashMap<>();
-            String dummyQuorumVotersString = nodes.controllerNodes().keySet().stream().
+            String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
                 map(controllerNode -> String.format("%d@0.0.0.0:0", controllerNode)).
                 collect(Collectors.joining(","));
             /*
@@ -143,7 +145,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 nodes = nodes.copyWithAbsolutePaths(baseDirectory.getAbsolutePath());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("KafkaClusterTestKit%d", false));
-                Time time = Time.SYSTEM;
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     Map<String, String> props = new HashMap<>(configProps);
                     props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "controller");
@@ -160,7 +161,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // Note: we can't accurately set controller.quorum.voters yet, since we don't
                     // yet know what ports each controller will pick.  Set it to a dummy string \
                     // for now as a placeholder.
-                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, dummyQuorumVotersString);
+                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
@@ -176,7 +177,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         config,
                         metaLogShim,
                         raftManager,
-                        time,
+                        Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),
                         connectFutureManager.future
@@ -214,7 +215,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
                     // Just like above, we set a placeholder voter list here until we
                     // find out what ports the controllers picked.
-                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, dummyQuorumVotersString);
+                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
@@ -228,7 +229,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         config,
                         nodes.brokerProperties(node.id()),
                         metaLogShim,
-                        time,
+                        Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),
                         JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
@@ -241,7 +242,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             } catch (Exception e) {
                 if (executorService != null) {
                     executorService.shutdownNow();
-                    executorService.awaitTermination(1, TimeUnit.DAYS);
+                    executorService.awaitTermination(5, TimeUnit.MINUTES);
                 }
                 for (ControllerServer controller : controllers.values()) {
                     controller.shutdown();
@@ -303,44 +304,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
                 int nodeId = entry.getKey();
                 ControllerServer controller = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-                        try (PrintStream out = new PrintStream(stream)) {
-                            StorageTool.formatCommand(out,
-                                JavaConverters.asScalaBuffer(Collections.singletonList(
-                                    controller.config().metadataLogDir())).toSeq(),
-                                nodes.controllerProperties(nodeId),
-                                false);
-                        } finally {
-                            for (String line : stream.toString().split(String.format("%n"))) {
-                                controller.info(() -> line);
-                            }
-                        }
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                }));
+                formatNodeAndLog(nodes.controllerProperties(nodeId), controller.config().metadataLogDir(),
+                    controller, futures::add);
             }
             for (Entry<Integer, BrokerServer> entry : kip500Brokers.entrySet()) {
                 int nodeId = entry.getKey();
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-                        try (PrintStream out = new PrintStream(stream)) {
-                            StorageTool.formatCommand(out,
-                                JavaConverters.asScalaBuffer(Collections.singletonList(
-                                    broker.config().metadataLogDir())).toSeq(),
-                                nodes.brokerProperties(nodeId),
-                                false);
-                        } finally {
-                            for (String line : stream.toString().split(String.format("%n"))) {
-                                broker.info(() -> line);
-                            }
-                        }
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                }));
+                formatNodeAndLog(nodes.brokerProperties(nodeId), broker.config().metadataLogDir(),
+                    broker, futures::add);
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -351,6 +322,26 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
+    }
+
+    private void formatNodeAndLog(MetaProperties properties, String metadataLogDir, Logging loggingMixin,
+                                  Consumer<Future<?>> futureConsumer) {
+        futureConsumer.accept(executorService.submit(() -> {
+            try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+                try (PrintStream out = new PrintStream(stream)) {
+                    StorageTool.formatCommand(out,
+                            JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
+                            properties,
+                            false);
+                } finally {
+                    for (String line : stream.toString().split(String.format("%n"))) {
+                        loggingMixin.info(() -> line);
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }));
     }
 
     public void startup() throws ExecutionException, InterruptedException {
