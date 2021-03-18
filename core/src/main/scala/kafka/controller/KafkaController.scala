@@ -1680,45 +1680,61 @@ class KafkaController(val config: KafkaConfig,
   private def processPartitionModifications(topic: String): Unit = {
     def restorePartitionReplicaAssignment(
       topic: String,
-      newPartitionReplicaAssignment: Map[TopicPartition, ReplicaAssignment]
+      restorePartitionReplicaAssignment: Map[TopicPartition, ReplicaAssignment]
     ): Unit = {
       info("Restoring the partition replica assignment for topic %s".format(topic))
 
-      val existingPartitions = zkClient.getChildren(TopicPartitionsZNode.path(topic))
-      val existingPartitionReplicaAssignment = newPartitionReplicaAssignment
-        .filter(p => existingPartitions.contains(p._1.partition.toString))
-        .map { case (tp, _) =>
-          tp -> controllerContext.partitionFullReplicaAssignment(tp)
-      }.toMap
-
       zkClient.setTopicAssignment(topic,
         controllerContext.topicIds.get(topic),
-        existingPartitionReplicaAssignment,
+        restorePartitionReplicaAssignment,
         controllerContext.epochZkVersion)
     }
 
     if (!isActive) return
     val partitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic))
-    val partitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
+    val newPartitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
       controllerContext.partitionReplicaAssignment(topicPartition).isEmpty
     }
 
-    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
-      if (partitionsToBeAdded.nonEmpty) {
-        warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
-          .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
+    val existingPartitionsInContext = partitionReplicaAssignment.dropWhile(partitionAndReplica => newPartitionsToBeAdded.contains(partitionAndReplica._1))
+    val oldPartitionsToBeModified = existingPartitionsInContext.filter{ case (topicPartition, _) =>
+      controllerContext.partitionReplicaAssignment(topicPartition).diff(partitionReplicaAssignment(topicPartition).replicas).nonEmpty
+    }
 
-        restorePartitionReplicaAssignment(topic, partitionReplicaAssignment)
+    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
+      if (newPartitionsToBeAdded.nonEmpty) {
+        warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
+          .format(newPartitionsToBeAdded.map(_._1.partition).mkString(","), topic))
+
+        val existingPartitionsInZk = zkClient.getChildren(TopicPartitionsZNode.path(topic))
+        val existingPartitionReplicaAssignment = partitionReplicaAssignment
+          .filter(p => existingPartitionsInZk.contains(p._1.partition.toString))
+          .map { case (tp, _) =>
+            tp -> controllerContext.partitionFullReplicaAssignment(tp)
+          }.toMap
+
+        restorePartitionReplicaAssignment(topic, existingPartitionReplicaAssignment)
       } else {
         // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
         info("Ignoring partition change during topic deletion as no new partitions are added")
       }
-    } else if (partitionsToBeAdded.nonEmpty) {
-      info(s"New partitions to be added $partitionsToBeAdded")
-      partitionsToBeAdded.forKeyValue { (topicPartition, assignedReplicas) =>
+    } else if (oldPartitionsToBeModified.nonEmpty) {
+      warn("Skipping modifying existing partitions %s for topic %s, will restore their replica assignment by cache in controllerContext"
+        .format(oldPartitionsToBeModified.map(_._1.partition).mkString(","), topic))
+      val restoreOldPartitionReplicaAssignment = partitionReplicaAssignment.map { case (topicPartition: TopicPartition, assignedReplicas: ReplicaAssignment) =>
+        if (oldPartitionsToBeModified.contains(topicPartition)) {
+          (topicPartition, ReplicaAssignment(controllerContext.partitionReplicaAssignment(topicPartition), Seq.empty, Seq.empty))
+        } else {
+          (topicPartition, assignedReplicas)
+        }
+      }
+      restorePartitionReplicaAssignment(topic, restoreOldPartitionReplicaAssignment)
+    } else if (newPartitionsToBeAdded.nonEmpty) {
+      info(s"New partitions to be added $newPartitionsToBeAdded")
+      newPartitionsToBeAdded.forKeyValue { (topicPartition, assignedReplicas) =>
         controllerContext.updatePartitionFullReplicaAssignment(topicPartition, assignedReplicas)
       }
-      onNewPartitionCreation(partitionsToBeAdded.keySet)
+      onNewPartitionCreation(newPartitionsToBeAdded.keySet)
     }
   }
 
