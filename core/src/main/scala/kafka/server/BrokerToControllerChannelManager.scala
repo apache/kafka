@@ -295,6 +295,9 @@ class BrokerToControllerRequestThread(
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
 
+  // Used for testing
+  private[server] var started = false
+
   def activeControllerAddress(): Option[Node] = {
     Option(activeController.get())
   }
@@ -304,7 +307,7 @@ class BrokerToControllerRequestThread(
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
-    if (!this.isAlive) {
+    if (!started) {
       throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
     }
     requestQueue.add(request)
@@ -382,5 +385,10 @@ class BrokerToControllerRequestThread(
           super.pollOnce(maxTimeoutMs = 100)
       }
     }
+  }
+
+  override def start(): Unit = {
+    super.start()
+    started = true
   }
 }
