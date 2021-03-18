@@ -26,8 +26,10 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
@@ -63,7 +65,7 @@ public class ProduceResponseTest {
         assertEquals(10000, partitionProduceResponse.baseOffset());
         assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
         assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
-        assertEquals(null, partitionProduceResponse.errorMessage());
+        assertNull(partitionProduceResponse.errorMessage());
         assertTrue(partitionProduceResponse.recordErrors().isEmpty());
     }
 
@@ -78,6 +80,20 @@ public class ProduceResponseTest {
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
         assertEquals(10, v2Response.throttleTimeMs(), "Throttle time must be 10");
+
+        List<ProduceResponse> arrResponse = Arrays.asList(v0Response, v1Response, v2Response);
+        for(ProduceResponse produceResponse:arrResponse) {
+            assertEquals(1, produceResponse.data().responses().size());
+            ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();
+            assertEquals(1, topicProduceResponse.partitionResponses().size());  
+            ProduceResponseData.PartitionProduceResponse partitionProduceResponse = topicProduceResponse.partitionResponses().iterator().next();
+            assertEquals(100, partitionProduceResponse.logStartOffset());
+            assertEquals(10000, partitionProduceResponse.baseOffset());
+            assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
+            assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
+            assertNull(partitionProduceResponse.errorMessage());
+            assertTrue(partitionProduceResponse.recordErrors().isEmpty());
+        }
     }
 
     @SuppressWarnings("deprecation")
