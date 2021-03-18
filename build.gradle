@@ -25,7 +25,6 @@ buildscript {
       url "https://plugins.gradle.org/m2/"
     }
   }
-  apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
