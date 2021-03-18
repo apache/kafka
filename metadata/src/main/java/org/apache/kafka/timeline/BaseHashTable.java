@@ -40,14 +40,14 @@ class BaseHashTable<T> {
     private final static double MAX_LOAD_FACTOR = 0.75f;
 
     /**
-     * The natural log of 2
+     * The minimum number of slots we can have in the hash table.
      */
-    private final static double LN_2 = Math.log(2);
+    final static int MIN_CAPACITY = 2;
 
     /**
      * The maximum number of slots we can have in the hash table.
      */
-    private final static int MAX_CAPACITY = 0x4000000;
+    final static int MAX_CAPACITY = 1 << 30;
 
     private Object[] elements;
     private int size = 0;
@@ -56,12 +56,28 @@ class BaseHashTable<T> {
         this.elements = new Object[expectedSizeToCapacity(expectedSize)];
     }
 
+    /**
+     * Calculate the capacity we should provision, given the expected size.
+     *
+     * Our capacity must always be a power of 2, and never less than 2 or more
+     * than MAX_CAPACITY.  We use 64-bit numbers here to avoid overflow
+     * concerns.
+     */
     static int expectedSizeToCapacity(int expectedSize) {
-        if (expectedSize <= 1) {
-            return 2;
+        long minCapacity = (long) Math.ceil((float) expectedSize / MAX_LOAD_FACTOR);
+        return Math.max(MIN_CAPACITY,
+                (int) Math.min(MAX_CAPACITY, roundUpToPowerOfTwo(minCapacity)));
+    }
+
+    private static long roundUpToPowerOfTwo(long i) {
+        if (i <= 0) {
+            return 0;
+        } else if (i > (1L << 62)) {
+            throw new ArithmeticException("There are no 63-bit powers of 2 higher than " +
+                    "or equal to " + i);
+        } else {
+            return 1L << -Long.numberOfLeadingZeros(i - 1);
         }
-        double sizeToFit = expectedSize / MAX_LOAD_FACTOR;
-        return (int) Math.min(MAX_CAPACITY, Math.ceil(Math.log(sizeToFit) / LN_2));
     }
 
     final int baseSize() {
