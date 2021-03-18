@@ -152,6 +152,10 @@ final class KafkaMetadataLog private (
   }
 
   override def truncateTo(offset: Long): Unit = {
+    if (offset < highWatermark.offset) {
+      throw new IllegalArgumentException(s"Attempt to truncate to offset $offset, which is below " +
+        s"the current high watermark ${highWatermark.offset}")
+    }
     log.truncateTo(offset)
   }
 

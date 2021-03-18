@@ -108,7 +108,7 @@ object BrokerApiVersionsCommand {
                             val client: ConsumerNetworkClient,
                             val bootstrapBrokers: List[Node]) extends Logging {
 
-    @volatile var running: Boolean = true
+    @volatile var running = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
     val networkThread = new KafkaThread("admin-client-network-thread", () => {
@@ -135,7 +135,7 @@ object BrokerApiVersionsCommand {
     private def send(target: Node,
                      api: ApiKeys,
                      request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
-      val future: RequestFuture[ClientResponse] = client.send(target, request)
+      val future = client.send(target, request)
       pendingFutures.add(future)
       future.awaitDone(Long.MaxValue, TimeUnit.MILLISECONDS)
       pendingFutures.remove(future)
