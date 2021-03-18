@@ -61,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
@@ -1097,13 +1098,17 @@ public class KafkaStreams implements AutoCloseable {
         return Optional.empty();
     }
 
-    // Returns the number of threads that are not in the DEAD state -- use this over threads.size()
+    // Returns the number of threads that are not in the DEAD or PENDING_SHUTDOWN state -- use this over threads.size()
     private int getNumLiveStreamThreads() {
         final AtomicInteger numLiveThreads = new AtomicInteger(0);
         synchronized (threads) {
             processStreamThread(thread -> {
                 if (thread.state() == StreamThread.State.DEAD) {
+                    log.debug("Trimming thread {} from the threads list since it's state is {}", thread.getName(), StreamThread.State.DEAD);
                     threads.remove(thread);
+                } else if (thread.state() == StreamThread.State.PENDING_SHUTDOWN) {
+                    log.debug("Skipping thread {} from num live threads computation since it's state is {}",
+                              thread.getName(), StreamThread.State.PENDING_SHUTDOWN);
                 } else {
                     numLiveThreads.incrementAndGet();
                 }
