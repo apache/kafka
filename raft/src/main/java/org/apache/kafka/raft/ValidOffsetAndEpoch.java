@@ -35,7 +35,7 @@ public final class ValidOffsetAndEpoch {
         return offsetAndEpoch;
     }
 
-    public static enum Kind {
+    public enum Kind {
         DIVERGING, SNAPSHOT, VALID
     }
 
