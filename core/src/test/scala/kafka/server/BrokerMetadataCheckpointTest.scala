@@ -15,7 +15,6 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -64,7 +63,7 @@ class BrokerMetadataCheckpointTest {
   @Test
   def testCreateMetadataProperties(): Unit = {
     val meta = MetaProperties(
-      clusterId = Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
+      clusterId = "H3KKO4NTRPaCWtEmm3vW7A",
       nodeId = 5
     )
     val properties = new RawMetaProperties(meta.toProperties)
@@ -81,21 +80,21 @@ class BrokerMetadataCheckpointTest {
   }
 
   @Test
-  def testMetaPropertiesDoesNotAllowHexEncodedUUIDs(): Unit = {
+  def testMetaPropertiesAllowsHexEncodedUUIDs(): Unit = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
     properties.nodeId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
+    MetaProperties.parse(properties)
   }
 
   @Test
-  def testMetaPropertiesWithInvalidClusterId(): Unit = {
+  def testMetaPropertiesWithNonUuidClusterId(): Unit = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "not a valid uuid"
     properties.nodeId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
+    MetaProperties.parse(properties)
   }
 
   @Test

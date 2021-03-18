@@ -32,7 +32,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
     val nodeId = 0
     val metaProperties = MetaProperties(clusterId, nodeId)
 
@@ -49,7 +49,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testLoadMetaPropertiesWithInconsistentNodeId(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
     val metaNodeId = 1
     val configNodeId = 0
 
@@ -90,7 +90,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaPropertiesMissingInSomeLogDir(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`.
@@ -110,7 +110,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaLogDirIsOffline(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`
@@ -131,7 +131,7 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupDoesNotFailIfDataDirIsOffline(): Unit = {
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
     val nodeId = 1
 
     // One log dir is online and has properly formatted `meta.properties`
@@ -155,7 +155,7 @@ class KafkaRaftServerTest {
   @Test
   def testStartupFailsIfUnexpectedMetadataDir(): Unit = {
     val nodeId = 1
-    val clusterId = Uuid.randomUuid()
+    val clusterId = Uuid.randomUuid().toString
 
     // Create two directories with valid `meta.properties`
     val metadataDir = TestUtils.tempDirectory()
@@ -186,7 +186,7 @@ class KafkaRaftServerTest {
 
     // Create a random clusterId in each log dir
     Seq(logDir1, logDir2).foreach { dir =>
-      writeMetaProperties(dir, MetaProperties(clusterId = Uuid.randomUuid(), nodeId))
+      writeMetaProperties(dir, MetaProperties(clusterId = Uuid.randomUuid().toString, nodeId))
     }
 
     val configProperties = new Properties
