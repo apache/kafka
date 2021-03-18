@@ -579,7 +579,7 @@ public class StreamThread extends Thread {
                     mainConsumer.enforceRebalance();
                 }
                 final Long size = cacheResizeSize.getAndSet(-1L);
-                if ( size != -1L) {
+                if (size != -1L) {
                     cacheResizer.accept(size);
                 }
                 runOnce();
