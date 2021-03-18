@@ -64,7 +64,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
-public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
+public class KTableKTableForeignKeyInnerJoinMultiIntegration55Test {
     private final static int NUM_BROKERS = 1;
 
     @ClassRule
@@ -111,35 +111,35 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
 
-        final List<KeyValue<Integer, Float>> table1 = asList(
-            new KeyValue<>(1, 1.33f),
-            new KeyValue<>(2, 2.22f),
-            new KeyValue<>(3, -1.22f), //Won't be joined in yet.
-            new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
-        );
-
-        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-        final List<KeyValue<String, Long>> table2 = asList(
-            new KeyValue<>("0", 0L),  //partition 2
-            new KeyValue<>("1", 10L), //partition 0
-            new KeyValue<>("2", 20L), //partition 2
-            new KeyValue<>("3", 30L), //partition 2
-            new KeyValue<>("4", 40L), //partition 1
-            new KeyValue<>("5", 50L), //partition 0
-            new KeyValue<>("6", 60L), //partition 1
-            new KeyValue<>("7", 70L), //partition 0
-            new KeyValue<>("8", 80L), //partition 0
-            new KeyValue<>("9", 90L)  //partition 2
-        );
-
-        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-        final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
-            new KeyValue<>(10, "waffle")
-        );
-
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
+//        final List<KeyValue<Integer, Float>> table1 = asList(
+//            new KeyValue<>(1, 1.33f),
+//            new KeyValue<>(2, 2.22f),
+//            new KeyValue<>(3, -1.22f), //Won't be joined in yet.
+//            new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
+//        );
+//
+//        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+//        final List<KeyValue<String, Long>> table2 = asList(
+//            new KeyValue<>("0", 0L),  //partition 2
+//            new KeyValue<>("1", 10L), //partition 0
+//            new KeyValue<>("2", 20L), //partition 2
+//            new KeyValue<>("3", 30L), //partition 2
+//            new KeyValue<>("4", 40L), //partition 1
+//            new KeyValue<>("5", 50L), //partition 0
+//            new KeyValue<>("6", 60L), //partition 1
+//            new KeyValue<>("7", 70L), //partition 0
+//            new KeyValue<>("8", 80L), //partition 0
+//            new KeyValue<>("9", 90L)  //partition 2
+//        );
+//
+//        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+//        final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
+//            new KeyValue<>(10, "waffle")
+//        );
+//
+//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
+//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
+//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
@@ -179,6 +179,38 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
         INNER
     }
 
+    private void produceRecords() {
+        final List<KeyValue<Integer, Float>> table1 = asList(
+            new KeyValue<>(1, 1.33f),
+            new KeyValue<>(2, 2.22f),
+            new KeyValue<>(3, -1.22f), //Won't be joined in yet.
+            new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
+        );
+
+        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+        final List<KeyValue<String, Long>> table2 = asList(
+            new KeyValue<>("0", 0L),  //partition 2
+            new KeyValue<>("1", 10L), //partition 0
+            new KeyValue<>("2", 20L), //partition 2
+            new KeyValue<>("3", 30L), //partition 2
+            new KeyValue<>("4", 40L), //partition 1
+            new KeyValue<>("5", 50L), //partition 0
+            new KeyValue<>("6", 60L), //partition 1
+            new KeyValue<>("7", 70L), //partition 0
+            new KeyValue<>("8", 80L), //partition 0
+            new KeyValue<>("9", 90L)  //partition 2
+        );
+
+        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+        final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
+            new KeyValue<>(10, "waffle")
+        );
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
+    }
+
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
@@ -200,6 +232,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
 
+        produceRecords();
+
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
             OUTPUT,
@@ -208,7 +242,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
         assertEquals(expectedResult, result);
     }
 
-
     private static Properties getStreamsConfig() {
         final Properties streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "KTable-FKJ-Multi");
@@ -216,8 +249,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration35Test {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 5000);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 15000);
         return streamsConfig;
     }
 
