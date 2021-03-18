@@ -201,6 +201,11 @@ public class InternalTopologyBuilder {
                              final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier) {
             super(name, predecessors.clone());
             this.supplier = supplier;
+            if (supplier.stores() != null) {
+                for (final StoreBuilder<?> storeBuilder: supplier.stores()) {
+                    addStateStore(storeBuilder.name());
+                }
+            }
         }
 
         ProcessorNodeFactory(final String name,
