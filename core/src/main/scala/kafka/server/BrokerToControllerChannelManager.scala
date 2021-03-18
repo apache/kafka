@@ -296,6 +296,7 @@ class BrokerToControllerRequestThread(
   private val activeController = new AtomicReference[Node](null)
 
   // Used for testing
+  @volatile
   private[server] var started = false
 
   def activeControllerAddress(): Option[Node] = {

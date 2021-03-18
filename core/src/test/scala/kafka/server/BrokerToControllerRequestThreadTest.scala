@@ -343,12 +343,10 @@ class BrokerToControllerRequestThreadTest {
 
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
 
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
       config, time, "", retryTimeoutMs = Long.MaxValue)
-    mockClient.prepareResponse(expectedResponse)
 
-    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
+    val completionHandler = new TestRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
