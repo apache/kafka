@@ -20,9 +20,7 @@ import java.nio.charset.StandardCharsets
 buildscript {
   repositories {
     mavenCentral()
-    jcenter()
   }
-  apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
@@ -1975,7 +1973,7 @@ project(':connect:transforms') {
 
   dependencies {
     api project(':connect:api')
-    
+
     implementation libs.slf4jApi
 
     testImplementation libs.easymock
