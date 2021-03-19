@@ -45,13 +45,12 @@ public enum Type {
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
             invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
             invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
-
         }
     },
     DEFAULT {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            throw new IllegalStateException("Cannot create invocation contexts for DEFAULT type");
+            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
         }
     };
 

@@ -88,7 +88,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 cluster.format();
                 cluster.startup();
                 kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
+                    () -> cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
                     () -> "Broker never made it to RUNNING state.",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
@@ -118,7 +118,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Collection<SocketServer> brokerSocketServers() {
-            return clusterReference.get().kip500Brokers().values().stream()
+            return clusterReference.get().brokers().values().stream()
                 .map(BrokerServer::socketServer)
                 .collect(Collectors.toList());
         }
@@ -137,7 +137,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public SocketServer anyBrokerSocketServer() {
-            return clusterReference.get().kip500Brokers().values().stream()
+            return clusterReference.get().brokers().values().stream()
                 .map(BrokerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));

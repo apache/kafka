@@ -54,7 +54,7 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -80,7 +80,7 @@ class RaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -138,7 +138,7 @@ class RaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -181,7 +181,7 @@ class RaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
