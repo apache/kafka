@@ -68,28 +68,28 @@ allprojects {
         }
       }
     }
-    configurations.all {
-      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
-      // that are unrelated to the project dependencies, we should not change them
-      if (name != "zinc") {
-        resolutionStrategy {
-          force(
-            // be explicit about the javassist dependency version instead of relying on the transitive version
-            libs.javassist,
-            // ensure we have a single version in the classpath despite transitive dependencies
-            libs.scalaLibrary,
-            libs.scalaReflect,
-            libs.jacksonAnnotations,
-            // be explicit about the Netty dependency version instead of relying on the version set by
-            // ZooKeeper (potentially older and containing CVEs)
-            libs.nettyHandler,
-            libs.nettyTransportNativeEpoll
-          )
-        }
+  }
+
+  configurations.all {
+    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+    // that are unrelated to the project dependencies, we should not change them
+    if (name != "zinc") {
+      resolutionStrategy {
+        force(
+          // be explicit about the javassist dependency version instead of relying on the transitive version
+          libs.javassist,
+          // ensure we have a single version in the classpath despite transitive dependencies
+          libs.scalaLibrary,
+          libs.scalaReflect,
+          libs.jacksonAnnotations,
+          // be explicit about the Netty dependency version instead of relying on the version set by
+          // ZooKeeper (potentially older and containing CVEs)
+          libs.nettyHandler,
+          libs.nettyTransportNativeEpoll
+        )
       }
     }
   }
-
 }
 
 ext {
@@ -148,6 +148,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
+        'KIP-500.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
