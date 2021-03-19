@@ -59,11 +59,15 @@ abstract class ZooKeeperTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
+    shutdownZooKeeper()
+    Configuration.setConfiguration(null)
+  }
+
+  def shutdownZooKeeper(): Unit = {
     if (zkClient != null)
-     zkClient.close()
+      zkClient.close()
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown(), this)
-    Configuration.setConfiguration(null)
   }
 
   // Trigger session expiry by reusing the session id in another client
