@@ -911,7 +911,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setLeaderEpoch(quorum.epoch())
                 .setLeaderId(quorum.leaderIdOrSentinel());
 
-            switch (validOffsetAndEpoch.type()) {
+            switch (validOffsetAndEpoch.kind()) {
                 case DIVERGING:
                     partitionData.divergingEpoch()
                         .setEpoch(validOffsetAndEpoch.offsetAndEpoch().epoch)
@@ -1039,7 +1039,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             ValidOffsetAndEpoch validOffsetAndEpoch = log.validateOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
             final Records records;
-            if (validOffsetAndEpoch.type() == ValidOffsetAndEpoch.Type.VALID) {
+            if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
                 if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
