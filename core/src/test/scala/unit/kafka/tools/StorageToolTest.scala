@@ -33,7 +33,7 @@ import org.junit.jupiter.api.{Test, Timeout}
 
 @Timeout(value = 40)
 class StorageToolTest {
-  private def newKip500Properties() = {
+  private def newSelfManagedProperties() = {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
@@ -43,13 +43,13 @@ class StorageToolTest {
 
   @Test
   def testConfigToLogDirectories(): Unit = {
-    val config = new KafkaConfig(newKip500Properties())
+    val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals(Seq("/tmp/bar", "/tmp/foo"), StorageTool.configToLogDirectories(config))
   }
 
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
-    val properties = newKip500Properties()
+    val properties = newSelfManagedProperties()
     properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
@@ -127,7 +127,7 @@ Found problem:
   }
 
   @Test
-  def testInfoWithMismatchedKip500KafkaConfig(): Unit = {
+  def testInfoWithMismatchedSelfManagedKafkaConfig(): Unit = {
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
@@ -178,7 +178,7 @@ Found problem:
 
   @Test
   def testFormatWithInvalidClusterId(): Unit = {
-    val config = new KafkaConfig(newKip500Properties())
+    val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
