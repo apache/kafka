@@ -50,6 +50,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -83,7 +84,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      */
     private static class ControllerQuorumVotersFutureManager implements AutoCloseable {
         private final int expectedControllers;
-        private final CompletableFuture<List<String>> future = new CompletableFuture<>();
+        private final CompletableFuture<Map<Integer, RaftConfig.AddressSpec>> future = new CompletableFuture<>();
         private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
 
         ControllerQuorumVotersFutureManager(int expectedControllers) {
@@ -94,8 +95,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
             controllerPorts.put(nodeId, port);
             if (controllerPorts.size() >= expectedControllers) {
                 future.complete(controllerPorts.entrySet().stream().
-                    map(e -> String.format("%d@localhost:%d", e.getKey(), e.getValue())).
-                    collect(Collectors.toList()));
+                    collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", entry.getValue()))
+                    )));
             }
         }
 
@@ -381,8 +384,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
         Properties properties = new Properties();
         if (!controllers.isEmpty()) {
-            Collection<Node> controllerNodes = RaftConfig.quorumVoterStringsToNodes(
-                    controllerQuorumVotersFutureManager.future.get());
+            Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
+                controllerQuorumVotersFutureManager.future.get());
 
             StringBuilder bld = new StringBuilder();
             String prefix = "";

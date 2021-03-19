@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, RaftClient, RecordSerde}
+import org.apache.kafka.raft.{BatchReader, RaftClient, RaftConfig, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
@@ -85,7 +85,7 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(config.quorumVoters)
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
