@@ -964,7 +964,7 @@ public class KafkaAdminClient extends AdminClient {
          * Maps node ID strings to calls that have been sent.
          * Only accessed from this thread.
          */
-        private final Map<String, List<Call>> callsInFlight = new HashMap<>();
+        private final Map<String, Call> callsInFlight = new HashMap<>();
 
         /**
          * Maps correlation IDs to calls that have been sent.
@@ -1106,7 +1106,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 Node node = entry.getKey();
-                if (!callsInFlight.getOrDefault(node.idString(), Collections.emptyList()).isEmpty()) {
+                if (callsInFlight.containsKey(node.idString())) {
                     log.trace("Still waiting for other calls to finish on node {}.", node);
                     nodeReadyDeadlines.remove(node);
                     continue;
@@ -1133,6 +1133,8 @@ public class KafkaAdminClient extends AdminClient {
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
                     continue;
                 }
+                // Subtract the time we spent waiting for the node to become ready from
+                // the total request time.
                 int remainingRequestTime;
                 Long deadlineMs = nodeReadyDeadlines.remove(node);
                 if (deadlineMs == null) {
@@ -1147,9 +1149,9 @@ public class KafkaAdminClient extends AdminClient {
                     AbstractRequest.Builder<?> requestBuilder;
                     try {
                         requestBuilder = call.createRequest(timeoutMs);
-                    } catch (Throwable throwable) {
+                    } catch (Throwable t) {
                         call.fail(now, new KafkaException(String.format(
-                            "Internal error sending %s to %s.", call.callName, node)));
+                            "Internal error sending %s to %s.", call.callName, node), t));
                         continue;
                     }
                     ClientRequest clientRequest = client.newClientRequest(node.idString(),
@@ -1157,7 +1159,7 @@ public class KafkaAdminClient extends AdminClient {
                     log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
                         requestBuilder, node, clientRequest.correlationId(), timeoutMs);
                     client.send(clientRequest, now);
-                    getOrCreateListValue(callsInFlight, node.idString()).add(call);
+                    callsInFlight.put(node.idString(), call);
                     correlationIdToCalls.put(clientRequest.correlationId(), call);
                     break;
                 }
@@ -1176,14 +1178,9 @@ public class KafkaAdminClient extends AdminClient {
          */
         private void timeoutCallsInFlight(TimeoutProcessor processor) {
             int numTimedOut = 0;
-            for (Map.Entry<String, List<Call>> entry : callsInFlight.entrySet()) {
-                List<Call> contexts = entry.getValue();
-                if (contexts.isEmpty())
-                    continue;
+            for (Map.Entry<String, Call> entry : callsInFlight.entrySet()) {
+                Call call = entry.getValue();
                 String nodeId = entry.getKey();
-                // We assume that the first element in the list is the earliest. So it should be the
-                // only one we need to check the timeout for.
-                Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
                     log.info("Disconnecting from {} due to timeout while awaiting {}", nodeId, call);
                     client.disconnect(nodeId);
@@ -1220,8 +1217,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Stop tracking this call.
                 correlationIdToCalls.remove(correlationId);
-                List<Call> calls = callsInFlight.get(response.destination());
-                if ((calls == null) || (!calls.remove(call))) {
+                if (!callsInFlight.remove(response.destination(), call)) {
                     log.error("Internal server error on {}: ignoring call {} in correlationIdToCall " +
                         "that did not exist in callsInFlight", response.destination(), call);
                     continue;
@@ -1316,7 +1312,7 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            log.trace("Thread starting");
+            log.debug("Thread starting");
             try {
                 processRequests();
             } finally {
@@ -1387,7 +1383,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
-                List<ClientResponse> responses = client.poll(pollTimeout, now);
+                List<ClientResponse> responses = client.poll(Math.max(0L, pollTimeout), now);
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
                 // unassign calls to disconnected nodes
@@ -1412,11 +1408,13 @@ public class KafkaAdminClient extends AdminClient {
         void enqueue(Call call, long now) {
             if (call.tries > maxRetries) {
                 log.debug("Max retries {} for {} reached", maxRetries, call);
-                call.handleTimeoutFailure(time.milliseconds(), new TimeoutException());
+                call.handleTimeoutFailure(time.milliseconds(), new TimeoutException(
+                    "Exceeded maxRetries after " + call.tries + " tries."));
                 return;
             }
             if (log.isDebugEnabled()) {
-                log.debug("Queueing {} with a timeout {} ms from now.", call, call.deadlineMs - now);
+                log.debug("Queueing {} with a timeout {} ms from now.", call,
+                    Math.min(requestTimeoutMs, call.deadlineMs - now));
             }
             boolean accepted = false;
             synchronized (this) {
