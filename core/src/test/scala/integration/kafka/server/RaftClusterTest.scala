@@ -237,8 +237,22 @@ class RaftClusterTest {
                               quotas: Seq[ClientQuotaAlteration.Op],
                               filter: ClientQuotaFilter,
                               expectCount: Int): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
-          admin.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJava)).asJava)
-          val (describeResult, ok) = TestUtils.computeUntilTrue(admin.describeClientQuotas(filter).entities().get()) {
+          val alterResult = admin.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJava)).asJava)
+          try {
+            alterResult.all().get()
+          } catch {
+            case t: Throwable => fail("AlterClientQuotas request failed", t)
+          }
+
+          def describeOrFail(filter: ClientQuotaFilter): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
+            try {
+              admin.describeClientQuotas(filter).entities().get()
+            } catch {
+              case t: Throwable => fail("DescribeClientQuotas request failed", t)
+            }
+          }
+
+          val (describeResult, ok) = TestUtils.computeUntilTrue(describeOrFail(filter)) {
             results => results.getOrDefault(entity, java.util.Collections.emptyMap[String, java.lang.Double]()).size() == expectCount
           }
           assertTrue(ok, "Broker never saw new client quotas")
@@ -251,7 +265,6 @@ class RaftClusterTest {
 
         describeResult = alterThenDescribe(entity, Seq(
           new ClientQuotaAlteration.Op("request_percentage", 0.97),
-          new ClientQuotaAlteration.Op("unknown_quota", 100),
           new ClientQuotaAlteration.Op("producer_byte_rate", 10000),
           new ClientQuotaAlteration.Op("consumer_byte_rate", 10001)
         ), filter, 3)
