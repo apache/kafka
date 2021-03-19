@@ -51,7 +51,7 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka broker.
+ * A self-managed Kafka broker.
  */
 class BrokerServer(
                     val config: KafkaConfig,

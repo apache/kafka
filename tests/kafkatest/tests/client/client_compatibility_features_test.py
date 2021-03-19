@@ -134,7 +134,6 @@ class ClientCompatibilityFeaturesTest(Test):
         self.kafka.start()
         features = get_broker_features(broker_version)
         if not self.zk:
-            #  this check/disabling is only necessary due to the fact that we are in early access mode with
-            #  KIP-500 and we should remove the special casing when that his fully implemented
+            #  The self-managed mode doesn't support acls yet, we should remove this once it does
             features["describe-acls-supported"] = False
         self.invoke_compatibility_program(features)

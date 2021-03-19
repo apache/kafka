@@ -33,14 +33,13 @@ import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
 import scala.collection.Seq
 
 /**
- * This class implements the KIP-500 server which relies on a self-managed
+ * This class implements the self-managed mode server (aka KIP-500) which relies on a
  * Raft quorum for maintaining cluster metadata. It is responsible for
  * constructing the controller and/or broker based on the `process.roles`
  * configuration and for managing their basic lifecycle (startup and shutdown).
  *
- * Note that this server is a work in progress and relies on stubbed
- * implementations of the controller [[ControllerServer]] and broker
- * [[BrokerServer]].
+ * Note that this server is a work in progress and we are releasing it as
+ * early access in 2.8.0.
  */
 class KafkaRaftServer(
   config: KafkaConfig,

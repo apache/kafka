@@ -15,8 +15,8 @@
 
 # the types of metadata quorums we support
 zk = 'ZK' # ZooKeeper, used before/during the KIP-500 bridge release(s)
-colocated_raft = 'COLOCATED_RAFT' # co-located KIP-500 Controllers, used during/after the KIP-500 bridge release(s)
-remote_raft = 'REMOTE_RAFT' # separate KIP-500 Controllers, used during/after the KIP-500 bridge release(s)
+colocated_raft = 'COLOCATED_RAFT' # co-located self-managed Controllers, used during/after the KIP-500 bridge release(s)
+remote_raft = 'REMOTE_RAFT' # separate self-managed Controllers, used during/after the KIP-500 bridge release(s)
 
 # How we will parameterize tests that exercise all quorum styles
 #   [“ZK”, “REMOTE_RAFT”, "COLOCATED_RAFT"] during the KIP-500 bridge release(s)

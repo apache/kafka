@@ -148,7 +148,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'KIP-500.md',
+        'config/self-managed/README.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
