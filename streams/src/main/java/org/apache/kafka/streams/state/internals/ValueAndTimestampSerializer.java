@@ -105,7 +105,7 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
     }
 
     private static boolean timeIsDecreasing(final byte[] oldRecord, final byte[] newRecord) {
-        return extractTimestamp(newRecord) < extractTimestamp(oldRecord);
+        return extractTimestamp(newRecord) <= extractTimestamp(oldRecord);
     }
 
     private static long extractTimestamp(final byte[] bytes) {
