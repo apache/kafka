@@ -26,7 +26,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * It indicates the deletion state of the remote topic partition. This will be based on the action executed on this
+ * This enum indicates the deletion state of the remote topic partition. This will be based on the action executed on this
  * partition by the remote log service implementation.
  * State transitions are mentioned below. Self transition is treated as valid. This allows updating with the
  * same state in case of retries and failover.
@@ -90,9 +90,9 @@ public enum RemotePartitionDeleteState {
         Objects.requireNonNull(targetState, "targetState can not be null");
 
         if (srcState == null) {
-            // If the source state is null, check the target state as the initial state viz DELETE_PARTITION_MARKED
-            // Wanted to keep this logic simple here by taking null for srcState, instead of creating one more state like
-            // DELETE_PARTITION_NOT_MARKED and have the null check by caller and pass that state.
+            // If the source state is null, check the target state as the initial state viz DELETE_PARTITION_MARKED.
+            // This ensures simplicity here as we don't have to define one more type to represent the state 'null' like
+            // DELETE_PARTITION_NOT_MARKED, have the null check by the caller and pass that state.
             return targetState == DELETE_PARTITION_MARKED;
         } else if (srcState == targetState) {
             // Self transition is treated as valid. This is to maintain the idempotency for the state in case of retries

@@ -29,16 +29,13 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * This class is an implementation of {@link RemoteStorageManager} backed by inmemory store.
+ * This class is an implementation of {@link RemoteStorageManager} backed by in-memory store.
  */
 public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteStorageManager.class);
 
-    // map of key to log data, which can be segment or any of its indexes.
+    // Map of key to log data, which can be segment or any of its indexes.
     private Map<String, byte[]> keyToLogData = new ConcurrentHashMap<>();
-
-    public InmemoryRemoteStorageManager() {
-    }
 
     static String generateKeyForSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return remoteLogSegmentMetadata.remoteLogSegmentId().id().toString() + ".segment";
@@ -61,21 +58,27 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
         log.debug("copying log segment and indexes for : {}", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         Objects.requireNonNull(logSegmentData, "logSegmentData can not be null");
+
+        if (keyToLogData.containsKey(generateKeyForSegment(remoteLogSegmentMetadata))) {
+            throw new RemoteStorageException("It already contains the segment for the given id: " +
+                                             remoteLogSegmentMetadata.remoteLogSegmentId());
+        }
+
         try {
             keyToLogData.put(generateKeyForSegment(remoteLogSegmentMetadata),
-                    Files.readAllBytes(logSegmentData.logSegment().toPath()));
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.Offset),
-                    Files.readAllBytes(logSegmentData.offsetIndex().toPath()));
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.Timestamp),
-                    Files.readAllBytes(logSegmentData.timeIndex().toPath()));
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.Transaction),
-                    Files.readAllBytes(logSegmentData.txnIndex().toPath()));
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.LeaderEpoch),
+                    Files.readAllBytes(logSegmentData.logSegment()));
+            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.TRANSACTION),
+                    Files.readAllBytes(logSegmentData.txnIndex()));
+            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.LEADER_EPOCH),
                     logSegmentData.leaderEpochIndex().array());
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.ProducerSnapshot),
-                    Files.readAllBytes(logSegmentData.producerSnapshotIndex().toPath()));
-        } catch (IOException e) {
-            throw new RemoteStorageException(e.getMessage(), e);
+            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.PRODUCER_SNAPSHOT),
+                    Files.readAllBytes(logSegmentData.producerSnapshotIndex()));
+            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.OFFSET),
+                    Files.readAllBytes(logSegmentData.offsetIndex()));
+            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.TIMESTAMP),
+                    Files.readAllBytes(logSegmentData.timeIndex()));
+        } catch (Exception e) {
+            throw new RemoteStorageException(e);
         }
         log.debug("copied log segment and indexes for : {} successfully.", remoteLogSegmentMetadata);
     }
@@ -104,7 +107,7 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
         }
 
         if (endPosition < startPosition) {
-            throw new IllegalArgumentException("end position must be greater than start position");
+            throw new IllegalArgumentException("end position must be greater than or equal to start position");
         }
 
         String key = generateKeyForSegment(remoteLogSegmentMetadata);
@@ -121,8 +124,8 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
                                                + " must be less than the length of the segment: " + segment.length);
         }
 
-        // check for boundaries like given end position is more than the length, length should never be more than the
-        // existing segment size.
+        // If the given (endPosition + 1) is more than the segment length then the segment length is taken into account.
+        // Computed length should never be more than the existing segment size.
         int length = Math.min(segment.length - 1, endPosition) - startPosition + 1;
         log.debug("Length of the segment to be sent: [{}], for segment: [{}]", length, remoteLogSegmentMetadata);
 
@@ -162,10 +165,13 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public void close() throws IOException {
+        // Clearing the references to the map and assigning empty immutable map.
+        // Practically, this instance will not be used once it is closed.
         keyToLogData = Collections.emptyMap();
     }
 
     @Override
     public void configure(Map<String, ?> configs) {
+        // Intentionally left blank here as nothing to be initialized here.
     }
 }

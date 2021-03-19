@@ -26,7 +26,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * It indicates the state of the remote log segment. This will be based on the action executed on this
+ * This enum indicates the state of the remote log segment. This will be based on the action executed on this
  * segment by the remote log service implementation.
  * <p>
  * It goes through the below state transitions. Self transition is treated as valid. This allows updating with the
@@ -94,9 +94,9 @@ public enum RemoteLogSegmentState {
         Objects.requireNonNull(targetState, "targetState can not be null");
 
         if (srcState == null) {
-            // If the source state is null, check the target state as the initial state viz DELETE_PARTITION_MARKED
-            // Wanted to keep this logic simple here by taking null for srcState, instead of creating one more state like
-            // COPY_SEGMENT_NOT_STARTED and have the null check by caller and pass that state.
+            // If the source state is null, check the target state as the initial state viz COPY_SEGMENT_STARTED
+            // This ensures simplicity here as we don't have to define one more type to represent the state 'null' like
+            // COPY_SEGMENT_NOT_STARTED, have the null check by the caller and pass that state.
             return targetState == COPY_SEGMENT_STARTED;
         } else if (srcState == targetState) {
             // Self transition is treated as valid. This is to maintain the idempotency for the state in case of retries
