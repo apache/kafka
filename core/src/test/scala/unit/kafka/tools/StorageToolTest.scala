@@ -32,7 +32,7 @@ import org.junit.jupiter.api.{Test, Timeout}
 
 @Timeout(value = 40)
 class StorageToolTest {
-  private def newKip500Properties() = {
+  private def newSelfManagedProperties() = {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
@@ -42,13 +42,13 @@ class StorageToolTest {
 
   @Test
   def testConfigToLogDirectories(): Unit = {
-    val config = new KafkaConfig(newKip500Properties())
+    val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals(Seq("/tmp/bar", "/tmp/foo"), StorageTool.configToLogDirectories(config))
   }
 
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
-    val properties = newKip500Properties()
+    val properties = newSelfManagedProperties()
     properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
@@ -119,14 +119,14 @@ Found problem:
 Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}
 
 Found problem:
-  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for kip-500.
+  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in self-managed mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)
   }
 
   @Test
-  def testInfoWithMismatchedKip500KafkaConfig(): Unit = {
+  def testInfoWithMismatchedSelfManagedKafkaConfig(): Unit = {
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
@@ -144,7 +144,7 @@ Found problem:
 Found metadata: {broker.id=1, cluster.id=26c36907-4158-4a35-919d-6534229f5241, version=0}
 
 Found problem:
-  The kafka configuration file appears to be for a kip-500 cluster, but the directories are formatted for legacy mode.
+  The kafka configuration file appears to be for a cluster in self-managed mode, but the directories are formatted for legacy mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)
@@ -177,7 +177,7 @@ Found problem:
 
   @Test
   def testFormatWithInvalidClusterId(): Unit = {
-    val config = new KafkaConfig(newKip500Properties())
+    val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
