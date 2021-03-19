@@ -266,7 +266,7 @@ class Log(@volatile private var _dir: File,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
           private val hadCleanShutdown: Boolean = true,
-          @volatile var topicId : Option[Uuid] = None,
+          @volatile var topicId: Option[Uuid],
           val keepPartitionMetadataFile: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -360,8 +360,9 @@ class Log(@volatile private var _dir: File,
           partitionMetadataFile.delete()
         else {
           val fileTopicId = partitionMetadataFile.read().topicId
-          if (topicId.isDefined && fileTopicId != topicId.get)
-            throw new IllegalStateException(s"Tried to assign topic ID $topicId to log, but log already contained topicId $fileTopicId")
+          if (topicId.isDefined && !topicId.contains(fileTopicId))
+            throw new IllegalStateException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+              s"but log already contained topic ID $fileTopicId")
           topicId = Some(fileTopicId)
         }
     } else if (topicId.isDefined && keepPartitionMetadataFile) {
@@ -586,6 +587,12 @@ class Log(@volatile private var _dir: File,
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
+  }
+
+  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
+  def writeTopicIdToExistingLog(topicId: Uuid): Unit = {
+    partitionMetadataFile.write(topicId)
+    this.topicId = Some(topicId)
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
@@ -2612,7 +2619,7 @@ object Log {
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
-            topicId: Option[Uuid] = None,
+            topicId: Option[Uuid],
             keepPartitionMetadataFile: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)

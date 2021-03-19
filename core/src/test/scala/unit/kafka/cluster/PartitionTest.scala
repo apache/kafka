@@ -1940,7 +1940,8 @@ class PartitionTest extends AbstractPartitionTest {
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
     log.producerStateManager,
-    new LogDirFailureChannel(1)) {
+    new LogDirFailureChannel(1),
+    topicId = None) {
 
     override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
       appendSemaphore.acquire()

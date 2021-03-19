@@ -110,7 +110,8 @@ abstract class AbstractLogCleanerIntegrationTest {
         brokerTopicStats = new BrokerTopicStats,
         maxProducerIdExpirationMs = 60 * 60 * 1000,
         producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-        logDirFailureChannel = new LogDirFailureChannel(10))
+        logDirFailureChannel = new LogDirFailureChannel(10),
+        topicId = None)
       logMap.put(partition, log)
       this.logs += log
     }

@@ -1326,7 +1326,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"epoch ${leaderAndIsrRequest.controllerEpoch}")
         }
       val topicIds = leaderAndIsrRequest.topicIds()
-      def getTopicId (topicName: String): Option[Uuid] = {
+      def getTopicId(topicName: String): Option[Uuid] = {
         val topicId = topicIds.get(topicName)
         // if invalid topic ID return None
         if (topicId == null || topicId == Uuid.ZERO_UUID)
@@ -1377,9 +1377,9 @@ class ReplicaManager(val config: KafkaConfig,
               val requestLeaderEpoch = partitionState.leaderEpoch
               val requestTopicId = topicIds.get(topicPartition.topic)
 
-              if (!checkTopicId(requestTopicId, partition.topicId)) {
-                stateChangeLogger.error(s"Topic Id in memory: ${partition.topicId.get} does not" +
-                  s" match the topic Id for partition $topicPartition received: " +
+              if (!hasConsistentTopicId(requestTopicId, partition.topicId)) {
+                stateChangeLogger.error(s"Topic ID in memory: ${partition.topicId.get} does not" +
+                  s" match the topic ID for partition $topicPartition received: " +
                   s"$requestTopicId.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
               } else if (requestLeaderEpoch > currentLeaderEpoch) {
@@ -1496,16 +1496,11 @@ class ReplicaManager(val config: KafkaConfig,
    * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exist
    * @return true if the request topic id is consistent, false otherwise
    */
-  private def checkTopicId(requestTopicId: Uuid, logTopicIdOpt: Option[Uuid]): Boolean = {
+  private def hasConsistentTopicId(requestTopicId: Uuid, logTopicIdOpt: Option[Uuid]): Boolean = {
     if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID) {
       true
     } else
-      logTopicIdOpt match {
-        case None =>
-          true
-        case Some(logTopicId)  =>
-           requestTopicId == logTopicId
-    }
+      logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
   }
 
   /**

@@ -353,7 +353,8 @@ class PartitionLockTest extends Logging {
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
     log.producerStateManager,
-    new LogDirFailureChannel(1)) {
+    new LogDirFailureChannel(1),
+    topicId = None) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {
       val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)

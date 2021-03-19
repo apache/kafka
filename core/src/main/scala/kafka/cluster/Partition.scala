@@ -345,9 +345,8 @@ class Partition(val topicPartition: TopicPartition,
       maybeLog = Some(log)
       updateHighWatermark(log)
       // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
-      if (log.topicId == None && topicId.isDefined) {
-        log.partitionMetadataFile.write(topicId.get)
-        log.topicId = Some(topicId.get)
+      if (log.topicId == None) {
+        topicId.foreach(topicId => log.writeTopicIdToExistingLog(topicId))
       }
       log
     } finally {

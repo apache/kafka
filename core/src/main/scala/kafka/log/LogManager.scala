@@ -270,6 +270,7 @@ class LogManager(logDirs: Seq[File],
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
+      topicId = None,
       keepPartitionMetadataFile = keepPartitionMetadataFile)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
