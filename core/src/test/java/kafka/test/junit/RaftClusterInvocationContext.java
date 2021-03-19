@@ -82,7 +82,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
-                // TODO how to pass down security protocol and listener name?
+                // KAFKA-12512 need to pass security protocol and listener name here
                 KafkaClusterTestKit cluster = builder.build();
                 clusterReference.set(cluster);
                 cluster.format();

@@ -22,6 +22,7 @@ import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
+import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
 import kafka.server.Server;
 import kafka.tools.StorageTool;
@@ -170,7 +171,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
                     String threadNamePrefix = String.format("controller%d_", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(), node.id());
-                    TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
+                    TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition,
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
@@ -223,7 +224,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(), node.id());
-                    TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
+                    TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition,
                             Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
