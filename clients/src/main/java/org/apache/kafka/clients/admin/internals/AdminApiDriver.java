@@ -258,11 +258,11 @@ public class AdminApiDriver<K, V> {
                 "Will attempt retry", spec.request);
             dynamicMapping.ifPresent(mapping -> {
                 // After a disconnect, we want the driver to attempt to lookup the key
-                // again. This gives us a chance to find a new coordinator or partition
-                // leader for example.
-                if (mapping.keys.containsAll(spec.keys)) {
-                    spec.keys.forEach(this::unmap);
-                }
+                // again (if the key is dynamically mapped). This gives us a chance to
+                // find a new coordinator or partition leader for example.
+                spec.keys.stream()
+                    .filter(mapping.keys::contains)
+                    .forEach(this::unmap);
             });
         } else {
             spec.keys.forEach(key -> completeExceptionally(key, t));

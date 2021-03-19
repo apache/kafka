@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.DynamicKeyMapping;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.KeyMappings;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler.StaticKeyMapping;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -326,6 +327,77 @@ class AdminApiDriverTest {
         RequestSpec<String> retryLookupSpec = retryLookupSpecs.get(0);
         assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retryLookupSpec.nextAllowedTryMs);
         assertEquals(1, retryLookupSpec.tries);
+    }
+
+    @Test
+    public void testCoalescedStaticAndDynamicFulfillment() {
+        Map<String, MockRequestScope> dynamicLookupScopes = map(
+            "foo", new MockRequestScope(OptionalInt.empty())
+        );
+
+        Map<String, Integer> staticMapping = map(
+            "bar", 1
+        );
+
+        MockLookupStrategy<String> strategy = new MockLookupStrategy<>(dynamicLookupScopes);
+        TestContext ctx = new TestContext(new KeyMappings<>(
+            Optional.of(new StaticKeyMapping<>(staticMapping)),
+            Optional.of(new DynamicKeyMapping<>(dynamicLookupScopes.keySet(), strategy))
+        ));
+
+        // Initially we expect a lookup for the dynamic key and a
+        // fulfillment request for the static key
+        LookupResult<String> lookupResult = mapped("foo", 1);
+        ctx.lookupStrategy().expectLookup(
+            mkSet("foo"), lookupResult
+        );
+        ctx.handler.expectRequest(
+            mkSet("bar"), completed("bar", 10L)
+        );
+
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+        assertEquals(2, requestSpecs.size());
+
+        RequestSpec<String> lookupSpec = requestSpecs.get(0);
+        assertEquals(mkSet("foo"), lookupSpec.keys);
+        ctx.assertLookupResponse(lookupSpec, lookupResult);
+
+        // Receive a disconnect from the fulfillment request so that
+        // we have an opportunity to coalesce the keys.
+        RequestSpec<String> fulfillmentSpec = requestSpecs.get(1);
+        assertEquals(mkSet("bar"), fulfillmentSpec.keys);
+        ctx.driver.onFailure(ctx.time.milliseconds(), fulfillmentSpec, new DisconnectException());
+
+        // Now we should get two fulfillment requests. One of them will
+        // the coalesced dynamic and static keys for broker 1. The other
+        // should contain the single dynamic key for broker 0.
+        ctx.handler.reset();
+        ctx.handler.expectRequest(
+            mkSet("foo", "bar"), completed("foo", 15L, "bar", 30L)
+        );
+
+        List<RequestSpec<String>> coalescedSpecs = ctx.driver.poll();
+        assertEquals(1, coalescedSpecs.size());
+        RequestSpec<String> coalescedSpec = coalescedSpecs.get(0);
+        assertEquals(mkSet("foo", "bar"), coalescedSpec.keys);
+
+        // Disconnect in order to ensure that only the dynamic key is unmapped.
+        // Then complete the remaining requests.
+        ctx.driver.onFailure(ctx.time.milliseconds(), coalescedSpec, new DisconnectException());
+
+        Map<Set<String>, LookupResult<String>> fooLookupRetry = map(
+            mkSet("foo"), mapped("foo", 3)
+        );
+        Map<Set<String>, ApiResult<String, Long>> barFulfillmentRetry = map(
+            mkSet("bar"), completed("bar", 30L)
+        );
+        ctx.poll(fooLookupRetry, barFulfillmentRetry);
+
+        Map<Set<String>, ApiResult<String, Long>> fooFulfillmentRetry = map(
+            mkSet("foo"), completed("foo", 15L)
+        );
+        ctx.poll(emptyMap(), fooFulfillmentRetry);
+        ctx.poll(emptyMap(), emptyMap());
     }
 
     @Test
@@ -659,7 +731,7 @@ class AdminApiDriverTest {
 
     private static KeyMappings<String> staticMapping(Map<String, Integer> staticMappedKeys) {
         return new KeyMappings<>(
-            Optional.of(new AdminApiHandler.StaticKeyMapping<>(staticMappedKeys)),
+            Optional.of(new StaticKeyMapping<>(staticMappedKeys)),
             Optional.empty()
         );
     }
