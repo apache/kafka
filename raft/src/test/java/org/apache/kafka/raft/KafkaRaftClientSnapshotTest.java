@@ -1269,7 +1269,84 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertVotedCandidate(epoch + 1, localId);
     }
 
+    @Test
+    public void testFetchSnapshotRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // null cluster id is accepted
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.clusterId.toString(),
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // null cluster id is accepted
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                null,
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // empty cluster id is rejected
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                "",
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+        // invalid cluster id is rejected
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                "invalid-uuid",
+                context.metadataPartition,
+                epoch,
+                new OffsetAndEpoch(0, 0),
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
     private static FetchSnapshotRequestData fetchSnapshotRequest(
+            TopicPartition topicPartition,
+            int epoch,
+            OffsetAndEpoch offsetAndEpoch,
+            int maxBytes,
+            long position
+    ) {
+        return fetchSnapshotRequest(null, topicPartition, epoch, offsetAndEpoch, maxBytes, position);
+    }
+
+    private static FetchSnapshotRequestData fetchSnapshotRequest(
+        String clusterId,
         TopicPartition topicPartition,
         int epoch,
         OffsetAndEpoch offsetAndEpoch,
@@ -1281,6 +1358,7 @@ final public class KafkaRaftClientSnapshotTest {
             .setEpoch(offsetAndEpoch.epoch);
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
+            clusterId,
             topicPartition,
             snapshotPartition -> {
                 return snapshotPartition
