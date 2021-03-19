@@ -62,13 +62,8 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testCreateMetadataProperties(): Unit = {
-    val meta = MetaProperties(
-      clusterId = "H3KKO4NTRPaCWtEmm3vW7A",
-      nodeId = 5
-    )
-    val properties = new RawMetaProperties(meta.toProperties)
-    val meta2 = MetaProperties.parse(properties)
-    assertEquals(meta, meta2)
+    val clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
+    confirmValidForMetaProperties(clusterId)
   }
 
   @Test
@@ -81,20 +76,24 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testMetaPropertiesAllowsHexEncodedUUIDs(): Unit = {
-    val properties = new RawMetaProperties()
-    properties.version = 1
-    properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
-    properties.nodeId = 1
-    MetaProperties.parse(properties)
+    val clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
+    confirmValidForMetaProperties(clusterId)
   }
 
   @Test
   def testMetaPropertiesWithNonUuidClusterId(): Unit = {
-    val properties = new RawMetaProperties()
-    properties.version = 1
-    properties.clusterId = "not a valid uuid"
-    properties.nodeId = 1
-    MetaProperties.parse(properties)
+    val clusterId = "not a valid uuid"
+    confirmValidForMetaProperties(clusterId)
+  }
+
+  private def confirmValidForMetaProperties(clusterId: String) = {
+    val meta = MetaProperties(
+      clusterId = clusterId,
+      nodeId = 5
+    )
+    val properties = new RawMetaProperties(meta.toProperties)
+    val meta2 = MetaProperties.parse(properties)
+    assertEquals(meta, meta2)
   }
 
   @Test
