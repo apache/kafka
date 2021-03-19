@@ -20,9 +20,7 @@ import java.nio.charset.StandardCharsets
 buildscript {
   repositories {
     mavenCentral()
-    jcenter()
   }
-  apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
@@ -70,28 +68,28 @@ allprojects {
         }
       }
     }
-    configurations.all {
-      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
-      // that are unrelated to the project dependencies, we should not change them
-      if (name != "zinc") {
-        resolutionStrategy {
-          force(
-            // be explicit about the javassist dependency version instead of relying on the transitive version
-            libs.javassist,
-            // ensure we have a single version in the classpath despite transitive dependencies
-            libs.scalaLibrary,
-            libs.scalaReflect,
-            libs.jacksonAnnotations,
-            // be explicit about the Netty dependency version instead of relying on the version set by
-            // ZooKeeper (potentially older and containing CVEs)
-            libs.nettyHandler,
-            libs.nettyTransportNativeEpoll
-          )
-        }
+  }
+
+  configurations.all {
+    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+    // that are unrelated to the project dependencies, we should not change them
+    if (name != "zinc") {
+      resolutionStrategy {
+        force(
+          // be explicit about the javassist dependency version instead of relying on the transitive version
+          libs.javassist,
+          // ensure we have a single version in the classpath despite transitive dependencies
+          libs.scalaLibrary,
+          libs.scalaReflect,
+          libs.jacksonAnnotations,
+          // be explicit about the Netty dependency version instead of relying on the version set by
+          // ZooKeeper (potentially older and containing CVEs)
+          libs.nettyHandler,
+          libs.nettyTransportNativeEpoll
+        )
       }
     }
   }
-
 }
 
 ext {
@@ -150,6 +148,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
+        'KIP-500.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
@@ -1255,6 +1254,7 @@ project(':raft') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1305,6 +1305,12 @@ project(':raft') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
     }
   }
 
@@ -1424,9 +1430,11 @@ project(':streams') {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
-
+    
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+    
     implementation libs.slf4jApi
-    implementation libs.rocksDBJni
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
 
@@ -1966,7 +1974,7 @@ project(':connect:transforms') {
 
   dependencies {
     api project(':connect:api')
-    
+
     implementation libs.slf4jApi
 
     testImplementation libs.easymock

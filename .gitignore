@@ -57,5 +57,6 @@ jmh-benchmarks/generated
 jmh-benchmarks/src/main/generated
 streams/src/generated
 raft/src/generated
+raft/.jqwik-database
 core/src/generated
 metadata/src/generated

@@ -80,7 +80,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.{ArgumentMatchers, Mockito}
 
-import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1412,7 +1411,6 @@ class KafkaApisTest {
     }
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
@@ -1459,10 +1457,11 @@ class KafkaApisTest {
 
       val response = capturedResponse.getValue.asInstanceOf[ProduceResponse]
 
-      assertEquals(1, response.responses().size())
-      for (partitionResponse <- response.responses().asScala) {
-        assertEquals(Errors.INVALID_PRODUCER_EPOCH, partitionResponse._2.error)
-      }
+      assertEquals(1, response.data.responses.size)
+      val topicProduceResponse = response.data.responses.asScala.head
+      assertEquals(1, topicProduceResponse.partitionResponses.size)   
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+      assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
     }
   }
 
