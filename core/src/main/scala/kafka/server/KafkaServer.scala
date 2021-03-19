@@ -573,10 +573,10 @@ class KafkaServer(
                     metadataUpdater.setNodes(Seq(node(prevController)).asJava)
                   }
                 case None =>
-                  info(s"Broker registration for controller $controllerId is not available (i.e. the Controller's ZK session expired)")
+                  info(s"Broker registration for controller $controllerId is not available in the metadata cache")
               }
             case None =>
-              info("No controller registered in ZooKeeper")
+              info("No controller present in the metadata cache")
           }
 
           // 2. issue a controlled shutdown to the controller
