@@ -120,7 +120,7 @@ Found problem:
 Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}
 
 Found problem:
-  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for kip-500.
+  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for the self-managed mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)
@@ -145,7 +145,7 @@ Found problem:
 Found metadata: {broker.id=1, cluster.id=26c36907-4158-4a35-919d-6534229f5241, version=0}
 
 Found problem:
-  The kafka configuration file appears to be for a kip-500 cluster, but the directories are formatted for legacy mode.
+  The kafka configuration file appears to be for a self-managed mode cluster, but the directories are formatted for legacy mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)

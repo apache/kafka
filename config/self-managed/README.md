@@ -1,5 +1,5 @@
-KIP-500 Early Access Release
-============================
+Self-managed mode (aka KIP-500 mode) Early Access Release
+=========================================================
 
 # Introduction
 It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this mode [self-managed mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum).  It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it is available for testing in the Kafka 2.8 release.
@@ -11,7 +11,7 @@ Self-managed mode has many benefits -- some obvious, and some not so obvious.  C
 # Quickstart
 
 ## Warning
-Self-managed mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released, it may not even be possible to upgrade your self-managed clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of KIP-500.
+Self-managed mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released, it will not be possible to upgrade your self-managed clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of self-managed mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -25,8 +25,8 @@ xtzWWN4bTjitpL3kfd9s5g
 The next step is to format your storage directories.  If you are running in single-node mode, you can do this with one command:
 
 ~~~~
-$ ./bin/kafka-storage.sh format -t xtzWWN4bTjitpL3kfd9s5g -c ./config/nozk-combined.properties
-Formatting /tmp/nozk-combined-logs
+$ ./bin/kafka-storage.sh format -t xtzWWN4bTjitpL3kfd9s5g -c ./config/self-managed/self-managed-combined.properties
+Formatting /tmp/self-managed-combined-logs
 ~~~~
 
 If you are using multiple nodes, then you should run the format command on each node.  Be sure to use the same cluster ID for each one.
@@ -35,10 +35,10 @@ If you are using multiple nodes, then you should run the format command on each 
 Finally, you are ready to start the Kafka server on each node.
 
 ~~~~
-$ ./bin/kafka-server-start.sh ./config/nozk-combined.properties
+$ ./bin/kafka-server-start.sh ./config/self-managed/self-managed-combined.properties
 [2021-02-26 15:37:11,071] INFO Registered kafka:type=kafka.Log4jController MBean (kafka.utils.Log4jControllerRegistration$)
 [2021-02-26 15:37:11,294] INFO Setting -D jdk.tls.rejectClientInitiatedRenegotiation=true to disable client-initiated TLS renegotiation (org.apache.zookeeper.common.X509Util)
-[2021-02-26 15:37:11,466] INFO [Log partition=@metadata-0, dir=/tmp/nozk-combined-logs] Loading producer state till offset 0 with message format version 2 (kafka.log.Log)
+[2021-02-26 15:37:11,466] INFO [Log partition=@metadata-0, dir=/tmp/self-managed-combined-logs] Loading producer state till offset 0 with message format version 2 (kafka.log.Log)
 [2021-02-26 15:37:11,509] INFO [raft-expiration-reaper]: Starting (kafka.raft.TimingWheelExpirationService$ExpiredOperationReaper)
 [2021-02-26 15:37:11,640] INFO [RaftManager nodeId=1] Completed transition to Unattached(epoch=0, voters=[1], electionTimeoutMs=9037) (org.apache.kafka.raft.QuorumState)
 ...
@@ -54,7 +54,7 @@ Created topic foo.
 # Deployment
 
 ## Controller Servers
-Unlike in ZooKeeper-based mode, where any server can become the controller, in self-managed mode, only a small group of specially selected servers can act as controllers.  The specially selected controller servers will participate in the metadata quorum.  Each KIP-500 controller server is either active, or a hot standby for the current active controller server.
+Unlike in ZooKeeper-based mode, where any server can become the controller, in self-managed mode, only a small group of specially selected servers can act as controllers.  The specially selected controller servers will participate in the metadata quorum.  Each self-managed controller server is either active, or a hot standby for the current active controller server.
 
 Typically you will select either 3 or 5 servers for this role, depending on the size of your cluster.  Just like with ZooKeeper, you must keep a majority of the controllers alive in order to maintain availability.  So if you have 3 controllers, you can tolerate 1 failure; with 5 controllers, you can tolerate 2 failures.
 
@@ -114,8 +114,8 @@ If you encounter an issue, you might want to take a look at the metadata log.
 One way to view the metadata log is with kafka-dump-log.sh tool, like so:
 
 ~~~~
-[cmccabe@zeratul kafka3]$ ./bin/kafka-dump-log.sh  --cluster-metadata-decoder --skip-record-metadata --files /tmp/nozk-combined-logs/\@metadata-0/*.log
-Dumping /tmp/nozk-combined-logs/@metadata-0/00000000000000000000.log
+[cmccabe@zeratul kafka3]$ ./bin/kafka-dump-log.sh  --cluster-metadata-decoder --skip-record-metadata --files /tmp/self-managed-combined-logs/\@metadata-0/*.log
+Dumping /tmp/self-managed-combined-logs/@metadata-0/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 1 isTransactional: false isControl: true position: 0 CreateTime: 1614382631640 size: 89 magic: 2 compresscodec: NONE crc: 1438115474 isvalid: true
 
@@ -140,7 +140,7 @@ baseOffset: 7 lastOffset: 8 count: 2 baseSequence: -1 lastSequence: -1 producerI
 Another tool for examining the metadata logs is the Kafka metadata shell.  Just like the ZooKeeper shell, this allows you to inspect the metadata of the cluster.
 
 ~~~~
-$ ./bin/kafka-metadata-shell.sh  --snapshot /tmp/nozk-combined-logs/\@metadata-0/00000000000000000000.log
+$ ./bin/kafka-metadata-shell.sh  --snapshot /tmp/self-managed-combined-logs/\@metadata-0/00000000000000000000.log
 >> ls /
 brokers  local  metadataQuorum  topicIds  topics
 >> ls /topics
