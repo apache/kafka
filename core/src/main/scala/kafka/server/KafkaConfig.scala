@@ -674,7 +674,7 @@ object KafkaConfig {
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in self-managed mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the self-managed controller. This is required " +
-    "if this process is a self-managed controller. The ZK-based controller will not use this configuration."
+    "if the process is part of a self-managed cluster. The ZK-based controller will not use this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
 
   /************* Authorizer Configuration ***********/
