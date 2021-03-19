@@ -186,10 +186,11 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "controllerForwardingChannel",
+        channelName = "forwarding",
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
+      clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
       val apiVersionManager = ApiVersionManager(
@@ -211,7 +212,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "alterisr",
+        channelName = "alterIsr",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
