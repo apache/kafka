@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -63,16 +64,18 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
     class Batch<T> {
         private final long baseOffset;
         private final int epoch;
+        private final long lastOffset;
         private final List<T> records;
 
-        public Batch(long baseOffset, int epoch, List<T> records) {
+        private Batch(long baseOffset, int epoch, long lastOffset, List<T> records) {
             this.baseOffset = baseOffset;
             this.epoch = epoch;
+            this.lastOffset = lastOffset;
             this.records = records;
         }
 
         public long lastOffset() {
-            return baseOffset + records.size() - 1;
+            return lastOffset;
         }
 
         public long baseOffset() {
@@ -92,6 +95,7 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
             return "Batch(" +
                 "baseOffset=" + baseOffset +
                 ", epoch=" + epoch +
+                ", lastOffset=" + lastOffset +
                 ", records=" + records +
                 ')';
         }
@@ -110,6 +114,13 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
         public int hashCode() {
             return Objects.hash(baseOffset, epoch, records);
         }
-    }
 
+        public static <T> Batch<T> empty(long baseOffset, int epoch, long lastOffset) {
+            return new Batch<>(baseOffset, epoch, lastOffset, Collections.emptyList());
+        }
+
+        public static <T> Batch<T> of(long baseOffset, int epoch, List<T> records) {
+            return new Batch<>(baseOffset, epoch, baseOffset + records.size(), records);
+        }
+    }
 }

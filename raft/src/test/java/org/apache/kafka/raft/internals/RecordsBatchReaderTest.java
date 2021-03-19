@@ -53,9 +53,9 @@ class RecordsBatchReaderTest {
         long baseOffset = 57;
 
         List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
+            BatchReader.Batch.of(baseOffset, 1, asList("a", "b", "c")),
+            BatchReader.Batch.of(baseOffset + 3, 2, asList("d", "e")),
+            BatchReader.Batch.of(baseOffset + 5, 2, asList("f"))
         );
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
@@ -68,9 +68,9 @@ class RecordsBatchReaderTest {
         long baseOffset = 57;
 
         List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
+            BatchReader.Batch.of(baseOffset, 1, asList("a", "b", "c")),
+            BatchReader.Batch.of(baseOffset + 3, 2, asList("d", "e")),
+            BatchReader.Batch.of(baseOffset + 5, 2, asList("f"))
         );
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
@@ -136,9 +136,7 @@ class RecordsBatchReaderTest {
 
         RecordsBatchReader<String> reader = new RecordsBatchReader<>(
             baseOffset,
-            records,
-            serde,
-            bufferSupplier,
+            new SerdeRecordsIterator<>(records, serde, bufferSupplier, Integer.MAX_VALUE),
             closeListener
         );
 

@@ -69,6 +69,7 @@ import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
+import org.apache.kafka.raft.internals.SerdeRecordsIterator;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -2405,9 +2406,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * data in memory, we let the state machine read the records from disk.
          */
         public void fireHandleCommit(long baseOffset, Records records) {
-            BufferSupplier bufferSupplier = BufferSupplier.create();
-            RecordsBatchReader<T> reader = new RecordsBatchReader<>(baseOffset, records,
-                serde, bufferSupplier, this);
+            // TODO: The max batch size is not techinically correct that the accumulator may create a bigger batch
+            RecordsBatchReader<T> reader = new RecordsBatchReader<>(
+                baseOffset,
+                new SerdeRecordsIterator<>(records, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES),
+                this
+            );
             fireHandleCommit(reader);
         }
 
@@ -2419,7 +2423,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * followers.
          */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
-            BatchReader.Batch<T> batch = new BatchReader.Batch<>(baseOffset, epoch, records);
+            BatchReader.Batch<T> batch = BatchReader.Batch.of(baseOffset, epoch, records);
             MemoryBatchReader<T> reader = new MemoryBatchReader<>(Collections.singletonList(batch), this);
             fireHandleCommit(reader);
         }
