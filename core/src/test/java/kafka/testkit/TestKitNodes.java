@@ -132,11 +132,11 @@ public class TestKitNodes {
     }
 
     public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId, id);
+        return MetaProperties.apply(clusterId.toString(), id);
     }
 
     public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId, id);
+        return MetaProperties.apply(clusterId.toString(), id);
     }
 
     public ListenerName interBrokerListenerName() {
