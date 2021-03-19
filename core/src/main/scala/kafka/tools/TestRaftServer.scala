@@ -74,7 +74,7 @@ class TestRaftServer(
     socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(
-      clusterId = Uuid.ZERO_UUID,
+      clusterId = Uuid.ZERO_UUID.toString,
       nodeId = config.nodeId
     )
 

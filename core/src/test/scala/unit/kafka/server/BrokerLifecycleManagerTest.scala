@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.{Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -76,7 +76,7 @@ class BrokerLifecycleManagerTest {
     }.toList.asJava)
     val mockChannelManager = new MockBrokerToControllerChannelManager(mockClient,
       time, controllerNodeProvider, nodeApiVersions)
-    val clusterId = Uuid.fromString("x4AJGXQSRnephtTZzujw4w")
+    val clusterId = "x4AJGXQSRnephtTZzujw4w"
     val advertisedListeners = new ListenerCollection()
     config.advertisedListeners.foreach { ep =>
       advertisedListeners.add(new Listener().setHost(ep.host).
