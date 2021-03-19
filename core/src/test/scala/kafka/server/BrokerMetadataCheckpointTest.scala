@@ -15,13 +15,13 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class BrokerMetadataCheckpointTest {
+  private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
 
   @Test
   def testReadWithNonExistentFile(): Unit = {
@@ -63,8 +63,32 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testCreateMetadataProperties(): Unit = {
+    confirmValidForMetaProperties(clusterIdBase64)
+  }
+
+  @Test
+  def testMetaPropertiesWithMissingVersion(): Unit = {
+    val properties = new RawMetaProperties()
+    properties.clusterId = clusterIdBase64
+    properties.nodeId = 1
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
+  }
+
+  @Test
+  def testMetaPropertiesAllowsHexEncodedUUIDs(): Unit = {
+    val clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
+    confirmValidForMetaProperties(clusterId)
+  }
+
+  @Test
+  def testMetaPropertiesWithNonUuidClusterId(): Unit = {
+    val clusterId = "not a valid uuid"
+    confirmValidForMetaProperties(clusterId)
+  }
+
+  private def confirmValidForMetaProperties(clusterId: String) = {
     val meta = MetaProperties(
-      clusterId = Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
+      clusterId = clusterId,
       nodeId = 5
     )
     val properties = new RawMetaProperties(meta.toProperties)
@@ -73,36 +97,10 @@ class BrokerMetadataCheckpointTest {
   }
 
   @Test
-  def testMetaPropertiesWithMissingVersion(): Unit = {
-    val properties = new RawMetaProperties()
-    properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
-    properties.nodeId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
-  }
-
-  @Test
-  def testMetaPropertiesDoesNotAllowHexEncodedUUIDs(): Unit = {
-    val properties = new RawMetaProperties()
-    properties.version = 1
-    properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
-    properties.nodeId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
-  }
-
-  @Test
-  def testMetaPropertiesWithInvalidClusterId(): Unit = {
-    val properties = new RawMetaProperties()
-    properties.version = 1
-    properties.clusterId = "not a valid uuid"
-    properties.nodeId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
-  }
-
-  @Test
   def testMetaPropertiesWithMissingBrokerId(): Unit = {
     val properties = new RawMetaProperties()
     properties.version = 1
-    properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
+    properties.clusterId = clusterIdBase64
     assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
@@ -110,7 +108,7 @@ class BrokerMetadataCheckpointTest {
   def testMetaPropertiesWithMissingControllerId(): Unit = {
     val properties = new RawMetaProperties()
     properties.version = 1
-    properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
+    properties.clusterId = clusterIdBase64
     assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 

@@ -24,7 +24,6 @@ import java.util.Properties
 import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -97,23 +96,13 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 object MetaProperties {
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
-    val clusterId = requireClusterId(properties)
+    val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
     new MetaProperties(clusterId, nodeId)
   }
 
   def require[T](key: String, value: Option[T]): T = {
     value.getOrElse(throw new RuntimeException(s"Failed to find required property $key."))
-  }
-
-  def requireClusterId(properties: RawMetaProperties): Uuid = {
-    val value = require(ClusterIdKey, properties.clusterId)
-    try {
-      Uuid.fromString(value)
-    } catch {
-      case e: Throwable => throw new RuntimeException(s"Failed to parse $ClusterIdKey property " +
-        s"as a UUID: ${e.getMessage}")
-    }
   }
 }
 
@@ -135,13 +124,13 @@ case class ZkMetaProperties(
 }
 
 case class MetaProperties(
-  clusterId: Uuid,
+  clusterId: String,
   nodeId: Int,
 ) {
   def toProperties: Properties = {
     val properties = new RawMetaProperties()
     properties.version = 1
-    properties.clusterId = clusterId.toString
+    properties.clusterId = clusterId
     properties.nodeId = nodeId
     properties.props
   }

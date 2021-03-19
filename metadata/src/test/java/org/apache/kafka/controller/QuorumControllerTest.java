@@ -139,7 +139,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(0).
-                        setClusterId(Uuid.fromString("06B-K3N1TBCNYFgruEVP0Q")).
+                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setListeners(listeners));
                 assertEquals(0L, reply.get().epoch());

@@ -198,7 +198,7 @@ object StorageTool extends Logging {
         s"does not appear to be a valid UUID: ${e.getMessage}")
     }
     require(config.nodeId >= 0, s"The node.id must be set to a non-negative integer.")
-    new MetaProperties(effectiveClusterId, config.nodeId)
+    new MetaProperties(effectiveClusterId.toString, config.nodeId)
   }
 
   def formatCommand(stream: PrintStream,
