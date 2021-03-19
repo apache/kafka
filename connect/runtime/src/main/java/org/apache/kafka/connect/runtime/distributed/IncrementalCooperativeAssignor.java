@@ -591,23 +591,28 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return revoking;
     }
 
-    static void computeRevoked(Map<String, ConnectorsAndTasks> revoking,
-                               Collection<WorkerLoad> existingWorkers,
-                               int numberOfTotalWorks,
-                               int numberOfActives,
-                               boolean forTask) {
-        int floor = numberOfActives / numberOfTotalWorks;
-        int numberOfBiggers = numberOfActives % numberOfTotalWorks;
-        int ceil = numberOfBiggers == 0 ? floor : floor + 1;
-        for (WorkerLoad existing : existingWorkers) {
-            int currentSize = forTask ? existing.tasksSize() : existing.connectorsSize();
-            int expectedSize;
-            if (existingWorkers.size() == 1 || currentSize == 1) expectedSize = ceil;
-            else if (currentSize >= ceil && numberOfBiggers > 0) {
+    static void computeRevoked(final Map<String, ConnectorsAndTasks> revoking,
+                               final Collection<WorkerLoad> existingWorkers,
+                               final int numberOfWorkers,
+                               final int numberOfActiveTasks,
+                               final boolean forTask) {
+        final int floor = numberOfActiveTasks / numberOfWorkers;
+        int numberOfCeilingMembers = numberOfActiveTasks % numberOfWorkers;
+        final int ceil = numberOfCeilingMembers == 0 ? floor : floor + 1;
+        for (final WorkerLoad existing : existingWorkers) {
+            final int currentSize = forTask ? existing.tasksSize() : existing.connectorsSize();
+            final int expectedSize;
+            // In order to reduce down-time, we have to avoid removing tasks from the nodes which are already in balance.
+            if (existingWorkers.size() == 1 || currentSize == 1) {
+                // this condition is used to deal with following specify cases
+                // 1) there is only one existent node so we can calculate the balanced numbers.
+                // 2) the node hosts only one task so it is unnecessary to remove the task from it.
                 expectedSize = ceil;
-                numberOfBiggers--;
+            } else if (currentSize >= ceil && numberOfCeilingMembers > 0) {
+                expectedSize = ceil;
+                numberOfCeilingMembers--;
             } else expectedSize = floor;
-            Iterator<?> elements = forTask ? existing.tasks().iterator() : existing.connectors().iterator();
+            final Iterator<?> elements = forTask ? existing.tasks().iterator() : existing.connectors().iterator();
             int numToRevoke = currentSize - expectedSize;
             while (elements.hasNext() && numToRevoke > 0) {
                 ConnectorsAndTasks resources = revoking.computeIfAbsent(
