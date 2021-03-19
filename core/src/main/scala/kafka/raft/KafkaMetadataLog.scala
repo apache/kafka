@@ -19,7 +19,7 @@ package kafka.raft
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
-import java.util.{NoSuchElementException, Optional, Properties}
+import java.util.{Optional, Properties}
 
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
@@ -248,20 +248,20 @@ final class KafkaMetadataLog private (
   }
 
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
-    try {
-      Optional.of(snapshotIds.last)
-    } catch {
-      case _: NoSuchElementException =>
-        Optional.empty()
+    val descending = snapshotIds.descendingIterator
+    if (descending.hasNext) {
+      Optional.of(descending.next)
+    } else {
+      Optional.empty()
     }
   }
 
   override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
-    try {
-      Optional.of(snapshotIds.first)
-    } catch {
-      case _: NoSuchElementException =>
-        Optional.empty()
+    val ascendingIterator = snapshotIds.iterator
+    if (ascendingIterator.hasNext) {
+      Optional.of(ascendingIterator.next)
+    } else {
+      Optional.empty()
     }
   }
 
@@ -290,7 +290,7 @@ final class KafkaMetadataLog private (
    * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
   private def removeSnapshotFilesBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
-    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator()
+    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator
     while (expiredSnapshotIdsIter.hasNext) {
       val snapshotId = expiredSnapshotIdsIter.next()
       // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
