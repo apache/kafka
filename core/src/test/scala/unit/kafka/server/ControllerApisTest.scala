@@ -88,7 +88,7 @@ class ControllerApisTest {
       new KafkaConfig(props),
 
       // FIXME: Would make more sense to set controllerId here
-      MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw"), nodeId = nodeId),
+      MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
       Seq.empty,
       new SimpleApiVersionManager(ListenerType.CONTROLLER)
     )

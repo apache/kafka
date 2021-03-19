@@ -25,7 +25,6 @@ import java.util.Properties
 
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -156,7 +155,7 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       val metaProperties = MetaProperties(
-        clusterId = Uuid.fromString("XcZZOzUqS4yHOjhMQB6JLQ"), nodeId = 2)
+        clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, false))
