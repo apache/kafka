@@ -102,7 +102,8 @@ class KafkaVersion(LooseVersion):
         return self >= V_2_7_0
 
     def supports_topic_ids_when_using_zk(self):
-        # Supports topic IDs as described by KIP-516
+        # Supports topic IDs as described by KIP-516.
+        # Self-managed clusters always support topic ID, so this method only applies to ZK clusters.
         return self >= V_2_8_0
 
 def get_version(node=None):
