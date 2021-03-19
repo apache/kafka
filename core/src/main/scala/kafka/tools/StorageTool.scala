@@ -64,17 +64,17 @@ object StorageTool extends Logging {
       command match {
         case "info" =>
           val directories = configToLogDirectories(config.get)
-          val kip500Mode = configToKip500Mode(config.get)
-          Exit.exit(infoCommand(System.out, kip500Mode, directories))
+          val selfManagedMode = configToSelfManagedMode(config.get)
+          Exit.exit(infoCommand(System.out, selfManagedMode, directories))
 
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
-          if (!configToKip500Mode(config.get)) {
+          if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
-              "a legacy cluster. Formatting is only supported for kip-500 clusters.")
+              "a legacy cluster. Formatting is only supported for clusters in self-managed mode.")
           }
           Exit.exit(formatCommand(System.out, directories, metaProperties, ignoreFormatted ))
 
@@ -99,9 +99,9 @@ object StorageTool extends Logging {
     directories.toSeq
   }
 
-  def configToKip500Mode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
+  def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
-  def infoCommand(stream: PrintStream, kip500Mode: Boolean, directories: Seq[String]): Int = {
+  def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
     val foundDirectories = new mutable.ArrayBuffer[String]
     var prevMetadata: Option[RawMetaProperties] = None
@@ -142,14 +142,14 @@ object StorageTool extends Logging {
     })
 
     prevMetadata.foreach { prev =>
-      if (kip500Mode) {
+      if (selfManagedMode) {
         if (prev.version == 0) {
-          problems += "The kafka configuration file appears to be for a kip-500 cluster, but " +
+          problems += "The kafka configuration file appears to be for a cluster in self-managed mode, but " +
             "the directories are formatted for legacy mode."
         }
       } else if (prev.version == 1) {
         problems += "The kafka configuration file appears to be for a legacy cluster, but " +
-          "the directories are formatted for kip-500."
+          "the directories are formatted for a cluster in self-managed mode."
       }
     }
 
