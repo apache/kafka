@@ -96,17 +96,13 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 object MetaProperties {
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
-    val clusterId = requireClusterId(properties)
+    val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
     new MetaProperties(clusterId, nodeId)
   }
 
   def require[T](key: String, value: Option[T]): T = {
     value.getOrElse(throw new RuntimeException(s"Failed to find required property $key."))
-  }
-
-  def requireClusterId(properties: RawMetaProperties): String = {
-    require(ClusterIdKey, properties.clusterId)
   }
 }
 
