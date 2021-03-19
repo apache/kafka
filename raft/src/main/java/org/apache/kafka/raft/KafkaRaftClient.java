@@ -549,6 +549,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Handle a Vote request. This API may return the following errors:
      *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
+     *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
@@ -560,7 +562,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         VoteRequestData request = (VoteRequestData) requestMetadata.data;
 
-        if (!hasValidClusterId(request)) {
+        if (!hasValidClusterId(request.clusterId())) {
             return new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
@@ -724,6 +726,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Handle a BeginEpoch request. This API may return the following errors:
      *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
+     *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
      *      if this node or the sender is not one of the current known voters)
@@ -735,7 +739,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) requestMetadata.data;
 
-        if (!hasValidClusterId(request)) {
+        if (!hasValidClusterId(request.clusterId())) {
             return new BeginQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
@@ -811,6 +815,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Handle an EndEpoch request. This API may return the following errors:
      *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
+     *      but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
      *      if this node or the sender is not one of the current known voters)
@@ -822,7 +828,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         EndQuorumEpochRequestData request = (EndQuorumEpochRequestData) requestMetadata.data;
 
-        if (!hasValidClusterId(request)) {
+        if (!hasValidClusterId(request.clusterId())) {
             return new EndQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
@@ -951,27 +957,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean hasValidClusterId(ApiMessage request) {
-        String requestClusterId = getClusterId(request);
+    private boolean hasValidClusterId(String requestClusterId) {
         // We don't enforce the cluster id if it is not provided.
         if (requestClusterId == null) {
             return true;
         }
         return clusterId.equals(requestClusterId);
-    }
-
-    private String getClusterId(ApiMessage requestData) {
-        if (requestData instanceof FetchRequestData)
-            return ((FetchRequestData) requestData).clusterId();
-        if (requestData instanceof VoteRequestData)
-            return ((VoteRequestData) requestData).clusterId();
-        if (requestData instanceof BeginQuorumEpochRequestData)
-            return ((BeginQuorumEpochRequestData) requestData).clusterId();
-        if (requestData instanceof EndQuorumEpochRequestData)
-            return ((EndQuorumEpochRequestData) requestData).clusterId();
-        if (requestData instanceof FetchSnapshotRequestData)
-            return ((FetchSnapshotRequestData) requestData).clusterId();
-        throw new IllegalArgumentException("Unexpected type to get clusterId for requestData: " + requestData);
     }
 
     /**
@@ -982,6 +973,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      *
      * This API may return the following errors:
      *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
+     *     but different from this node
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
@@ -993,7 +986,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         FetchRequestData request = (FetchRequestData) requestMetadata.data;
 
-        if (!hasValidClusterId(request)) {
+        if (!hasValidClusterId(request.clusterId())) {
             return completedFuture(new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
         }
 
@@ -1227,12 +1220,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    /**
+     * Handle a FetchSnapshot request, similar to the Fetch request but we use {@link UnalignedRecords}
+     * in response because the records are not necessarily offset-aligned.
+     *
+     * This API may return the following errors:
+     *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
+     *     but different from this node
+     * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
+     * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
+     *     or if either the fetch offset or the last fetched epoch is invalid
+     * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exists
+     * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
+     */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
         RaftRequest.Inbound requestMetadata
     ) throws IOException {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
 
-        if (!hasValidClusterId(data)) {
+        if (!hasValidClusterId(data.clusterId())) {
             return new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
