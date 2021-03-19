@@ -773,7 +773,6 @@ class LogManager(logDirs: Seq[File],
    * Otherwise throw KafkaStorageException
    *
    * @param topicPartition The partition whose log needs to be returned or created
-   * @param loadConfig A function to retrieve the log config, this is only called if the log is created
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
