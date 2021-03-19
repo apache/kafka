@@ -46,6 +46,10 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
         return true;
     }
 
+    private static boolean timeIsDecreasing(final byte[] oldRecord, final byte[] newRecord) {
+        return extractTimestamp(newRecord) <= extractTimestamp(oldRecord);
+    }
+
     private static long extractTimestamp(final byte[] bytes) {
         final byte[] timestampBytes = new byte[Long.BYTES];
         for (int i = 0; i < Long.BYTES; i++) {
@@ -55,31 +59,30 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
     }
 
     /**
-     * @param left  the serialized byte array of the old record in state store
-     * @param right the serialized byte array of the new record being processed
+     * @param oldRecord  the serialized byte array of the old record in state store
+     * @param newRecord the serialized byte array of the new record being processed
      * @return true if the two serialized values are the same (excluding timestamp) or
      *              if the timestamp of right is less than left (indicating out of order record)
      *         false otherwise
      */
-    public static boolean compareValuesAndCheckForIncreasingTimestamp(final byte[] left, final byte[] right) {
-        if (left == right) {
+    public static boolean compareValuesAndCheckForIncreasingTimestamp(final byte[] oldRecord, final byte[] newRecord) {
+        if (oldRecord == newRecord) {
+            // same reference, so they are trivially the same (might both be null)
             return true;
-        }
-        if (left == null || right == null) {
+        } else if (oldRecord == null || newRecord == null) {
+            // only one is null, so they cannot be the same
             return false;
-        }
-
-        final int length = left.length;
-        if (right.length != length) {
+        } else if (newRecord.length != oldRecord.length) {
+            // they are different length, so they cannot be the same
             return false;
-        }
-
-        final long leftTimestamp = extractTimestamp(left);
-        final long rightTimestamp = extractTimestamp(right);
-        if (rightTimestamp < leftTimestamp) {
+        } else if (timeIsDecreasing(oldRecord, newRecord)) {
+            // the record time represents the beginning of the validity interval, so if the time
+            // moves backwards, we need to do the update regardless of whether the value has changed
             return false;
+        } else {
+            // all other checks have fallen through, so we actually compare the binary data of the two values
+            return skipTimestampAndCompareValues(oldRecord, newRecord);
         }
-        return skipTimestampAndCompareValues(left, right);
     }
 
     @Override
