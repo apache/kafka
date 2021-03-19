@@ -113,7 +113,7 @@ public class FetchResponseBenchmark {
     @Benchmark
     public int testConstructFetchResponse() {
         FetchResponse fetchResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, unresolvedTopicData, topicIds, 0, 0);
-        return fetchResponse.resolvedResponseData().size();
+        return fetchResponse.data().responses().size();
     }
 
     @Benchmark

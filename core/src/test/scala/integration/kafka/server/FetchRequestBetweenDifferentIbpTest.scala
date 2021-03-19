@@ -121,10 +121,6 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     // Make the broker whose version < KAFKA_2_8_IV0 controller
     ensureControllerIn(Seq(0))
-
-    // Restart the broker whose version=KAFKA_2_8_IV2, and the controller will send an updateMetadata request to it
-    killBroker(1)
-    restartDeadBrokers()
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
     val record3 = new ProducerRecord(topic, 0, null, "key".getBytes, "value".getBytes)

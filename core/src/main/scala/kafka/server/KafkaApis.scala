@@ -830,20 +830,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       def createResponse(throttleTimeMs: Int): FetchResponse = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-        unconvertedFetchResponse.resolvedResponseData.forEach { (tp, unconvertedPartitionData) =>
-          val error = Errors.forCode(unconvertedPartitionData.errorCode)
-          if (error != Errors.NONE)
-            debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-              s"on partition $tp failed due to ${error.exceptionName}")
-          convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
+        unconvertedFetchResponse.data().responses().forEach { topicResponse =>
+          if (topicResponse.topic() != "") {
+            topicResponse.partitions().forEach{ unconvertedPartitionData =>
+              val tp = new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex())
+              val error = Errors.forCode(unconvertedPartitionData.errorCode)
+              if (error != Errors.NONE)
+                debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+                  s"on partition $tp failed due to ${error.exceptionName}")
+              convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
+            }
+          }
         }
 
         // Prepare fetch response from converted data
         val response =
           FetchResponse.prepareResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getUnresolvedTopicData(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
-        response.resolvedResponseData.forEach { (tp, data) =>
-          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
+        response.data().responses().forEach { topicResponse =>
+          if (topicResponse.topic() != "") {
+            topicResponse.partitions().forEach { data =>
+              val tp = new TopicPartition(topicResponse.topic(), data.partitionIndex())
+              brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
+            }
+          }
         }
         response
       }
@@ -863,8 +873,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, topicIds)
         quotas.leader.record(responseSize)
-        val unresolvedPartitionsSize = fetchContext.getUnresolvedTopicData().asScala.foldLeft(0)((prev, topic) => prev + topic.partitions().size())
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
+        val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
+        trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
         requestHelper.sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
       } else {
@@ -896,8 +906,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          val unresolvedPartitionsSize = fetchContext.getUnresolvedTopicData().asScala.foldLeft(0)((prev, topic) => prev + topic.partitions().size())
-          trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
+          val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
+          trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
             s"metadata=${unconvertedFetchResponse.sessionId}")
         }
 
@@ -3378,6 +3388,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 object KafkaApis {
   // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
   // traffic doesn't exceed quota.
+  // TODO: remove resolvedResponseData method when sizeOf can take a data object.
   private[server] def sizeOfThrottledPartitions(versionId: Short,
                                                 unconvertedResponse: FetchResponse,
                                                 quota: ReplicationQuotaManager,

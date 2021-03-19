@@ -166,10 +166,7 @@ public class FetchResponse extends AbstractResponse {
     // TODO: Should be replaced or cleaned up. The idea is that in KafkaApis we need to reconstruct responseData even though we could have just passed in and out a map.
     //  With topic IDs, recreating the map takes a little more time since we have to get the topic name from the topic ID to name map.
     //  The refactor somewhat helps in KafkaApis, but we have to recompute the map instead of just returning it.
-    //  This is unsafe in test cases now (FetchSessionTest) where it used to be safe. Before it would just pull the responseData map.
-    //  If we wanted to recompute with topicNames we could call responseData(topicNames) however,
-    //  now it will just return the version computed here.
-
+    //  Can  be replaced when we remove toMessage and change sizeOf.
     // Used when we can guarantee responseData is populated with all possible partitions
     // This occurs when we have a response version < 13 or we built the FetchResponse with
     // responseDataMap as a parameter and we have the same topic IDs available.
@@ -279,13 +276,11 @@ public class FetchResponse extends AbstractResponse {
         return version >= 8;
     }
 
-    // Visible for testing
-    // Returns a FetchResponse as though it has been sent back from the server
-    // Will either contain topic names or topic IDs but not both.
-
     // TODO: After refactor, the use of this method changed.
     //  Since we removed the constructor with these fields we can only easily build a response with topic IDs using this method.
-    //  Topic ID errors make the process a bit more complicated but maybe we can find a way to clean this up.
+    //  This method has the same use case of the `of` method. When that is fully removed, this should be removed too.
+    //  We can add the unresolvedTopics (List<FetchResponseData.FetchableTopicResponse>) to the end of the other
+    //  List<FetchResponseData.FetchableTopicResponse> in the response data.
     public static FetchResponse prepareResponse(Errors error,
                                                 LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData,
                                                 List<FetchResponseData.FetchableTopicResponse> unresolvedTopics,
