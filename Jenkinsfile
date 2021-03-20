@@ -113,7 +113,6 @@ pipeline {
             setupGradle()
             doValidation()
             doTest()
-            tryStreamsArchetype()
           }
         }
 
@@ -170,7 +169,7 @@ pipeline {
             setupGradle()
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest('unitTest')
+              doTest()
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }

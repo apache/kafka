@@ -159,11 +159,18 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
+    logger.info(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
+    println(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
+
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
+    logger.info(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
+    println(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
+
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
-    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    logger.info("Second leaderId {} and epoch {}", secondLeaderEpoch, secondLeaderEpoch)
+
+    logger.info(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
+    println(s"get partition $partition leader epoch ${zkClient.getTopicPartitionState(partition).get}")
 
     // No changes to written data
     // TODO flaky test
