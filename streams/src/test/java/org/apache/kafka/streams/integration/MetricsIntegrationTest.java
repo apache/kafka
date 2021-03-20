@@ -260,7 +260,7 @@ public class MetricsIntegrationTest {
         final Topology topology = builder.build();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
-        verifyAliveStreamThreadsMetric(0);
+        verifyAliveStreamThreadsMetric();
         verifyStateMetric(State.CREATED);
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric();
@@ -271,7 +271,7 @@ public class MetricsIntegrationTest {
             timeout,
             () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
 
-        verifyAliveStreamThreadsMetric(NUM_THREADS);
+        verifyAliveStreamThreadsMetric();
         verifyStateMetric(State.RUNNING);
     }
 
@@ -463,13 +463,13 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
-    private void verifyAliveStreamThreadsMetric(final int numThreads) {
+    private void verifyAliveStreamThreadsMetric() {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(ALIVE_STREAM_THREADS) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(numThreads));
+        assertThat(metricsList.get(0).metricValue(), is(NUM_THREADS));
     }
 
     private void verifyStateMetric(final State state) {
