@@ -30,7 +30,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,77 +75,12 @@ public class FetchResponse extends AbstractResponse {
         return data;
     }
 
-    // Class used to keep track of unresolved topic IDs and their partitions. Created in FetchRequest and FetchSession
-    // and used to build the Fetch Response.
-    public static final class TopicIdError {
-        private final Uuid id;
-        private final Set<Integer> partitions;
-        private final Errors error;
-
-        public TopicIdError(Uuid id,
-                List<Integer> partitions,
-                Errors error) {
-            this.id = id;
-            this.partitions = new HashSet<>(partitions);
-            this.error = error;
-        }
-
-        public Uuid id() {
-            return this.id;
-        }
-
-        public Set<Integer> partitions() {
-            return this.partitions;
-        }
-
-        public void addPartition(int partition) {
-            partitions.add(partition);
-        }
-
-        public void addPartitions(List<Integer> partitions) {
-            this.partitions.addAll(partitions);
-        }
-
-        // Builds the PartitionData using the id, partitions, and error stored in TopicIdError
-        // TODO: maybe just store PartitionData here?
-        private List<FetchResponseData.PartitionData> errorData() {
-            return partitions.stream().map(partition -> new FetchResponseData.PartitionData()
-                    .setPartitionIndex(partition)
-                    .setErrorCode(error.code())
-                    .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
-                    .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                    .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
-                    .setAbortedTransactions(null)
-                    .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)).collect(Collectors.toList());
-        }
-
-    }
-
     /**
      * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
      * Version 13 introduces topic IDs which mean there may be unresolved partitions. Unresolved partitions are partitions
      * whose topic IDs could not be found on the server. resolvedPartitionData and unresolvedPartitionData should be disjoint sets.
      * Thus, a partition in the response will never appear in both resolvedPartitionData and unresolvedPartitionData.
      */
-    // * @param error                      The top-level error code.
-    // * @param resolvedPartitionData      The fetched data with resolved topic IDs grouped by partition.
-    // * @param unresolvedPartitionData    The fetched data with unresolved topic IDS
-    // * @param topicIds                   The map from topic name to topic IDs
-    // * @param throttleTimeMs             The time in milliseconds that the response was throttled
-    // * @param sessionId                  The fetch session id.
-    // */
-    //public FetchResponse(Errors error,
-    //                     LinkedHashMap<TopicPartition, PartitionData<T>> resolvedPartitionData,
-    //                     List<TopicIdError> unresolvedPartitionData,
-    //                     Map<String, Uuid> topicIds,
-    //                     int throttleTimeMs,
-    //                     int sessionId) {
-    //    super(ApiKeys.FETCH);
-    //    this.data = toMessage(throttleTimeMs, error, resolvedPartitionData.entrySet().iterator(), unresolvedPartitionData,
-    //            topicIds, sessionId);
-    //    this.responseDataMap = resolvedPartitionData;
-    //}
-
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
