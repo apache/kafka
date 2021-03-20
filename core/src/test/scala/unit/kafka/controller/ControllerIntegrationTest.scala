@@ -37,7 +37,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
-import scala.collection.View.Empty
 import scala.collection.{Map, Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -265,11 +264,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testUnexpectedTopicPartitionModified(): Unit = {
     servers = makeServers(2)
     val tp0 = new TopicPartition("t", 0)
+    val tp1 = new TopicPartition("t", 1)
     val assignment = Map(tp0.partition -> Seq(0))
-    val modifiedAssignment = Map(tp0 -> ReplicaAssignment(Seq(1), Seq(), Seq()))
+    val modifiedAssignment = Map(
+      tp0 -> ReplicaAssignment(Seq(1), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(1), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), modifiedAssignment, firstControllerEpochZkVersion)
-    waitForPartitionAssignment(tp0, assignment, "failed to get expected partition state upon topic partition unexpected modified")
+    waitForPartitionAssignment(tp0, tp1, modifiedAssignment, "failed to get expected partition state upon topic partition unexpected modified")
   }
 
   @Test
@@ -1145,13 +1147,18 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }, message)
   }
 
-  private def waitForPartitionAssignment(tp: TopicPartition,
-                                    assignment: Map[Int, Seq[Int]],
+  private def waitForPartitionAssignment(tp0: TopicPartition,
+                                    tp1: TopicPartition,
+                                    modifiedAssignment: Map[TopicPartition, ReplicaAssignment],
                                     message: String): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val topicPartitionAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(tp.topic()))
-      topicPartitionAssignment.contains(tp) && topicPartitionAssignment.getOrElse(tp, ReplicaAssignment.empty).replicas
-          .diff(assignment.getOrElse(tp.partition(), Empty.toSeq)).isEmpty
+      val topicPartitionAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(tp0.topic()))
+      topicPartitionAssignment.contains(tp0) &&
+        topicPartitionAssignment.getOrElse(tp0, ReplicaAssignment.empty).replicas
+          .diff(modifiedAssignment.getOrElse(tp0, ReplicaAssignment.empty).replicas).nonEmpty &&
+        topicPartitionAssignment.contains(tp1) &&
+        topicPartitionAssignment.getOrElse(tp1, ReplicaAssignment.empty).replicas
+          .diff(modifiedAssignment.getOrElse(tp1, ReplicaAssignment.empty).replicas).isEmpty
     }, message)
   }
 
