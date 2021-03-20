@@ -27,13 +27,11 @@ def setupGradle() {
 
 def doValidation() {
   sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true
+    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala
   '''
 }
 
-def doTest(target = "unitTest integrationTest") {
+def doTest(target = "core:test --tests ListOffsetsRequestTest") {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \

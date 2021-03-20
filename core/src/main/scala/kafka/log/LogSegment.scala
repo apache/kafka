@@ -577,6 +577,7 @@ class LogSegment private[log] (val log: FileRecords,
     val position = offsetIndex.lookup(math.max(timestampOffset.offset, startingOffset)).position
 
     // Search the timestamp
+    logger.info("search log {} for timestamp {}", log, timestamp)
     Option(log.searchForTimestamp(timestamp, position, startingOffset))
   }
 
