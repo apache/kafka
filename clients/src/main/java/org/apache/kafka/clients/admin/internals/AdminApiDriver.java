@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.DynamicKeyMapping;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.KeyMappings;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.StaticKeyMapping;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler.Keys;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -80,8 +78,7 @@ public class AdminApiDriver<K, V> {
     private final long retryBackoffMs;
     private final long deadlineMs;
     private final AdminApiHandler<K, V> handler;
-    private final Optional<StaticKeyMapping<K>> staticMapping;
-    private final Optional<DynamicKeyMapping<K>> dynamicMapping;
+    private final Keys<K> keys;
     private final Map<K, KafkaFutureImpl<V>> futures;
 
     private final BiMultimap<ApiRequestScope, K> lookupMap = new BiMultimap<>();
@@ -99,28 +96,23 @@ public class AdminApiDriver<K, V> {
         this.retryBackoffMs = retryBackoffMs;
         this.log = logContext.logger(AdminApiDriver.class);
         this.futures = new HashMap<>();
-
-        KeyMappings<K> result = handler.initializeKeys();
-        this.dynamicMapping = result.dynamicMapping;
-        this.staticMapping = result.staticMapping;
-
-        initializeKeys();
+        this.keys = initializeKeys(handler);
     }
 
-    private void initializeKeys() {
-        staticMapping.ifPresent(mapping -> {
-            mapping.keys.forEach((key, brokerId) -> {
-                futures.put(key, new KafkaFutureImpl<>());
-                map(key, brokerId);
-            });
+    private Keys<K> initializeKeys(AdminApiHandler<K, V> handler) {
+        Keys<K> keys = handler.initializeKeys();
+
+        keys.staticKeys.forEach((key, brokerId) -> {
+            futures.put(key, new KafkaFutureImpl<>());
+            map(key, brokerId);
         });
 
-        dynamicMapping.ifPresent(mapping -> {
-            for (K key : mapping.keys) {
-                futures.put(key, new KafkaFutureImpl<>());
-                lookupMap.put(mapping.lookupStrategy.lookupScope(key), key);
-            }
+        keys.dynamicKeys.forEach(key -> {
+            futures.put(key, new KafkaFutureImpl<>());
+            lookupMap.put(keys.lookupStrategy.lookupScope(key), key);
         });
+
+        return keys;
     }
 
     /**
@@ -138,11 +130,12 @@ public class AdminApiDriver<K, V> {
      * back to the Lookup stage, which will allow us to attempt lookup again.
      */
     private void unmap(K key) {
-        DynamicKeyMapping<K> mapping = dynamicMapping.orElseThrow(() ->
-            new IllegalStateException("Attempt to unmap key " + key + " which is not dynamically mapped")
-        );
+        if (!keys.dynamicKeys.contains(key)) {
+            throw new IllegalStateException("Attempt to unmap key " + key + " which is not dynamically mapped");
+        }
+
         fulfillmentMap.remove(key);
-        lookupMap.put(mapping.lookupStrategy.lookupScope(key), key);
+        lookupMap.put(keys.lookupStrategy.lookupScope(key), key);
     }
 
     private void clear(K key) {
@@ -231,11 +224,7 @@ public class AdminApiDriver<K, V> {
             result.failedKeys.forEach(this::completeExceptionally);
             result.unmappedKeys.forEach(this::unmap);
         } else {
-            DynamicKeyMapping<K> mapping = dynamicMapping.orElseThrow(() ->
-                new IllegalStateException("Received response for unexpected dynamic lookup scope " + spec.scope)
-            );
-
-            AdminApiLookupStrategy.LookupResult<K> result = mapping.lookupStrategy.handleResponse(
+            AdminApiLookupStrategy.LookupResult<K> result = keys.lookupStrategy.handleResponse(
                 spec.keys,
                 response
             );
@@ -256,14 +245,13 @@ public class AdminApiDriver<K, V> {
         if (t instanceof DisconnectException) {
             log.debug("Node disconnected before response could be received for request {}. " +
                 "Will attempt retry", spec.request);
-            dynamicMapping.ifPresent(mapping -> {
-                // After a disconnect, we want the driver to attempt to lookup the key
-                // again (if the key is dynamically mapped). This gives us a chance to
-                // find a new coordinator or partition leader for example.
-                spec.keys.stream()
-                    .filter(mapping.keys::contains)
-                    .forEach(this::unmap);
-            });
+
+            // After a disconnect, we want the driver to attempt to lookup the key
+            // again (if the key is dynamically mapped). This gives us a chance to
+            // find a new coordinator or partition leader for example.
+            spec.keys.stream()
+                .filter(keys.dynamicKeys::contains)
+                .forEach(this::unmap);
         } else {
             spec.keys.forEach(key -> completeExceptionally(key, t));
         }
@@ -311,13 +299,13 @@ public class AdminApiDriver<K, V> {
     }
 
     private void collectLookupRequests(List<RequestSpec<K>> requests) {
-        dynamicMapping.ifPresent(mapping -> {
+        if (!keys.dynamicKeys.isEmpty()) {
             collectRequests(
                 requests,
                 lookupMap,
-                (keys, scope) -> mapping.lookupStrategy.buildRequest(keys)
+                (keys, scope) -> this.keys.lookupStrategy.buildRequest(keys)
             );
-        });
+        }
     }
 
     private void collectFulfillmentRequests(List<RequestSpec<K>> requests) {

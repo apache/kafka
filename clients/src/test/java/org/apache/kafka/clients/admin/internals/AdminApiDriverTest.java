@@ -18,9 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.DynamicKeyMapping;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.KeyMappings;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.StaticKeyMapping;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler.Keys;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -60,7 +58,7 @@ class AdminApiDriverTest {
     @Test
     public void testCoalescedLookup() {
         MockRequestScope scope = new MockRequestScope(OptionalInt.empty());
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", scope,
             "bar", scope
         )));
@@ -83,7 +81,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testCoalescedFulfillment() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty()),
             "bar", new MockRequestScope(OptionalInt.of(1))
         )));
@@ -106,7 +104,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testKeyLookupFailure() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty()),
             "bar", new MockRequestScope(OptionalInt.of(1))
         )));
@@ -129,7 +127,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testKeyLookupRetry() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty()),
             "bar", new MockRequestScope(OptionalInt.of(1))
         )));
@@ -162,7 +160,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testStaticMapping() {
-        TestContext ctx = new TestContext(staticMapping(map(
+        TestContext ctx = new TestContext(Keys.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
@@ -180,7 +178,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentFailure() {
-        TestContext ctx = new TestContext(staticMapping(map(
+        TestContext ctx = new TestContext(Keys.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
@@ -198,7 +196,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentRetry() {
-        TestContext ctx = new TestContext(staticMapping(map(
+        TestContext ctx = new TestContext(Keys.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
@@ -222,7 +220,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentUnmapping() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty()),
             "bar", new MockRequestScope(OptionalInt.of(1))
         )));
@@ -259,7 +257,7 @@ class AdminApiDriverTest {
     @Test
     public void testRecoalescedLookup() {
         MockRequestScope scope = new MockRequestScope(OptionalInt.empty());
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", scope,
             "bar", scope
         )));
@@ -294,7 +292,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testRetryLookupAfterDisconnect() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty())
         )));
 
@@ -339,10 +337,10 @@ class AdminApiDriverTest {
             "bar", 1
         );
 
-        MockLookupStrategy<String> strategy = new MockLookupStrategy<>(dynamicLookupScopes);
-        TestContext ctx = new TestContext(new KeyMappings<>(
-            Optional.of(new StaticKeyMapping<>(staticMapping)),
-            Optional.of(new DynamicKeyMapping<>(dynamicLookupScopes.keySet(), strategy))
+        TestContext ctx = new TestContext(new Keys<>(
+            staticMapping,
+            dynamicLookupScopes.keySet(),
+            new MockLookupStrategy<>(dynamicLookupScopes)
         ));
 
         // Initially we expect a lookup for the dynamic key and a
@@ -402,7 +400,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testLookupRetryBookkeeping() {
-        TestContext ctx = new TestContext(dynamicMapping(map(
+        TestContext ctx = new TestContext(dynamicMapped(map(
             "foo", new MockRequestScope(OptionalInt.empty())
         )));
 
@@ -427,7 +425,7 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentRetryBookkeeping() {
-        TestContext ctx = new TestContext(staticMapping(map("foo", 0)));
+        TestContext ctx = new TestContext(Keys.staticMapped(map("foo", 0)));
 
         ApiResult<String, Long> emptyFulfillment = emptyFulfillment();
         ctx.handler.expectRequest(mkSet("foo"), emptyFulfillment);
@@ -507,13 +505,13 @@ class AdminApiDriverTest {
 
     private static class TestContext {
         private final MockTime time = new MockTime();
-        private final KeyMappings<String> keyMappings;
+        private final Keys<String> keys;
         private final MockAdminApiHandler<String, Long> handler;
         private final AdminApiDriver<String, Long> driver;
 
-        public TestContext(KeyMappings<String> keyMappings) {
-            this.keyMappings = keyMappings;
-            this.handler = new MockAdminApiHandler<>(keyMappings);
+        public TestContext(Keys<String> keys) {
+            this.keys = keys;
+            this.handler = new MockAdminApiHandler<>(keys);
             this.driver = new AdminApiDriver<>(
                 handler,
                 time.milliseconds() + API_TIMEOUT_MS,
@@ -521,16 +519,12 @@ class AdminApiDriverTest {
                 new LogContext()
             );
 
-            keyMappings.staticMapping.ifPresent(mapping -> {
-                mapping.keys.forEach((key, brokerId) -> {
-                    assertMappedKey(driver, key, brokerId);
-                });
+            keys.staticKeys.forEach((key, brokerId) -> {
+                assertMappedKey(driver, key, brokerId);
             });
 
-            keyMappings.dynamicMapping.ifPresent(mapping -> {
-                mapping.keys.forEach(key -> {
-                    assertUnmappedKey(driver, key);
-                });
+            keys.dynamicKeys.forEach(key -> {
+                assertUnmappedKey(driver, key);
             });
         }
 
@@ -587,10 +581,10 @@ class AdminApiDriverTest {
         }
 
         private MockLookupStrategy<String> lookupStrategy() {
-            DynamicKeyMapping<String> mapping = keyMappings.dynamicMapping.orElseThrow(() ->
-                new IllegalStateException("Unexpected lookup when no dynamic mapping is defined")
-            );
-            return (MockLookupStrategy<String>) mapping.lookupStrategy;
+            if (keys.dynamicKeys.isEmpty()) {
+                throw new IllegalStateException("Unexpected lookup when no dynamic mapping is defined");
+            }
+            return (MockLookupStrategy<String>) keys.lookupStrategy;
         }
 
         public void poll(
@@ -662,10 +656,10 @@ class AdminApiDriverTest {
     }
 
     private static class MockAdminApiHandler<K, V> implements AdminApiHandler<K, V> {
-        private final KeyMappings<K> keyMappings;
+        private final Keys<K> keyMappings;
         private final Map<Set<K>, ApiResult<K, V>> expectedRequests = new HashMap<>();
 
-        private MockAdminApiHandler(KeyMappings<K> keyMappings) {
+        private MockAdminApiHandler(Keys<K> keyMappings) {
             this.keyMappings = keyMappings;
         }
 
@@ -675,7 +669,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public KeyMappings<K> initializeKeys() {
+        public Keys<K> initializeKeys() {
             return keyMappings;
         }
 
@@ -721,19 +715,9 @@ class AdminApiDriverTest {
         return map;
     }
 
-    private static KeyMappings<String> dynamicMapping(Map<String, MockRequestScope> lookupScopes) {
+    private static Keys<String> dynamicMapped(Map<String, MockRequestScope> lookupScopes) {
         MockLookupStrategy<String> strategy = new MockLookupStrategy<>(lookupScopes);
-        return new KeyMappings<>(
-            Optional.empty(),
-            Optional.of(new DynamicKeyMapping<>(lookupScopes.keySet(), strategy))
-        );
-    }
-
-    private static KeyMappings<String> staticMapping(Map<String, Integer> staticMappedKeys) {
-        return new KeyMappings<>(
-            Optional.of(new StaticKeyMapping<>(staticMappedKeys)),
-            Optional.empty()
-        );
+        return Keys.dynamicMapped(lookupScopes.keySet(), strategy);
     }
 
     private static ApiResult<String, Long> completed(String key, Long value) {

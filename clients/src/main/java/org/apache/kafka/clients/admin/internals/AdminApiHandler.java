@@ -22,8 +22,9 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+
+import static java.util.Objects.requireNonNull;
 
 public interface AdminApiHandler<K, V> {
 
@@ -43,11 +44,12 @@ public interface AdminApiHandler<K, V> {
      *
      * @return the key mappings
      */
-    KeyMappings<K> initializeKeys();
+    Keys<K> initializeKeys();
 
     /**
-     * Build the fulfillment request. The set of keys are derived during the Lookup stage
-     * as the set of keys which all map to the same destination broker.
+     * Build the request. The set of keys are derived by {@link AdminApiDriver}
+     * during the lookup stage as the set of keys which all map to the same
+     * destination broker.
      *
      * @param brokerId the target brokerId for the request
      * @param keys the set of keys that should be handled by this request
@@ -57,7 +59,7 @@ public interface AdminApiHandler<K, V> {
     AbstractRequest.Builder<?> buildRequest(Integer brokerId, Set<K> keys);
 
     /**
-     * Callback that is invoked when a Fulfillment request returns successfully.
+     * Callback that is invoked when a request returns successfully.
      * The handler should parse the response, check for errors, and return a
      * result which indicates which keys (if any) have either been completed or
      * failed with an unrecoverable error.
@@ -74,38 +76,40 @@ public interface AdminApiHandler<K, V> {
      * @param keys the set of keys from the associated request
      * @param response the response received from the broker
      *
-     * @return result indicating key complation, failure, and unmapping
+     * @return result indicating key completion, failure, and unmapping
      */
     ApiResult<K, V> handleResponse(Integer brokerId, Set<K> keys, AbstractResponse response);
 
-    class KeyMappings<K> {
-        public final Optional<StaticKeyMapping<K>> staticMapping;
-        public final Optional<DynamicKeyMapping<K>> dynamicMapping;
-
-        public KeyMappings(
-            Optional<StaticKeyMapping<K>> staticMapping,
-            Optional<DynamicKeyMapping<K>> dynamicMapping
-        ) {
-            this.staticMapping = staticMapping;
-            this.dynamicMapping = dynamicMapping;
-        }
-    }
-
-    class StaticKeyMapping<K> {
-        public final Map<K, Integer> keys;
-
-        public StaticKeyMapping(Map<K, Integer> keys) {
-            this.keys = Collections.unmodifiableMap(keys);
-        }
-    }
-
-    class DynamicKeyMapping<K> {
-        public final Set<K> keys;
+    class Keys<K> {
+        public final Map<K, Integer> staticKeys;
+        public final Set<K> dynamicKeys;
         public final AdminApiLookupStrategy<K> lookupStrategy;
 
-        public DynamicKeyMapping(Set<K> keys, AdminApiLookupStrategy<K> lookupStrategy) {
-            this.keys = Collections.unmodifiableSet(keys);
+        public Keys(
+            Map<K, Integer> staticKeys,
+            Set<K> dynamicKeys,
+            AdminApiLookupStrategy<K> lookupStrategy
+        ) {
+            this.staticKeys = requireNonNull(staticKeys);
+            this.dynamicKeys = requireNonNull(dynamicKeys);
             this.lookupStrategy = lookupStrategy;
+
+            if (!dynamicKeys.isEmpty()) {
+                requireNonNull(lookupStrategy);
+            }
+        }
+
+        public static <K> Keys<K> staticMapped(
+            Map<K, Integer> staticKeys
+        ) {
+            return new Keys<>(staticKeys, Collections.emptySet(), null);
+        }
+
+        public static <K> Keys<K> dynamicMapped(
+            Set<K> dynamicKeys,
+            AdminApiLookupStrategy<K> lookupStrategy
+        ) {
+            return new Keys<>(Collections.emptyMap(), dynamicKeys, lookupStrategy);
         }
     }
 

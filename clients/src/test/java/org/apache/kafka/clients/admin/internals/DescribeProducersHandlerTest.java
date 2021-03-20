@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Test;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -47,11 +46,13 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeProducersHandlerTest {
@@ -80,12 +81,11 @@ public class DescribeProducersHandlerTest {
             new DescribeProducersOptions().brokerId(brokerId)
         );
 
-        AdminApiHandler.KeyMappings<TopicPartition> keyMappings = handler.initializeKeys();
-        assertEquals(Optional.empty(), keyMappings.dynamicMapping);
-        assertTrue(keyMappings.staticMapping.isPresent());
+        AdminApiHandler.Keys<TopicPartition> keys = handler.initializeKeys();
+        assertEquals(emptySet(), keys.dynamicKeys);
+        assertNull(keys.lookupStrategy);
 
-        AdminApiHandler.StaticKeyMapping<TopicPartition> mapping = keyMappings.staticMapping.get();
-        mapping.keys.forEach((topicPartition, mappedBrokerId) -> {
+        keys.staticKeys.forEach((topicPartition, mappedBrokerId) -> {
             assertEquals(brokerId, mappedBrokerId, "Unexpected brokerId for " + topicPartition);
         });
     }
@@ -103,13 +103,10 @@ public class DescribeProducersHandlerTest {
             new DescribeProducersOptions()
         );
 
-        AdminApiHandler.KeyMappings<TopicPartition> keyMappings = handler.initializeKeys();
-        assertEquals(Optional.empty(), keyMappings.staticMapping);
-        assertTrue(keyMappings.dynamicMapping.isPresent());
-
-        AdminApiHandler.DynamicKeyMapping<TopicPartition> mapping = keyMappings.dynamicMapping.get();
-        assertEquals(topicPartitions, mapping.keys);
-        assertTrue(mapping.lookupStrategy instanceof PartitionLeaderStrategy);
+        AdminApiHandler.Keys<TopicPartition> keys = handler.initializeKeys();
+        assertEquals(emptyMap(), keys.staticKeys);
+        assertTrue(keys.lookupStrategy instanceof PartitionLeaderStrategy);
+        assertEquals(topicPartitions, keys.dynamicKeys);
     }
 
     @Test

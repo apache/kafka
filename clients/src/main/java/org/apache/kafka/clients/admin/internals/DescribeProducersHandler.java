@@ -39,7 +39,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -68,22 +67,16 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
     }
 
     @Override
-    public KeyMappings<TopicPartition> initializeKeys() {
+    public Keys<TopicPartition> initializeKeys() {
         if (options.brokerId().isPresent()) {
             // If the options indicate a specific broker, then we can skip the lookup step
             int destinationBrokerId = options.brokerId().getAsInt();
             Map<TopicPartition, Integer> staticMappedPartitions =
                 Utils.initializeMap(topicPartitions, () -> destinationBrokerId);
-            return new KeyMappings<>(
-                Optional.of(new StaticKeyMapping<>(staticMappedPartitions)),
-                Optional.empty()
-            );
+            return Keys.staticMapped(staticMappedPartitions);
         } else {
             PartitionLeaderStrategy lookupStrategy = new PartitionLeaderStrategy(logContext);
-            return new KeyMappings<>(
-                Optional.empty(),
-                Optional.of(new DynamicKeyMapping<>(topicPartitions, lookupStrategy))
-            );
+            return Keys.dynamicMapped(topicPartitions, lookupStrategy);
         }
     }
 
