@@ -23,7 +23,7 @@
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID." },
-    { "name": "ClusterId", "type": "uuid", "versions": "0+",
+    { "name": "ClusterId", "type": "string", "versions": "0+",
       "about": "The cluster id of the broker process." },
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
       "about": "The incarnation id of the broker process." },

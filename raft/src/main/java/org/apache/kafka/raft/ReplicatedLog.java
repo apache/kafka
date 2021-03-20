@@ -84,11 +84,13 @@ public interface ReplicatedLog extends Closeable {
     default ValidOffsetAndEpoch validateOffsetAndEpoch(long offset, int epoch) {
         if (startOffset() == 0 && offset == 0) {
             return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(0, 0));
-        } else if (
-                earliestSnapshotId().isPresent() &&
-                ((offset < startOffset()) ||
-                 (offset == startOffset() && epoch != earliestSnapshotId().get().epoch) ||
-                 (epoch < earliestSnapshotId().get().epoch))
+        }
+
+        Optional<OffsetAndEpoch> earliestSnapshotId = earliestSnapshotId();
+        if (earliestSnapshotId.isPresent() &&
+            ((offset < startOffset()) ||
+             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch) ||
+             (epoch < earliestSnapshotId.get().epoch))
         ) {
             /* Send a snapshot if the leader has a snapshot at the log start offset and
              * 1. the fetch offset is less than the log start offset or
