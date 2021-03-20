@@ -932,28 +932,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testDeleteTopicsRequestNumTopics() {
-        for (short version : DELETE_TOPICS.allVersions()) {
-            DeleteTopicsRequest request = createDeleteTopicsRequest(version);
-            DeleteTopicsRequest serializedRequest = DeleteTopicsRequest.parse(request.serialize(), version);
-            // createDeleteTopicsRequest sets 2 topics
-            assertEquals(2, request.numberOfTopics());
-            assertEquals(2, serializedRequest.numberOfTopics());
-
-            // Test using IDs
-            if (version >= 6) {
-                DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                            .setTopics(Arrays.asList(new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid()),
-                                                     new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid())))
-                            .setTimeoutMs(1000)).build(version);
-                DeleteTopicsRequest serializedRequestWithIds = DeleteTopicsRequest.parse(requestWithIds.serialize(), version);
-                assertEquals(2, requestWithIds.numberOfTopics());
-                assertEquals(2, serializedRequestWithIds.numberOfTopics());
-            }
-        }
-    }
-
-    @Test
     public void testFetchRequestMaxBytesOldVersions() {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);
