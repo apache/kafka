@@ -1708,7 +1708,7 @@ class KafkaController(val config: KafkaConfig,
     val partitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic))
     val existingPartitionsInContext = controllerContext.partitionFullReplicaAssignmentForTopic(topic)
     val partitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
-      existingPartitionsInContext.getOrElse(topicPartition, ReplicaAssignment.empty).replicas.nonEmpty
+      existingPartitionsInContext.getOrElse(topicPartition, ReplicaAssignment.empty).replicas.isEmpty
     }
 
     val partitionsToBeModified = existingPartitionsInContext.filter{ case (topicPartition, existingAssignment) =>

@@ -37,7 +37,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.View.Empty
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -258,6 +259,17 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitForPartitionMetadata(servers, tp1.topic, tp1.partition)
+  }
+
+  @Test
+  def testUnexpectedTopicPartitionModified(): Unit = {
+    servers = makeServers(2)
+    val tp0 = new TopicPartition("t", 0)
+    val assignment = Map(tp0.partition -> Seq(0))
+    val modifiedAssignment = Map(tp0 -> ReplicaAssignment(Seq(1), Seq(), Seq()))
+    TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
+    zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), modifiedAssignment, firstControllerEpochZkVersion)
+    waitForPartitionAssignment(tp0, assignment, "failed to get expected partition state upon topic partition unexpected modified")
   }
 
   @Test
@@ -1130,6 +1142,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
+    }, message)
+  }
+
+  private def waitForPartitionAssignment(tp: TopicPartition,
+                                    assignment: Map[Int, Seq[Int]],
+                                    message: String): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      val topicPartitionAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(tp.topic()))
+      topicPartitionAssignment.contains(tp) && topicPartitionAssignment.getOrElse(tp, ReplicaAssignment.empty).replicas
+          .diff(assignment.getOrElse(tp.partition(), Empty.toSeq)).isEmpty
     }, message)
   }
 
