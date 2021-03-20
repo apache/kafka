@@ -1712,7 +1712,7 @@ class KafkaController(val config: KafkaConfig,
     }
 
     val partitionsToBeModified = existingPartitionsInContext.filter{ case (topicPartition, existingAssignment) =>
-      existingAssignment.replicas.diff(partitionReplicaAssignment(topicPartition).replicas).nonEmpty
+      existingAssignment.replicas.diff(partitionReplicaAssignment.getOrElse(topicPartition, ReplicaAssignment.empty).replicas).nonEmpty
     }
 
     if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
