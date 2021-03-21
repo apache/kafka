@@ -198,6 +198,7 @@ class BrokerToControllerChannelManagerImpl(
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         Selector.NO_IDLE_TIMEOUT_MS,
+        Selector.ENABLE_TCP_NODELAY,
         metrics,
         time,
         channelName,

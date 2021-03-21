@@ -779,7 +779,7 @@ public class SslTransportLayerTest {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
+        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, Selector.ENABLE_TCP_NODELAY, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
 
             String node = "0";
@@ -896,7 +896,7 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(args.sslClientConfigs);
-            this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+            this.selector = new Selector(5000, true, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -975,7 +975,7 @@ public class SslTransportLayerTest {
         String node = "0";
         server = createEchoServer(args, securityProtocol);
         clientChannelBuilder.configure(args.sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
+        this.selector = new Selector(5000, true, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -1288,7 +1288,7 @@ public class SslTransportLayerTest {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(100 * 5000, true, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1304,7 +1304,7 @@ public class SslTransportLayerTest {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, true, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
         return selector;
     }
 

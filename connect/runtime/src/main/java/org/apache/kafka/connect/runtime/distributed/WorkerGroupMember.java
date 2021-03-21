@@ -113,8 +113,10 @@ public class WorkerGroupMember {
             this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            Selector selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    config.getBoolean(CommonClientConfigs.SOCKET_TCP_NODELAY_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext);
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
+                    selector,
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice

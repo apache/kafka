@@ -77,6 +77,10 @@ public class AdminClientConfig extends AbstractConfig {
     /** <code>socket.connection.setup.timeout.max.ms</code> */
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG;
 
+    /** <code>socket.tcp.no.delay</code> */
+    public static final String SOCKET_TCP_NODELAY_CONFIG = CommonClientConfigs.SOCKET_TCP_NODELAY_CONFIG;
+    private static final String SOCKET_TCP_NODELAY_DOC = CommonClientConfigs.SOCKET_TCP_NODELAY_DOC;
+
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
     private static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
@@ -165,6 +169,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+                                .define(SOCKET_TCP_NODELAY_CONFIG,
+                                        Type.BOOLEAN,
+                                        CommonClientConfigs.DEFAULT_SOCKET_TCP_NODELAY,
+                                        Importance.LOW,
+                                        SOCKET_TCP_NODELAY_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,
                                         5 * 60 * 1000,

@@ -271,6 +271,7 @@ class KafkaRaftManager[T](
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       config.connectionsMaxIdleMs,
+      config.socketTcpNoDelay,
       metrics,
       time,
       metricGroupPrefix,

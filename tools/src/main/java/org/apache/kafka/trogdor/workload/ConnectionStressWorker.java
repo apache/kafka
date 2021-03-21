@@ -164,7 +164,7 @@ public class ConnectionStressWorker implements TaskWorker {
                 ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, logContext);
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        metrics, TIME, "", channelBuilder, logContext)) {
+                        conf.getBoolean(AdminClientConfig.SOCKET_TCP_NODELAY_CONFIG), metrics, TIME, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",

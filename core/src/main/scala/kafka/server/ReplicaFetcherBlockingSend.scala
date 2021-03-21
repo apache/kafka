@@ -71,6 +71,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       brokerConfig.connectionsMaxIdleMs,
+      brokerConfig.socketTcpNoDelay,
       metrics,
       time,
       "replica-fetcher",

@@ -255,6 +255,11 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+        .define(CommonClientConfigs.SOCKET_TCP_NODELAY_CONFIG,
+          ConfigDef.Type.BOOLEAN,
+          CommonClientConfigs.DEFAULT_SOCKET_TCP_NODELAY,
+          ConfigDef.Importance.LOW,
+          CommonClientConfigs.SOCKET_TCP_NODELAY_DOC)
         .define(
           CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
           ConfigDef.Type.LONG,
@@ -288,6 +293,7 @@ object BrokerApiVersionsCommand {
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
       val connectionSetupTimeoutMaxMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
+      val tcpNoDelay = config.getBoolean(CommonClientConfigs.SOCKET_TCP_NODELAY_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
@@ -297,6 +303,7 @@ object BrokerApiVersionsCommand {
 
       val selector = new Selector(
         DefaultConnectionMaxIdleMs,
+        tcpNoDelay,
         metrics,
         time,
         "admin",
