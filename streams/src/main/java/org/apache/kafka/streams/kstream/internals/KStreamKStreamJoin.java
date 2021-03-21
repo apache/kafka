@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -39,13 +39,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final long joinBeforeMs;
     private final long joinAfterMs;
 
-    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
 
     KStreamKStreamJoin(final String otherWindowName,
                        final long joinBeforeMs,
                        final long joinAfterMs,
-                       final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
@@ -104,12 +104,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     context().forward(
                         key,
-                        joiner.apply(value, otherRecord.value),
+                        joiner.apply(key, value, otherRecord.value),
                         To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
                 }
 
                 if (needOuterJoin) {
-                    context().forward(key, joiner.apply(value, null));
+                    context().forward(key, joiner.apply(key, value, null));
                 }
             }
         }
