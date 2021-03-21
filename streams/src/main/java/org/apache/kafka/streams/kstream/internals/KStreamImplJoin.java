@@ -22,11 +22,11 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -55,7 +55,7 @@ class KStreamImplJoin {
 
     public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
                                                final KStream<K1, V2> other,
-                                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                                final JoinWindows windows,
                                                final StreamJoined<K1, V1, V2> streamJoined) {
 
@@ -130,7 +130,7 @@ class KStreamImplJoin {
             thisWindowStore.name(),
             windows.afterMs,
             windows.beforeMs,
-            AbstractStream.reverseJoiner(joiner),
+            AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter
         );
 
