@@ -79,7 +79,7 @@ public class ClusterConnectionStatesTest {
 
     // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
     private AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
-            initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));;
+            initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
 
     @BeforeEach
     public void setup() {
