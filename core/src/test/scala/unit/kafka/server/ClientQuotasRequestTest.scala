@@ -563,7 +563,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def describeClientQuotas(filter: ClientQuotaFilter) = {
     val result = new KafkaFutureImpl[java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]]]
     if (cluster.clusterType() == ClusterType.RAFT) {
-      Thread.sleep(3000) // need to do this since updates are now async!
+      Thread.sleep(1000) // need to do this since updates are now async!
     }
     sendDescribeClientQuotasRequest(filter).complete(result)
     try result.get catch {
