@@ -133,17 +133,17 @@ class ControllerChannelManager(controllerContext: ControllerContext,
           Some(reconfigurable)
         case _ => None
       }
-      val selector = new Selector(
-        NetworkReceive.UNLIMITED,
-        Selector.NO_IDLE_TIMEOUT_MS,
-        metrics,
-        time,
-        "controller-channel",
-        Map("broker-id" -> brokerNode.idString).asJava,
-        false,
-        channelBuilder,
-        logContext
-      )
+      val selectorBuilder = new Selector.Builder()
+            selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                                .withConnectionMaxIdleMs(Selector.NO_IDLE_TIMEOUT_MS)
+                                .withMetrics(metrics)
+                                .withTime(time)
+                                .withMetricGrpPrefix("controller-channel")
+                                .withMetricTags(Map("broker-id" -> brokerNode.idString).asJava)
+                                .withMetricsPerConnection(false)
+                                .withChannelBuilder(channelBuilder)
+                                .withLogContext(logContext);
+      val selector = selectorBuilder.build()
       val networkClient = new NetworkClient(
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),

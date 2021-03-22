@@ -743,8 +743,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
             ApiVersions apiVersions = new ApiVersions();
+            Selector.Builder selectorBuilder = new Selector.Builder();
+            selectorBuilder.withConnectionMaxIdleMs(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG))
+                    .withMetrics(metrics)
+                    .withTime(time)
+                    .withMetricGrpPrefix(metricGrpPrefix)
+                    .withChannelBuilder(channelBuilder)
+                    .withLogContext(logContext);
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
+                    selectorBuilder.build(),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice for max in-flight requests

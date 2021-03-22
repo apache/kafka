@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,7 +80,14 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(logContext);
+        this.selector = selectorBuilder.build();
     }
 
     @AfterEach
@@ -122,7 +131,14 @@ public class SslSelectorTest extends SelectorTest {
         ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configure(sslClientConfigs);
         Metrics metrics = new Metrics();
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        Selector selector = selectorBuilder.build();
 
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
@@ -161,7 +177,14 @@ public class SslSelectorTest extends SelectorTest {
 
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        this.selector = selectorBuilder.build();
         connect(node, new InetSocketAddress("localhost", server.port));
         selector.send(createSend(node, request));
 
@@ -293,8 +316,18 @@ public class SslSelectorTest extends SelectorTest {
                 .build();
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                .withConnectionMaxIdleMs(5000)
+                .withMetrics(metrics)
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withMetricTags(new HashMap<>())
+                .withMetricsPerConnection(true)
+                .withRecordTimePerConnection(false)
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        selector = selectorBuilder.build();
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

@@ -275,52 +275,10 @@ public class Selector implements Selectable, AutoCloseable {
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
     }
 
-    public Selector(int maxReceiveSize,
-                    long connectionMaxIdleMs,
-                    Metrics metrics,
-                    Time time,
-                    String metricGrpPrefix,
-                    Map<String, String> metricTags,
-                    boolean metricsPerConnection,
-                    boolean recordTimePerConnection,
-                    ChannelBuilder channelBuilder,
-                    MemoryPool memoryPool,
-                    LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags,
-                metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool, logContext);
-    }
-
-    public Selector(int maxReceiveSize,
-                    long connectionMaxIdleMs,
-                    int failedAuthenticationDelayMs,
-                    Metrics metrics,
-                    Time time,
-                    String metricGrpPrefix,
-                    Map<String, String> metricTags,
-                    boolean metricsPerConnection,
-                    ChannelBuilder channelBuilder,
-                    LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
-    }
-
-    public Selector(int maxReceiveSize,
-                    long connectionMaxIdleMs,
-                    Metrics metrics,
-                    Time time,
-                    String metricGrpPrefix,
-                    Map<String, String> metricTags,
-                    boolean metricsPerConnection,
-                    ChannelBuilder channelBuilder,
-                    LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, channelBuilder, logContext);
-    }
-
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
-    }
-
-    public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
+    // used for anonymous class for testing purposes
+    protected Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, Collections.emptyMap(),
+                true, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
     /**

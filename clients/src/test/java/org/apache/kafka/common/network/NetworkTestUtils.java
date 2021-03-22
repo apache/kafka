@@ -24,6 +24,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -62,7 +63,14 @@ public class NetworkTestUtils {
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder, Time time) {
-        return new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        return selectorBuilder.build();
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {

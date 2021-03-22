@@ -122,8 +122,15 @@ public class NioEchoServer extends Thread {
                 securityProtocol, config, credentialCache, tokenCache, time, logContext,
                 () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         this.metrics = new Metrics();
-        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
-                "MetricGroup", channelBuilder, logContext);
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(10000)
+                .withFailedAuthenticationDelayMs(failedAuthenticationDelayMs)
+                .withMetrics(metrics)
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(logContext);
+        this.selector = selectorBuilder.build();
         acceptorThread = new AcceptorThread();
         this.time = time;
     }

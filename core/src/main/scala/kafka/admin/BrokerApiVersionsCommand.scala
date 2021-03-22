@@ -294,14 +294,15 @@ object BrokerApiVersionsCommand {
       val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
       val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
       metadata.bootstrap(brokerAddresses)
+      val selectorBuilder = new Selector.Builder()
+      selectorBuilder.withConnectionMaxIdleMs(DefaultConnectionMaxIdleMs)
+                          .withMetrics(metrics)
+                          .withTime(time)
+                          .withMetricGrpPrefix("admin")
+                          .withChannelBuilder(channelBuilder)
+                          .withLogContext(logContext);
 
-      val selector = new Selector(
-        DefaultConnectionMaxIdleMs,
-        metrics,
-        time,
-        "admin",
-        channelBuilder,
-        logContext)
+      val selector = selectorBuilder.build()
 
       val networkClient = new NetworkClient(
         selector,

@@ -514,8 +514,14 @@ public class KafkaAdminClient extends AdminClient {
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics, time, metricGrpPrefix, channelBuilder, logContext);
+            Selector.Builder selectorBuilder = new Selector.Builder();
+            selectorBuilder.withConnectionMaxIdleMs(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG))
+                    .withMetrics(metrics)
+                    .withTime(time)
+                    .withMetricGrpPrefix(metricGrpPrefix)
+                    .withChannelBuilder(channelBuilder)
+                    .withLogContext(logContext);
+            selector = selectorBuilder.build();
             networkClient = new NetworkClient(
                 selector,
                 metadataManager.updater(),
