@@ -24,10 +24,11 @@ import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGr
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.common.{ConsumerGroupState, KafkaFuture, Node, TopicPartition, TopicPartitionInfo}
-import org.easymock.{EasyMock, IArgumentMatcher}
-import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 
 import scala.jdk.CollectionConverters._
 
@@ -44,22 +45,21 @@ class ConsumerGroupServiceTest {
     val args = Array("--bootstrap-server", "localhost:9092", "--group", group, "--describe", "--offsets")
     val groupService = consumerGroupService(args)
 
-    expect(admin.describeConsumerGroups(EasyMock.eq(Collections.singletonList(group)), anyObject()))
-      .andReturn(describeGroupsResult(ConsumerGroupState.STABLE))
-      .once()
-    expect(admin.listConsumerGroupOffsets(EasyMock.eq(group), anyObject()))
-      .andReturn(listGroupOffsetsResult)
-      .once()
-    expect(admin.listOffsets(offsetsArgMatcher, anyObject()))
-      .andReturn(listOffsetsResult)
-      .once()
-    replay(admin)
+    when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
+      .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE))
+    when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
+      .thenReturn(listGroupOffsetsResult)
+    when(admin.listOffsets(offsetsArgMatcher, any()))
+      .thenReturn(listOffsetsResult)
 
     val (state, assignments) = groupService.collectGroupOffsets(group)
     assertEquals(Some("Stable"), state)
     assertTrue(assignments.nonEmpty)
     assertEquals(topicPartitions.size, assignments.get.size)
-    verify(admin)
+
+    verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
+    verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(group), any())
+    verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
   }
 
   @Test
@@ -70,21 +70,20 @@ class ConsumerGroupServiceTest {
       topicsWithoutPartitionsSpecified.flatMap(topic => Seq("--topic", topic))
     val groupService = consumerGroupService((args ++ topicArgs).toArray)
 
-    expect(admin.describeConsumerGroups(EasyMock.eq(Collections.singletonList(group)), anyObject()))
-      .andReturn(describeGroupsResult(ConsumerGroupState.DEAD))
-      .once()
-    expect(admin.describeTopics(EasyMock.eq(topicsWithoutPartitionsSpecified.asJava), anyObject()))
-      .andReturn(describeTopicsResult(topicsWithoutPartitionsSpecified))
-      .once()
-    expect(admin.listOffsets(offsetsArgMatcher, anyObject()))
-      .andReturn(listOffsetsResult)
-      .once()
-    replay(admin)
+    when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
+      .thenReturn(describeGroupsResult(ConsumerGroupState.DEAD))
+    when(admin.describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified.asJava), any()))
+      .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified))
+    when(admin.listOffsets(offsetsArgMatcher, any()))
+      .thenReturn(listOffsetsResult)
 
     val resetResult = groupService.resetOffsets()
     assertEquals(Set(group), resetResult.keySet)
     assertEquals(topicPartitions.toSet, resetResult(group).keySet)
-    verify(admin)
+
+    verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any())
+    verify(admin, times(1)).describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified.asJava), any())
+    verify(admin, times(1)).listOffsets(offsetsArgMatcher, any())
   }
 
   private def consumerGroupService(args: Array[String]): ConsumerGroupService = {
@@ -108,27 +107,14 @@ class ConsumerGroupServiceTest {
 
   private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {
     val offsets = topicPartitions.map(_ -> new OffsetAndMetadata(100)).toMap.asJava
-    val result: ListConsumerGroupOffsetsResult = mock(classOf[ListConsumerGroupOffsetsResult]) // mocking since there is no public constructor
-    expect(result.partitionsToOffsetAndMetadata()).andReturn(KafkaFuture.completedFuture(offsets)).anyTimes()
-    replay(result)
-    result
+    AdminClientTestUtils.listConsumerGroupOffsetsResult(offsets)
   }
 
   private def offsetsArgMatcher: util.Map[TopicPartition, OffsetSpec] = {
     val expectedOffsets = topicPartitions.map(tp => tp -> OffsetSpec.latest).toMap
-    EasyMock.reportMatcher(new IArgumentMatcher {
-      override def matches(argument: Any): Boolean = {
-        argument match {
-          case map: util.Map[_, _] =>
-            map.keySet.asScala == expectedOffsets.keySet && map.values.asScala.forall(_.isInstanceOf[OffsetSpec.LatestSpec])
-          case _ =>
-            false
-        }
-      }
-
-      override def appendTo(buffer: StringBuffer): Unit = buffer.append(s"partitionOffsets($expectedOffsets)")
-    })
-    expectedOffsets.asJava
+    ArgumentMatchers.argThat[util.Map[TopicPartition, OffsetSpec]] { map =>
+      map.keySet.asScala == expectedOffsets.keySet && map.values.asScala.forall(_.isInstanceOf[OffsetSpec.LatestSpec])
+    }
   }
 
   private def listOffsetsResult: ListOffsetsResult = {
@@ -138,13 +124,10 @@ class ConsumerGroupServiceTest {
   }
 
   private def describeTopicsResult(topics: Seq[String]): DescribeTopicsResult = {
-    val result: DescribeTopicsResult = mock(classOf[DescribeTopicsResult])  // mocking since there is no public constructor
-    val topicDescriptions = topics.map { topic =>
+   val topicDescriptions = topics.map { topic =>
       val partitions = (0 until numPartitions).map(i => new TopicPartitionInfo(i, null, Collections.emptyList[Node], Collections.emptyList[Node]))
       topic -> new TopicDescription(topic, false, partitions.asJava)
     }.toMap
-    expect(result.all()).andReturn(KafkaFuture.completedFuture(topicDescriptions.asJava)).anyTimes()
-    replay(result)
-    result
+    AdminClientTestUtils.describeTopicsResult(topicDescriptions.asJava)
   }
 }
