@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -57,8 +58,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer.CHANGELOG_HEADERS;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
@@ -84,10 +87,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         return singletonList(
             new Object[] {
                 "in-memory buffer",
-                (Function<String, InMemoryTimeOrderedKeyValueBuffer<String, String>>) name ->
-                    new InMemoryTimeOrderedKeyValueBuffer
-                        .Builder<>(name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer()))
-                        .build()
+                (Function<String, TimeOrderedKeyValueBuffer<String, String>>) name ->
+                    new TimeOrderedKeyValueBufferBuilder<>(
+                        name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer())
+                    ).build()
             }
         );
     }
@@ -287,6 +290,111 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.put(1L, "B", new Change<>("new-value", null), recordContext);
         assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueAndTimestamp.make("old-value", -1))));
         assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
+    }
+
+    @Test
+    public void shouldIterate() {
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init((StateStoreContext) context, buffer);
+
+        final ProcessorRecordContext recordContext = getContext(0L);
+
+        // k1: t1, t3
+        buffer.put(1L, "k1", new Change<>("v1", "v0"), recordContext);
+        buffer.put(3L, "k1", new Change<>(null, "v1"), recordContext);
+        // k2: t2, t3
+        buffer.put(2L, "k2", new Change<>("v2", "v1"), recordContext);
+        buffer.put(3L, "k2", new Change<>("v3", "v2"), recordContext);
+        // k5: t3
+        buffer.put(3L, "k5", new Change<>(null, null), recordContext);
+
+        final KeyValueIterator<String, String> it0 = buffer.range("k1", "k0");
+        assertFalse(it0.hasNext());
+
+        final KeyValueIterator<String, String> it1 = buffer.range("k0", "k4");
+        assertThat(it1.next(), equalTo(new KeyValue<>("k1", "v0")));
+        assertThat(it1.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertFalse(it1.hasNext());
+
+        final KeyValueIterator<String, String> it2 = buffer.reverseRange("k0", "k4");
+        assertThat(it2.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it2.next(), equalTo(new KeyValue<>("k1", "v0")));
+        assertFalse(it2.hasNext());
+
+        final KeyValueIterator<String, String> it3 = buffer.all();
+        assertThat(it3.next(), equalTo(new KeyValue<>("k1", "v0")));
+        assertThat(it3.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it3.next(), equalTo(new KeyValue<>("k5", null)));
+        assertFalse(it3.hasNext());
+
+        final KeyValueIterator<String, String> it4 = buffer.reverseAll();
+        assertThat(it4.next(), equalTo(new KeyValue<>("k5", null)));
+        assertThat(it4.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it4.next(), equalTo(new KeyValue<>("k1", "v0")));
+        assertFalse(it4.hasNext());
+
+        // evict t1, t2
+        buffer.evictWhile(() -> buffer.minTimestamp() < 2L, kv -> { });
+        buffer.flush();
+
+        final KeyValueIterator<String, String> it5 = buffer.range("k1", "k0");
+        assertFalse(it5.hasNext());
+
+        final KeyValueIterator<String, String> it6 = buffer.range("k0", "k4");
+        assertThat(it6.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertFalse(it6.hasNext());
+
+        final KeyValueIterator<String, String> it7 = buffer.reverseRange("k2", "k5");
+        assertThat(it7.next(), equalTo(new KeyValue<>("k5", null)));
+        assertThat(it7.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertFalse(it7.hasNext());
+
+        final KeyValueIterator<String, String> it8 = buffer.all();
+        assertThat(it8.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it8.next(), equalTo(new KeyValue<>("k5", null)));
+        assertFalse(it8.hasNext());
+
+        final KeyValueIterator<String, String> it9 = buffer.reverseAll();
+        assertThat(it9.next(), equalTo(new KeyValue<>("k5", null)));
+        assertThat(it9.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertFalse(it9.hasNext());
+
+        // k1: t4
+        buffer.put(4L, "k1", new Change<>("v4", null), recordContext);
+        // k3: t5
+        buffer.put(5L, "k3", new Change<>("v5", null), recordContext);
+        // k4: t4, t5
+        buffer.put(4L, "k4", new Change<>("v4", "v0"), recordContext);
+        buffer.put(5L, "k4", new Change<>("v5", "v4"), recordContext);
+
+        final KeyValueIterator<String, String> it10 = buffer.range("k0", "k3");
+        assertThat(it10.next(), equalTo(new KeyValue<>("k1", null)));
+        assertThat(it10.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it10.next(), equalTo(new KeyValue<>("k3", null)));
+        assertFalse(it10.hasNext());
+
+        final KeyValueIterator<String, String> it11 = buffer.reverseRange("k3", "k5");
+        assertThat(it11.next(), equalTo(new KeyValue<>("k5", null)));
+        assertThat(it11.next(), equalTo(new KeyValue<>("k4", "v0")));
+        assertThat(it11.next(), equalTo(new KeyValue<>("k3", null)));
+        assertFalse(it11.hasNext());
+
+        final KeyValueIterator<String, String> it12 = buffer.all();
+        assertThat(it12.next(), equalTo(new KeyValue<>("k1", null)));
+        assertThat(it12.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it12.next(), equalTo(new KeyValue<>("k3", null)));
+        assertThat(it12.next(), equalTo(new KeyValue<>("k4", "v0")));
+        assertThat(it12.next(), equalTo(new KeyValue<>("k5", null)));
+        assertFalse(it12.hasNext());
+
+        final KeyValueIterator<String, String> it13 = buffer.reverseAll();
+        assertThat(it13.next(), equalTo(new KeyValue<>("k5", null)));
+        assertThat(it13.next(), equalTo(new KeyValue<>("k4", "v0")));
+        assertThat(it13.next(), equalTo(new KeyValue<>("k3", null)));
+        assertThat(it13.next(), equalTo(new KeyValue<>("k2", "v1")));
+        assertThat(it13.next(), equalTo(new KeyValue<>("k1", null)));
+        assertFalse(it13.hasNext());
     }
 
     @Test

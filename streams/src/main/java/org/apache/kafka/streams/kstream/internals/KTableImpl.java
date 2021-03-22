@@ -66,7 +66,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -513,6 +515,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
+        Objects.requireNonNull(suppressed, "suppressed can't be null");
+
         final String name;
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
@@ -523,31 +527,33 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
+        final String queryableStoreName;
+        if (suppressed.isQueryEnabled()) {
+            queryableStoreName = suppressedInternal.name();
+        } else {
+            queryableStoreName = null;
+        }
+
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
+
+        final StoreBuilder<TimeOrderedKeyValueBuffer<K, V>> storeBuilder = new TimeOrderedKeyValueBufferBuilder<>(
+            storeName,
+            keySerde,
+            valueSerde);
+
+        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            storeBuilder.withLoggingEnabled(topicConfig);
+        } else {
+            storeBuilder.withLoggingDisabled();
+        }
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
             storeName,
             this
         );
-
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder;
-
-        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
-            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
-            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
-                storeName,
-                keySerde,
-                valueSerde)
-                .withLoggingEnabled(topicConfig);
-        } else {
-            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
-                storeName,
-                keySerde,
-                valueSerde)
-                .withLoggingDisabled();
-        }
 
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
@@ -562,7 +568,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             keySerde,
             valueSerde,
             Collections.singleton(this.name),
-            null,
+            queryableStoreName,
             suppressionSupplier,
             node,
             builder

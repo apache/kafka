@@ -31,6 +31,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
     private final boolean safeToDropTombstones;
+    private final boolean isQueryEnabled;
 
     /**
      * @param safeToDropTombstones Note: it's *only* safe to drop tombstones for windowed KTables in "final results" mode.
@@ -49,17 +50,33 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
                               final Duration suppressionTime,
                               final BufferConfig bufferConfig,
                               final TimeDefinition<K> timeDefinition,
-                              final boolean safeToDropTombstones) {
+                              final boolean safeToDropTombstones,
+                              final boolean isQueryEnabled) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefinition.instance() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
         this.safeToDropTombstones = safeToDropTombstones;
+        this.isQueryEnabled = isQueryEnabled;
+    }
+
+    @Override
+    public Suppressed<K> enableQuery() {
+        if (name == null) {
+            throw new IllegalArgumentException("This method can't be called without the name set");
+        }
+
+        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, safeToDropTombstones, true);
+    }
+
+    @Override
+    public boolean isQueryEnabled() {
+        return isQueryEnabled;
     }
 
     @Override
     public Suppressed<K> withName(final String name) {
-        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, safeToDropTombstones);
+        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, safeToDropTombstones, isQueryEnabled);
     }
 
     @Override
@@ -97,12 +114,13 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
             Objects.equals(name, that.name) &&
             Objects.equals(bufferConfig, that.bufferConfig) &&
             Objects.equals(timeToWaitForMoreEvents, that.timeToWaitForMoreEvents) &&
-            Objects.equals(timeDefinition, that.timeDefinition);
+            Objects.equals(timeDefinition, that.timeDefinition) &&
+            Objects.equals(isQueryEnabled, that.isQueryEnabled);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, safeToDropTombstones);
+        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, safeToDropTombstones, isQueryEnabled);
     }
 
     @Override
@@ -113,6 +131,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
                 ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
                 ", timeDefinition=" + timeDefinition +
                 ", safeToDropTombstones=" + safeToDropTombstones +
+                ", isQueryEnabled=" + isQueryEnabled +
                 '}';
     }
 }

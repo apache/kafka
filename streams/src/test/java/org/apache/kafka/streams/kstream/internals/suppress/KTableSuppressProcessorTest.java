@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferBuilder;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
@@ -75,7 +75,7 @@ public class KTableSuppressProcessorTest {
 
             final String storeName = "test-store";
 
-            final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valueSerde)
+            final StateStore buffer = new TimeOrderedKeyValueBufferBuilder<>(storeName, keySerde, valueSerde)
                 .withLoggingDisabled()
                 .build();
 
