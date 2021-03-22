@@ -1107,6 +1107,12 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
+        // valid cluster id is accepted
+        context.deliverRequest(context.fetchRequest(
+                epoch, context.clusterId.toString(), otherNodeId, -5L, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
+
         // null cluster id is accepted
         context.deliverRequest(context.fetchRequest(
             epoch, null, otherNodeId, -5L, 0, 0));
@@ -1124,6 +1130,96 @@ public class KafkaRaftClientTest {
             epoch, "invalid-uuid", otherNodeId, -5L, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testVoteRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // valid cluster id is accepted
+        context.deliverRequest(context.voteRequest(epoch, localId, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // null cluster id is accepted
+        context.deliverRequest(context.voteRequest(epoch, localId, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // empty cluster id is rejected
+        context.deliverRequest(context.voteRequest("", epoch, localId, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+        // invalid cluster id is rejected
+        context.deliverRequest(context.voteRequest("invalid-uuid", epoch, localId, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testBeginQuorumEpochRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // valid cluster id is accepted
+        context.deliverRequest(context.beginEpochRequest(context.clusterId.toString(), epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // null cluster id is accepted
+        context.deliverRequest(context.beginEpochRequest(epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // empty cluster id is rejected
+        context.deliverRequest(context.beginEpochRequest("", epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+        // invalid cluster id is rejected
+        context.deliverRequest(context.beginEpochRequest("invalid-uuid", epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testEndQuorumEpochRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // valid cluster id is accepted
+        context.deliverRequest(context.endEpochRequest(context.clusterId.toString(), epoch, localId, Collections.singletonList(otherNodeId)));
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // null cluster id is accepted
+        context.deliverRequest(context.endEpochRequest(epoch, localId, Collections.singletonList(otherNodeId)));
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // empty cluster id is rejected
+        context.deliverRequest(context.endEpochRequest("", epoch, localId, Collections.singletonList(otherNodeId)));
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+        // invalid cluster id is rejected
+        context.deliverRequest(context.endEpochRequest("invalid-uuid", epoch, localId, Collections.singletonList(otherNodeId)));
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.INCONSISTENT_CLUSTER_ID);
     }
 
     @Test
