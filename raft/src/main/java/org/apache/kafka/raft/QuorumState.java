@@ -81,6 +81,7 @@ public class QuorumState {
     private final Random random;
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
+    private final LogContext logContext;
 
     private volatile EpochState state;
 
@@ -100,6 +101,7 @@ public class QuorumState {
         this.time = time;
         this.log = logContext.logger(QuorumState.class);
         this.random = random;
+        this.logContext = logContext;
     }
 
     public void initialize(OffsetAndEpoch logEndOffsetAndEpoch) throws IOException, IllegalStateException {
@@ -437,7 +439,8 @@ public class QuorumState {
             epoch(),
             epochStartOffset,
             voters,
-            candidateState.grantingVoters()
+            candidateState.grantingVoters(),
+            logContext
         ));
     }
 
