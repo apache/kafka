@@ -591,17 +591,17 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return revoking;
     }
 
-    static void computeRevoked(final Map<String, ConnectorsAndTasks> revoking,
-                               final Collection<WorkerLoad> existingWorkers,
-                               final int numberOfWorkers,
-                               final int numberOfActiveTasks,
-                               final boolean forTask) {
-        final int floor = numberOfActiveTasks / numberOfWorkers;
+    static void computeRevoked(Map<String, ConnectorsAndTasks> revoking,
+                               Collection<WorkerLoad> existingWorkers,
+                               int numberOfWorkers,
+                               int numberOfActiveTasks,
+                               boolean forTask) {
+        int floor = numberOfActiveTasks / numberOfWorkers;
         int numberOfCeilingMembers = numberOfActiveTasks % numberOfWorkers;
-        final int ceil = numberOfCeilingMembers == 0 ? floor : floor + 1;
-        for (final WorkerLoad existing : existingWorkers) {
-            final int currentSize = forTask ? existing.tasksSize() : existing.connectorsSize();
-            final int expectedSize;
+        int ceil = numberOfCeilingMembers == 0 ? floor : floor + 1;
+        for (WorkerLoad existing : existingWorkers) {
+            int currentSize = forTask ? existing.tasksSize() : existing.connectorsSize();
+            int expectedSize;
             // In order to reduce down-time, we have to avoid removing tasks from the nodes which are already in balance.
             if (existingWorkers.size() == 1 || currentSize == 1) {
                 // this condition is used to deal with following specify cases
@@ -612,7 +612,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 expectedSize = ceil;
                 numberOfCeilingMembers--;
             } else expectedSize = floor;
-            final Iterator<?> elements = forTask ? existing.tasks().iterator() : existing.connectors().iterator();
+            Iterator<?> elements = forTask ? existing.tasks().iterator() : existing.connectors().iterator();
             int numToRevoke = currentSize - expectedSize;
             while (elements.hasNext() && numToRevoke > 0) {
                 ConnectorsAndTasks resources = revoking.computeIfAbsent(
