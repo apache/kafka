@@ -459,13 +459,7 @@ object ConsumerGroupCommand extends Logging {
       val partitionLevelResult = mutable.Map[TopicPartition, Throwable]()
 
       val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
-
-      val knownPartitions = topicWithPartitions.flatMap { topicArg =>
-        val split = topicArg.split(":")
-        split(1).split(",").map { partition =>
-          new TopicPartition(split(0), partition.toInt)
-        }
-      }
+      val knownPartitions = topicWithPartitions.flatMap(parseTopicsWithPartitions)
 
       // Get the partitions of topics that the user did not explicitly specify the partitions
       val describeTopicsResult = adminClient.describeTopics(
@@ -711,16 +705,26 @@ object ConsumerGroupCommand extends Logging {
       options.timeoutMs(t)
     }
 
-    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = {
-      val (topicsWithPartitions, topics) = topicArgs.partition(_.contains(":"))
-      val specifiedPartitions = topicsWithPartitions.flatMap { arg =>
-        arg.split(":") match {
-          case Array(topic, partitions) =>
-            partitions.split(",").map(partition => new TopicPartition(topic, partition.toInt))
-          case _ =>
-            throw new IllegalArgumentException(s"Invalid topic arg '$arg', expected topic name and partitions")
+    private def parseTopicsWithPartitions(topicArg: String): Seq[TopicPartition] = {
+      def partitionNum(partition: String): Int = {
+        try {
+          partition.toInt
+        } catch {
+          case _: NumberFormatException =>
+            throw new IllegalArgumentException(s"Invalid partition '$partition' specified in topic arg '$topicArg''")
         }
       }
+      topicArg.split(":") match {
+        case Array(topic, partitions) =>
+          partitions.split(",").map(partition => new TopicPartition(topic, partitionNum(partition)))
+        case _ =>
+          throw new IllegalArgumentException(s"Invalid topic arg '$topicArg', expected topic name and partitions")
+      }
+    }
+
+    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = {
+      val (topicsWithPartitions, topics) = topicArgs.partition(_.contains(":"))
+      val specifiedPartitions = topicsWithPartitions.flatMap(parseTopicsWithPartitions)
 
       val unspecifiedPartitions = if (topics.nonEmpty) {
         val descriptionMap = adminClient.describeTopics(
