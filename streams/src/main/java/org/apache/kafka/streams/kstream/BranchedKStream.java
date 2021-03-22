@@ -56,7 +56,7 @@ import java.util.Map;
  * The values of the respective {@code Map<Stream, KStream<K, V>>} entries are formed as following:
  * <ul>
  *     <li>If no chain function or consumer is provided in {@link BranchedKStream#branch(Predicate, Branched)} via
- *     the {@link Branched} parameter, then the the branch itself is added to the {@code Map}
+ *     the {@link Branched} parameter, then the branch itself is added to the {@code Map}
  *     <li>If chain function is provided and it returns a non-null value for a given branch, then the value
  *     is the result returned by this function
  *     <li>If a chain function returns {@code null} for a given branch, then no entry is added to the map
