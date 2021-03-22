@@ -558,7 +558,7 @@ class AdminApiDriverTest {
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
 
             requestSpec.keys.forEach(key -> {
-                assertEquals(OptionalInt.of(brokerId), requestSpec.scope.destinationBrokerId());
+                assertMappedKey(driver, key, brokerId);
             });
 
             // The response is just a placeholder. The result is all we are interested in

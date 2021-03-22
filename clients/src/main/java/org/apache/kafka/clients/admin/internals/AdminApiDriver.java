@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -282,11 +283,14 @@ public class AdminApiDriver<K, V> {
                 continue;
             }
 
-            AbstractRequest.Builder<?> request = buildRequest.apply(keys, scope);
+            // Copy the keys to avoid exposing the underlying mutable set
+            Set<K> copyKeys = Collections.unmodifiableSet(new HashSet<>(keys));
+
+            AbstractRequest.Builder<?> request = buildRequest.apply(copyKeys, scope);
             RequestSpec<K> spec = new RequestSpec<>(
                 handler.apiName() + "(api=" + request.apiKey() + ")",
                 scope,
-                new HashSet<>(keys), // copy to avoid exposing mutable state
+                copyKeys,
                 request,
                 requestState.nextAllowedRetryMs,
                 deadlineMs,

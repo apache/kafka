@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -30,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -145,16 +145,18 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         Map<TopicPartition, Throwable> failed = new HashMap<>();
         Map<TopicPartition, Integer> mapped = new HashMap<>();
 
-        for (MetadataResponse.TopicMetadata topicMetadata : response.topicMetadata()) {
-            Errors topicError = topicMetadata.error();
+        for (MetadataResponseData.MetadataResponseTopic topicMetadata : response.data().topics()) {
+            String topic = topicMetadata.name();
+            Errors topicError = Errors.forCode(topicMetadata.errorCode());
             if (topicError != Errors.NONE) {
-                handleTopicError(topicMetadata.topic(), topicError, requestPartitions, failed);
+                handleTopicError(topic, topicError, requestPartitions, failed);
                 continue;
             }
 
-            for (MetadataResponse.PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
-                TopicPartition topicPartition = partitionMetadata.topicPartition;
-                Errors partitionError = partitionMetadata.error;
+
+            for (MetadataResponseData.MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
+                TopicPartition topicPartition = new TopicPartition(topic, partitionMetadata.partitionIndex());
+                Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
 
                 if (!requestPartitions.contains(topicPartition)) {
                     // The `Metadata` response always returns all partitions for requested
@@ -167,9 +169,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                     continue;
                 }
 
-                Optional<Integer> leaderIdOpt = partitionMetadata.leaderId;
-                if (leaderIdOpt.isPresent()) {
-                    mapped.put(topicPartition, leaderIdOpt.get());
+                int leaderId = partitionMetadata.leaderId();
+                if (leaderId >= 0) {
+                    mapped.put(topicPartition, leaderId);
                 } else {
                     log.debug("Metadata request for {} returned no error, but the leader is unknown. Will retry",
                         topicPartition);

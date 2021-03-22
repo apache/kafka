@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,6 +95,12 @@ public interface AdminApiHandler<K, V> {
             this.staticKeys = requireNonNull(staticKeys);
             this.dynamicKeys = requireNonNull(dynamicKeys);
             this.lookupStrategy = lookupStrategy;
+
+            Set<K> staticAndDynamicKeys = Utils.intersection(HashSet::new, staticKeys.keySet(), dynamicKeys);
+            if (!staticAndDynamicKeys.isEmpty()) {
+                throw new IllegalArgumentException("The following keys were configured both as dynamically " +
+                    "and statically mapped: " + staticAndDynamicKeys);
+            }
 
             if (!dynamicKeys.isEmpty()) {
                 requireNonNull(lookupStrategy);
