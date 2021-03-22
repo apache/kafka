@@ -28,6 +28,7 @@ import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
 
 import scala.collection.Seq
@@ -58,7 +59,8 @@ class KafkaRaftServer(
     metaProps.clusterId.toString
   )
 
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(config.quorumVoters)
+  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
+    RaftConfig.parseVoterConnections(config.quorumVoters))
 
   private val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
     metaProps,
@@ -67,7 +69,8 @@ class KafkaRaftServer(
     KafkaRaftServer.MetadataPartition,
     time,
     metrics,
-    threadNamePrefix
+    threadNamePrefix,
+    controllerQuorumVotersFuture
   )
 
   private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
