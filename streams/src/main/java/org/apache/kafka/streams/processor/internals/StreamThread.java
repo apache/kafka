@@ -422,8 +422,6 @@ public class StreamThread extends Thread {
             cache::resize
         );
 
-        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
-
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
@@ -848,7 +846,7 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration(now)) {
+            if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
                     taskManager.tasks().keySet());

@@ -90,7 +90,6 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
-    private java.util.function.Consumer<Set<TopicPartition>> resetter;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -226,18 +225,7 @@ public class TaskManager {
                     );
                 }
 
-                mainConsumer.pause(assignedToPauseAndReset);
-                // TODO: KIP-572 need to handle `TimeoutException`
-                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(assignedToPauseAndReset);
-                for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
-                    final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
-                    if (offsetAndMetadata != null) {
-                        mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
-                        assignedToPauseAndReset.remove(committedEntry.getKey());
-                    }
-                }
-                // throws if anything has no configured reset policy
-                resetter.accept(assignedToPauseAndReset);
+                task.addPartitionsForOffsetReset(assignedToPauseAndReset);
             }
             task.revive();
         }
@@ -418,7 +406,7 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      * @return {@code true} if all tasks are fully restored
      */
-    boolean tryToCompleteRestoration(final long now) {
+    boolean tryToCompleteRestoration(final long now, final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         boolean allRunning = true;
 
         final List<Task> activeTasks = new LinkedList<>();
@@ -449,7 +437,7 @@ public class TaskManager {
             for (final Task task : activeTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
-                        task.completeRestoration();
+                        task.completeRestoration(offsetResetter);
                         task.clearTaskTimeout();
                     } catch (final TimeoutException timeoutException) {
                         task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
@@ -1286,10 +1274,6 @@ public class TaskManager {
 
     boolean needsInitializationOrRestoration() {
         return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
-    }
-
-    public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
-        this.resetter = resetter;
     }
 
     // for testing only

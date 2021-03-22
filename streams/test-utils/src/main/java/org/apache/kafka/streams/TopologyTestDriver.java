@@ -528,7 +528,7 @@ public class TopologyTestDriver implements Closeable {
                 context,
                 logContext);
             task.initializeIfNeeded();
-            task.completeRestoration();
+            task.completeRestoration(noOpResetter -> { });
             task.processorContext().setRecordContext(null);
 
         } else {
