@@ -224,7 +224,7 @@ public class SslSelectorTest extends SelectorTest {
 
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+        this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, Selector.NO_FAILED_AUTHENTICATION_DELAY, metrics, time, "MetricGroup", Collections.emptyMap(), true, false, channelBuilder, MemoryPool.NONE, new LogContext()) {
             @Override
             void pollSelectionKeys(Set<SelectionKey> selectionKeys, boolean isImmediatelyConnected, long currentTimeNanos) {
                 for (SelectionKey key : selectionKeys) {

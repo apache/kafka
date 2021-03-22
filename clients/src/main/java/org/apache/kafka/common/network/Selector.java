@@ -234,7 +234,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param channelBuilder Channel builder for every new connection
      * @param logContext Context for logging with additional info
      */
-    public Selector(int maxReceiveSize,
+    Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
             int failedAuthenticationDelayMs,
             Metrics metrics,
@@ -273,12 +273,6 @@ public class Selector implements Selectable, AutoCloseable {
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
-    }
-
-    // used for anonymous class for testing purposes
-    protected Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, Collections.emptyMap(),
-                true, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
     /**
