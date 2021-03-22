@@ -714,9 +714,12 @@ object ConsumerGroupCommand extends Logging {
     private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = {
       val (topicsWithPartitions, topics) = topicArgs.partition(_.contains(":"))
       val specifiedPartitions = topicsWithPartitions.flatMap { arg =>
-        val topicPartitions = arg.split(":")
-        val topic = topicPartitions(0)
-        topicPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
+        arg.split(":") match {
+          case Array(topic, partitions) =>
+            partitions.split(",").map(partition => new TopicPartition(topic, partition.toInt))
+          case _ =>
+            throw new IllegalArgumentException(s"Invalid topic arg '$arg', expected topic name and partitions")
+        }
       }
 
       val unspecifiedPartitions = if (topics.nonEmpty) {
