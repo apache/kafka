@@ -45,6 +45,7 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.{Map, Seq}
@@ -61,7 +62,7 @@ class BrokerServer(
                     val metrics: Metrics,
                     val threadNamePrefix: Option[String],
                     val initialOfflineDirs: Seq[String],
-                    val controllerQuorumVotersFuture: CompletableFuture[util.List[String]],
+                    val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                     val supportedFeatures: util.Map[String, VersionRange]
                   ) extends KafkaBroker {
 
@@ -178,7 +179,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(

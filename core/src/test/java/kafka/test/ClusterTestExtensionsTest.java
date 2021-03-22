@@ -86,20 +86,20 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "foo", value = "bar"),
             @ClusterConfigProperty(key = "spam", value = "eggs")
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.ZK, serverProperties = {
+        @ClusterTest(name = "cluster-tests-2", clusterType = Type.RAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz")
         })
     })
     public void testClusterTests() {
-        if (clusterInstance.config().name().filter(name -> name.equals("cluster-tests-1")).isPresent()) {
+        if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "bar");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggs");
-        } else if (clusterInstance.config().name().filter(name -> name.equals("cluster-tests-2")).isPresent()) {
+        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "baz");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggz");
         } else {
-            Assertions.fail("Unknown cluster config " + clusterInstance.config().name());
+            Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
         }
     }
 

@@ -128,13 +128,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
         }
 
-        generatedClusterConfigs.forEach(config -> {
-            if (config.clusterType() == Type.ZK) {
-                testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
-            } else {
-                throw new IllegalStateException("Unknown cluster type " + config.clusterType());
-            }
-        });
+        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(config, testInvocations));
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -198,14 +192,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             properties.put(property.key(), property.value());
         }
 
-        switch (type) {
-            case ZK:
-            case BOTH:
-                ClusterConfig config = builder.build();
-                config.serverProperties().putAll(properties);
-                testInvocations.accept(new ZkClusterInvocationContext(config));
-                break;
-        }
+        ClusterConfig config = builder.build();
+        config.serverProperties().putAll(properties);
+        type.invocationContexts(config, testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
