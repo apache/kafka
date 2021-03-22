@@ -17,6 +17,11 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
+import java.util.Optional
+import java.util.concurrent.TimeUnit
+import java.util.function.Consumer
+
 import kafka.cluster.BrokerEndPoint
 import kafka.common.ClientIdAndBroker
 import kafka.log.LogAppendInfo
@@ -31,19 +36,50 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 
-import java.nio.ByteBuffer
-import java.util.Optional
-import java.util.concurrent.TimeUnit
-import java.util.function.Consumer
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.math.min
 
 
+sealed trait FetcherEvent extends Comparable[FetcherEvent] {
+  def priority: Int // an event with a higher priority value is more important
+  def state: FetcherState
+  override def compareTo(other: FetcherEvent): Int = {
+    // an event with a higher proirity value should be dequeued first in a PriorityQueue
+    other.priority.compareTo(this.priority)
+  }
+}
+
+// TODO: merge the AddPartitions and RemovePartitions into a single event
+case class AddPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch], future: KafkaFutureImpl[Void]) extends FetcherEvent {
+  override def priority = 2
+  override def state = FetcherState.AddPartitions
+}
+
+case class RemovePartitions(topicPartitions: Set[TopicPartition], future: KafkaFutureImpl[Void]) extends FetcherEvent {
+  override def priority = 2
+  override def state = FetcherState.RemovePartitions
+}
+
+case class GetPartitionCount(future: KafkaFutureImpl[Int]) extends FetcherEvent {
+  override def priority = 2
+  override def state = FetcherState.GetPartitionCount
+}
+
+case object TruncateAndFetch extends FetcherEvent {
+  override def priority = 1
+  override def state = FetcherState.TruncateAndFetch
+}
+
+
+class DelayedFetcherEvent(delay: Long, val fetcherEvent: FetcherEvent) extends DelayedItem(delayMs = delay) {
+}
+
 abstract class AbstractAsyncFetcher(clientId: String,
                                     val sourceBroker: BrokerEndPoint,
                                     failedPartitions: FailedPartitions,
-                                    fetchBackOffMs: Int = 0) extends Logging {
+                                    fetchBackOffMs: Int = 0,
+                                    fetcherEventBus: FetcherEventBus) extends FetcherEventProcessor with Logging {
 
   type FetchData = FetchResponse.PartitionData[Records]
   type EpochData = OffsetsForLeaderEpochRequest.PartitionData
@@ -82,6 +118,15 @@ abstract class AbstractAsyncFetcher(clientId: String,
   protected def isOffsetForLeaderEpochSupported: Boolean
 
 
+  def truncateAndFetch(): Unit = {
+    maybeTruncate()
+    if (maybeFetch()) {
+      fetcherEventBus.schedule(new DelayedFetcherEvent(fetchBackOffMs, TruncateAndFetch))
+    } else {
+      fetcherEventBus.put(TruncateAndFetch)
+    }
+  }
+
   /**
    * maybeFetch returns whether the fetching logic should back off
    */
@@ -110,6 +155,21 @@ abstract class AbstractAsyncFetcher(clientId: String,
     if (partitions.nonEmpty) {
       debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
+    }
+  }
+
+  override def process(event: FetcherEvent): Unit = {
+    event match {
+      case AddPartitions(initialFetchStates, future) =>
+        addPartitions(initialFetchStates)
+        future.complete(null)
+      case RemovePartitions(topicPartitions, future) =>
+        removePartitions(topicPartitions)
+        future.complete(null)
+      case GetPartitionCount(future) =>
+        future.complete(partitionStates.size())
+      case TruncateAndFetch =>
+        truncateAndFetch()
     }
   }
 
