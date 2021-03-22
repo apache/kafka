@@ -1015,7 +1015,7 @@ class KafkaApisTest {
 
     if (enableAutoTopicCreation) {
       assertTrue(capturedRequest.getValue.isDefined)
-      assertEquals(request, capturedRequest.getValue.get)
+      assertEquals(request.context, capturedRequest.getValue.get)
     }
 
     verify(authorizer, autoTopicCreationManager)
@@ -1024,8 +1024,8 @@ class KafkaApisTest {
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: RequestChannel.Request): Capture[Option[RequestChannel.Request]] = {
-    val capturedRequest = EasyMock.newCapture[Option[RequestChannel.Request]]()
+                                  request: RequestChannel.Request): Capture[Option[RequestContext]] = {
+    val capturedRequest = EasyMock.newCapture[Option[RequestContext]]()
     if (enableAutoTopicCreation) {
       EasyMock.expect(clientControllerQuotaManager.newPermissiveQuotaFor(EasyMock.eq(request)))
         .andReturn(UnboundedControllerMutationQuota)

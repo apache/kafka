@@ -1113,7 +1113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
-        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request))
+        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
         nonExistingTopics.map { topic =>
           val error = try {

@@ -24,7 +24,7 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 
 import scala.compat.java8.OptionConverters._
 
@@ -44,18 +44,18 @@ object ForwardingManager {
     new ForwardingManagerImpl(channelManager)
   }
 
-  private[server] def buildEnvelopeRequest(request: RequestChannel.Request,
+  private[server] def buildEnvelopeRequest(context: RequestContext,
                                            forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
-    val principalSerde = request.context.principalSerde.asScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
+    val principalSerde = context.principalSerde.asScala.getOrElse(
+      throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
         "since there is no serde defined")
     )
-    val serializedPrincipal = principalSerde.serialize(request.context.principal)
+    val serializedPrincipal = principalSerde.serialize(context.principal)
     forwardRequestBuffer.flip()
     new EnvelopeRequest.Builder(
       forwardRequestBuffer,
       serializedPrincipal,
-      request.context.clientAddress.getAddress
+      context.clientAddress.getAddress
     )
   }
 }
@@ -76,7 +76,7 @@ class ForwardingManagerImpl(
     request: RequestChannel.Request,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request, request.buffer.duplicate())
+    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request.context, request.buffer.duplicate())
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {

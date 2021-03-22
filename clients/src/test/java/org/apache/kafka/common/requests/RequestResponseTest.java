@@ -1012,6 +1012,25 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testSerializeWithInconsistentHeaderApiKey() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build();
+        short requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader requestHeader = new RequestHeader(DELETE_TOPICS, requestVersion, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
+    }
+
+    @Test
+    public void testSerializeWithInconsistentHeaderVersion() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build((short) 2);
+        RequestHeader requestHeader = new RequestHeader(CREATE_TOPICS, (short) 1, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
+    }
+
+    @Test
     public void testJoinGroupRequestVersion0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
