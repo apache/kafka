@@ -106,7 +106,7 @@ public class Selector implements Selectable, AutoCloseable {
         public Builder() {
             this.maxReceiveSize = NetworkReceive.UNLIMITED;
             this.failedAuthenticationDelayMs = NO_FAILED_AUTHENTICATION_DELAY;
-            this.recordTimePerConnection = true;
+            this.metricsPerConnection = true;
             this.metricTags = Collections.emptyMap();
             this.recordTimePerConnection = false;
             this.memoryPool = MemoryPool.NONE;

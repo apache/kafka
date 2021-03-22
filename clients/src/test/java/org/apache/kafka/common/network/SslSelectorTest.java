@@ -80,7 +80,7 @@ public class SslSelectorTest extends SelectorTest {
         this.metrics = new Metrics();
         Selector.Builder selectorBuilder = new Selector.Builder();
         selectorBuilder.withConnectionMaxIdleMs(5000)
-                .withMetrics(new Metrics())
+                .withMetrics(metrics)
                 .withTime(time)
                 .withMetricGrpPrefix("MetricGroup")
                 .withChannelBuilder(channelBuilder)
@@ -131,7 +131,7 @@ public class SslSelectorTest extends SelectorTest {
         Metrics metrics = new Metrics();
         Selector.Builder selectorBuilder = new Selector.Builder();
         selectorBuilder.withConnectionMaxIdleMs(5000)
-                .withMetrics(new Metrics())
+                .withMetrics(metrics)
                 .withTime(time)
                 .withMetricGrpPrefix("MetricGroup")
                 .withChannelBuilder(channelBuilder)
@@ -324,6 +324,7 @@ public class SslSelectorTest extends SelectorTest {
                 .withMetricsPerConnection(true)
                 .withRecordTimePerConnection(false)
                 .withChannelBuilder(channelBuilder)
+                .withMemoryPool(pool)
                 .withLogContext(new LogContext());
         selector = selectorBuilder.build();
 
