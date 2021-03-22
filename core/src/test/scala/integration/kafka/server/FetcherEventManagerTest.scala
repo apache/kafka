@@ -1,0 +1,84 @@
+package integration.kafka.server
+
+import kafka.cluster.BrokerEndPoint
+import kafka.server._
+import org.apache.kafka.common.internals.KafkaFutureImpl
+import org.apache.kafka.common.utils.Time
+import org.easymock.EasyMock.{createMock, expect, replay, verify}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+
+class FetcherEventManagerTest {
+
+  @Test
+  def testInitialState(): Unit = {
+    val time = Time.SYSTEM
+    val fetcherEventBus: FetcherEventBus = createMock(classOf[FetcherEventBus])
+    expect(fetcherEventBus.put(TruncateAndFetch)).andVoid()
+    expect(fetcherEventBus.close()).andVoid()
+    replay(fetcherEventBus)
+
+    val processor : FetcherEventProcessor = createMock(classOf[FetcherEventProcessor])
+    val fetcherEventManager = new FetcherEventManager("thread-1", fetcherEventBus, processor, time)
+
+    fetcherEventManager.start()
+    fetcherEventManager.close()
+
+    verify(fetcherEventBus)
+  }
+
+  @Test
+  def testEventExecution(): Unit = {
+    val time = Time.SYSTEM
+    val fetcherEventBus = new FetcherEventBus(time)
+
+    @volatile var addPartitionsProcessed = 0
+    @volatile var removePartitionsProcessed = 0
+    @volatile var getPartitionsProcessed = 0
+    @volatile var truncateAndFetchProcessed = 0
+    val processor : FetcherEventProcessor = new FetcherEventProcessor {
+      override def process(event: FetcherEvent): Unit = {
+        event match {
+          case AddPartitions(initialFetchStates, future) =>
+            addPartitionsProcessed += 1
+            future.asInstanceOf[KafkaFutureImpl[Void]].complete(null)
+          case RemovePartitions(topicPartitions, future) =>
+            removePartitionsProcessed += 1
+            future.asInstanceOf[KafkaFutureImpl[Void]].complete(null)
+          case GetPartitionCount(future) =>
+            getPartitionsProcessed += 1
+            future.asInstanceOf[KafkaFutureImpl[Int]].complete(1)
+          case TruncateAndFetch =>
+            truncateAndFetchProcessed += 1
+        }
+
+      }
+
+      override def fetcherStats: FetcherStats = ???
+
+      override def fetcherLagStats: FetcherLagStats = ???
+
+      override def sourceBroker: BrokerEndPoint = ???
+
+      override def close(): Unit = {}
+    }
+
+    val fetcherEventManager = new FetcherEventManager("thread-1", fetcherEventBus, processor, time)
+    val addPartitionsFuture = fetcherEventManager.addPartitions(Map.empty)
+    val removePartitionsFuture = fetcherEventManager.removePartitions(Set.empty)
+    val getPartitionCountFuture = fetcherEventManager.getPartitionsCount()
+
+    fetcherEventManager.start()
+    addPartitionsFuture.get()
+    removePartitionsFuture.get()
+    getPartitionCountFuture.get()
+
+    assertEquals(1, addPartitionsProcessed)
+    assertEquals(1, removePartitionsProcessed)
+    assertEquals(1, getPartitionsProcessed)
+    fetcherEventManager.close()
+  }
+
+}
+
