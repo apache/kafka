@@ -120,6 +120,10 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
     @Override
     public R apply(R record) {
+        if (operatingValue(record) == null) {
+            return record;
+        }
+
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
