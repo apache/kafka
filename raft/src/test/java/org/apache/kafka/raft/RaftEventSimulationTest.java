@@ -931,11 +931,7 @@ public class RaftEventSimulationTest {
                 PersistentState state = nodeEntry.getValue();
                 ElectionState electionState = state.store.readElectionState();
 
-                if (electionState == null) {
-                    continue;
-                }
-
-                if (electionState.epoch >= epoch && electionState.hasLeader()) {
+                if (electionState != null && electionState.epoch >= epoch && electionState.hasLeader()) {
                     if (epoch == electionState.epoch && leaderId.isPresent()) {
                         assertEquals(leaderId.getAsInt(), electionState.leaderId());
                     } else {
