@@ -19,28 +19,29 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
+import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_TOPICS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DeleteTopicsRequestTest {
 
     @Test
     public void testTopicNormalization() {
         for (short version : DELETE_TOPICS.allVersions()) {
-            // First check topic names are in the correct place when using topicNames.
+            // Check topic names are in the correct place when using topicNames.
             String topic1 = "topic1";
             String topic2 = "topic2";
             List<String> topics = Arrays.asList(topic1, topic2);
-            DeleteTopicsRequest requestWithNames = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                    .setTopicNames(topics)).build(version);
+            DeleteTopicsRequest requestWithNames = new DeleteTopicsRequest.Builder(
+                    new DeleteTopicsRequestData().setTopicNames(topics)).build(version);
             DeleteTopicsRequest requestWithNamesSerialized = DeleteTopicsRequest.parse(requestWithNames.serialize(), version);
 
             assertEquals(topics, requestWithNames.topicNames());
@@ -51,50 +52,60 @@ public class DeleteTopicsRequestTest {
                 assertEquals(topics, requestWithNamesSerialized.data().topicNames());
             } else {
                 // topics in TopicNames are moved to new topics field
-                Iterator<String> topicsIterator = topics.iterator();
-                requestWithNames.data().topics().forEach(topic -> assertEquals(topicsIterator.next(), topic.name()));
-                Iterator<String> topicsIterator2 = topics.iterator();
-                requestWithNames.data().topics().forEach(topic -> assertEquals(topicsIterator2.next(), topic.name()));
+                assertEquals(topics, requestWithNames.data().topics().stream().map(DeleteTopicState::name).collect(Collectors.toList()));
+                assertEquals(topics, requestWithNamesSerialized.data().topics().stream().map(DeleteTopicState::name).collect(Collectors.toList()));
             }
+        }
+    }
 
+    @Test
+    public void testNewTopicsField() {
+        for (short version : DELETE_TOPICS.allVersions()) {
+            String topic1 = "topic1";
+            String topic2 = "topic2";
+            List<String> topics = Arrays.asList(topic1, topic2);
+            DeleteTopicsRequest requestWithNames = new DeleteTopicsRequest.Builder(
+                    new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                            new DeleteTopicsRequestData.DeleteTopicState().setName(topic1),
+                            new DeleteTopicsRequestData.DeleteTopicState().setName(topic2)))).build(version);
             // Ensure we only use new topics field on versions 6+.
-            try {
-                DeleteTopicsRequest requestWithNames2 = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                        .setTopics(Arrays.asList(new DeleteTopicsRequestData.DeleteTopicState().setName(topic1),
-                                new DeleteTopicsRequestData.DeleteTopicState().setName(topic2)))).build(version);
-                DeleteTopicsRequest requestWithNamesSerialized2 = DeleteTopicsRequest.parse(requestWithNames2.serialize(), version);
+            if (version >= 6) {
+                DeleteTopicsRequest requestWithNamesSerialized = DeleteTopicsRequest.parse(requestWithNames.serialize(), version);
 
-                assertTrue(version >= 6);
-                assertEquals(topics, requestWithNames2.topicNames());
-                assertEquals(topics, requestWithNamesSerialized2.topicNames());
+                assertEquals(topics, requestWithNames.topicNames());
+                assertEquals(topics, requestWithNamesSerialized.topicNames());
 
-            } catch (UnsupportedVersionException e) {
+            } else {
                 // We should fail if version is less than 6.
-                assertTrue(version < 6);
+                assertThrows(UnsupportedVersionException.class, () -> requestWithNames.serialize());
             }
+        }
+    }
 
-            // Next check topic IDs are handled correctly. We should only use this field on versions 6+.
+    @Test
+    public void testTopicIdsField() {
+        for (short version : DELETE_TOPICS.allVersions()) {
+            // Check topic IDs are handled correctly. We should only use this field on versions 6+.
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
             List<Uuid> topicIds = Arrays.asList(topicId1, topicId2);
+            DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(
+                    new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                            new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId1),
+                            new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId2)))).build(version);
 
-            try {
-                DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                        .setTopics(Arrays.asList(new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId1),
-                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId2)))).build(version);
+            if (version >= 6) {
                 DeleteTopicsRequest requestWithIdsSerialized = DeleteTopicsRequest.parse(requestWithIds.serialize(), version);
 
-                // Version should be at least 6
-                assertTrue(version >= 6);
                 assertEquals(topicIds, requestWithIds.topicIds());
                 assertEquals(topicIds, requestWithIdsSerialized.topicIds());
 
                 // All topic names should be replaced with null
                 requestWithIds.data().topics().forEach(topic -> assertNull(topic.name()));
                 requestWithIdsSerialized.data().topics().forEach(topic -> assertNull(topic.name()));
-            } catch (UnsupportedVersionException e) {
+            } else {
                 // We should fail if version is less than 6.
-                assertTrue(version < 6);
+                assertThrows(UnsupportedVersionException.class, () -> requestWithIds.serialize());
             }
         }
     }
@@ -112,10 +123,10 @@ public class DeleteTopicsRequestTest {
 
             // Test using IDs
             if (version >= 6) {
-                DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                        .setTopics(Arrays.asList(new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid()),
-                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid())))
-                        .setTimeoutMs(1000)).build(version);
+                DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(
+                        new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid()),
+                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid())))).build(version);
                 DeleteTopicsRequest serializedRequestWithIds = DeleteTopicsRequest.parse(requestWithIds.serialize(), version);
                 assertEquals(2, requestWithIds.numberOfTopics());
                 assertEquals(2, serializedRequestWithIds.numberOfTopics());
