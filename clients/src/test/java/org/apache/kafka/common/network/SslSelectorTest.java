@@ -19,7 +19,6 @@ package org.apache.kafka.common.network;
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -53,7 +52,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

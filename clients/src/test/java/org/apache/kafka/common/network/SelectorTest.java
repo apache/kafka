@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
