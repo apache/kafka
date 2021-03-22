@@ -37,7 +37,7 @@ class RaftClusterTest {
   def testCreateClusterAndClose(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(1).
+        setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
       cluster.format()
@@ -51,7 +51,7 @@ class RaftClusterTest {
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(3).
+        setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
       cluster.format()
@@ -76,7 +76,7 @@ class RaftClusterTest {
   def testCreateClusterAndCreateListDeleteTopic(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(3).
+        setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
       cluster.format()
@@ -134,7 +134,7 @@ class RaftClusterTest {
   def testCreateClusterAndCreateAndManyTopics(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(3).
+        setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
       cluster.format()
@@ -177,7 +177,7 @@ class RaftClusterTest {
   def testCreateClusterAndCreateAndManyTopicsWithManyPartitions(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(3).
+        setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
       cluster.format()
@@ -220,7 +220,7 @@ class RaftClusterTest {
   def testClientQuotas(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumKip500BrokerNodes(1).
+        setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
       cluster.format()
