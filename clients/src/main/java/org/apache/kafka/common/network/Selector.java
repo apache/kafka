@@ -112,7 +112,6 @@ public class Selector implements Selectable, AutoCloseable {
             this.memoryPool = MemoryPool.NONE;
         }
 
-
         public Builder withMaxReceiveSize(int maxReceiveSize) {
             this.maxReceiveSize = maxReceiveSize;
             return this;
