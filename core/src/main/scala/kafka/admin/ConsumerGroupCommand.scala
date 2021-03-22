@@ -580,18 +580,20 @@ object ConsumerGroupCommand extends Logging {
             partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
             Some(s"${consumerSummary.clientId}"))
         }
-        val rowsWithoutConsumer = committedOffsets.filter { case (tp, _) =>
-          !assignedTopicPartitions.contains(tp)
-        }.flatMap { case (topicPartition, offset) =>
+
+        val unassignedPartitions = committedOffsets.filterNot { case (tp, _) => assignedTopicPartitions.contains(tp) }
+        val rowsWithoutConsumer = if (unassignedPartitions.nonEmpty) {
           collectConsumerAssignment(
             groupId,
             Option(consumerGroup.coordinator),
-            Seq(topicPartition),
-            Map(topicPartition -> Some(offset.offset)),
+            unassignedPartitions.keySet.toSeq,
+            unassignedPartitions.map { case (tp, offset) => tp -> Some(offset.offset) },
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE)).toSeq
-        }
+        } else
+          Seq.empty
+
         groupId -> (Some(state.toString), Some(rowsWithConsumer ++ rowsWithoutConsumer))
       }).toMap
 
@@ -696,7 +698,8 @@ object ConsumerGroupCommand extends Logging {
       adminClient.close()
     }
 
-    private def createAdminClient(configOverrides: Map[String, String]): Admin = {
+    // Visibility for testing
+    protected def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
       configOverrides.forKeyValue { (k, v) => props.put(k, v)}
@@ -708,22 +711,27 @@ object ConsumerGroupCommand extends Logging {
       options.timeoutMs(t)
     }
 
-    private def parseTopicPartitionsToReset(groupId: String, topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
-      case topicArg if topicArg.contains(":") =>
-        val topicPartitions = topicArg.split(":")
+    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = {
+      val (topicsWithPartitions, topics) = topicArgs.partition(_.contains(":"))
+      val specifiedPartitions = topicsWithPartitions.flatMap { arg =>
+        val topicPartitions = arg.split(":")
         val topic = topicPartitions(0)
         topicPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
-      case topic =>
+      }
+
+      val unspecifiedPartitions = if (topics.nonEmpty) {
         val descriptionMap = adminClient.describeTopics(
-          Seq(topic).asJava,
+          topics.asJava,
           withTimeoutMs(new DescribeTopicsOptions)
         ).all().get.asScala
-        val r = descriptionMap.flatMap{ case(topic, description) =>
-          description.partitions().asScala.map{ tpInfo =>
+        descriptionMap.flatMap { case (topic, description) =>
+          description.partitions().asScala.map { tpInfo =>
             new TopicPartition(topic, tpInfo.partition)
           }
         }
-        r
+      } else
+        Seq.empty
+      specifiedPartitions ++ unspecifiedPartitions
     }
 
     private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
@@ -731,7 +739,7 @@ object ConsumerGroupCommand extends Logging {
         getCommittedOffsets(groupId).keys.toSeq
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
-        parseTopicPartitionsToReset(groupId, topics)
+        parseTopicPartitionsToReset(topics)
       } else {
         if (opts.options.has(opts.resetFromFileOpt))
           Nil
