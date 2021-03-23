@@ -571,11 +571,7 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
-                if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
-                    log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
-                    mainConsumer.enforceRebalance();
-                }
+                maybeSendShutdown();
                 final Long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
                     cacheResizer.accept(size);
@@ -609,12 +605,14 @@ public class StreamThread extends Thread {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
                 if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    maybeSendShutdown();
                     return false;
                 }
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
                 if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    maybeSendShutdown();
                     return false;
                 }
             }
@@ -629,6 +627,14 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void maybeSendShutdown() {
+        if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.warn("Detected that shutdown was requested. " +
+                    "All clients in this app will now begin to shutdown");
+            mainConsumer.enforceRebalance();
+        }
     }
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
