@@ -30,7 +30,7 @@ class PassThrough<K, V> implements ProcessorSupplier<K, V, K, V> {
 
     private static final class PassThroughProcessor<K, V> extends AbstractProcessor<K, V, K, V> {
         @Override
-        public void process(Record<K, V> record) {
+        public void process(final Record<K, V> record) {
             context().forward(record);
         }
     }
