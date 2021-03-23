@@ -62,6 +62,18 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
+    def consumer_supports_bootstrap_server(self):
+        """
+        Kafka supported a new consumer beginning with v0.9.0 where
+        we can specify --bootstrap-server instead of --zookeeper.
+
+        This version also allowed a --consumer-config file where we could specify
+        a security protocol other than PLAINTEXT.
+
+        :return: true if the version of Kafka supports a new consumer with --bootstrap-server
+        """
+        return self >= V_0_9_0_0
+
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
@@ -89,8 +101,9 @@ class KafkaVersion(LooseVersion):
         # User SCRAM Credentials (KIP-554)
         return self >= V_2_7_0
 
-    def supports_topic_ids(self):
-        # Supports topic IDs as described by KIP-516
+    def supports_topic_ids_when_using_zk(self):
+        # Supports topic IDs as described by KIP-516.
+        # Self-managed clusters always support topic ID, so this method only applies to ZK clusters.
         return self >= V_2_8_0
 
 def get_version(node=None):
@@ -103,7 +116,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("2.8.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("3.0.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -195,3 +208,7 @@ LATEST_2_7 = V_2_7_0
 # 2.8.x versions
 V_2_8_0 = KafkaVersion("2.8.0")
 LATEST_2_8 = V_2_8_0
+
+# 3.0.x versions
+V_3_0_0 = KafkaVersion("3.0.0")
+LATEST_3_0 = V_3_0_0

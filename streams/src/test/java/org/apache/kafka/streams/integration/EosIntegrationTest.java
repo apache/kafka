@@ -99,7 +99,7 @@ public class EosIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         NUM_BROKERS,
-        Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false"))
+        Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true"))
     );
 
     @BeforeClass

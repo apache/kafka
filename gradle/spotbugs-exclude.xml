@@ -95,7 +95,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
     <Match>
-        <Class name="org.apache.kafka.common.record.KafkaLZ4BlockOutputStream"/>
+        <Class name="org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream"/>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 
@@ -354,6 +354,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
              AbstractCoordinator#coordinator.  See KAFKA-4992 for details.-->
         <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short.  -->
+        <Package name="org.apache.kafka.queue"/>
+        <Source name="KafkaEventQueue.java"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
     </Match>
 
     <Match>

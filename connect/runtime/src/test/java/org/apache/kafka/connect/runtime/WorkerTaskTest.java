@@ -26,7 +26,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
@@ -185,26 +184,20 @@ public class WorkerTaskTest {
                 .createStrictMock();
 
         final CountDownLatch stopped = new CountDownLatch(1);
-        final Thread thread = new Thread() {
-            @Override
-            public void run() {
-                try {
-                    stopped.await();
-                } catch (Exception e) {
-                }
+        final Thread thread = new Thread(() -> {
+            try {
+                stopped.await();
+            } catch (Exception e) {
             }
-        };
+        });
 
         workerTask.initialize(TASK_CONFIG);
         EasyMock.expectLastCall();
 
         workerTask.execute();
-        expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                thread.start();
-                return null;
-            }
+        expectLastCall().andAnswer(() -> {
+            thread.start();
+            return null;
         });
 
         statusListener.onStartup(taskId);

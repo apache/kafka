@@ -46,7 +46,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
 
-  override def generateConfigs = {
+  override def generateConfigs: Seq[KafkaConfig] = {
     generateKafkaConfigs()
   }
 
@@ -78,7 +78,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
   @Test
   @Disabled // To be re-enabled once we can make it less flaky (KAFKA-4801)
-  def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
+  def testConsumptionWithBrokerFailures(): Unit = consumeWithBrokerFailures(10)
 
   /*
    * 1. Produce a bunch of messages
@@ -121,7 +121,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @Test
-  def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
+  def testSeekAndCommitWithBrokerFailures(): Unit = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
@@ -476,21 +476,24 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
     val consumer = createConsumerWithGroupId(groupId)
-    consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
+    consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
       def onPartitionsRevoked(partitions: Collection[TopicPartition]): Unit = {
       }})
-    consumer.poll(time.Duration.ofSeconds(3L))
-    assertTrue(assignSemaphore.tryAcquire(1, TimeUnit.SECONDS), "Assignment did not complete on time")
+
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(time.Duration.ofMillis(100L))
+      assignSemaphore.tryAcquire()
+    }, "Assignment did not complete on time")
+
     if (committedRecords > 0)
       assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     consumer.close()
   }
 
-  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false)
-  {
+  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false) {
     var iter: Int = 0
 
     override def doWork(): Unit = {

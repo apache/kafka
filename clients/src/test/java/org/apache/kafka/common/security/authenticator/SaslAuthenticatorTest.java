@@ -16,53 +16,23 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Base64.Encoder;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.Configuration;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.LoginContext;
-import javax.security.auth.login.LoginException;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
-
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslClientAuth;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
@@ -83,23 +53,28 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.SaslAuthenticateRequest;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -108,26 +83,59 @@ import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBea
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SecurityUtils;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
-import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
-
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+import javax.security.sasl.SaslClient;
+import javax.security.sasl.SaslException;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Base64.Encoder;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -250,7 +258,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without username");
@@ -274,7 +282,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without password");
@@ -391,7 +399,7 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "DIGEST-MD5");
             createSelector(securityProtocol, saslClientConfigs);
             selector2 = selector;
-            InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+            InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
             NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
             selector = null; // keeps it from being closed when next one is created
@@ -401,7 +409,7 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
             createSelector(securityProtocol, saslClientConfigs);
             selector3 = selector;
-            selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node3, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
             NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
             server.verifyAuthenticationMetrics(3, 0);
             
@@ -1777,6 +1785,74 @@ public class SaslAuthenticatorTest {
                 "{\"status\":\"insufficient_scope\", \"scope\":\"[LOGIN_TO_KAFKA]\"}");
     }
 
+    @Test
+    public void testSslClientAuthDisabledForSaslSslListener() throws Exception {
+        verifySslClientAuthForSaslSslListener(true, SslClientAuth.NONE);
+    }
+
+    @Test
+    public void testSslClientAuthRequestedForSaslSslListener() throws Exception {
+        verifySslClientAuthForSaslSslListener(true, SslClientAuth.REQUESTED);
+    }
+
+    @Test
+    public void testSslClientAuthRequiredForSaslSslListener() throws Exception {
+        verifySslClientAuthForSaslSslListener(true, SslClientAuth.REQUIRED);
+    }
+
+    @Test
+    public void testSslClientAuthRequestedOverriddenForSaslSslListener() throws Exception {
+        verifySslClientAuthForSaslSslListener(false, SslClientAuth.REQUESTED);
+    }
+
+    @Test
+    public void testSslClientAuthRequiredOverriddenForSaslSslListener() throws Exception {
+        verifySslClientAuthForSaslSslListener(false, SslClientAuth.REQUIRED);
+    }
+
+    private void verifySslClientAuthForSaslSslListener(boolean useListenerPrefix,
+                                                       SslClientAuth configuredClientAuth) throws Exception {
+
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        String listenerPrefix = useListenerPrefix ? ListenerName.forSecurityProtocol(securityProtocol).configPrefix() : "";
+        saslServerConfigs.put(listenerPrefix + BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, configuredClientAuth.name());
+        saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, SaslSslPrincipalBuilder.class.getName());
+        server = createEchoServer(securityProtocol);
+
+        SslClientAuth expectedClientAuth = useListenerPrefix ? configuredClientAuth : SslClientAuth.NONE;
+        String certDn = "O=A client,CN=localhost";
+        KafkaPrincipal principalWithMutualTls = SaslSslPrincipalBuilder.saslSslPrincipal(TestJaasConfig.USERNAME, certDn);
+        KafkaPrincipal principalWithOneWayTls = SaslSslPrincipalBuilder.saslSslPrincipal(TestJaasConfig.USERNAME, "ANONYMOUS");
+
+        // Client configured with valid key store
+        createAndCheckClientConnectionAndPrincipal(securityProtocol, "0",
+                expectedClientAuth == SslClientAuth.NONE ? principalWithOneWayTls : principalWithMutualTls);
+
+        // Client does not configure key store
+        removeClientSslKeystore();
+        if (expectedClientAuth != SslClientAuth.REQUIRED) {
+            createAndCheckClientConnectionAndPrincipal(securityProtocol, "1", principalWithOneWayTls);
+        } else {
+            createAndCheckSslAuthenticationFailure(securityProtocol, "1");
+        }
+
+        // Client configures untrusted key store
+        CertStores newStore = new CertStores(false, "localhost");
+        newStore.keyStoreProps().forEach((k, v) -> saslClientConfigs.put(k, v));
+        if (expectedClientAuth == SslClientAuth.NONE) {
+            createAndCheckClientConnectionAndPrincipal(securityProtocol, "2", principalWithOneWayTls);
+        } else {
+            createAndCheckSslAuthenticationFailure(securityProtocol, "2");
+        }
+    }
+
+    private void removeClientSslKeystore() {
+        saslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        saslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        saslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+    }
+
     private void verifySaslAuthenticateHeaderInterop(boolean enableHeaderOnServer, boolean enableHeaderOnClient,
             SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
         configureMechanisms(saslMechanism, Arrays.asList(saslMechanism));
@@ -1827,31 +1903,18 @@ public class SaslAuthenticatorTest {
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
+
+        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+            ApiVersionCollection versionCollection = new ApiVersionCollection(2);
+            versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
+            versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
+            return new ApiVersionsResponse(new ApiVersionsResponseData().setApiKeys(versionCollection));
+        };
+
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                credentialCache, null, time, new LogContext()) {
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
 
-            @Override
-            protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
-                                                                       Map<String, AuthenticateCallbackHandler> callbackHandlers,
-                                                                       String id,
-                                                                       TransportLayer transportLayer,
-                                                                       Map<String, Subject> subjects,
-                                                                       Map<String, Long> connectionsMaxReauthMsByMechanism,
-                                                                       ChannelMetadataRegistry metadataRegistry) {
-                return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName,
-                        securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time) {
-
-                    @Override
-                    protected ApiVersionsResponse apiVersionsResponse() {
-                        ApiVersionCollection versionCollection = new ApiVersionCollection(2);
-                        versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
-                        versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
-                        return new ApiVersionsResponse(new ApiVersionsResponseData().setApiKeys(versionCollection));
-                    }
-                };
-            }
-        };
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
                 "localhost", serverChannelBuilder, credentialCache, time);
@@ -1869,10 +1932,29 @@ public class SaslAuthenticatorTest {
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
+
+        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+            ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.defaultApiVersionsResponse(
+                ApiMessageType.ListenerType.ZK_BROKER);
+            ApiVersionCollection apiVersions = new ApiVersionCollection();
+            for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
+                if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
+                    // ApiVersion can NOT be reused in second ApiVersionCollection
+                    // due to the internal pointers it contains.
+                    apiVersions.add(apiVersion.duplicate());
+                }
+
+            }
+            ApiVersionsResponseData data = new ApiVersionsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+                .setApiKeys(apiVersions);
+            return new ApiVersionsResponse(data);
+        };
+
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                credentialCache, null, time, new LogContext()) {
-
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -1882,27 +1964,7 @@ public class SaslAuthenticatorTest {
                                                                        Map<String, Long> connectionsMaxReauthMsByMechanism,
                                                                        ChannelMetadataRegistry metadataRegistry) {
                 return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName,
-                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time) {
-
-                    @Override
-                    protected ApiVersionsResponse apiVersionsResponse() {
-                        ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-                        ApiVersionCollection apiVersions = new ApiVersionCollection();
-                        for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
-                            if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
-                                // ApiVersion can NOT be reused in second ApiVersionCollection
-                                // due to the internal pointers it contains.
-                                apiVersions.add(apiVersion.duplicate());
-                            }
-
-                        }
-                        ApiVersionsResponseData data = new ApiVersionsResponseData()
-                            .setErrorCode(Errors.NONE.code())
-                            .setThrottleTimeMs(0)
-                            .setApiKeys(apiVersions);
-                        return new ApiVersionsResponse(data);
-                    }
-
+                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier) {
                     @Override
                     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
                         // Don't enable Kafka SASL_AUTHENTICATE headers
@@ -1927,7 +1989,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                null, null, time, new LogContext()) {
+                null, null, null, time, new LogContext(), null) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -1954,7 +2016,7 @@ public class SaslAuthenticatorTest {
         };
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 
@@ -2020,7 +2082,7 @@ public class SaslAuthenticatorTest {
     private void authenticateUsingSaslPlainAndCheckConnection(String node, boolean enableSaslAuthenticateHeader) throws Exception {
         // Authenticate using PLAIN username/password
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
-        ByteBuffer authBuf = ByteBuffer.wrap(authString.getBytes("UTF-8"));
+        ByteBuffer authBuf = ByteBuffer.wrap(Utils.utf8(authString));
         if (enableSaslAuthenticateHeader) {
             SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
             SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
@@ -2127,6 +2189,27 @@ public class SaslAuthenticatorTest {
         } finally {
             closeClientConnectionIfNecessary();
         }
+    }
+
+    private void createAndCheckClientConnectionAndPrincipal(SecurityProtocol securityProtocol,
+                                                            String node,
+                                                            KafkaPrincipal expectedPrincipal) throws Exception {
+        try {
+            assertEquals(Collections.emptyList(), server.selector().channels());
+            createClientConnection(securityProtocol, node);
+            NetworkTestUtils.waitForChannelReady(selector, node);
+            assertEquals(expectedPrincipal, server.selector().channels().get(0).principal());
+            checkClientConnection(node);
+        } finally {
+            closeClientConnectionIfNecessary();
+            TestUtils.waitForCondition(() -> server.selector().channels().isEmpty(), "Channel not removed after disconnection");
+        }
+    }
+
+    private void createAndCheckSslAuthenticationFailure(SecurityProtocol securityProtocol, String node) throws Exception {
+        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
+        Exception exception = finalState.exception();
+        assertEquals(SslAuthenticationException.class, exception.getClass());
     }
 
     private void checkAuthenticationAndReauthentication(SecurityProtocol securityProtocol, String node)
@@ -2448,7 +2531,8 @@ public class SaslAuthenticatorTest {
                 String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
                 DelegationTokenCache tokenCache, Time time) {
             super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
-                    handshakeRequestEnable, credentialCache, tokenCache, time, new LogContext());
+                handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         }
 
         @Override
@@ -2467,6 +2551,27 @@ public class SaslAuthenticatorTest {
                                 new SaslHandshakeRequestData().setMechanism("PLAIN")).build(version);
                     }
                 };
+        }
+    }
+
+    public static class SaslSslPrincipalBuilder implements KafkaPrincipalBuilder {
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
+            assertTrue(saslContext.sslSession().isPresent());
+            String sslPrincipal;
+            try {
+                sslPrincipal = saslContext.sslSession().get().getPeerPrincipal().getName();
+            } catch (SSLPeerUnverifiedException e) {
+                sslPrincipal = KafkaPrincipal.ANONYMOUS.getName();
+            }
+            String saslPrincipal = saslContext.server().getAuthorizationID();
+            return saslSslPrincipal(saslPrincipal, sslPrincipal);
+        }
+
+        static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
         }
     }
 }

@@ -44,7 +44,7 @@ public class StopReplicaResponseTest {
                 new StopReplicaPartitionState().setPartitionIndex(0),
                 new StopReplicaPartitionState().setPartitionIndex(1))));
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version : STOP_REPLICA.allVersions()) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version,
                 15, 20, 0, false, topicStates).build(version);
             StopReplicaResponse response = request

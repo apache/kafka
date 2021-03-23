@@ -50,7 +50,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +57,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -65,6 +65,22 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static int NUM_BROKERS = 1;
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final static MockTime MOCK_TIME = CLUSTER.time;
+    private final static String TABLE_1 = "table1";
+    private final static String TABLE_2 = "table2";
+    private final static String TABLE_3 = "table3";
+    private final static String OUTPUT = "output-";
+    private final Properties streamsConfig = getStreamsConfig();
+    private final Properties streamsConfigTwo = getStreamsConfig();
+    private final Properties streamsConfigThree = getStreamsConfig();
+    private KafkaStreams streams;
+    private KafkaStreams streamsTwo;
+    private KafkaStreams streamsThree;
+    private final static Properties CONSUMER_CONFIG = new Properties();
+
+    private final static Properties PRODUCER_CONFIG_1 = new Properties();
+    private final static Properties PRODUCER_CONFIG_2 = new Properties();
+    private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeClass
     public static void startCluster() throws IOException, InterruptedException {
@@ -91,32 +107,25 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-
-        final List<KeyValue<Integer, Float>> table1 = Arrays.asList(
-                new KeyValue<>(1, 1.33f),
-                new KeyValue<>(2, 2.22f),
-                new KeyValue<>(3, -1.22f), //Won't be joined in yet.
-                new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
+        final List<KeyValue<Integer, Float>> table1 = asList(
+            new KeyValue<>(1, 1.33f),
+            new KeyValue<>(2, 2.22f),
+            new KeyValue<>(3, -1.22f), //Won't be joined in yet.
+            new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
         );
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-        final List<KeyValue<String, Long>> table2 = Arrays.asList(
-                new KeyValue<>("0", 0L),  //partition 2
-                new KeyValue<>("1", 10L), //partition 0
-                new KeyValue<>("2", 20L), //partition 2
-                new KeyValue<>("3", 30L), //partition 2
-                new KeyValue<>("4", 40L), //partition 1
-                new KeyValue<>("5", 50L), //partition 0
-                new KeyValue<>("6", 60L), //partition 1
-                new KeyValue<>("7", 70L), //partition 0
-                new KeyValue<>("8", 80L), //partition 0
-                new KeyValue<>("9", 90L)  //partition 2
+        final List<KeyValue<String, Long>> table2 = asList(
+            new KeyValue<>("0", 0L),  //partition 2
+            new KeyValue<>("1", 10L), //partition 0
+            new KeyValue<>("2", 20L), //partition 2
+            new KeyValue<>("3", 30L), //partition 2
+            new KeyValue<>("4", 40L), //partition 1
+            new KeyValue<>("5", 50L), //partition 0
+            new KeyValue<>("6", 60L), //partition 1
+            new KeyValue<>("7", 70L), //partition 0
+            new KeyValue<>("8", 80L), //partition 0
+            new KeyValue<>("9", 90L)  //partition 2
         );
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
@@ -139,24 +148,14 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         CLUSTER.stop();
     }
 
-    private final static MockTime MOCK_TIME = CLUSTER.time;
-    private final static String TABLE_1 = "table1";
-    private final static String TABLE_2 = "table2";
-    private final static String TABLE_3 = "table3";
-    private final static String OUTPUT = "output-";
-    private static Properties streamsConfig;
-    private KafkaStreams streams;
-    private KafkaStreams streamsTwo;
-    private KafkaStreams streamsThree;
-    private final static Properties CONSUMER_CONFIG = new Properties();
-
-    private final static Properties PRODUCER_CONFIG_1 = new Properties();
-    private final static Properties PRODUCER_CONFIG_2 = new Properties();
-    private final static Properties PRODUCER_CONFIG_3 = new Properties();
-
     @Before
     public void before() throws IOException {
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
+        streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
+        streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
+
+        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
     @After
@@ -193,11 +192,10 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
                                         final boolean verifyQueryableState) throws Exception {
         final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
         final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType + queryableName);
 
-        streams = prepareTopology(queryableName, queryableNameTwo);
-        streamsTwo = prepareTopology(queryableName, queryableNameTwo);
-        streamsThree = prepareTopology(queryableName, queryableNameTwo);
+        streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
+        streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
+        streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
         streams.start();
         streamsTwo.start();
         streamsThree.start();
@@ -210,7 +208,20 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         assertEquals(expectedResult, result);
     }
 
-    private KafkaStreams prepareTopology(final String queryableName, final String queryableNameTwo) {
+    private static Properties getStreamsConfig() {
+        final Properties streamsConfig = new Properties();
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "KTable-FKJ-Multi");
+        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        return streamsConfig;
+    }
+
+    private static KafkaStreams prepareTopology(final String queryableName,
+                                                final String queryableNameTwo,
+                                                final Properties streamsConfig) {
+
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
         final StreamsBuilder builder = new StreamsBuilder();
 

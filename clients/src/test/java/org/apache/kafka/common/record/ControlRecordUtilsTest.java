@@ -19,6 +19,8 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -50,7 +52,7 @@ public class ControlRecordUtilsTest {
                                                new Voter().setVoterId(voterId)));
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(256);
-        data.toStruct(data.highestSupportedVersion()).writeTo(valueBuffer);
+        data.write(new ByteBufferAccessor(valueBuffer), new ObjectSerializationCache(), data.highestSupportedVersion());
         valueBuffer.flip();
 
         byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType.type};

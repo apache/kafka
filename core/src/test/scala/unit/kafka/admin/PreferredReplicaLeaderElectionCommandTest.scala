@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
-
 import scala.collection.Seq
 import kafka.common.AdminCommandFailedException
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -69,9 +69,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    partitionsAndAssignments.foreach { case (tp, assignment) =>
-      zkClient.createTopicAssignment(tp.topic, Some(Uuid.randomUuid()),
-      Map(tp -> assignment))
+    partitionsAndAssignments.forKeyValue { (tp, assignment) =>
+      zkClient.createTopicAssignment(tp.topic, Some(Uuid.randomUuid()), Map(tp -> assignment))
     }
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(

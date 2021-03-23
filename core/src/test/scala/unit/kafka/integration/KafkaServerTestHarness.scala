@@ -30,7 +30,7 @@ import scala.collection.Seq
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
@@ -85,6 +85,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
   protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
+  protected def enableForwarding: Boolean = false
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -98,8 +99,14 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs)
-      servers += TestUtils.createServer(config, time = brokerTime(config.brokerId))
+    for (config <- configs) {
+      servers += TestUtils.createServer(
+        config,
+        time = brokerTime(config.brokerId),
+        threadNamePrefix = None,
+        enableForwarding
+      )
+    }
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
@@ -166,6 +173,19 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
       val cache = server.credentialProvider.credentialCache.cache(mechanismName, classOf[ScramCredential])
       TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
     }
+  }
+
+  def getController(): KafkaServer = {
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    servers.filter(s => s.config.brokerId == controllerId).head
+  }
+
+  def getTopicIds(): Map[String, Uuid] = {
+    getController().kafkaController.controllerContext.topicIds.toMap
+  }
+
+  def getTopicNames(): Map[Uuid, String] = {
+    getController().kafkaController.controllerContext.topicNames.toMap
   }
 
 }

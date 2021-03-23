@@ -21,7 +21,6 @@ import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -129,11 +128,11 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
 
-    private val zookeeperOptBuilder: OptionSpecBuilder = parser.accepts("zookeeper",
+    private val zookeeperOptBuilder = parser.accepts("zookeeper",
       "DEPRECATED. The connection string for the zookeeper connection in the " +
       "form host:port. Multiple URLS can be given to allow fail-over. " +
       "Replaced by --bootstrap-server, REQUIRED unless --bootstrap-server is given.")
-    private val bootstrapOptBuilder: OptionSpecBuilder = parser.accepts("bootstrap-server",
+    private val bootstrapOptBuilder = parser.accepts("bootstrap-server",
       "A hostname and port for the broker to connect to, " +
       "in the form host:port. Multiple comma-separated URLs can be given. REQUIRED unless --zookeeper is given.")
     parser.mutuallyExclusive(zookeeperOptBuilder, bootstrapOptBuilder)

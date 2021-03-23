@@ -165,6 +165,6 @@ public class ConnectMetricsTest {
     }
 
     static MetricName metricName(String name) {
-        return new MetricName(name, "test_group", "metrics for testing", Collections.<String, String>emptyMap());
+        return new MetricName(name, "test_group", "metrics for testing", Collections.emptyMap());
     }
 }

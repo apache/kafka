@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
@@ -845,14 +846,14 @@ public class ValuesTest {
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Float);
-        assertEquals(value.floatValue(), ((Float) schemaAndValue.value()).floatValue(), 0);
+        assertEquals(value, (Float) schemaAndValue.value(), 0);
         value = -Float.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Float);
-        assertEquals(value.floatValue(), ((Float) schemaAndValue.value()).floatValue(), 0);
+        assertEquals(value, (Float) schemaAndValue.value(), 0);
     }
 
     @Test
@@ -863,14 +864,14 @@ public class ValuesTest {
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Double);
-        assertEquals(value.doubleValue(), ((Double) schemaAndValue.value()).doubleValue(), 0);
+        assertEquals(value, (Double) schemaAndValue.value(), 0);
         value = -Double.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Double);
-        assertEquals(value.doubleValue(), ((Double) schemaAndValue.value()).doubleValue(), 0);
+        assertEquals(value, (Double) schemaAndValue.value(), 0);
     }
 
     protected void assertParsed(String input) {
@@ -911,7 +912,7 @@ public class ValuesTest {
 
     protected void assertConsumable(Parser parser, String... expectedTokens) {
         for (String expectedToken : expectedTokens) {
-            if (!expectedToken.trim().isEmpty()) {
+            if (!Utils.isBlank(expectedToken)) {
                 int position = parser.mark();
                 assertTrue(parser.canConsume(expectedToken.trim()));
                 parser.rewindTo(position);

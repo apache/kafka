@@ -49,11 +49,9 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -188,7 +186,7 @@ public final class MessageTest {
                 .setPartitions(Collections.singletonList(partition)));
         Supplier<ListOffsetsResponseData> response = () -> new ListOffsetsResponseData()
                 .setTopics(topics);
-        for (short version = 0; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
+        for (short version : ApiKeys.LIST_OFFSETS.allVersions()) {
             ListOffsetsResponseData responseData = response.get();
             if (version > 0) {
                 responseData.topics().get(0).partitions().get(0)
@@ -461,7 +459,7 @@ public final class MessageTest {
                             ))))
                     .setRetentionTimeMs(20);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequestData requestData = request.get();
             if (version < 1) {
                 requestData.setMemberId("");
@@ -487,7 +485,7 @@ public final class MessageTest {
             if (version == 1) {
                 testEquivalentMessageRoundTrip(version, requestData);
             } else if (version >= 2 && version <= 4) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 4, requestData, requestData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 5, requestData, requestData);
             } else {
                 testAllMessageRoundTripsFromVersion(version, requestData);
             }
@@ -511,7 +509,7 @@ public final class MessageTest {
                       )
                       .setThrottleTimeMs(20);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitResponseData responseData = response.get();
             if (version < 3) {
                 responseData.setThrottleTimeMs(0);
@@ -570,7 +568,7 @@ public final class MessageTest {
                                       .setCommittedOffset(offset)
                               ))));
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             TxnOffsetCommitRequestData requestData = request.get();
             if (version < 2) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
@@ -634,10 +632,10 @@ public final class MessageTest {
                                                        .setTopics(topics)
                                                        .setRequireStable(true);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             final short finalVersion = version;
             if (version < 2) {
-                assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
+                assertThrows(NullPointerException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
             }
@@ -663,7 +661,7 @@ public final class MessageTest {
                                       .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())))))
                       .setErrorCode(Errors.NOT_COORDINATOR.code())
                       .setThrottleTimeMs(10);
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             OffsetFetchResponseData responseData = response.get();
             if (version <= 1) {
                 responseData.setErrorCode(Errors.NONE.code());
@@ -722,7 +720,7 @@ public final class MessageTest {
                                  .setErrorMessage(errorMessage)))).iterator()))
                 .setThrottleTimeMs(throttleTimeMs);
 
-        for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
+        for (short version : ApiKeys.PRODUCE.allVersions()) {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
@@ -743,12 +741,19 @@ public final class MessageTest {
             }
 
             if (version >= 3 && version <= 4) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 4, responseData, responseData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 5, responseData, responseData);
             } else if (version >= 6 && version <= 7) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 7, responseData, responseData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 8, responseData, responseData);
             } else {
                 testEquivalentMessageRoundTrip(version, responseData);
             }
+        }
+    }
+
+    @Test
+    public void defaultValueShouldBeWritable() {
+        for (short version = SimpleExampleMessageData.LOWEST_SUPPORTED_VERSION; version <= SimpleExampleMessageData.HIGHEST_SUPPORTED_VERSION; ++version) {
+            MessageUtil.toByteBuffer(new SimpleExampleMessageData(), version);
         }
     }
 
@@ -809,11 +814,9 @@ public final class MessageTest {
 
     private void testMessageRoundTrip(short version, Message message, Message expected) throws Exception {
         testByteBufferRoundTrip(version, message, expected);
-        testStructRoundTrip(version, message, expected);
     }
 
     private void testEquivalentMessageRoundTrip(short version, Message message) throws Exception {
-        testStructRoundTrip(version, message, message);
         testByteBufferRoundTrip(version, message, message);
         testJsonRoundTrip(version, message, message);
     }
@@ -837,16 +840,6 @@ public final class MessageTest {
         assertEquals(expected.toString(), message2.toString());
     }
 
-    private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
-        Struct struct = message.toStruct(version);
-        Message message2 = message.getClass().getConstructor().newInstance();
-        message2.fromStruct(struct, version);
-        assertEquals(expected, message2);
-        assertEquals(expected.hashCode(), message2.hashCode());
-        assertEquals(expected.toString(), message2.toString());
-    }
-
-    @SuppressWarnings("unchecked")
     private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
         String jsonConverter = jsonConverterTypeName(message.getClass().getTypeName());
         Class<?> converter = Class.forName(jsonConverter);
@@ -896,33 +889,6 @@ public final class MessageTest {
         }
     }
 
-    private static class NamedType {
-        final String name;
-        final Type type;
-
-        NamedType(String name, Type type) {
-            this.name = name;
-            this.type = type;
-        }
-
-        boolean hasSimilarType(NamedType other) {
-            if (type.getClass().equals(other.type.getClass())) {
-                return true;
-            }
-            if (type.getClass().equals(Type.RECORDS.getClass())) {
-                return other.type.getClass().equals(Type.NULLABLE_BYTES.getClass());
-            } else if (type.getClass().equals(Type.NULLABLE_BYTES.getClass())) {
-                return other.type.getClass().equals(Type.RECORDS.getClass());
-            }
-            return false;
-        }
-
-        @Override
-        public String toString() {
-            return name + "[" + type + "]";
-        }
-    }
-
     @Test
     public void testDefaultValues() {
         verifyWriteRaisesUve((short) 0, "validateOnly",
@@ -958,8 +924,8 @@ public final class MessageTest {
     @Test
     public void testWriteNullForNonNullableFieldRaisesException() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
-        for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
-            verifyWriteRaisesNpe(i, createTopics);
+        for (short version : ApiKeys.CREATE_TOPICS.allVersions()) {
+            verifyWriteRaisesNpe(version, createTopics);
         }
         MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
         verifyWriteRaisesNpe((short) 0, metadata);
@@ -1006,12 +972,6 @@ public final class MessageTest {
         ByteBuffer buf = ByteBuffer.allocate(size * 2);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, cache, version);
-        ByteBuffer alt = buf.duplicate();
-        alt.flip();
-        StringBuilder bld = new StringBuilder();
-        while (alt.hasRemaining()) {
-            bld.append(String.format(" %02x", alt.get()));
-        }
         assertEquals(size, buf.position(), "Expected the serialized size to be " + size + ", but it was " + buf.position());
     }
 

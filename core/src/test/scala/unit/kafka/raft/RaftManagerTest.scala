@@ -21,15 +21,15 @@ import java.util.concurrent.CompletableFuture
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import org.apache.kafka.raft.KafkaRaftClient
 import org.junit.jupiter.api.Assertions._
-import org.mockito.Mockito._
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito._
 
 class RaftManagerTest {
 
   @Test
   def testShutdownIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient)
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)
@@ -52,7 +52,7 @@ class RaftManagerTest {
   @Test
   def testUncaughtExceptionInIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient)
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)

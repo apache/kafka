@@ -23,17 +23,19 @@
       "about": "The partition id." },
     { "name": "TopicId", "type": "uuid", "versions": "0+",
       "about": "The unique ID of this topic." },
-    { "name": "Replicas", "type":  "[]int32", "versions":  "0+",
+    { "name": "Replicas", "type":  "[]int32", "versions":  "0+", "entityType": "brokerId",
       "about": "The replicas of this partition, sorted by preferred order." },
     { "name": "Isr", "type":  "[]int32", "versions":  "0+",
       "about": "The in-sync replicas of this partition" },
-    { "name": "RemovingReplicas", "type":  "[]int32", "versions":  "0+", "nullableVersions": "0+",
+    { "name": "RemovingReplicas", "type":  "[]int32", "versions":  "0+", "nullableVersions": "0+", "entityType": "brokerId",
       "about": "The replicas that we are in the process of removing." },
-    { "name": "AddingReplicas", "type":  "[]int32", "versions":  "0+", "nullableVersions": "0+",
+    { "name": "AddingReplicas", "type":  "[]int32", "versions":  "0+", "nullableVersions": "0+", "entityType": "brokerId",
       "about": "The replicas that we are in the process of adding." },
-    { "name": "Leader", "type": "int32", "versions": "0+", "default": "-1",
+    { "name": "Leader", "type": "int32", "versions": "0+", "default": "-1", "entityType": "brokerId",
       "about": "The lead replica, or -1 if there is no leader." },
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
-      "about": "An epoch that gets incremented each time we change the ISR." }
+      "about": "The epoch of the partition leader." },
+    { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "An epoch that gets incremented each time we change anything in the partition." }
   ]
 }

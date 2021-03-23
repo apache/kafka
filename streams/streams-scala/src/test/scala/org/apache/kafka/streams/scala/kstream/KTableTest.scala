@@ -19,7 +19,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
-import org.apache.kafka.streams.kstream.{SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
+import org.apache.kafka.streams.kstream.{Named, SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.time.Duration
+import scala.jdk.CollectionConverters._
 
 class KTableTest extends TestDriver {
 
@@ -396,5 +397,58 @@ class KTableTest extends TestDriver {
     assertTrue(testOutput.isEmpty)
 
     testDriver.close()
+  }
+
+  @Test
+  def testSettingNameOnFilterProcessor(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count()
+    table
+      .filter((key, value) => key.equals("a") && value == 1, Named.as("my-name"))
+      .toStream
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val filterNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(3)
+    assertEquals("my-name", filterNode.name())
+  }
+
+  @Test
+  def testSettingNameOnCountProcessor(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count(Named.as("my-name"))
+    table.toStream.to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val countNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(1)
+    assertEquals("my-name", countNode.name())
+  }
+
+  @Test
+  def testSettingNameOnJoinProcessor(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sourceTopic2 = "source2"
+    val sinkTopic = "sink"
+
+    val table1 = builder.stream[String, String](sourceTopic1).groupBy((key, _) => key).count()
+    val table2 = builder.stream[String, String](sourceTopic2).groupBy((key, _) => key).count()
+    table1
+      .join(table2, Named.as("my-name"))((a, b) => a + b)
+      .toStream
+      .to(sinkTopic)
+
+    val joinNodeLeft = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(6)
+    val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
+    assertEquals("my-name", joinNodeLeft.name())
+    assertEquals("my-name", joinNodeRight.name())
   }
 }

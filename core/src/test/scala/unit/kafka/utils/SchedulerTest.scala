@@ -127,7 +127,7 @@ class SchedulerTest {
       topicPartition, producerStateManager, new LogDirFailureChannel(10))
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
-    assertTrue(!(scheduler.taskRunning(log.producerExpireCheck)))
+    assertFalse(scheduler.taskRunning(log.producerExpireCheck))
   }
 
   /**

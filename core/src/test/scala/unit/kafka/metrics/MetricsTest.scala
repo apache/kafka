@@ -33,14 +33,16 @@ import scala.jdk.CollectionConverters._
 import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.JmxReporter
+import org.apache.kafka.common.utils.Time
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
 
+  val requiredKafkaServerPrefix = "kafka.server:type=KafkaServer,name"
   val overridingProps = new Properties
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-  overridingProps.put(JmxReporter.EXCLUDE_CONFIG, "kafka.server:type=KafkaServer,name=ClusterId")
+  overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
@@ -74,7 +76,32 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=ClusterId"), 1)
+  }
+
+  @Test
+  def testBrokerStateMetric(): Unit = {
+    // Check if BrokerState metric exists.
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=BrokerState"), 1)
+  }
+
+  @Test
+  def testYammerMetricsCountMetric(): Unit = {
+    // Check if yammer-metrics-count metric exists.
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=yammer-metrics-count"), 1)
+  }
+
+  @Test
+  def testLinuxIoMetrics(): Unit = {
+    // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
+    // able to collect those metrics on the platform where this test is running.
+    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying).usable()
+    val expectedCount = if (usable) 1 else 0
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
+      assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
   @Test
@@ -83,7 +110,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
     assertFalse(ManagementFactory.getPlatformMBeanServer
-                  .isRegistered(new ObjectName("kafka.server:type=KafkaServer,name=ClusterId")))
+                  .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
   @Test
@@ -95,7 +122,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
     assertTrue(ManagementFactory.getPlatformMBeanServer
-                  .isRegistered(new ObjectName("kafka.server:type=KafkaServer,name=ClusterId")))
+                  .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
   @Test

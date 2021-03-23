@@ -55,6 +55,23 @@ public class MirrorCheckpointConnectorTest {
     }
 
     @Test
+    public void testMirrorCheckpointConnectorEnabled() {
+        // enable the checkpoint emission
+        MirrorConnectorConfig config = new MirrorConnectorConfig(
+                makeProps("emit.checkpoints.enabled", "true"));
+
+        List<String> knownConsumerGroups = new ArrayList<>();
+        knownConsumerGroups.add("consumer-group-1");
+        // MirrorCheckpointConnector as minimum to run taskConfig()
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
+                config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect 1 task will be created
+        assertEquals(1, output.size());
+        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
+    }
+
+    @Test
     public void testNoConsumerGroup() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new ArrayList<>(), config);
@@ -78,6 +95,21 @@ public class MirrorCheckpointConnectorTest {
     }
 
     @Test
+    public void testReplicationEnabled() {
+        // enable the replication
+        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("enabled", "true"));
+
+        List<String> knownConsumerGroups = new ArrayList<>();
+        knownConsumerGroups.add("consumer-group-1");
+        // MirrorCheckpointConnector as minimum to run taskConfig()
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups, config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect 1 task will be created
+        assertEquals(1, output.size());
+        assertEquals("consumer-group-1", output.get(0).get(MirrorConnectorConfig.TASK_CONSUMER_GROUPS));
+    }
+
+    @Test
     public void testFindConsumerGroups() throws Exception {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptyList(), config);
@@ -90,7 +122,7 @@ public class MirrorCheckpointConnectorTest {
         doReturn(true).when(connector).shouldReplicate(anyString());
         List<String> groupFound = connector.findConsumerGroups();
 
-        Set<String> expectedGroups = groups.stream().map(g -> g.groupId()).collect(Collectors.toSet());
+        Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
         assertEquals(expectedGroups, new HashSet<>(groupFound));
     }
 

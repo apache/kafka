@@ -232,8 +232,8 @@ public class KafkaStreamsTest {
         EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(0L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(1L).anyTimes();
-        prepareStreamThread(streamThreadOne, true);
-        prepareStreamThread(streamThreadTwo, false);
+        prepareStreamThread(streamThreadOne, 1, true);
+        prepareStreamThread(streamThreadTwo, 2, false);
 
         // setup global threads
         final AtomicReference<GlobalStreamThread.State> globalThreadState = new AtomicReference<>(GlobalStreamThread.State.CREATED);
@@ -293,7 +293,7 @@ public class KafkaStreamsTest {
         );
     }
 
-    private void prepareStreamThread(final StreamThread thread, final boolean terminable) throws Exception {
+    private void prepareStreamThread(final StreamThread thread, final int threadId, final boolean terminable) throws Exception {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
@@ -319,13 +319,25 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
-        EasyMock.expect(thread.threadMetadata()).andStubReturn(threadMetadata);
-        thread.waitOnThreadState(StreamThread.State.DEAD);
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.getGroupInstanceID()).andStubReturn(Optional.empty());
+        EasyMock.expect(thread.threadMetadata()).andReturn(new ThreadMetadata(
+                "processId-StreamThread-" + threadId,
+                "DEAD",
+                "",
+                "",
+                Collections.emptySet(),
+                "",
+                Collections.emptySet(),
+                Collections.emptySet()
+            )
+        ).anyTimes();
+        EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
         thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
-        EasyMock.expect(thread.getName()).andStubReturn("newThread");
+        thread.requestLeaveGroupDuringShutdown();
+        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.getName()).andStubReturn("processId-StreamThread-" + threadId);
         thread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
@@ -429,70 +441,6 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void stateShouldTransitToErrorIfAllThreadsDead() throws InterruptedException {
-        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.setStateListener(streamsStateListener);
-
-        Assert.assertEquals(0, streamsStateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.CREATED, streams.state());
-
-        streams.start();
-
-        TestUtils.waitForCondition(
-            () -> streamsStateListener.numChanges == 2,
-            "Streams never started.");
-        Assert.assertEquals(KafkaStreams.State.RUNNING, streams.state());
-
-        for (final StreamThread thread : streams.threads) {
-            threadStatelistenerCapture.getValue().onChange(
-                thread,
-                StreamThread.State.PARTITIONS_REVOKED,
-                StreamThread.State.RUNNING);
-        }
-
-        Assert.assertEquals(3, streamsStateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
-
-        threadStatelistenerCapture.getValue().onChange(
-            streams.threads.get(NUM_THREADS - 1),
-            StreamThread.State.PENDING_SHUTDOWN,
-            StreamThread.State.PARTITIONS_REVOKED);
-
-        threadStatelistenerCapture.getValue().onChange(
-            streams.threads.get(NUM_THREADS - 1),
-            StreamThread.State.DEAD,
-            StreamThread.State.PENDING_SHUTDOWN);
-
-        Assert.assertEquals(3, streamsStateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
-
-        for (final StreamThread thread : streams.threads) {
-            if (thread != streams.threads.get(NUM_THREADS - 1)) {
-                threadStatelistenerCapture.getValue().onChange(
-                    thread,
-                    StreamThread.State.PENDING_SHUTDOWN,
-                    StreamThread.State.PARTITIONS_REVOKED);
-
-                threadStatelistenerCapture.getValue().onChange(
-                    thread,
-                    StreamThread.State.DEAD,
-                    StreamThread.State.PENDING_SHUTDOWN);
-            }
-        }
-
-        Assert.assertEquals(4, streamsStateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.ERROR, streams.state());
-
-        streams.close();
-
-        // the state should not stuck with ERROR, but transit to NOT_RUNNING in the end
-        TestUtils.waitForCondition(
-            () -> streamsStateListener.numChanges == 6,
-            "Streams never closed.");
-        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
-    }
-
-    @Test
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
@@ -535,8 +483,9 @@ public class KafkaStreamsTest {
                 streams.threads.get(i).join();
             }
             TestUtils.waitForCondition(
-                () -> streams.state() == KafkaStreams.State.ERROR,
-                "Streams never stopped.");
+                () -> streams.localThreadsMetadata().stream().allMatch(t -> t.threadState().equals("DEAD")),
+                "Streams never stopped"
+            );
         } finally {
             streams.close();
         }
@@ -567,12 +516,18 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
-            assertEquals(streams.state(), KafkaStreams.State.ERROR);
+            TestUtils.waitForCondition(
+                () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
+                "Thread never stopped."
+            );
         } finally {
             streams.close();
         }
 
-        assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.ERROR,
+            "Thread never stopped."
+        );
     }
 
     @Test
@@ -609,7 +564,7 @@ public class KafkaStreamsTest {
         streams.start();
         final int oldSize = streams.threads.size();
         TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-        assertThat(streams.addStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
         assertThat(streams.threads.size(), equalTo(oldSize + 1));
     }
 
@@ -635,8 +590,7 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         final int oldSize = streams.threads.size();
         streams.start();
-        streamThreadOne.shutdown();
-        streamThreadTwo.shutdown();
+        globalStreamThread.shutdown();
         assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
         assertThat(streams.threads.size(), equalTo(oldSize));
     }
@@ -659,7 +613,7 @@ public class KafkaStreamsTest {
         final int oldSize = streams.threads.size();
         TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
             "Kafka Streams client did not reach state RUNNING");
-        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 1)));
         assertThat(streams.threads.size(), equalTo(oldSize - 1));
     }
 
@@ -926,6 +880,8 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             EasyMock.eq(true)
         ).andReturn(stateDirectory);
+        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
+        stateDirectory.close();
         PowerMock.replayAll(Executors.class, cleanupSchedule, stateDirectory);
 
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
@@ -1095,6 +1051,7 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             EasyMock.eq(shouldFilesExist)
         ).andReturn(stateDirectory);
+        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
 
         PowerMock.replayAll();
 

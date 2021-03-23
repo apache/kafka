@@ -45,18 +45,20 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListOffsetsResponseData;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -91,8 +93,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.common.metrics.stats.Avg;
-
 import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
@@ -112,6 +112,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -2041,6 +2042,45 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
+    @Test
+    public void testCurrentLag() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer =
+            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        // throws for unassigned partition
+        assertThrows(IllegalStateException.class, () -> consumer.currentLag(tp0));
+
+        consumer.assign(singleton(tp0));
+
+        // no error for no current position
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+
+        consumer.seek(tp0, 50L);
+
+        // no error for no end offset (so unknown lag)
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+
+        final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
+        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
+
+        final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(5, records.count());
+        assertEquals(55L, consumer.position(tp0));
+
+        // correct lag result
+        assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
+
+        consumer.close(Duration.ZERO);
+    }
+
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
@@ -2236,12 +2276,14 @@ public class KafkaConsumerTest {
         return new ListOffsetsResponse(data);
     }
 
-    private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> tpResponses = new LinkedHashMap<>();
+    private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
+            final long highWatermark = fetchEntry.getValue().logLastOffset + 1;
+            final long logStartOffset = fetchEntry.getValue().logFirstOffset;
             final MemoryRecords records;
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
@@ -2252,14 +2294,17 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition, new FetchResponse.PartitionData<>(
-                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                    0L, null, records));
+            tpResponses.put(partition,
+                new FetchResponseData.PartitionData()
+                    .setPartitionIndex(partition.partition())
+                    .setHighWatermark(highWatermark)
+                    .setLogStartOffset(logStartOffset)
+                    .setRecords(records));
         }
-        return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
-    private FetchResponse<MemoryRecords> fetchResponse(TopicPartition partition, long fetchOffset, int count) {
+    private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
         FetchInfo fetchInfo = new FetchInfo(fetchOffset, count);
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }
@@ -2379,10 +2424,18 @@ public class KafkaConsumerTest {
     }
 
     private static class FetchInfo {
+        long logFirstOffset;
+        long logLastOffset;
         long offset;
         int count;
 
         FetchInfo(long offset, int count) {
+            this(0L, offset + count, offset, count);
+        }
+
+        FetchInfo(long logFirstOffset, long logLastOffset, long offset, int count) {
+            this.logFirstOffset = logFirstOffset;
+            this.logLastOffset = logLastOffset;
             this.offset = offset;
             this.count = count;
         }

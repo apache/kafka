@@ -128,9 +128,11 @@ class Tasks {
         if (activeTasksPerId.remove(activeTask.id()) == null) {
             throw new IllegalStateException("Attempted to convert unknown active task to standby task: " + activeTask.id());
         }
-        activeTasksPerPartition.entrySet().stream()
+        final Set<TopicPartition> toBeRemoved = activeTasksPerPartition.entrySet().stream()
             .filter(e -> e.getValue().id().equals(activeTask.id()))
-            .forEach(e -> activeTasksPerPartition.remove(e.getKey()));
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
+        toBeRemoved.forEach(activeTasksPerPartition::remove);
 
         cleanUpTaskProducerAndRemoveTask(activeTask.id(), taskCloseExceptions);
 

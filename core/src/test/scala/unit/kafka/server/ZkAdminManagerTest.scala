@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.zk.KafkaZkClient
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
 import org.easymock.EasyMock
 import kafka.utils.TestUtils
@@ -25,13 +25,16 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import java.util.Properties
+
+import kafka.server.metadata.ZkConfigRepository
+
+import scala.jdk.CollectionConverters._
 
 class ZkAdminManagerTest {
 
@@ -46,9 +49,9 @@ class ZkAdminManagerTest {
     metrics.close()
   }
 
-  def createAdminManager(): ZkAdminManager = {
+  def createConfigHelper(metadataCache: MetadataCache, zkClient: KafkaZkClient): ConfigHelper = {
     val props = TestUtils.createBrokerConfig(brokerId, "zk")
-    new ZkAdminManager(KafkaConfig.fromProps(props), metrics, metadataCache, zkClient)
+    new ConfigHelper(metadataCache, KafkaConfig.fromProps(props), new ZkConfigRepository(new AdminZkClient(zkClient)))
   }
 
   @Test
@@ -62,8 +65,8 @@ class ZkAdminManagerTest {
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id)
       .setConfigurationKeys(null))
-    val adminManager = createAdminManager()
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
+    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
@@ -78,10 +81,29 @@ class ZkAdminManagerTest {
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id))
-    val adminManager = createAdminManager()
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
+    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
+  }
+
+  @Test
+  def testDescribeConfigsWithConfigurationKeys(): Unit = {
+    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
+
+    EasyMock.replay(zkClient, metadataCache)
+
+    val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
+      .setResourceName(topic)
+      .setResourceType(ConfigResource.Type.TOPIC.id)
+      .setConfigurationKeys(List("retention.ms", "retention.bytes", "segment.bytes").asJava)
+    )
+    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
+    assertEquals(Errors.NONE.code, results.head.errorCode())
+    val resultConfigKeys = results.head.configs().asScala.map(r => r.name()).toSet
+    assertEquals(Set("retention.ms", "retention.bytes", "segment.bytes"), resultConfigKeys)
   }
 
   @Test
@@ -91,7 +113,7 @@ class ZkAdminManagerTest {
     EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
     EasyMock.replay(zkClient, metadataCache)
 
-    val adminManager = createAdminManager()
+    val configHelper = createConfigHelper(metadataCache, zkClient)
 
     val resources = List(
       new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -101,7 +123,7 @@ class ZkAdminManagerTest {
         .setResourceName(brokerId.toString)
         .setResourceType(ConfigResource.Type.BROKER.id))
 
-    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(2, results.size)
     results.foreach(r => {
       assertEquals(Errors.NONE.code, r.errorCode)
