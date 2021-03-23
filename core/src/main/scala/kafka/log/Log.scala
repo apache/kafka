@@ -721,7 +721,7 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment,
-                             leaderEpochCache: Option[LeaderEpochFileCache] = None): Int = lock synchronized {
+                             leaderEpochCache: Option[LeaderEpochFileCache]): Int = lock synchronized {
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     rebuildProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
