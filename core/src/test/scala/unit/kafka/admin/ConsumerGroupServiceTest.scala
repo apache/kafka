@@ -38,7 +38,7 @@ class ConsumerGroupServiceTest {
   private val topics = (0 until 5).map(i => s"testTopic$i")
   private val numPartitions = 10
   private val topicPartitions = topics.flatMap(topic => (0 until numPartitions).map(i => new TopicPartition(topic, i)))
-  private val admin: Admin = mock(classOf[Admin])
+  private val admin = mock(classOf[Admin])
 
   @Test
   def testAdminRequestsForDescribeOffsets(): Unit = {
