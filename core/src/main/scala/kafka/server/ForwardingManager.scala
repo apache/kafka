@@ -51,7 +51,6 @@ object ForwardingManager {
         "since there is no serde defined")
     )
     val serializedPrincipal = principalSerde.serialize(context.principal)
-    forwardRequestBuffer.flip()
     new EnvelopeRequest.Builder(
       forwardRequestBuffer,
       serializedPrincipal,
@@ -76,7 +75,9 @@ class ForwardingManagerImpl(
     request: RequestChannel.Request,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request.context, request.buffer.duplicate())
+    val requestBuffer = request.buffer.duplicate()
+    requestBuffer.flip()
+    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request.context, requestBuffer)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
