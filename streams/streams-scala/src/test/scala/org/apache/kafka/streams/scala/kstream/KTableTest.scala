@@ -448,7 +448,7 @@ class KTableTest extends TestDriver {
 
     val joinNodeLeft = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(6)
     val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
-    assertEquals("my-name", joinNodeLeft.name())
-    assertEquals("my-name", joinNodeRight.name())
+    assertTrue(joinNodeLeft.name().contains("my-name"))
+    assertTrue(joinNodeRight.name().contains("my-name"))
   }
 }

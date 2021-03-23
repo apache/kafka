@@ -89,7 +89,7 @@ class KStreamSplitTest extends TestDriver {
     val mapped = testDriver.createOutput[Integer, Integer]("mapped")
 
     assertEquals(List(2, 4), even.readValuesToList().asScala)
-    assertEquals(List(9, 21), mapped.readValuesToList().asScala)
+    assertEquals(List(9, 81), mapped.readValuesToList().asScala)
 
     testDriver.close()
   }
