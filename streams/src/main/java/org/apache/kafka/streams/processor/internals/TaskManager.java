@@ -167,18 +167,7 @@ public class TaskManager {
             }
         }
 
-        // Make sure to clean up any corrupted standby tasks in their entirety before committing
-        // since TaskMigrated can be thrown and the resulting handleLostAll will only clean up active tasks
         closeAndRevive(corruptedStandbyTasks);
-
-        commit(tasks()
-                   .values()
-                   .stream()
-                   .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                   .filter(t -> !corruptedTasks.contains(t.id()))
-                   .collect(Collectors.toSet())
-        );
-
         closeAndRevive(corruptedActiveTasks);
     }
 
@@ -332,8 +321,8 @@ public class TaskManager {
                 //    write the checkpoint file.
                 final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();
                 if (!offsets.isEmpty()) {
-                    log.error("Task {} should has been committed when it was suspended, but it reports non-empty " +
-                                    "offsets {} to commit; it means it fails during last commit and hence should be closed dirty",
+                    log.error("Task {} should have been committed when it was suspended, but it reports non-empty " +
+                                    "offsets {} to commit; this means it failed during last commit and hence should be closed dirty",
                             task.id(), offsets);
 
                     tasksToCloseDirty.add(task);
@@ -515,7 +504,43 @@ public class TaskManager {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, e);
+
+            // if we hit a TaskCorruptedException, we have to peel off any revoked tasks since they will be gone by
+            // the time the exception is bubbled up through poll()
+            if (e instanceof TaskCorruptedException) {
+                final Set<TaskId> corruptedTasks = ((TaskCorruptedException) e).corruptedTasks();
+                final Set<TaskId> stillAssignedCorruptedTasks = new HashSet<>();
+                final Set<TaskId> revokedCorruptedTasks = new HashSet<>();
+
+                for (final TaskId taskId : corruptedTasks) {
+                    final Task task = tasks.task(taskId);
+                    if (!revokedActiveTasks.contains(task)) {
+                        stillAssignedCorruptedTasks.add(taskId);
+                    } else {
+                        revokedCorruptedTasks.add(taskId);
+                    }
+                }
+
+                // If any of the corrupted tasks are being revoked, we need to filter them from the
+                // TaskCorruptedException otherwise we will try to revive tasks we no longer own
+                // Any revoked tasks will be detected and closed dirty in handleAssignment and wipe their state
+                if (!stillAssignedCorruptedTasks.isEmpty()) {
+                    log.info("Removing revoked tasks {} from the corrupted list, the remaining tasks will be revived " +
+                        "after the rebalance has completed.", revokedCorruptedTasks);
+
+                    // TODO: usually we would always save the first seen exception to rethrow, but TaskCorruptedException
+                    // must be bubbled up to the StreamThread to ensure corrupted state is cleared and revived
+                    firstException.set(new TaskCorruptedException(stillAssignedCorruptedTasks));
+                } else {
+                    // If all corrupted tasks are being revoked, we can just close them dirty in handleAssignment
+                    // and can swallow the exception
+                    log.info("All the corrupted tasks are being revoked so the exception can be swallowed: {}",
+                             revokedCorruptedTasks);
+                }
+            } else {
+                // TODO: KIP-572 need to handle TimeoutException, may be rethrown from committing offsets under ALOS
+                firstException.compareAndSet(null, e);
+            }
         }
 
         // only try to complete post-commit if committing succeeded;
