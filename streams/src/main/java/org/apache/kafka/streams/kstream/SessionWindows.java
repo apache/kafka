@@ -93,6 +93,9 @@ public final class SessionWindows {
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
+        if (inactivityGapMs <= 0) {
+            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
+        }
         return new SessionWindows(inactivityGapMs, DEFAULT_GRACE_PERIOD_MS);
     }
 
@@ -111,7 +114,6 @@ public final class SessionWindows {
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
-
         if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }

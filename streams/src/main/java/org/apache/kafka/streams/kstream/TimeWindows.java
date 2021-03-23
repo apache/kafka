@@ -91,6 +91,9 @@ public final class TimeWindows extends Windows<TimeWindow> {
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = validateMillisecondDuration(size, msgPrefix);
+        if (sizeMs <= 0) {
+            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
+        }
         return new TimeWindows(sizeMs, sizeMs, DEFAULT_GRACE_PERIOD_MS);
     }
 
@@ -108,6 +111,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
     public TimeWindows advanceBy(final Duration advance) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
         final long advanceMs = validateMillisecondDuration(advance, msgPrefix);
+        if (advanceMs <= 0 || advanceMs > sizeMs) {
+            throw new IllegalArgumentException(String.format("Window advancement interval should be more than zero " +
+                    "and less than window duration which is %d ms, but given advancement interval is: %d ms", sizeMs, advanceMs));
+        }
         return new TimeWindows(sizeMs, advanceMs, graceMs);
     }
 

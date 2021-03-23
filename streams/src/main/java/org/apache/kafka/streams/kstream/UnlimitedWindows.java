@@ -71,6 +71,9 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
         final long startMs = ApiUtils.validateMillisecondInstant(start, msgPrefix);
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
+        }
         return new UnlimitedWindows(startMs);
     }
 
