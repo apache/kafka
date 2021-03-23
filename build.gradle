@@ -167,6 +167,10 @@ if (file('.git').exists()) {
   }
 }
 
+// Apply 'java' to the root project so that the root-level task 'aggregatedJavadoc' can depend on compileJava
+// Weirdly, this seems to be required for some people, but not others. It doesn't seem to be harmful to add it
+// here, in any case.
+apply plugin: 'java'
 
 subprojects {
 
@@ -2278,8 +2282,6 @@ project(':connect:mirror-client') {
     dependsOn copyDependantLibs
   }
 }
-
-apply plugin: 'java'
 
 task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
