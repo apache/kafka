@@ -16,16 +16,17 @@
  */
 package kafka.server
 
-import java.util.Optional
-
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
@@ -123,10 +124,9 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
-  // -1 indicate "latest"
-  def fetchOffsetAndEpoch(serverId: Int,
-                          timestamp: Long,
-                          version: Short): (Long, Int) = {
+  private[this] def sendRequest(serverId: Int,
+                                timestamp: Long,
+                                version: Short): ListOffsetsPartitionResponse = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -139,10 +139,17 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     val request = if (version == -1) builder.build() else builder.build(version)
 
-    val response = sendRequest(serverId, request)
-    val partitionData = response.topics.asScala.find(_.name == topic).get
+    sendRequest(serverId, request).topics.asScala.find(_.name == topic).get
       .partitions.asScala.find(_.partitionIndex == partition.partition).get
+  }
 
+  // -1 indicate "latest"
+  private[this] def fetchOffsetAndEpoch(serverId: Int,
+                                        timestamp: Long,
+                                        version: Short): (Long, Int) = {
+    val partitionData = sendRequest(serverId, timestamp, version)
+
+    println(s"[CHIA] fetchOffsetAndEpoch version: $version partitionData: $partitionData")
     if (version == 0) {
       if (partitionData.oldStyleOffsets().isEmpty)
         (-1, partitionData.leaderEpoch)
@@ -154,7 +161,10 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @Test
   def testResponseIncludesLeaderEpoch(): Unit = {
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val topicConfig = new Properties
+    // make sure we won't lose data when force-removing leader
+    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers, topicConfig)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
@@ -166,6 +176,9 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    // make sure high watermark of new leader has not caught up
+    TestUtils.waitUntilTrue(() => sendRequest(secondLeaderId, 0L, -1).errorCode() != Errors.OFFSET_NOT_AVAILABLE.code(),
+      "the second leader does not sync to follower")
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
 
     // No changes to written data
