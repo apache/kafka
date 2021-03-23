@@ -41,12 +41,7 @@ class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn
         public void process(final Record<KIn, VIn> record) {
             for (final KeyValue<? extends KOut, ? extends VOut> newPair :
                 mapper.apply(record.key(), record.value())) {
-                final Record<KOut, VOut> newRecord = new Record<>(
-                    newPair.key,
-                    newPair.value,
-                    record.timestamp(),
-                    record.headers());
-                context().forward(newRecord);
+                context().forward(record.withKey(newPair.key).withValue(newPair.value));
             }
         }
     }
