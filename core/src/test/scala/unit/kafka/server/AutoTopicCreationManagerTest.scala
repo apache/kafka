@@ -17,21 +17,25 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.net.InetAddress
+import java.util.{Collections, Properties}
 
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createBroker
+import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
-import org.apache.kafka.common.message.CreateTopicsRequestData
+import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsRequestData}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.invocation.InvocationOnMock
@@ -219,6 +223,39 @@ class AutoTopicCreationManagerTest {
     testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
   }
 
+  @Test
+  def testTopicCreationWithMetadataContext(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      Some(brokerToController),
+      Some(adminManager),
+      Some(controller),
+      groupCoordinator,
+      transactionCoordinator)
+
+    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
+    val topicName = "topic"
+    topicsCollection.add(getNewTopic(topicName))
+    val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
+      .setApiKey(ApiKeys.CREATE_TOPICS.id)
+      .setMinVersion(0)
+      .setMaxVersion(0)
+    Mockito.when(brokerToController.controllerApiVersions())
+      .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+
+    Mockito.when(controller.isActive).thenReturn(false)
+
+    val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
+      "clientId", 0)
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
+
+    // Throw upon undefined principal serde when building the forward request
+    assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext)))
+  }
+
   private def testErrorWithCreationInZk(error: Errors,
                                         topicName: String,
                                         isInternal: Boolean,
@@ -261,9 +298,10 @@ class AutoTopicCreationManagerTest {
 
   private def createTopicAndVerifyResult(error: Errors,
                                          topicName: String,
-                                         isInternal: Boolean): Unit = {
+                                         isInternal: Boolean,
+                                         metadataContext: Option[RequestContext] = None): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, None)
+      Set(topicName), UnboundedControllerMutationQuota, metadataContext)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())

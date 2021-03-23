@@ -185,28 +185,26 @@ class DefaultAutoTopicCreationManager(
       throw new IllegalStateException("Channel manager must be defined in order to send CreateTopic requests.")
     }
 
-    metadataRequestContext match {
-      case Some(context) =>
-        val requestVersion =
-          channelManager.controllerApiVersions() match {
-            case None =>
-              ApiKeys.CREATE_TOPICS.latestVersion()
-            case Some(nodeApiVersions) =>
-              nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
-          }
+    val request = metadataRequestContext.map { context =>
+      val requestVersion =
+        channelManager.controllerApiVersions() match {
+          case None =>
+            ApiKeys.CREATE_TOPICS.latestVersion()
+          case Some(nodeApiVersions) =>
+            nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
+        }
 
-        // Borrow client information such as client id and correlation id from the original request,
-        // in order to correlate the create request with the original metadata request.
-        val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
-          requestVersion,
-          context.clientId,
-          context.correlationId)
-        val envelopeRequest = ForwardingManager.buildEnvelopeRequest(context,
-          createTopicsRequest.build().serializeWithHeader(requestHeader))
-        channelManager.sendRequest(envelopeRequest, requestCompletionHandler)
+      // Borrow client information such as client id and correlation id from the original request,
+      // in order to correlate the create request with the original metadata request.
+      val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
+        requestVersion,
+        context.clientId,
+        context.correlationId)
+      ForwardingManager.buildEnvelopeRequest(context,
+        createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader))
+    }.getOrElse(createTopicsRequest)
 
-      case None => channelManager.sendRequest(createTopicsRequest, requestCompletionHandler)
-    }
+    channelManager.sendRequest(request, requestCompletionHandler)
 
     val creatableTopicResponses = creatableTopics.keySet.toSeq.map { topic =>
       new MetadataResponseTopic()
