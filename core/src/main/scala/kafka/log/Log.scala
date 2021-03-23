@@ -700,11 +700,13 @@ class Log(@volatile private var _dir: File,
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
-            recoverSegment(segment)
+            if (segment.validateSegmentAndRebuildIndices() > 0)
+              throw new KafkaStorageException("Found invalid or corrupted messages in segment " + segment.log.file);
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            recoverSegment(segment)
+            if (segment.validateSegmentAndRebuildIndices() > 0)
+              throw new KafkaStorageException("Found invalid or corrupted messages in segment " + segment.log.file);
         }
         addSegment(segment)
       }
@@ -750,7 +752,7 @@ class Log(@volatile private var _dir: File,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       if (swapSegment.validateSegmentAndRebuildIndices() > 0)
-        throw new KafkaStorageException("Found invalid or corrupted messages in swap segment " + swapSegment.log.file());
+        throw new KafkaStorageException("Found invalid or corrupted messages in swap segment " + swapSegment.log.file);
 
       // We create swap files for two cases:
       // (1) Log cleaning where multiple segments are merged into one, and
