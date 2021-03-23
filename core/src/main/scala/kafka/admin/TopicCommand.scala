@@ -320,9 +320,10 @@ object TopicCommand extends Logging {
         val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
         val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
         val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+          .toSeq.sortBy(td => td.name())
         val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
         val topicPartitions = topicDescriptions
-          .flatMap(td => td.partitions.iterator().asScala.map(p => new TopicPartition(td.name(), p.partition())))
+          .flatMap(td => td.partitions.iterator().asScala.map(p => new TopicPartition(td.name(), p.partition())).toSeq)
           .toSet.asJava
         val reassignments = listAllReassignments(topicPartitions)
 
