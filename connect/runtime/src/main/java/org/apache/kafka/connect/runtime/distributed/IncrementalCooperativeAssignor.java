@@ -244,7 +244,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, ConnectorsAndTasks> toRevoke = computeDeleted(deleted, connectorAssignments, taskAssignments);
         log.debug("Connector and task to delete assignments: {}", toRevoke);
 
-        // Revoking redundant connectors/tasks if the the workers have duplicate assignments
+        // Revoking redundant connectors/tasks if the workers have duplicate assignments
         toRevoke.putAll(computeDuplicatedAssignments(memberConfigs, connectorAssignments, taskAssignments));
         log.debug("Connector and task to revoke assignments (include duplicated assignments): {}", toRevoke);
 
@@ -456,7 +456,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                         candidateWorkerLoad.stream().map(WorkerLoad::worker).collect(Collectors.joining(",")));
                 Iterator<WorkerLoad> candidateWorkerIterator = candidateWorkerLoad.iterator();
                 for (String connector : lostAssignments.connectors()) {
-                    // Loop over the the candidate workers as many times as it takes
+                    // Loop over the candidate workers as many times as it takes
                     if (!candidateWorkerIterator.hasNext()) {
                         candidateWorkerIterator = candidateWorkerLoad.iterator();
                     }
