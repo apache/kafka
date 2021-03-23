@@ -209,7 +209,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
 
     def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
-      val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
+      val (result, success) = TestUtils.computeUntilTrue(
+        describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava)))(r => r.size() == expectedMatches.size)
+      assert(success, "Did not see expected number of matching IP entities")
       assertEquals(expectedMatches.keySet, result.asScala.keySet)
       result.asScala.foreach { case (entity, props) =>
         assertEquals(Set(IpConnectionRateProp), props.asScala.keySet)
@@ -363,7 +365,8 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
     // Test exact matches.
     matchUserClientEntities.foreach { case (e, v) =>
-      val result = matchEntity(e)
+      val (result, success) = TestUtils.computeUntilTrue(matchEntity(e))(r => r.size() == 1)
+      assert(success, "Never saw 1 matching entitiy")
       assertEquals(1, result.size)
       assertTrue(result.get(e) != null)
       val value = result.get(e).get(RequestPercentageProp)
@@ -397,7 +400,10 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     setupDescribeClientQuotasMatchTest()
 
     def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean): Unit = {
-      val result = describeClientQuotas(filter)
+      val (result, success) = TestUtils.computeUntilTrue(describeClientQuotas(filter))(r => {
+        expectedMatchSize == r.size
+      })
+      assert(success, "Did not see expected number of matches")
       val (expectedMatches, _) = (matchUserClientEntities ++ matchIpEntities).partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
       assertEquals(expectedMatchSize, result.size, s"Failed to match $expectedMatchSize entities for $filter")
@@ -539,6 +545,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
         .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
       )
     }
+    if (cluster.clusterType() == ClusterType.RAFT) {
+      Thread.sleep(5000) // TODO how to avoid this? The previous result is the same size as the updated one.
+    }
     val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
     if (quotas.isEmpty) {
       assertEquals(0, describe.size)
@@ -562,9 +571,6 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def describeClientQuotas(filter: ClientQuotaFilter) = {
     val result = new KafkaFutureImpl[java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]]]
-    if (cluster.clusterType() == ClusterType.RAFT) {
-      Thread.sleep(1000) // need to do this since updates are now async!
-    }
     sendDescribeClientQuotasRequest(filter).complete(result)
     try result.get catch {
       case e: ExecutionException => throw e.getCause
