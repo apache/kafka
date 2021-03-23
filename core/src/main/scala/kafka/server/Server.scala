@@ -33,7 +33,6 @@ trait Server {
 }
 
 object Server {
-
   val MetricsPrefix: String = "kafka.server"
   val ClusterIdLabel: String = "kafka.cluster.id"
   val BrokerIdLabel: String = "kafka.broker.id"
