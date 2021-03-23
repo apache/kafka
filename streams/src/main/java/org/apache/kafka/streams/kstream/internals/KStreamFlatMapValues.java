@@ -17,7 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+<<<<<<< HEAD
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
+=======
+import org.apache.kafka.streams.processor.api.AbstractProcessor;
+>>>>>>> 5d5216288a (migrate kstream flat map values to new processor)
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
