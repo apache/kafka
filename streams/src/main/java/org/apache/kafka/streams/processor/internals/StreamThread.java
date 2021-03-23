@@ -604,17 +604,13 @@ public class StreamThread extends Thread {
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    maybeSendShutdown();
-                    return false;
-                }
+                maybeSendShutdown();
+                return false;
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    maybeSendShutdown();
-                    return false;
-                }
+                maybeSendShutdown();
+                return false;
             }
         }
         return true;
