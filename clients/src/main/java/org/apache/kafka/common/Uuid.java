@@ -39,7 +39,7 @@ public class Uuid implements Comparable<Uuid> {
     private final long leastSignificantBits;
 
     /**
-     * Constructs a 128-bit type 4 UUID where the first long represents the the most significant 64 bits
+     * Constructs a 128-bit type 4 UUID where the first long represents the most significant 64 bits
      * and the second long represents the least significant 64 bits.
      */
     public Uuid(long mostSigBits, long leastSigBits) {

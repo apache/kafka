@@ -578,7 +578,7 @@ public final class RecordAccumulator {
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();
                     if (producerIdAndEpoch != null && !batch.hasSequence()) {
-                        // If the the producer id/epoch of the partition do not match the latest one
+                        // If the producer id/epoch of the partition do not match the latest one
                         // of the producer, we update it and reset the sequence. This should be
                         // only done when all its in-flight batches have completed. This is guarantee
                         // in `shouldStopDrainBatchesForPartition`.
