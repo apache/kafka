@@ -38,12 +38,13 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -66,13 +67,24 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static final Integer PURGE_INTERVAL_MS = 10;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
         {
             put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
         }
     });
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     private final Time time = CLUSTER.time;
 
@@ -137,11 +149,6 @@ public class PurgeRepartitionTopicIntegrationTest {
 
             return false;
         }
-    }
-
-    @BeforeClass
-    public static void createTopics() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
     }
 
     @Before
