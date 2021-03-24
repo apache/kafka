@@ -41,9 +41,9 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -71,8 +71,42 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String OUTPUT_TOPIC_1 = "outputTopic_1";
     private static final String OUTPUT_TOPIC_2 = "outputTopic_2";
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopics(
+                TOPIC_1_0,
+                TOPIC_2_0,
+                TOPIC_A_0,
+                TOPIC_C_0,
+                TOPIC_Y_0,
+                TOPIC_Z_0,
+                TOPIC_1_1,
+                TOPIC_2_1,
+                TOPIC_A_1,
+                TOPIC_C_1,
+                TOPIC_Y_1,
+                TOPIC_Z_1,
+                TOPIC_1_2,
+                TOPIC_2_2,
+                TOPIC_A_2,
+                TOPIC_C_2,
+                TOPIC_Y_2,
+                TOPIC_Z_2,
+                NOOP,
+                DEFAULT_OUTPUT_TOPIC,
+                OUTPUT_TOPIC_0,
+                OUTPUT_TOPIC_1,
+                OUTPUT_TOPIC_2);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private final MockTime mockTime = CLUSTER.time;
 
     private static final String TOPIC_1_0 = "topic-1_0";
@@ -105,35 +139,6 @@ public class FineGrainedAutoResetIntegrationTest {
     private final String topicCTestMessage = "topic-C test";
     private final String topicYTestMessage = "topic-Y test";
     private final String topicZTestMessage = "topic-Z test";
-
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(
-            TOPIC_1_0,
-            TOPIC_2_0,
-            TOPIC_A_0,
-            TOPIC_C_0,
-            TOPIC_Y_0,
-            TOPIC_Z_0,
-            TOPIC_1_1,
-            TOPIC_2_1,
-            TOPIC_A_1,
-            TOPIC_C_1,
-            TOPIC_Y_1,
-            TOPIC_Z_1,
-            TOPIC_1_2,
-            TOPIC_2_2,
-            TOPIC_A_2,
-            TOPIC_C_2,
-            TOPIC_Y_2,
-            TOPIC_Z_2,
-            NOOP,
-            DEFAULT_OUTPUT_TOPIC,
-            OUTPUT_TOPIC_0,
-            OUTPUT_TOPIC_1,
-            OUTPUT_TOPIC_2);
-    }
 
     @Before
     public void setUp() throws IOException {

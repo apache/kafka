@@ -107,7 +107,6 @@ versions += [
   scalaCollectionCompat: "2.3.0",
   scalafmt: "1.5.1",
   scalaJava8Compat : "0.9.1",
-  scalatest: "3.0.8",
   scoverage: "1.4.1",
   slf4j: "1.7.30",
   snappy: "1.1.8.1",

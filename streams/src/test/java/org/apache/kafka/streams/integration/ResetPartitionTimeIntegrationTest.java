@@ -35,7 +35,8 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.ClassRule;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -43,6 +44,7 @@ import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -70,9 +72,18 @@ public class ResetPartitionTimeIntegrationTest {
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
         BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
     }
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG, 0L);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();

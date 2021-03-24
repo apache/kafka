@@ -48,9 +48,9 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
@@ -82,8 +82,29 @@ import static org.hamcrest.Matchers.greaterThan;
 @Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopics(
+                TOPIC_1,
+                TOPIC_2,
+                TOPIC_A,
+                TOPIC_C,
+                TOPIC_Y,
+                TOPIC_Z,
+                FA_TOPIC,
+                FOO_TOPIC);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private final MockTime mockTime = CLUSTER.time;
 
     private static final String TOPIC_1 = "topic-1";
@@ -103,22 +124,6 @@ public class RegexSourceIntegrationTest {
     private KafkaStreams streams;
     private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
     private String outputTopic;
-
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(
-            TOPIC_1,
-            TOPIC_2,
-            TOPIC_A,
-            TOPIC_C,
-            TOPIC_Y,
-            TOPIC_Z,
-            FA_TOPIC,
-            FOO_TOPIC);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
-    }
 
     @Before
     public void setUp() throws InterruptedException {

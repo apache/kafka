@@ -45,10 +45,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
-import org.junit.ClassRule;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -79,12 +81,22 @@ import static org.hamcrest.Matchers.empty;
 
 @Category(IntegrationTest.class)
 public class SuppressionIntegrationTest {
-    @ClassRule
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         1,
         mkProperties(mkMap()),
         0L
     );
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final int COMMIT_INTERVAL = 100;

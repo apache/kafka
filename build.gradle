@@ -271,7 +271,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -1575,12 +1575,9 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.junitJupiterApi
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.scalatest
+    testImplementation libs.junitJupiter
     testImplementation libs.easymock
     testImplementation libs.hamcrest
-
     testRuntimeOnly libs.slf4jlog4j
   }
 

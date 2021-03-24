@@ -28,15 +28,17 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
@@ -56,7 +58,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
     static {
@@ -66,6 +67,16 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Override
