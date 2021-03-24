@@ -75,7 +75,6 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
         return baseOffset;
     }
 
-    // TODO: rename this property it is misleading. It is not techinically the last offset of the batch reader
     public OptionalLong lastOffset() {
         if (isClosed) {
             return OptionalLong.of(lastReturnedOffset);

@@ -21,7 +21,6 @@ import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 /**
  * Interface for reading snapshots as a sequence of records.
@@ -37,7 +36,7 @@ public interface RawSnapshotReader extends Closeable {
      *
      * @throws IOException for any IO error while reading the size
      */
-    long sizeInBytes() throws IOException;
+    long sizeInBytes();
 
     /**
      * Creates a slize of unaligned records from the position up to a size.
@@ -49,7 +48,9 @@ public interface RawSnapshotReader extends Closeable {
     UnalignedRecords slice(long position, int size);
 
     /**
-     * TODO:
+     * Returns all of the records backing this snapshot reader.
+     *
+     * @return all of the records for this snapshot
      */
     Records records();
 }
