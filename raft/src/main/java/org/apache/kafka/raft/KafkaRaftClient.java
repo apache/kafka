@@ -338,15 +338,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshotId().flatMap(snapshoId -> {
-            try {
-                return log
-                    .readSnapshot(snapshoId)
-                    .map(reader -> SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES));
-            } catch (IOException e) {
-                logger.error("Unable to read snapshot: {}", snapshoId, e);
-
-                return Optional.empty();
-            }
+            return log
+                .readSnapshot(snapshoId)
+                .map(reader -> SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES));
         });
     }
 
@@ -379,24 +373,29 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void initialize() throws IOException {
-        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
+    public void initialize() {
+        try {
+            quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
 
-        long currentTimeMs = time.milliseconds();
-        if (quorum.isLeader()) {
-            throw new IllegalStateException("Voter cannot initialize as a Leader");
-        } else if (quorum.isCandidate()) {
-            onBecomeCandidate(currentTimeMs);
-        } else if (quorum.isFollower()) {
-            onBecomeFollower(currentTimeMs);
-        }
+            long currentTimeMs = time.milliseconds();
+            if (quorum.isLeader()) {
+                throw new IllegalStateException("Voter cannot initialize as a Leader");
+            } else if (quorum.isCandidate()) {
+                onBecomeCandidate(currentTimeMs);
+            } else if (quorum.isFollower()) {
+                onBecomeFollower(currentTimeMs);
+            }
 
-        // When there is only a single voter, become candidate immediately
-        if (quorum.isVoter()
-            && quorum.remoteVoters().isEmpty()
-            && !quorum.isLeader()
-            && !quorum.isCandidate()) {
-            transitionToCandidate(currentTimeMs);
+            // When there is only a single voter, become candidate immediately
+            if (quorum.isVoter()
+                && quorum.remoteVoters().isEmpty()
+                && !quorum.isLeader()
+                && !quorum.isCandidate()) {
+
+                transitionToCandidate(currentTimeMs);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -1447,10 +1446,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        if (!(partitionSnapshot.unalignedRecords() instanceof MemoryRecords)) {
+        final UnalignedMemoryRecords records;
+        if (partitionSnapshot.unalignedRecords() instanceof MemoryRecords) {
+            records = new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.unalignedRecords()).buffer());
+        } else if (partitionSnapshot.unalignedRecords() instanceof UnalignedMemoryRecords) {
+            records = (UnalignedMemoryRecords) partitionSnapshot.unalignedRecords();
+        } else {
             throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
         }
-        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.unalignedRecords()).buffer()));
+        snapshot.append(records);
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.
@@ -2324,7 +2328,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
         return new SnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE_BYTES,

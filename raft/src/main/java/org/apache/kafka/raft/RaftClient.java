@@ -19,12 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-public interface RaftClient<T> extends Closeable {
+public interface RaftClient<T> extends AutoCloseable {
 
     interface Listener<T> {
         /**
@@ -79,12 +77,9 @@ public interface RaftClient<T> extends Closeable {
     }
 
     /**
-     * Initialize the client.
-     * This should only be called once on startup.
-     *
-     * @throws IOException For any IO errors during initialization
+     * Initialize the client. This should only be called once on startup.
      */
-    void initialize() throws IOException;
+    void initialize();
 
     /**
      * Register a listener to get commit/leader notifications.
@@ -170,5 +165,5 @@ public interface RaftClient<T> extends Closeable {
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
 }

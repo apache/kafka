@@ -21,11 +21,9 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Optional;
 
-public interface ReplicatedLog extends Closeable {
+public interface ReplicatedLog extends AutoCloseable {
 
     /**
      * Write a set of records to the local leader log. These messages will either
@@ -231,7 +229,7 @@ public interface ReplicatedLog extends Closeable {
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
      */
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.
@@ -244,7 +242,7 @@ public interface ReplicatedLog extends Closeable {
      * @return an Optional with a readable snapshot, if the snapshot exists, otherwise
      *         returns an empty Optional
      */
-    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Returns the latest snapshot id if one exists.
