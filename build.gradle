@@ -59,6 +59,7 @@ allprojects {
   apply plugin: 'idea'
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
+  apply plugin: 'java'
 
   dependencyUpdates {
     revision="release"
@@ -166,11 +167,6 @@ if (file('.git').exists()) {
     ])
   }
 }
-
-// Apply 'java' to the root project so that the root-level task 'aggregatedJavadoc' can depend on compileJava
-// Weirdly, this seems to be required for some people, but not others. It doesn't seem to be harmful to add it
-// here, in any case.
-apply plugin: 'java'
 
 subprojects {
 
