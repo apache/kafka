@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.
@@ -36,6 +39,7 @@ public class VotedState implements EpochState {
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
+    private final Logger log;
 
     public VotedState(
         Time time,
@@ -43,7 +47,8 @@ public class VotedState implements EpochState {
         int votedId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int electionTimeoutMs
+        int electionTimeoutMs,
+        LogContext logContext
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
@@ -51,6 +56,7 @@ public class VotedState implements EpochState {
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
+        this.log = logContext.logger(VotedState.class);
     }
 
     @Override
@@ -90,6 +96,17 @@ public class VotedState implements EpochState {
     public void overrideElectionTimeout(long currentTimeMs, long timeoutMs) {
         electionTimer.update(currentTimeMs);
         electionTimer.reset(timeoutMs);
+    }
+
+    @Override
+    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
+        if (votedId() == candidateId) {
+            return true;
+        }
+
+        log.debug("Rejecting vote request since we already have voted for " +
+            "another candidate {} on that epoch", votedId());
+        return false;
     }
 
     @Override

@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class CandidateState implements EpochState {
@@ -34,6 +37,7 @@ public class CandidateState implements EpochState {
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Timer backoffTimer;
+    private final Logger log;
 
     /**
      * The life time of a candidate state is the following:
@@ -52,7 +56,8 @@ public class CandidateState implements EpochState {
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int retries,
-        int electionTimeoutMs
+        int electionTimeoutMs,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -62,6 +67,7 @@ public class CandidateState implements EpochState {
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.backoffTimer = time.timer(0);
+        this.log = logContext.logger(CandidateState.class);
 
         for (Integer voterId : voters) {
             voteStates.put(voterId, State.UNRECORDED);
@@ -233,6 +239,12 @@ public class CandidateState implements EpochState {
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
         return highWatermark;
+    }
+
+    @Override
+    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
+        log.debug("Rejecting vote request since we are already candidate on that epoch");
+        return false;
     }
 
     @Override

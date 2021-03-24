@@ -18,7 +18,10 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -252,6 +255,16 @@ public class LeaderStateTest {
 
         time.sleep(LeaderState.OBSERVER_SESSION_TIMEOUT_MS);
         assertEquals(emptySet(), state.getObserverStates(time.milliseconds()).keySet());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGrantVote(boolean grantVote) {
+        LeaderState state = newLeaderState(Utils.mkSet(1, 2, 3), 1);
+
+        assertFalse(state.grantVote(1, () -> grantVote));
+        assertFalse(state.grantVote(2, () -> grantVote));
+        assertFalse(state.grantVote(3, () -> grantVote));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {

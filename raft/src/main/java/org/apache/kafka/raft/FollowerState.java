@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
@@ -39,13 +42,16 @@ public class FollowerState implements EpochState {
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot;
 
+    private final Logger log;
+
     public FollowerState(
         Time time,
         int epoch,
         int leaderId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int fetchTimeoutMs
+        int fetchTimeoutMs,
+        LogContext logContext
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
@@ -54,6 +60,7 @@ public class FollowerState implements EpochState {
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
         this.fetchingSnapshot = Optional.empty();
+        this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
@@ -137,6 +144,13 @@ public class FollowerState implements EpochState {
             fetchingSnapshot.get().close();
         }
         this.fetchingSnapshot = fetchingSnapshot;
+    }
+
+    @Override
+    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
+        log.debug("Rejecting vote request since we already have a leader {} on that epoch",
+                leaderId());
+        return false;
     }
 
     @Override

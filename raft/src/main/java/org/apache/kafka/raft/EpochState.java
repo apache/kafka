@@ -18,12 +18,21 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public interface EpochState extends Closeable {
 
     default Optional<LogOffsetMetadata> highWatermark() {
         return Optional.empty();
     }
+
+    /**
+     * Decide whether to grant a vote to a candidate, it is the responsibility of the caller to invoke
+     * {@link QuorumState##transitionToVoted(int, int)} if vote is granted.
+     *
+     * @return true If grant vote.
+     */
+    boolean grantVote(int candidateId, Supplier<Boolean> logComparator);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.
