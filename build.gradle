@@ -173,6 +173,7 @@ subprojects {
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
   task allDepInsight(type: DependencyInsightReportTask) doLast {}
 
+  apply plugin: 'java-library'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
   apply plugin: 'org.gradle.test-retry'
