@@ -604,12 +604,10 @@ public class StreamThread extends Thread {
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                maybeSendShutdown();
                 return false;
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                maybeSendShutdown();
                 return false;
             }
         }
