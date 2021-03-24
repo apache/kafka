@@ -493,7 +493,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_APPLICATION:
                 if (getNumLiveStreamThreads() <= 1) {
-                    log.warn("Adding thread to communicate the shutdown. No processing will be done on this thread");
+                    log.warn("Attempt to shut down the application requires adding a thread to communicate the shutdown. No processing will be done on this thread");
                     addStreamThread();
                 }
                 if (throwable instanceof Error) {
