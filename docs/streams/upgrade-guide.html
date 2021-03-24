@@ -92,6 +92,14 @@
       this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for <code>state.dir</code>.
     </p>
 
+    <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
+    <p>
+        We removed the following deprecated APIs:
+    </p>
+    <ul>
+        <li> <code>WindowBytesStoreSupplier#segments</code>: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>).</li>
+    </ul>
+
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>
         We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in

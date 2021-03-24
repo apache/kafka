@@ -74,7 +74,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
 
-  /** KIP-500 Configuration */
+  /** Self-managed mode configs */
   val EmptyNodeId: Int = -1
 
   /************* Authorizer Configuration ***********/
@@ -370,7 +370,7 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
 
-  /** KIP-500 Configuration */
+  /** Self-managed mode configs */
   val ProcessRolesProp = "process.roles"
   val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
   val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
@@ -663,19 +663,18 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
 
-  /** KIP-500 Config Documentation */
+  /** Self-managed mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-    "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
-    "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
+    "This configuration is only for clusters in self-managed mode, which rely on a Raft quorum instead of ZooKeeper. Leave this config undefined or empty for Zookeeper clusters."
   val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
-  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KIP-500 mode."
-  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KIP-500 mode."
+  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in self-managed mode."
+  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in self-managed mode."
   val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
     "This is required configuration when the self-managed quorum is enabled."
-  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters upgraded to " +
-    "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
-  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
-    "if this process is a KIP-500 controller. The ZK-based controller will not use this configuration."
+  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in self-managed mode. " +
+    "If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the self-managed controller. This is required " +
+    "if the process is part of a self-managed cluster. The ZK-based controller will not use this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
 
   /************* Authorizer Configuration ***********/
@@ -1073,8 +1072,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
 
       /*
-       * KIP-500 Configuration. Note that these configs are defined as internal. We will make
-       * them public once we are ready to enable KIP-500 in a release.
+       * Self-managed mode configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
