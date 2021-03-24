@@ -60,21 +60,13 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public void append(UnalignedMemoryRecords records) throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
-        }
+        checkIfFrozen("Append");
         Utils.writeFully(channel, records.buffer());
     }
 
     @Override
     public void append(MemoryRecords records) throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                    String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
-        }
+        checkIfFrozen("Append");
         Utils.writeFully(channel, records.buffer());
     }
 
@@ -85,16 +77,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public void freeze() throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                String.format("Freeze is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
-        }
+        checkIfFrozen("Freeze");
 
         channel.close();
         frozen = true;
 
-        // Set readonly and ignore the result
         if (!tempSnapshotPath.toFile().setReadOnly()) {
             throw new IOException(String.format("Unable to set file (%s) as read-only", tempSnapshotPath));
         }
@@ -123,6 +110,19 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             snapshotId,
             frozen
         );
+    }
+
+    void checkIfFrozen(String operation) {
+        if (frozen) {
+            throw new IllegalStateException(
+                String.format(
+                    "%s is not supported. Snapshot is already frozen: id = %s; temp path = %s",
+                    operation,
+                    snapshotId,
+                    tempSnapshotPath
+                )
+            );
+        }
     }
 
     /**

@@ -22,7 +22,6 @@ import org.apache.kafka.raft.BatchReader.Batch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.util.Optional;
 
 import static java.util.Collections.singletonList;
@@ -99,20 +98,18 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     @Override
     public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
         try {
-            try (SnapshotReader<Integer> snapshot = reader) {
-                log.debug("Loading snapshot {}", snapshot.snapshotId());
-                while (snapshot.hasNext()) {
-                    Batch<Integer> batch = snapshot.next();
-                    for (Integer value : batch) {
-                        log.debug("Setting value: {}", value);
-                        this.committed = value;
-                        this.uncommitted = value;
-                    }
+            log.debug("Loading snapshot {}", reader.snapshotId());
+            while (reader.hasNext()) {
+                Batch<Integer> batch = reader.next();
+                for (Integer value : batch) {
+                    log.debug("Setting value: {}", value);
+                    this.committed = value;
+                    this.uncommitted = value;
                 }
-                log.debug("Finished loading snapshot. Set value: {}", this.committed);
             }
-        } catch (IOException e) {
-            log.error(String.format("Unable to read snapshot %s", reader.snapshotId()), e);
+            log.debug("Finished loading snapshot. Set value: {}", this.committed);
+        } finally {
+            reader.close();
         }
     }
 

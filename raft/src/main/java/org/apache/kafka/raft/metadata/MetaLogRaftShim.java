@@ -26,7 +26,6 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -129,10 +128,7 @@ public class MetaLogRaftShim implements MetaLogManager {
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             // TODO: Create Jira: Handle loading commit in ListenerShim
-            try {
-                reader.close();
-            } catch (IOException e) {
-            }
+            reader.close();
         }
 
         @Override

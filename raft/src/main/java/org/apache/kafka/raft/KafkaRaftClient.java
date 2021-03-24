@@ -312,7 +312,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
-                    SnapshotReader<T> snapshot = earliestSnapshot().orElseThrow(() -> {
+                    SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> {
                         return new IllegalStateException(
                             String.format(
                                 "Snapshot expected when next offset is %s, log start offset is %s and high-watermark is %s",
@@ -336,18 +336,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private Optional<SnapshotReader<T>> earliestSnapshot() {
-        return log.earliestSnapshotId().flatMap(earliestSnapshoId -> {
+    private Optional<SnapshotReader<T>> latestSnapshot() {
+        return log.latestSnapshotId().flatMap(snapshoId -> {
             try {
-                // TODO: The buffer size is not technically correct. The BatchAccumulator allows for bigger buffers
                 return log
-                    .readSnapshot(earliestSnapshoId)
+                    .readSnapshot(snapshoId)
                     .map(reader -> SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES));
             } catch (IOException e) {
-                logger.error(
-                    String.format("Unable to read snapshot: %s", earliestSnapshoId),
-                    e
-                );
+                logger.error("Unable to read snapshot: {}", snapshoId, e);
 
                 return Optional.empty();
             }
@@ -1328,6 +1324,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 );
             }
 
+            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Trying to fetch a snapshot with size (%s) and a position (%s) larger than %s",
+                        snapshotSize,
+                        partitionSnapshot.position(),
+                        Integer.MAX_VALUE
+                    )
+                );
+            }
+
             int maxSnapshotSize;
             try {
                 maxSnapshotSize = Math.toIntExact(snapshotSize);
@@ -1335,12 +1342,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
-                // TODO: This should return an error response instead of throwing an exception
-                throw new IllegalStateException(String.format("Trying to fetch a snapshot with position: %d lager than Int.MaxValue", partitionSnapshot.position()));
-            }
-
-            // TODO: I think this slice of records is closed when the snapshot is close in the try (...) above.
             UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
             return FetchSnapshotResponse.singleton(
@@ -2450,7 +2451,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * data in memory, we let the state machine read the records from disk.
          */
         public void fireHandleCommit(long baseOffset, Records records) {
-            // TODO: The max batch size is not techinically correct. The accumulator may create a bigger batch
             fireHandleCommit(
                 RecordsBatchReader.of(
                     baseOffset,

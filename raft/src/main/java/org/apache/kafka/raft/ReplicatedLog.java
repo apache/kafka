@@ -225,7 +225,8 @@ public interface ReplicatedLog extends Closeable {
     /**
      * Create a writable snapshot for the given snapshot id.
      *
-     * See {@link RawSnapshotWriter} for details on how to use this object.
+     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot

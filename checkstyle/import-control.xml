@@ -282,7 +282,6 @@
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.shell"/>
     <allow pkg="org.apache.kafka.snapshot"/>
-    <allow pkg="org.apache.log4j" />
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
   </subpackage>
@@ -410,7 +409,6 @@
   </subpackage>
 
   <subpackage name="snapshot">
-    <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.test"/>

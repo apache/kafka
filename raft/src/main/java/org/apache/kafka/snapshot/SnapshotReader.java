@@ -17,8 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.Iterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader.Batch;
@@ -33,7 +31,7 @@ import org.apache.kafka.raft.internals.SerdeRecordsIterator;
  * is assumed that the content of the snapshot represents all of the objects T for the topic
  * partition from offset 0 up to but not including the end offset in the snapshot id.
  */
-public final class SnapshotReader<T> implements Closeable, Iterator<Batch<T>> {
+public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
     private final SerdeRecordsIterator<T> iterator;
 
@@ -64,10 +62,8 @@ public final class SnapshotReader<T> implements Closeable, Iterator<Batch<T>> {
 
     /**
      * Closes the snapshot reader.
-     *
-     * @throws IOException for any IO error during close
      */
-    public void close() throws IOException {
+    public void close() {
         iterator.close();
     }
 

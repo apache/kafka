@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RecordSerde;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -83,7 +84,18 @@ public final class SerdeRecordsIteratorTest {
         testIterator(batches, fileRecords);
     }
 
-    // TODO: test what happends if max batch size is less that a record batch
+    @Test
+    public void testMaxBatchTooSmall() throws IOException {
+        List<BatchReader.Batch<String>> batches = createBatches(57);
+
+        MemoryRecords memRecords = buildRecords(CompressionType.NONE, batches);
+        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
+        fileRecords.append(memRecords);
+
+        SerdeRecordsIterator<String> iterator = createIterator(fileRecords, BufferSupplier.create(), 10);
+        assertThrows(IllegalStateException.class, iterator::hasNext);
+        assertThrows(IllegalStateException.class, iterator::next);
+    }
 
     private void testIterator(
         List<BatchReader.Batch<String>> expectedBatches,

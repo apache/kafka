@@ -49,7 +49,6 @@ import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -119,11 +118,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                     }
                 }
             } finally {
-                try {
-                    reader.close();
-                } catch (IOException e) {
-                    log.error("Unable to close snapshot {}", reader.snapshotId(), e);
-                }
+                reader.close();
             }
         }
 

@@ -108,7 +108,18 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                 if (allocatedBuffer.isPresent()) {
                     buffer = allocatedBuffer.get();
                     buffer.compact();
-                    // TODO: catch the case where compact didn't do anything
+
+                    if (!buffer.hasRemaining()) {
+                        // The buffer is not big enough to read an entire batch
+                        throw new IllegalStateException(
+                            String.format(
+                                "Unable to read batch from file records buffer %s with maximum batch %s and record size %s",
+                                buffer,
+                                maxBatchSize,
+                                records.sizeInBytes()
+                            )
+                        );
+                    }
                 } else {
                     buffer = bufferSupplier.get(Math.min(maxBatchSize, records.sizeInBytes()));
                     allocatedBuffer = Optional.of(buffer);
