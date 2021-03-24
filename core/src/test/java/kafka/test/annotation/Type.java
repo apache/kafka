@@ -17,12 +17,42 @@
 
 package kafka.test.annotation;
 
+import kafka.test.ClusterConfig;
+import kafka.test.junit.RaftClusterInvocationContext;
+import kafka.test.junit.ZkClusterInvocationContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+
+import java.util.function.Consumer;
+
 /**
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
  */
 public enum Type {
-    // RAFT,
-    ZK,
-    BOTH,
-    DEFAULT
+    RAFT {
+        @Override
+        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+        }
+    },
+    ZK {
+        @Override
+        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
+        }
+    },
+    BOTH {
+        @Override
+        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
+        }
+    },
+    DEFAULT {
+        @Override
+        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
+        }
+    };
+
+    public abstract void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
 }

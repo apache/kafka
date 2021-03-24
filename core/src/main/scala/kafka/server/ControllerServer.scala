@@ -40,12 +40,13 @@ import org.apache.kafka.controller.{Controller, QuorumController, QuorumControll
 import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka controller.
+ * A self-managed Kafka controller.
  */
 class ControllerServer(
                         val metaProperties: MetaProperties,
@@ -55,7 +56,7 @@ class ControllerServer(
                         val time: Time,
                         val metrics: Metrics,
                         val threadNamePrefix: Option[String],
-                        val controllerQuorumVotersFuture: CompletableFuture[util.List[String]]
+                        val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
                       ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -157,8 +158,7 @@ class ControllerServer(
 
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-      val controllerNodes =
-        RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,

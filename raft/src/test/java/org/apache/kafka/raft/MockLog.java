@@ -37,8 +37,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -400,20 +400,14 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<OffsetAndEpoch> latestSnapshotId() {
-        try {
-            return Optional.of(snapshots.lastKey());
-        } catch (NoSuchElementException e) {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(snapshots.lastEntry())
+            .map(Map.Entry::getKey);
     }
 
     @Override
     public Optional<OffsetAndEpoch> earliestSnapshotId() {
-        try {
-            return Optional.of(snapshots.firstKey());
-        } catch (NoSuchElementException e) {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(snapshots.firstEntry())
+            .map(Map.Entry::getKey);
     }
 
     @Override

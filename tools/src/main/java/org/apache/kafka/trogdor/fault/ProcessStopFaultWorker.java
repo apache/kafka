@@ -71,7 +71,7 @@ public class ProcessStopFaultWorker implements TaskWorker {
                 try {
                     pids.add(Integer.parseInt(components[0]));
                 } catch (NumberFormatException e) {
-                    log.error("Failed to parse process ID from line {}", e);
+                    log.error("Failed to parse process ID from line", e);
                 }
             }
         }

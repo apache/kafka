@@ -113,7 +113,7 @@ public final class CommandUtils {
                 pathComponents.size() : pathComponents.size() - 1;
             for (int i = 0; i < numDirectories; i++) {
                 MetadataNode node = directory.child(pathComponents.get(i));
-                if (node == null || !(node instanceof DirectoryNode)) {
+                if (!(node instanceof DirectoryNode)) {
                     return;
                 }
                 directory = (DirectoryNode) node;

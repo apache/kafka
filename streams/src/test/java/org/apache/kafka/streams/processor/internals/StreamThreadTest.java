@@ -1739,7 +1739,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
-        thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds());
+        thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds(), null);
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
 

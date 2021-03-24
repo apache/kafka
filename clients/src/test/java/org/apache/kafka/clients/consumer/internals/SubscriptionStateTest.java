@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
@@ -792,6 +793,20 @@ public class SubscriptionStateTest {
         assertTrue(state.hasValidPosition(tp0));
         assertFalse(state.awaitingValidation(tp0));
         assertFalse(state.isOffsetResetNeeded(tp0));
+    }
+
+    @Test
+    public void nullPositionLagOnNoPosition() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
+
+        state.updateHighWatermark(tp0, 1L);
+        state.updateLastStableOffset(tp0, 1L);
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
     }
 
 }

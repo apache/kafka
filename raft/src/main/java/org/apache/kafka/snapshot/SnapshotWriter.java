@@ -136,7 +136,7 @@ final public class SnapshotWriter<T> implements Closeable {
     /**
      * Closes the snapshot writer.
      *
-     * If close is called without first calling freeze the the snapshot is aborted.
+     * If close is called without first calling freeze the snapshot is aborted.
      *
      * @throws IOException for any IO error during close
      */

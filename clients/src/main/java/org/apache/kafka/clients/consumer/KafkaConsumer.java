@@ -2289,7 +2289,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin();
+            coordinator.requestRejoin("rebalance enforced by user");
         } finally {
             release();
         }

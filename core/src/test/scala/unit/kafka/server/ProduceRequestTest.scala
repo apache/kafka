@@ -32,7 +32,6 @@ import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -43,12 +42,11 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
-  @nowarn("cat=deprecation")
   @Test
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
-    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
+    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
       val topicPartition = new TopicPartition("topic", partition)
       val produceResponse = sendProduceRequest(leader,
           ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -61,14 +59,16 @@ class ProduceRequestTest extends BaseRequestTest {
             .setAcks((-1).toShort)
             .setTimeoutMs(3000)
             .setTransactionalId(null)).build())
-      assertEquals(1, produceResponse.responses.size)
-      val (tp, partitionResponse) = produceResponse.responses.asScala.head
+      assertEquals(1, produceResponse.data.responses.size)
+      val topicProduceResponse = produceResponse.data.responses.asScala.head
+      assertEquals(1, topicProduceResponse.partitionResponses.size)   
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+      val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
       assertEquals(topicPartition, tp)
-      assertEquals(Errors.NONE, partitionResponse.error)
-      assertEquals(expectedOffset, partitionResponse.baseOffset)
-      assertEquals(-1, partitionResponse.logAppendTime)
-      assertTrue(partitionResponse.recordErrors.isEmpty)
-      partitionResponse
+      assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode))
+      assertEquals(expectedOffset, partitionProduceResponse.baseOffset)
+      assertEquals(-1, partitionProduceResponse.logAppendTimeMs)
+      assertTrue(partitionProduceResponse.recordErrors.isEmpty)
     }
 
     sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
@@ -79,7 +79,6 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testProduceWithInvalidTimestamp(): Unit = {
     val topic = "topic"
@@ -110,21 +109,22 @@ class ProduceRequestTest extends BaseRequestTest {
       .setAcks((-1).toShort)
       .setTimeoutMs(3000)
       .setTransactionalId(null)).build())
-    val (tp, partitionResponse) = produceResponse.responses.asScala.head
+
+    assertEquals(1, produceResponse.data.responses.size)
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size)   
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
     assertEquals(topicPartition, tp)
-    assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
+    assertEquals(Errors.INVALID_TIMESTAMP, Errors.forCode(partitionProduceResponse.errorCode))
     // there are 3 records with InvalidTimestampException created from inner function createRecords
-    assertEquals(3, partitionResponse.recordErrors.size())
-    assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
-    assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
-    assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
-    for (recordError <- partitionResponse.recordErrors.asScala) {
-      assertNotNull(recordError.message)
-    }
-    assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
+    assertEquals(3, partitionProduceResponse.recordErrors.size)
+    val recordErrors = partitionProduceResponse.recordErrors.asScala
+    recordErrors.indices.foreach(i => assertEquals(i, recordErrors(i).batchIndex))
+    recordErrors.foreach(recordError => assertNotNull(recordError.batchIndexErrorMessage))
+    assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testProduceToNonReplica(): Unit = {
     val topic = "topic"
@@ -152,8 +152,11 @@ class ProduceRequestTest extends BaseRequestTest {
       .setTransactionalId(null)).build()
 
     val produceResponse = sendProduceRequest(nonReplicaId, produceRequest)
-    assertEquals(1, produceResponse.responses.size)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, produceResponse.responses.asScala.head._2.error)
+    assertEquals(1, produceResponse.data.responses.size)
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size)   
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
   }
 
   /* returns a pair of partition id and leader id */
@@ -164,7 +167,6 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -185,17 +187,20 @@ class ProduceRequestTest extends BaseRequestTest {
       .setAcks((-1).toShort)
       .setTimeoutMs(3000)
       .setTransactionalId(null)).build())
-    assertEquals(1, produceResponse.responses.size)
-    val (tp, partitionResponse) = produceResponse.responses.asScala.head
+
+    assertEquals(1, produceResponse.data.responses.size)
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size)   
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
     assertEquals(topicPartition, tp)
-    assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
-    assertEquals(-1, partitionResponse.baseOffset)
-    assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(Errors.CORRUPT_MESSAGE, Errors.forCode(partitionProduceResponse.errorCode))
+    assertEquals(-1, partitionProduceResponse.baseOffset)
+    assertEquals(-1, partitionProduceResponse.logAppendTimeMs)
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
     assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testZSTDProduceRequest(): Unit = {
     val topic = "topic"
@@ -222,21 +227,23 @@ class ProduceRequestTest extends BaseRequestTest {
       .setTransactionalId(null)
 
     // produce request with v7: works fine!
-    val res1 = sendProduceRequest(leader,
-      new ProduceRequest.Builder(7, 7, partitionRecords).build())
-    val (tp1, partitionResponse1) = res1.responses.asScala.head
+    val produceResponse1 = sendProduceRequest(leader, new ProduceRequest.Builder(7, 7, partitionRecords).build())
+
+    val topicProduceResponse1 = produceResponse1.data.responses.asScala.head
+    val partitionProduceResponse1 = topicProduceResponse1.partitionResponses.asScala.head
+    val tp1 = new TopicPartition(topicProduceResponse1.name, partitionProduceResponse1.index)
     assertEquals(topicPartition, tp1)
-    assertEquals(Errors.NONE, partitionResponse1.error)
-    assertEquals(0, partitionResponse1.baseOffset)
-    assertEquals(-1, partitionResponse1.logAppendTime)
+    assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
+    assertEquals(0, partitionProduceResponse1.baseOffset)
+    assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
 
     // produce request with v3: returns Errors.UNSUPPORTED_COMPRESSION_TYPE.
-    val res2 = sendProduceRequest(leader,
-      new ProduceRequest.Builder(3, 3, partitionRecords)
-        .buildUnsafe(3))
-    val (tp2, partitionResponse2) = res2.responses.asScala.head
+    val produceResponse2 = sendProduceRequest(leader, new ProduceRequest.Builder(3, 3, partitionRecords).buildUnsafe(3))
+    val topicProduceResponse2 = produceResponse2.data.responses.asScala.head
+    val partitionProduceResponse2 = topicProduceResponse2.partitionResponses.asScala.head
+    val tp2 = new TopicPartition(topicProduceResponse2.name, partitionProduceResponse2.index)
     assertEquals(topicPartition, tp2)
-    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, partitionResponse2.error)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, Errors.forCode(partitionProduceResponse2.errorCode))
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

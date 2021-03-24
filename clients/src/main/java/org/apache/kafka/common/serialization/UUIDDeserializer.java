@@ -36,7 +36,7 @@ public class UUIDDeserializer implements Deserializer<UUID> {
         Object encodingValue = configs.get(propertyName);
         if (encodingValue == null)
             encodingValue = configs.get("deserializer.encoding");
-        if (encodingValue != null && encodingValue instanceof String)
+        if (encodingValue instanceof String)
             encoding = (String) encodingValue;
     }
 
