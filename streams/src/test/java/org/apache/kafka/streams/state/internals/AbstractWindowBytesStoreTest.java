@@ -1173,14 +1173,23 @@ public abstract class AbstractWindowBytesStoreTest {
         store.put(2, "two+6");
     }
 
+    long extractStoreTimestamp(final byte[] binaryKey) {
+        return WindowKeySchema.extractStoreTimestamp(binaryKey);
+    }
+
+    <K> K extractStoreKey(final byte[] binaryKey,
+                          final StateSerdes<K, ?> serdes) {
+        return WindowKeySchema.extractStoreKey(binaryKey, serdes);
+    }
+
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,
                                                    @SuppressWarnings("SameParameterValue") final long startTime) {
         final HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (final KeyValue<byte[], byte[]> entry : changeLog) {
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(entry.key);
+            final long timestamp = extractStoreTimestamp(entry.key);
 
-            final Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
+            final Integer key = extractStoreKey(entry.key, serdes);
             final String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             final Set<String> entries = entriesByKey.computeIfAbsent(key, k -> new HashSet<>());
