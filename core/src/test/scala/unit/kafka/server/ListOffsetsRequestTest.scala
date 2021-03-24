@@ -149,7 +149,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
                                         version: Short): (Long, Int) = {
     val partitionData = sendRequest(serverId, timestamp, version)
 
-    println(s"[CHIA] fetchOffsetAndEpoch version: $version partitionData: $partitionData")
     if (version == 0) {
       if (partitionData.oldStyleOffsets().isEmpty)
         (-1, partitionData.leaderEpoch)
@@ -176,7 +175,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
-    // make sure high watermark of new leader has not caught up
+    // make sure high watermark of new leader has caught up
     TestUtils.waitUntilTrue(() => sendRequest(secondLeaderId, 0L, -1).errorCode() != Errors.OFFSET_NOT_AVAILABLE.code(),
       "the second leader does not sync to follower")
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
