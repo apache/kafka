@@ -234,7 +234,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param channelBuilder Channel builder for every new connection
      * @param logContext Context for logging with additional info
      */
-    Selector(int maxReceiveSize,
+    public Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
             int failedAuthenticationDelayMs,
             Metrics metrics,
