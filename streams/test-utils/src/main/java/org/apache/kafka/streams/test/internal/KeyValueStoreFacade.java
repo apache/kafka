@@ -14,26 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
+package org.apache.kafka.streams.test.internal;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
+import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
 
-import java.time.Instant;
+import java.util.List;
 
-public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-    public WindowStoreFacade(final TimestampedWindowStore<K, V> store) {
-        super(store);
+public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V> implements KeyValueStore<K, V> {
+
+    public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> inner) {
+        super(inner);
     }
 
     @Deprecated
@@ -48,7 +48,6 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
         inner.init(context, root);
     }
 
-    @Deprecated
     @Override
     public void put(final K key,
                     final V value) {
@@ -56,30 +55,21 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
     }
 
     @Override
-    public void put(final K key,
-                    final V value,
-                    final long windowStartTimestamp) {
-        inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP), windowStartTimestamp);
+    public V putIfAbsent(final K key,
+                         final V value) {
+        return getValueOrNull(inner.putIfAbsent(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP)));
     }
 
     @Override
-    public WindowStoreIterator<V> backwardFetch(final K key,
-                                                final long timeFrom,
-                                                final long timeTo) {
-        return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+    public void putAll(final List<KeyValue<K, V>> entries) {
+        for (final KeyValue<K, V> entry : entries) {
+            inner.put(entry.key, ValueAndTimestamp.make(entry.value, ConsumerRecord.NO_TIMESTAMP));
+        }
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                          final K keyTo,
-                                                          final long timeFrom,
-                                                          final long timeTo) {
-        return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+    public V delete(final K key) {
+        return getValueOrNull(inner.delete(key));
     }
 
     @Override
