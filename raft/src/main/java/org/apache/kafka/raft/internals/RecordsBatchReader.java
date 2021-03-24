@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.RecordSerde;
 
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-public class RecordsBatchReader<T> implements BatchReader<T> {
+public final class RecordsBatchReader<T> implements BatchReader<T> {
     private final long baseOffset;
     private final SerdeRecordsIterator<T> iterator;
     private final CloseListener<BatchReader<T>> closeListener;
@@ -32,7 +35,7 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
     private Optional<Batch<T>> nextBatch = Optional.empty();
     private boolean isClosed = false;
 
-    public RecordsBatchReader(
+    private RecordsBatchReader(
         long baseOffset,
         SerdeRecordsIterator<T> iterator,
         CloseListener<BatchReader<T>> closeListener
@@ -56,7 +59,7 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
 
     @Override
     public Batch<T> next() {
-        if (hasNext()) {
+        if (!hasNext()) {
             throw new NoSuchElementException("Records batch reader doesn't have any more elements");
         }
 
@@ -86,10 +89,24 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
         if (!isClosed) {
             isClosed = true;
 
-            // TODO: this closes the iterator even though it was passed through the constructor
             iterator.close();
             closeListener.onClose(this);
         }
+    }
+
+    public static <T> RecordsBatchReader<T> of(
+        long baseOffset,
+        Records records,
+        RecordSerde<T> serde,
+        BufferSupplier bufferSupplier,
+        int maxBatchSize,
+        CloseListener<BatchReader<T>> closeListener
+    ) {
+        return new RecordsBatchReader<>(
+            baseOffset,
+            new SerdeRecordsIterator<>(records, serde, bufferSupplier, maxBatchSize),
+            closeListener
+        );
     }
 
     private void checkIfClosed() {

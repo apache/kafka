@@ -24,9 +24,10 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.BatchReader.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClientTestContext;
+import org.apache.kafka.raft.internals.StringSerde;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,7 +50,7 @@ final public class SnapshotWriterReaderTest {
             snapshot.freeze();
         }
 
-        try (SnapshotReader<String> reader = readSnapshot(context, id)) {
+        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
             assertSnapshot(expected, reader);
         }
     }
@@ -102,27 +103,22 @@ final public class SnapshotWriterReaderTest {
 
     private SnapshotReader<String> readSnapshot(
         RaftClientTestContext context,
-        OffsetAndEpoch snapshotId
+        OffsetAndEpoch snapshotId,
+        int maxBatchSize
     ) {
-        return new SnapshotReader<>(
+        return SnapshotReader.of(
             context.log.readSnapshot(snapshotId).get(),
             context.serde,
-            BufferSupplier.create()
+            BufferSupplier.create(),
+            maxBatchSize
         );
     }
 
     public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
-        List<String> expected = new ArrayList<>();
-        batches.forEach(expected::addAll);
-
-        List<String> actual = new ArrayList<>(expected.size());
-        reader.forEach(batch -> {
-            batch.streamingIterator(BufferSupplier.create()).forEachRemaining(record -> {
-                actual.add(Utils.utf8(record.value()));
-            });
-        });
-
-        assertEquals(expected, actual);
+        assertSnapshot(
+            batches,
+            SnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE)
+        );
     }
 
     public static void assertSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
@@ -130,7 +126,12 @@ final public class SnapshotWriterReaderTest {
         batches.forEach(expected::addAll);
 
         List<String> actual = new ArrayList<>(expected.size());
-        reader.forEach(actual::addAll);
+        while (reader.hasNext()) {
+            Batch<String> batch = reader.next();
+            for (String value : batch) {
+                actual.add(value);
+            }
+        }
 
         assertEquals(expected, actual);
     }

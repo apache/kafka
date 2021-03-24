@@ -36,7 +36,6 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.NoSuchElementException;
@@ -687,16 +686,16 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public Iterator<RecordBatch> iterator() {
-            return Utils.covariantCast(data.batchIterator());
-        }
-
-        @Override
-        public UnalignedRecords read(long position, int size) {
+        public UnalignedRecords slice(long position, int size) {
             ByteBuffer buffer = data.buffer();
             buffer.position(Math.toIntExact(position));
             buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
             return new UnalignedMemoryRecords(buffer.slice());
+        }
+
+        @Override
+        public Records records() {
+            return data;
         }
 
         @Override

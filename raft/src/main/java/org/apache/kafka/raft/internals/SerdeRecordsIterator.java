@@ -73,7 +73,7 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
 
     @Override
     public Batch<T> next() {
-        if (hasNext()) {
+        if (!hasNext()) {
             throw new NoSuchElementException("Batch iterator doesn't have any more elements");
         }
 
@@ -108,6 +108,7 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                 if (allocatedBuffer.isPresent()) {
                     buffer = allocatedBuffer.get();
                     buffer.compact();
+                    // TODO: catch the case where compact didn't do anything
                 } else {
                     buffer = bufferSupplier.get(Math.min(maxBatchSize, records.sizeInBytes()));
                     allocatedBuffer = Optional.of(buffer);
@@ -120,8 +121,8 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                     throw new RuntimeException("Failed to read records into memory", e);
                 }
 
-                bytesRead += buffer.position() - start;
-                memoryRecords = MemoryRecords.readableRecords(buffer);
+                bytesRead += buffer.limit() - start;
+                memoryRecords = MemoryRecords.readableRecords(buffer.slice());
             } else {
                 throw new IllegalStateException(String.format("Unexpected Records type %s", records.getClass()));
             }
@@ -138,18 +139,21 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
         }
 
         while (nextBatches.isPresent()) {
-            while (nextBatches.get().hasNext()) {
+            if (nextBatches.get().hasNext()) {
                 MutableRecordBatch nextBatch = nextBatches.get().next();
+
+                // Update the buffer position to reflect the read batch
+                allocatedBuffer.ifPresent(buffer -> buffer.position(buffer.position() + nextBatch.sizeInBytes()));
+
                 if (!(nextBatch instanceof DefaultRecordBatch)) {
                     throw new IllegalStateException(
                         String.format("DefaultRecordBatch expected by record type was %s", nextBatch.getClass())
                     );
                 }
-
                 return Optional.of(readBatch((DefaultRecordBatch) nextBatch));
             }
 
-            nextBatches();
+            nextBatches = nextBatches();
         }
 
         return Optional.empty();

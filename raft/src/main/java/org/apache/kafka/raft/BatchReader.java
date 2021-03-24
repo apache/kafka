@@ -61,7 +61,7 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
     @Override
     void close();
 
-    class Batch<T> {
+    final class Batch<T> implements Iterable<T> {
         private final long baseOffset;
         private final int epoch;
         private final long lastOffset;
@@ -88,6 +88,11 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
 
         public int epoch() {
             return epoch;
+        }
+
+        @Override
+        public Iterator<T> iterator() {
+            return records.iterator();
         }
 
         @Override
@@ -120,7 +125,7 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
         }
 
         public static <T> Batch<T> of(long baseOffset, int epoch, List<T> records) {
-            return new Batch<>(baseOffset, epoch, baseOffset + records.size(), records);
+            return new Batch<>(baseOffset, epoch, baseOffset + records.size() - 1, records);
         }
     }
 }

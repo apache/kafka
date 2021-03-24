@@ -69,7 +69,6 @@ import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
-import org.apache.kafka.raft.internals.SerdeRecordsIterator;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -340,9 +339,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private Optional<SnapshotReader<T>> earliestSnapshot() {
         return log.earliestSnapshotId().flatMap(earliestSnapshoId -> {
             try {
+                // TODO: The buffer size is not technically correct. The BatchAccumulator allows for bigger buffers
                 return log
                     .readSnapshot(earliestSnapshoId)
-                    .map(reader -> new SnapshotReader<>(reader, serde, BufferSupplier.create()));
+                    .map(reader -> SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES));
             } catch (IOException e) {
                 logger.error(
                     String.format("Unable to read snapshot: %s", earliestSnapshoId),
@@ -1280,7 +1280,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         try (RawSnapshotReader snapshot = snapshotOpt.get()) {
-            if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshot.sizeInBytes()) {
+            long snapshotSize = snapshot.sizeInBytes();
+            if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshotSize) {
                 return FetchSnapshotResponse.singleton(
                     log.topicPartition(),
                     responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
@@ -1290,18 +1291,18 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             int maxSnapshotSize;
             try {
-                maxSnapshotSize = Math.toIntExact(snapshot.sizeInBytes());
+                maxSnapshotSize = Math.toIntExact(snapshotSize);
             } catch (ArithmeticException e) {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
             if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+                // TODO: This should return an error response instead of throwing an exception
                 throw new IllegalStateException(String.format("Trying to fetch a snapshot with position: %d lager than Int.MaxValue", partitionSnapshot.position()));
             }
 
-            UnalignedRecords records = snapshot.read(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
-
-            long snapshotSize = snapshot.sizeInBytes();
+            // TODO: I think this slice of records is closed when the snapshot is close in the try (...) above.
+            UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
@@ -2406,13 +2407,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * data in memory, we let the state machine read the records from disk.
          */
         public void fireHandleCommit(long baseOffset, Records records) {
-            // TODO: The max batch size is not techinically correct that the accumulator may create a bigger batch
-            RecordsBatchReader<T> reader = new RecordsBatchReader<>(
-                baseOffset,
-                new SerdeRecordsIterator<>(records, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES),
-                this
+            // TODO: The max batch size is not techinically correct. The accumulator may create a bigger batch
+            fireHandleCommit(
+                RecordsBatchReader.of(
+                    baseOffset,
+                    records,
+                    serde,
+                    BufferSupplier.create(),
+                    MAX_BATCH_SIZE_BYTES,
+                    this
+                )
             );
-            fireHandleCommit(reader);
         }
 
         /**

@@ -573,7 +573,7 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(0, response.position());
             assertEquals(snapshot.sizeInBytes(), response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
 
             assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
         }
@@ -617,7 +617,7 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(0, response.position());
             assertEquals(snapshot.sizeInBytes() / 2, response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
             ByteBuffer snapshotBuffer = memoryRecords.buffer();
 
             ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));

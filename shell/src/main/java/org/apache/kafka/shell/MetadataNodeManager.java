@@ -112,7 +112,8 @@ public final class MetadataNodeManager implements AutoCloseable {
             // TODO: Create Jira: Need to cover the case where handle snapshot invalidates previous commits
             //                    Need to handle that reader.snapshotId() means that every record up to that offset is committed
             try {
-                for (List<ApiMessageAndVersion> batch : reader) {
+                while (reader.hasNext()) {
+                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
                     for (ApiMessageAndVersion messageAndVersion : batch) {
                         handleMessage(messageAndVersion.message());
                     }
