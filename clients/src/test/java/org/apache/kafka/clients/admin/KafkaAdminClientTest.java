@@ -5339,7 +5339,6 @@ public class KafkaAdminClientTest {
             time.sleep(25);
             disconnectFuture.get();
 
-
             log.debug("Enabling nodes to send requests again.");
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 0);
