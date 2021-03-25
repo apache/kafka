@@ -207,8 +207,11 @@ def get_jdk(prefs, version):
     jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ) if jdk_java_home.strip() else None
     if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
-    if "1.%d.0" % version not in cmd_output("java -version", env=jdk_env):
-        fail("JDK %s is required" % version)
+    javaVersion = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
+    if version == 8 and "1.8.0" not in javaVersion:
+      fail("JDK 8 is required")
+    elif "%d.0" % version not in javaVersion:
+      fail("JDK %s is required" % version)
     return jdk_env
 
 def get_version(repo=REPO_HOME):
@@ -423,7 +426,7 @@ prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 compilers and libraries
+2. JDK8 and JDK11 compilers and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
