@@ -1148,8 +1148,9 @@ project(':clients') {
 
   task createVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property('commitId', commitId)
+    inputs.property('version', version)
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
     doLast {
       def data = [
         commitId: commitId,
@@ -1263,8 +1264,9 @@ project(':raft') {
 
   task createVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property('commitId', commitId)
+    inputs.property('version', version)
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
     doLast {
       def data = [
         commitId: commitId,
@@ -1505,8 +1507,9 @@ project(':streams') {
 
   task createStreamsVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    inputs.property('commitId', commitId)
+    inputs.property('version', version)
     outputs.file receiptFile
-    outputs.upToDateWhen { false }
     doLast {
       def data = [
               commitId: commitId,
