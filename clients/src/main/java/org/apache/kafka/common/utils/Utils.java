@@ -1343,4 +1343,11 @@ public final class Utils {
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }
+
+    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
+        Map<K, V> res = new HashMap<>(keys.size());
+        keys.forEach(key -> res.put(key, valueSupplier.get()));
+        return res;
+    }
+
 }

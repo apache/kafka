@@ -1528,6 +1528,28 @@ public interface Admin extends AutoCloseable {
     UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
 
     /**
+     * Describe producer state on a set of topic partitions. See
+     * {@link #describeProducers(Collection, DescribeProducersOptions)} for more details.
+     *
+     * @param partitions The set of partitions to query
+     * @return The result
+     */
+    default DescribeProducersResult describeProducers(Collection<TopicPartition> partitions) {
+        return describeProducers(partitions, new DescribeProducersOptions());
+    }
+
+    /**
+     * Describe active producer state on a set of topic partitions. Unless a specific broker
+     * is requested through {@link DescribeProducersOptions#brokerId(int)}, this will
+     * query the partition leader to find the producer state.
+     *
+     * @param partitions The set of partitions to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
