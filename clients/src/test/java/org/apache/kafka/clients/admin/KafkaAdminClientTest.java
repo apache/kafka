@@ -5330,6 +5330,8 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
             env.kafkaClient().setReadyCallback(node -> readyLatch.countDown());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
             final ListTopicsResult result = env.adminClient().listTopics();
 
             readyLatch.await();
@@ -5337,7 +5339,6 @@ public class KafkaAdminClientTest {
             time.sleep(25);
             disconnectFuture.get();
 
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             log.debug("Enabling nodes to send requests again.");
             for (Node node : cluster.nodes()) {
