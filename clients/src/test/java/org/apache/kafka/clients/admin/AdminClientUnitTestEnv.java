@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -113,6 +114,9 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
     @Override
     public void close() {
+        // tell the admin client to close now
+        this.adminClient.close(Duration.ZERO);
+        // block until it is really closed
         this.adminClient.close();
     }
 
