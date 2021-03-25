@@ -563,6 +563,33 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
+  def testDescribeUnderPreferredReplicaPartitions(): Unit = {
+    val underPreRepTopic = "under-preferred-replica-topic"
+    val notUnderPreRepTopic = "not-under-preferred-replica-topic"
+
+    adminClient.createTopics(
+      java.util.Arrays.asList(
+        new NewTopic(underPreRepTopic, Collections.singletonMap(0, java.util.Arrays.asList(0, 1, 2))),
+        new NewTopic(notUnderPreRepTopic, Collections.singletonMap(0, java.util.Arrays.asList(1, 0, 3))))).all().get()
+
+    waitForTopicCreated(underPreRepTopic)
+    waitForTopicCreated(notUnderPreRepTopic)
+
+    try {
+      killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, underPreRepTopic, 0)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-preferred-replica-partitions"))))
+      val rows = output.split("\n")
+      assertEquals(1, rows.size)
+      assertTrue(rows(0).startsWith(s"\tTopic: $underPreRepTopic"))
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
+  @Test
   def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(): Unit = {
     val configMap = new java.util.HashMap[String, String]()
     val replicationFactor: Short = 1
