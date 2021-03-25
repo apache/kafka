@@ -51,3 +51,9 @@ include 'clients',
     'streams:upgrade-system-tests-26',
     'streams:upgrade-system-tests-27',
     'tools'
+
+buildCache {
+    local { enabled = true }
+    remote(HttpBuildCache) { enabled = false } 
+}
+
