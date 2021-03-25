@@ -199,6 +199,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
@@ -5325,12 +5326,19 @@ public class KafkaAdminClientTest {
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 100);
             }
+            CountDownLatch readyLatch = new CountDownLatch(1);
+
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
+            env.kafkaClient().setReadyCallback(node -> readyLatch.countDown());
             final ListTopicsResult result = env.adminClient().listTopics();
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
+            readyLatch.await();
             log.debug("Advancing clock by 25 ms to trigger client-side disconnect.");
             time.sleep(25);
             disconnectFuture.get();
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
             log.debug("Enabling nodes to send requests again.");
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 0);
