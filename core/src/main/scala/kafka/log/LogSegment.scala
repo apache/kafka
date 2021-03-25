@@ -366,6 +366,11 @@ class LogSegment private[log] (val log: FileRecords,
           .format(log.file.getAbsolutePath, validBytes, e.getMessage, e.getCause))
     }
 
+    offsetIndex.trimToValidSize()
+    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
+    timeIndex.trimToValidSize()
+
     log.sizeInBytes - validBytes
   }
 
@@ -397,10 +402,6 @@ class LogSegment private[log] (val log: FileRecords,
       debug(s"Truncating $invalidBytes invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
 
     log.truncateTo(validBytes)
-    offsetIndex.trimToValidSize()
-    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
-    timeIndex.trimToValidSize()
     invalidBytes
   }
 

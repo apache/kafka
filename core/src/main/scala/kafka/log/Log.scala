@@ -673,7 +673,9 @@ class Log(@volatile private var _dir: File,
    * caller is responsible for closing them appropriately, if needed.
    * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
    */
-  private def loadSegmentFiles(): Unit = {
+  private def loadSegmentFiles(): Set[LogSegment] = {
+    val segmentsWithFailedSanityCheck = mutable.Set[LogSegment]()
+
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
     for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
@@ -700,17 +702,16 @@ class Log(@volatile private var _dir: File,
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
-            if (segment.validateSegmentAndRebuildIndices() > 0)
-              throw new KafkaStorageException("Found invalid or corrupted messages in segment " + segment.log.file);
+            segmentsWithFailedSanityCheck += segment
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            if (segment.validateSegmentAndRebuildIndices() > 0)
-              throw new KafkaStorageException("Found invalid or corrupted messages in segment " + segment.log.file);
+            segmentsWithFailedSanityCheck += segment
         }
         addSegment(segment)
       }
     }
+    segmentsWithFailedSanityCheck
   }
 
   /**
@@ -784,7 +785,7 @@ class Log(@volatile private var _dir: File,
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
-    retryOnOffsetOverflow {
+    val segmentsWithFailedSanityCheck = retryOnOffsetOverflow {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
       // loading of segments. In that case, we also need to close all segments that could have been left open in previous
       // call to loadSegmentFiles().
@@ -800,7 +801,7 @@ class Log(@volatile private var _dir: File,
 
     if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = retryOnOffsetOverflow {
-        recoverLog()
+        recoverLog(segmentsWithFailedSanityCheck)
       }
 
       // reset the index size of the currently active log segment to allow more entries
@@ -850,7 +851,7 @@ class Log(@volatile private var _dir: File,
    * logs are loaded.
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
-  private[log] def recoverLog(): Long = {
+  private[log] def recoverLog(segmentsWithFailedSanityCheck: Set[LogSegment]): Long = {
     /** return the log end offset if valid */
     def deleteSegmentsIfLogStartGreaterThanLogEnd(): Option[Long] = {
       if (logSegments.nonEmpty) {
@@ -865,12 +866,15 @@ class Log(@volatile private var _dir: File,
           producerStateManager.truncateFullyAndStartAt(logStartOffset)
           None
         }
-      } else None
+      } else {
+        None
+      }
     }
 
-    // if we have the clean shutdown marker, skip recovery
+    // perform recovery for unflushed segments if we do not have a clean shutdown marker
+    val unflushedSegments = logSegments(this.recoveryPoint, Long.MaxValue)
     if (!hadCleanShutdown) {
-      val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
+      val unflushed = unflushedSegments.iterator
       var truncated = false
 
       while (unflushed.hasNext && !truncated) {
@@ -896,6 +900,19 @@ class Log(@volatile private var _dir: File,
         }
       }
     }
+
+    // rebuild indices for flushed segments with failed sanity check
+    segmentsWithFailedSanityCheck
+      .diff(unflushedSegments.toSet)
+      .foreach { segment =>
+        val invalidBytes = segment.validateSegmentAndRebuildIndices()
+        if (invalidBytes > 0) {
+          segment.offsetIndex.deleteIfExists()
+          segment.timeIndex.deleteIfExists()
+          segment.txnIndex.deleteIfExists()
+          throw new KafkaStorageException(s"Found $invalidBytes invalid bytes in ${segment.log.file}")
+        }
+      }
 
     val logEndOffsetOption = deleteSegmentsIfLogStartGreaterThanLogEnd()
 

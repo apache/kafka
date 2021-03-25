@@ -1462,6 +1462,7 @@ class LogCleanerTest {
     val allEntries =
       for (entryNum <- 0 until offsetIndex.entries)
         yield offsetIndex.entry(entryNum)
+    val offsetIndexLength = offsetIndex.length
 
     // Simulate log recovery after swap file is created and old segment is deleted. Also delete the corresponding
     // offset index and validate that it is recreated after recovery.
@@ -1475,6 +1476,7 @@ class LogCleanerTest {
       for (entryNum <- 0 until recoveredOffsetIndex.entries)
         yield recoveredOffsetIndex.entry(entryNum)
     assertEquals(allEntries, recoveredEntries)
+    assertEquals(offsetIndexLength, recoveredOffsetIndex.length)
   }
 
   @Test

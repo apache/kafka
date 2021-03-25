@@ -45,7 +45,7 @@ import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.collection.{Iterable, Map, mutable}
+import scala.collection.{Iterable, Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
@@ -111,11 +111,11 @@ class LogTest {
           val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxPidExpirationMs)
           val log = new Log(logDir, config, logStartOffset, logRecoveryPoint, time.scheduler, brokerTopicStats, time, maxPidExpirationMs,
             LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, hadCleanShutdown) {
-            override def recoverLog(): Long = {
+            override def recoverLog(segmentsWithFailedSanityCheck: Set[LogSegment]): Long = {
               if (simulateError)
                 throw new RuntimeException
               cleanShutdownInterceptedValue = hadCleanShutdown
-              super.recoverLog()
+              super.recoverLog(segmentsWithFailedSanityCheck)
             }
           }
           log
@@ -2591,7 +2591,7 @@ class LogTest {
     val numMessages = 200
     val logConfig = LogTest.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     var log = createLog(logDir, logConfig)
-    for(i <- 0 until numMessages)
+    for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
     val indexFiles = log.logSegments.map(_.lazyOffsetIndex.file)
     val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
@@ -2606,7 +2606,7 @@ class LogTest {
     assertEquals(numMessages, log.logEndOffset, "Should have %d messages when log is reopened".format(numMessages))
     assertTrue(log.logSegments.head.offsetIndex.entries > 0, "The index should have been rebuilt")
     assertTrue(log.logSegments.head.timeIndex.entries > 0, "The time index should have been rebuilt")
-    for(i <- 0 until numMessages) {
+    for (i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
         assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
@@ -2614,6 +2614,32 @@ class LogTest {
         assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
     }
     log.close()
+  }
+
+  @Test
+  def testMissingIndexWithCorruptedFlushedSegmentThrows(): Unit = {
+    // publish the messages and close the log
+    val numMessages = 200
+    val logConfig = LogTest.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
+    val log = createLog(logDir, logConfig)
+    for (i <- 0 until numMessages)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+    log.flush(log.logEndOffset)
+    val recoveryPoint = log.recoveryPoint
+    val segment = log.logSegments.take(2).last
+    val segmentFile = segment.log.file
+    val indexFile = segment.lazyOffsetIndex.file
+    log.close()
+
+    // write garbage to the segment file and delete corresponding index
+    val bw = new BufferedWriter(new FileWriter(segmentFile))
+    bw.write("corruptRecord")
+    bw.close()
+    indexFile.delete()
+
+    // reopening the log should now fail, regardless of whether the shutdown was clean or not
+    assertThrows(classOf[KafkaStorageException], () => createLog(logDir, logConfig, recoveryPoint = recoveryPoint))
+    assertThrows(classOf[KafkaStorageException], () => createLog(logDir, logConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false))
   }
 
   @Test
