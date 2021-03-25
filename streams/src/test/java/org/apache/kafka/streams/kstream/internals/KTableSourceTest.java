@@ -41,6 +41,7 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -91,6 +92,7 @@ public class KTableSourceTest {
             supplier.theCapturedProcessor().processed());
     }
 
+    @Ignore // we have disabled KIP-557 until KAFKA-12508 can be properly addressed
     @Test
     public void testKTableSourceEmitOnChange() {
         final StreamsBuilder builder = new StreamsBuilder();
