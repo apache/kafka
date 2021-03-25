@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
@@ -50,6 +51,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final AtomicInteger size;
     private final FileChannel channel;
     private volatile File file;
+    private final AtomicBoolean needFlushParentDir;
 
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
@@ -59,13 +61,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
                 FileChannel channel,
                 int start,
                 int end,
-                boolean isSlice) throws IOException {
+                boolean isSlice,
+                boolean needFlushParentDir) throws IOException {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = isSlice;
         this.size = new AtomicInteger();
+        this.needFlushParentDir = new AtomicBoolean(needFlushParentDir);
 
         if (isSlice) {
             // don't check the file size if this is just a slice view
@@ -136,7 +140,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public FileRecords slice(int position, int size) throws IOException {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true, false);
     }
 
     /**
@@ -195,6 +199,19 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void flush() throws IOException {
         channel.force(true);
+        if (needFlushParentDir.getAndSet(false)) {
+            FileChannel dir = null;
+            try {
+                dir = FileChannel.open(file.getAbsoluteFile().getParentFile().toPath(),
+                    java.nio.file.StandardOpenOption.READ);
+                dir.force(true);
+            } catch (Exception e) {
+                throw new KafkaException("Attempt to flush the parent directory of " + file + " failed.");
+            } finally {
+                if (dir != null)
+                    dir.close();
+            }
+        }
     }
 
     /**
@@ -249,6 +266,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         } finally {
             this.file = f;
         }
+        needFlushParentDir.set(true);
     }
 
     /**
@@ -427,7 +445,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false);
+        return new FileRecords(file, channel, 0, end, false, mutable && !fileAlreadyExists);
     }
 
     public static FileRecords open(File file,

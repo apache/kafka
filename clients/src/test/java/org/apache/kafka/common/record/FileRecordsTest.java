@@ -90,7 +90,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
-        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false, false);
         assertThrows(IllegalArgumentException.class, () -> append(records, values));
     }
 
@@ -100,7 +100,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
-        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false));
+        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false, false));
     }
 
     @Test
@@ -314,7 +314,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.position(42L)).thenReturn(null);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false, false);
         fileRecords.truncateTo(42);
 
         verify(channelMock, atLeastOnce()).size();
@@ -331,7 +331,7 @@ public class FileRecordsTest {
 
         when(channelMock.size()).thenReturn(42L);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false, false);
 
         try {
             fileRecords.truncateTo(43);
@@ -353,7 +353,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false, false);
         fileRecords.truncateTo(23);
 
         verify(channelMock, atLeastOnce()).size();
