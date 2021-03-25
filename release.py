@@ -253,7 +253,7 @@ def command_stage_docs():
         sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
 
     prefs = load_prefs()
-    jdk8_env = get_jdk(prefs, 8)
+    jdk11_env = get_jdk(prefs, 11)
     save_prefs(prefs)
 
     version = get_version()
@@ -262,7 +262,7 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk11_env)
 
     docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 
@@ -508,7 +508,7 @@ if not rc:
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
-
+jdk11_env = get_jdk(prefs, 11)
 
 def select_gpg_key():
     print("Here are the available GPG keys:")
@@ -597,7 +597,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
-cmd("Building docs", "./gradlew aggregatedJavadoc", cwd=kafka_dir, env=jdk8_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk11_env)
 cmd("Copying docs", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
 for filename in os.listdir(artifacts_dir):
