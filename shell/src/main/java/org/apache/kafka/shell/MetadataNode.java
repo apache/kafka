@@ -54,7 +54,7 @@ public interface MetadataNode {
             DirectoryNode node = this;
             for (int i = 0; i < names.length - 1; i++) {
                 MetadataNode nextNode = node.children.get(names[i]);
-                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                if (!(nextNode instanceof DirectoryNode)) {
                     throw new RuntimeException("Unable to locate directory /" +
                         String.join("/", names));
                 }
@@ -95,7 +95,7 @@ public interface MetadataNode {
             DirectoryNode node = this;
             for (int i = 0; i < names.length; i++) {
                 MetadataNode nextNode = node.children.get(names[i]);
-                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                if (!(nextNode instanceof DirectoryNode)) {
                     throw new RuntimeException("Unable to locate directory /" +
                         String.join("/", names));
                 }
@@ -111,14 +111,14 @@ public interface MetadataNode {
             DirectoryNode node = this;
             for (int i = 0; i < names.length - 1; i++) {
                 MetadataNode nextNode = node.children.get(names[i]);
-                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                if (!(nextNode instanceof DirectoryNode)) {
                     throw new RuntimeException("Unable to locate file /" +
                         String.join("/", names));
                 }
                 node = (DirectoryNode) nextNode;
             }
             MetadataNode nextNode = node.child(names[names.length -  1]);
-            if (nextNode == null || !(nextNode instanceof FileNode)) {
+            if (!(nextNode instanceof FileNode)) {
                 throw new RuntimeException("Unable to locate file /" +
                     String.join("/", names));
             }

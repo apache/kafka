@@ -303,8 +303,10 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
+    private AtomicLong cacheResizeSize;
     private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
+
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -420,8 +422,6 @@ public class StreamThread extends Thread {
             cache::resize
         );
 
-        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
-
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
@@ -490,6 +490,7 @@ public class StreamThread extends Thread {
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
         this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
         this.assignmentErrorCode = assignmentErrorCode;
+        this.cacheResizeSize = new AtomicLong(-1L);
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
@@ -574,6 +575,10 @@ public class StreamThread extends Thread {
                     log.warn("Detected that shutdown was requested. " +
                             "All clients in this app will now begin to shutdown");
                     mainConsumer.enforceRebalance();
+                }
+                final Long size = cacheResizeSize.getAndSet(-1L);
+                if (size != -1L) {
+                    cacheResizer.accept(size);
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -686,7 +691,7 @@ public class StreamThread extends Thread {
     }
 
     public void resizeCache(final long size) {
-        cacheResizer.accept(size);
+        cacheResizeSize.set(size);
     }
 
     /**
@@ -841,7 +846,7 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration(now)) {
+            if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
                     taskManager.tasks().keySet());

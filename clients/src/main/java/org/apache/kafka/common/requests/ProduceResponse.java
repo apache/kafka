@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -110,31 +109,6 @@ public class ProduceResponse extends AbstractResponse {
     @Override
     public ProduceResponseData data() {
         return this.data;
-    }
-
-    /**
-     * this method is used by testing only.
-     * refactor the tests which are using this method and then remove this method from production code.
-     * https://issues.apache.org/jira/browse/KAFKA-10697
-     */
-    @Deprecated
-    public Map<TopicPartition, PartitionResponse> responses() {
-        return data.responses()
-                .stream()
-                .flatMap(t -> t.partitionResponses()
-                        .stream()
-                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.index()),
-                                new PartitionResponse(
-                                        Errors.forCode(p.errorCode()),
-                                        p.baseOffset(),
-                                        p.logAppendTimeMs(),
-                                        p.logStartOffset(),
-                                        p.recordErrors()
-                                                .stream()
-                                                .map(e -> new RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
-                                                .collect(Collectors.toList()),
-                                        p.errorMessage()))))
-                .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
     }
 
     @Override

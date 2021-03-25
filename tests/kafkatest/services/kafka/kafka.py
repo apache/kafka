@@ -945,8 +945,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return True
 
     def all_nodes_support_topic_ids(self):
+        if self.quorum_info.using_raft: return True
         for node in self.nodes:
-            if not self.node_inter_broker_protocol_version(node).supports_topic_ids():
+            if not self.node_inter_broker_protocol_version(node).supports_topic_ids_when_using_zk():
                 return False
         return True
 
@@ -1120,8 +1121,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
-        PartitionCount:2\tReplicationFactor:2\tConfigs:
-            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+        Topic: test_topic\tTopicId: <topic_id>\tPartitionCount: 2\tReplicationFactor: 2\tConfigs:
+            Topic: test_topic\tPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
             Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
         into a dictionary structure appropriate for use with reassign-partitions tool:
         {
@@ -1387,23 +1388,37 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise
 
     def topic_id(self, topic):
-        if self.quorum_info.using_raft:
-            raise Exception("Not yet implemented: Cannot obtain topic ID information when using Raft instead of ZooKeeper")
-        self.logger.debug(
-            "Querying zookeeper to find assigned topic ID for topic %s." % topic)
-        zk_path = "/brokers/topics/%s" % topic
-        topic_info_json = self.zk.query(zk_path, chroot=self.zk_chroot)
-
-        if topic_info_json is None:
-            raise Exception("Error finding state for topic %s." % topic)
-
-        topic_info = json.loads(topic_info_json)
-        self.logger.info(topic_info)
-
         if self.all_nodes_support_topic_ids():
-            topic_id = topic_info["topic_id"]
-            self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
-            return topic_id
+            node = self.nodes[0]
+
+            force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
+
+            cmd = fix_opts_for_new_jvm(node)
+            cmd += "%s --topic %s --describe" % \
+               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
+
+            self.logger.debug(
+                "Querying topic ID by using describe topic command ...\n%s" % cmd
+            )
+            output = ""
+            for line in node.account.ssh_capture(cmd):
+                output += line
+
+            lines = map(lambda x: x.strip(), output.split("\n"))
+            for line in lines:
+                m = re.match(".*TopicId:.*", line)
+                if m is None:
+                   continue
+
+                fields = line.split("\t")
+                # [Topic: test_topic, TopicId: <topic_id>, PartitionCount: 2, ReplicationFactor: 2, ...]
+                # -> [test_topic, <topic_id>, 2, 2, ...]
+                # -> <topic_id>
+                topic_id = list(map(lambda x: x.split(" ")[1], fields))[1]
+                self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
+
+                return topic_id
+            raise Exception("Error finding topic ID for topic %s." % topic)
         else:
             self.logger.info("No topic ID assigned for topic %s" % topic)
             return None

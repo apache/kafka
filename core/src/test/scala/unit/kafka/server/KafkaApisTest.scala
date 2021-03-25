@@ -79,7 +79,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.{ArgumentMatchers, Mockito}
 
-import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1408,7 +1407,6 @@ class KafkaApisTest {
     }
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
@@ -1455,10 +1453,11 @@ class KafkaApisTest {
 
       val response = capturedResponse.getValue.asInstanceOf[ProduceResponse]
 
-      assertEquals(1, response.responses().size())
-      for (partitionResponse <- response.responses().asScala) {
-        assertEquals(Errors.INVALID_PRODUCER_EPOCH, partitionResponse._2.error)
-      }
+      assertEquals(1, response.data.responses.size)
+      val topicProduceResponse = response.data.responses.asScala.head
+      assertEquals(1, topicProduceResponse.partitionResponses.size)   
+      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+      assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
     }
   }
 
@@ -3278,6 +3277,7 @@ class KafkaApisTest {
     val tp1 = new TopicPartition("foo", 0)
     val tp2 = new TopicPartition("bar", 3)
     val tp3 = new TopicPartition("baz", 1)
+    val tp4 = new TopicPartition("invalid;topic", 1)
 
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
     val data = new DescribeProducersRequestData().setTopics(List(
@@ -3289,8 +3289,10 @@ class KafkaApisTest {
         .setPartitionIndexes(List(Int.box(tp2.partition)).asJava),
       new DescribeProducersRequestData.TopicRequest()
         .setName(tp3.topic)
-        .setPartitionIndexes(List(Int.box(tp3.partition)).asJava)
-
+        .setPartitionIndexes(List(Int.box(tp3.partition)).asJava),
+      new DescribeProducersRequestData.TopicRequest()
+        .setName(tp4.topic)
+        .setPartitionIndexes(List(Int.box(tp4.partition)).asJava)
     ).asJava)
 
     def buildExpectedActions(topic: String): util.List[Action] = {
@@ -3337,11 +3339,19 @@ class KafkaApisTest {
     createKafkaApis(authorizer = Some(authorizer)).handleDescribeProducersRequest(request)
 
     val response = capturedResponse.getValue.asInstanceOf[DescribeProducersResponse]
-    assertEquals(3, response.data.topics.size())
-    assertEquals(Set("foo", "bar", "baz"), response.data.topics.asScala.map(_.name).toSet)
+    assertEquals(Set("foo", "bar", "baz", "invalid;topic"), response.data.topics.asScala.map(_.name).toSet)
 
-    val fooTopic = response.data.topics.asScala.find(_.name == tp1.topic).get
-    val fooPartition = fooTopic.partitions.asScala.find(_.partitionIndex == tp1.partition).get
+    def assertPartitionError(
+      topicPartition: TopicPartition,
+      error: Errors
+    ): DescribeProducersResponseData.PartitionResponse = {
+      val topicData = response.data.topics.asScala.find(_.name == topicPartition.topic).get
+      val partitionData = topicData.partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
+      assertEquals(error, Errors.forCode(partitionData.errorCode))
+      partitionData
+    }
+
+    val fooPartition = assertPartitionError(tp1, Errors.NONE)
     assertEquals(Errors.NONE, Errors.forCode(fooPartition.errorCode))
     assertEquals(1, fooPartition.activeProducers.size)
     val fooProducer = fooPartition.activeProducers.get(0)
@@ -3352,13 +3362,9 @@ class KafkaApisTest {
     assertEquals(-1, fooProducer.currentTxnStartOffset)
     assertEquals(200, fooProducer.coordinatorEpoch)
 
-    val barTopic = response.data.topics.asScala.find(_.name == tp2.topic).get
-    val barPartition = barTopic.partitions.asScala.find(_.partitionIndex == tp2.partition).get
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(barPartition.errorCode))
-
-    val bazTopic = response.data.topics.asScala.find(_.name == tp3.topic).get
-    val bazPartition = bazTopic.partitions.asScala.find(_.partitionIndex == tp3.partition).get
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(bazPartition.errorCode))
+    assertPartitionError(tp2, Errors.TOPIC_AUTHORIZATION_FAILED)
+    assertPartitionError(tp3, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+    assertPartitionError(tp4, Errors.INVALID_TOPIC_EXCEPTION)
   }
 
   @Test
