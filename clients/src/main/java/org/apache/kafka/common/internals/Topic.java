@@ -81,7 +81,7 @@ public class Topic {
     /**
      * Valid characters for Kafka topics are the ASCII alphanumerics, '.', '_', and '-'
      */
-    public static boolean containsValidPattern(String topic) {
+    static boolean containsValidPattern(String topic) {
         for (int i = 0; i < topic.length(); ++i) {
             char c = topic.charAt(i);
 

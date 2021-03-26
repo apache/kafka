@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.test.TestUtils;
@@ -28,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 public class JoinGroupRequestTest {
@@ -56,16 +54,6 @@ public class JoinGroupRequestTest {
             } catch (InvalidConfigurationException e) {
                 // Good
             }
-        }
-    }
-
-    @Test
-    public void shouldRecognizeInvalidCharactersInGroupInstanceIds() {
-        char[] invalidChars = {'/', '\\', ',', '\u0000', ':', '"', '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '='};
-
-        for (char c : invalidChars) {
-            String instanceId = "Is " + c + "illegal";
-            assertFalse(Topic.containsValidPattern(instanceId));
         }
     }
 
