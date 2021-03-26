@@ -690,7 +690,6 @@ public class TaskManagerTest {
 
         task00.setChangelogOffsets(singletonMap(t1p0, 0L));
         taskManager.handleCorruption(singleton(taskId00));
-        assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
@@ -718,7 +717,6 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
@@ -731,7 +729,6 @@ public class TaskManagerTest {
         corruptedTask.setChangelogOffsets(singletonMap(t1p0, 0L));
         taskManager.handleCorruption(singleton(taskId00));
 
-        assertTrue(nonCorruptedTask.commitPrepared);
         assertThat(nonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
@@ -771,48 +768,6 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator);
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
-        verify(consumer);
-    }
-
-    @Test
-    public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
-
-        final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
-        final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
-                throw new TaskMigratedException("You dropped out of the group!", new RuntimeException());
-            }
-        };
-
-        // handleAssignment
-        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment))).andStubReturn(singleton(corruptedStandby));
-        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId01Assignment))).andStubReturn(singleton(runningNonCorruptedActive));
-        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
-        expectLastCall().anyTimes();
-
-        expectRestoreToBeCompleted(consumer, changeLogReader);
-
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
-
-        taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-
-        // make sure this will be committed and throw
-        assertThat(runningNonCorruptedActive.state(), is(Task.State.RUNNING));
-        assertThat(corruptedStandby.state(), is(Task.State.RUNNING));
-
-        runningNonCorruptedActive.setCommitNeeded();
-
-        corruptedStandby.setChangelogOffsets(singletonMap(t1p0, 0L));
-        assertThrows(TaskMigratedException.class, () -> taskManager.handleCorruption(singleton(taskId00)));
-
-
-        assertThat(corruptedStandby.commitPrepared, is(true));
-        assertThat(corruptedStandby.state(), is(Task.State.CREATED));
         verify(consumer);
     }
 
