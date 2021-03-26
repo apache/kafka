@@ -31,8 +31,6 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
  * Instances of this class can be obtained by calling one of:
  *  {@link KafkaStreams#allMetadata()}
  *  {@link KafkaStreams#allMetadataForStore(String)}
- *  {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#metadataForKey(String, Object, Serializer)}
  *
  *  The HostInfo is constructed during Partition Assignment
  *  see {@link StreamsPartitionAssignor}
