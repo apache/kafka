@@ -32,7 +32,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
-import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
@@ -73,7 +72,7 @@ public class ConnectStandalone {
 
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
 
             log.info("Scanning for plugin classes. This might take a moment ...");
             Plugins plugins = new Plugins(workerProps);
@@ -103,14 +102,11 @@ public class ConnectStandalone {
                 connect.start();
                 for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
                     Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
-                    FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
-                        @Override
-                        public void onCompletion(Throwable error, Herder.Created<ConnectorInfo> info) {
-                            if (error != null)
-                                log.error("Failed to create job for {}", connectorPropsFile);
-                            else
-                                log.info("Created connector {}", info.result().name());
-                        }
+                    FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
+                        if (error != null)
+                            log.error("Failed to create job for {}", connectorPropsFile);
+                        else
+                            log.info("Created connector {}", info.result().name());
                     });
                     herder.putConnectorConfig(
                             connectorProps.get(ConnectorConfig.NAME_CONFIG),

@@ -470,7 +470,7 @@ public class RestServerTest {
 
     private String executePut(String host, int port, String endpoint, String jsonBody) throws IOException {
         HttpPut request = new HttpPut(endpoint);
-        StringEntity entity = new StringEntity(jsonBody, "UTF-8");
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
         entity.setContentType("application/json");
         request.setEntity(entity);
         CloseableHttpClient httpClient = HttpClients.createMinimal();

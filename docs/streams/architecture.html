@@ -110,6 +110,11 @@
         and Kafka Streams takes care of distributing partitions amongst tasks that run in the application instances. You can start as many threads of the application
         as there are input Kafka topic partitions so that, across all running instances of an application, every thread (or rather, the tasks it runs) has at least one input partition to process.
     </p>
+    <p>
+        As of Kafka 2.8 you can scale stream threads much in the same way you can scale your Kafka Stream clients.
+        Simply add or remove stream threads and Kafka Streams will take care of redistributing the partitions.
+        You may also add threads to replace stream threads that have died removing the need to restart clients to recover the number of thread running.
+    </p>
     <br>
 
     <h3 class="anchor-heading"><a id="streams_architecture_state" class="anchor-link"></a><a href="#streams_architecture_state">Local State Stores</a></h3>

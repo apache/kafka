@@ -42,7 +42,7 @@
         ]},
         { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
           "versions": "0+", "taggedVersions": "0+", "tag": 0, "fields": [
-          { "name": "LeaderId", "type": "int32", "versions": "0+",
+          { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
             "about": "The ID of the current leader or -1 if the leader is unknown."},
           { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
             "about": "The latest known leader epoch"}
@@ -51,8 +51,8 @@
           "about": "The total size of the snapshot." },
         { "name": "Position", "type": "int64", "versions": "0+",
           "about": "The starting byte position within the snapshot included in the Bytes field." },
-        { "name": "Bytes", "type": "bytes", "versions": "0+", "zeroCopy": true,
-          "about": "Snapshot data." }
+        { "name": "UnalignedRecords", "type": "records", "versions": "0+",
+          "about": "Snapshot data in records format which may not be aligned on an offset boundary" }
       ]}
     ]}
   ]

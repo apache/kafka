@@ -26,11 +26,11 @@ import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
-import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -98,7 +98,7 @@ public class PartitionMakeFollowerBenchmark {
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
             JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-            new scala.collection.mutable.HashMap<>(),
+            new CachedConfigRepository(),
             logConfig,
             new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
             1,
@@ -108,10 +108,10 @@ public class PartitionMakeFollowerBenchmark {
             1000L,
             60000,
             scheduler,
-            new BrokerState(),
             brokerTopicStats,
             logDirFailureChannel,
-            Time.SYSTEM);
+            Time.SYSTEM,
+            true);
 
         TopicPartition tp = new TopicPartition("topic", 0);
 
@@ -120,7 +120,7 @@ public class PartitionMakeFollowerBenchmark {
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            Properties::new, isrChangeListener, delayedOperations,
+            isrChangeListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints);
         executorService.submit((Runnable) () -> {

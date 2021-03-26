@@ -16,6 +16,7 @@
 {
   "apiKey": 8,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "OffsetCommitRequest",
   // Version 1 adds timestamp and group membership information, as well as the commit timestamp.
   //

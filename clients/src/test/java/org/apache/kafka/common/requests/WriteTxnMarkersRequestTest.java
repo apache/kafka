@@ -19,13 +19,13 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class WriteTxnMarkersRequestTest {
 
@@ -39,7 +39,7 @@ public class WriteTxnMarkersRequestTest {
 
     private static List<WriteTxnMarkersRequest.TxnMarkerEntry> markers;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         markers = Collections.singletonList(
              new WriteTxnMarkersRequest.TxnMarkerEntry(
@@ -51,7 +51,7 @@ public class WriteTxnMarkersRequestTest {
     @Test
     public void testConstructor() {
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), markers);
-        for (short version = 0; version <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(); version++) {
+        for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             assertEquals(1, request.markers().size());
             WriteTxnMarkersRequest.TxnMarkerEntry marker = request.markers().get(0);
@@ -66,7 +66,7 @@ public class WriteTxnMarkersRequestTest {
     @Test
     public void testGetErrorResponse() {
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), markers);
-        for (short version = 0; version <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(); version++) {
+        for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             WriteTxnMarkersResponse errorResponse =
                 request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_PRODUCER_ID.exception());

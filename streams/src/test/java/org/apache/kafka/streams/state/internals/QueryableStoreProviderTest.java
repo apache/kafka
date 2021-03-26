@@ -58,14 +58,16 @@ public class QueryableStoreProviderTest {
             );
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())).get("1");
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(
+            StoreQueryParameters.fromNameAndType("not-a-store", QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test
@@ -78,14 +80,16 @@ public class QueryableStoreProviderTest {
         assertNotNull(storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.windowStore())));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore, QueryableStoreTypes.keyValueStore())).get("1");
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(windowStore,
+            QueryableStoreTypes.keyValueStore())).get("1"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
-        storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis());
+        assertThrows(InvalidStateStoreException.class, () -> storeProvider.getStore(StoreQueryParameters.fromNameAndType(keyValueStore,
+            QueryableStoreTypes.windowStore())).fetch("1", System.currentTimeMillis()));
     }
 
     @Test

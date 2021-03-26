@@ -35,8 +35,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Map
@@ -54,7 +54,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val tp = t1p0
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()

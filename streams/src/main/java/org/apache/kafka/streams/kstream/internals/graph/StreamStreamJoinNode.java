@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.Joined;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.WindowStore;
@@ -36,7 +36,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
 
     private StreamStreamJoinNode(final String nodeName,
-                                 final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                                 final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
                                  final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
                                  final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters,
                                  final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
@@ -96,7 +96,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     public static final class StreamStreamJoinNodeBuilder<K, V1, V2, VR> {
 
         private String nodeName;
-        private ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
+        private ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner;
         private ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters;
         private ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters;
         private ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters;
@@ -111,7 +111,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         }
 
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner) {
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }

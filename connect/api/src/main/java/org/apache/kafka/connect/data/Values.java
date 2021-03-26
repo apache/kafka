@@ -891,7 +891,7 @@ public class Values {
         }
 
         String token = parser.next();
-        if (token.trim().isEmpty()) {
+        if (Utils.isBlank(token)) {
             return new SchemaAndValue(Schema.STRING_SCHEMA, token);
         }
         token = token.trim();
@@ -1253,7 +1253,7 @@ public class Values {
                 nextToken = consumeNextToken();
             }
             if (ignoreLeadingAndTrailingWhitespace) {
-                while (nextToken.trim().isEmpty() && canConsumeNextToken()) {
+                while (Utils.isBlank(nextToken) && canConsumeNextToken()) {
                     nextToken = consumeNextToken();
                 }
             }

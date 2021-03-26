@@ -18,8 +18,8 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.junit.Assert.{assertEquals, assertThrows, assertTrue}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -47,9 +47,7 @@ class FinalizedFeatureCacheTest {
     assertEquals(finalizedFeatures, cache.get.get.features)
     assertEquals(10, cache.get.get.epoch)
 
-    assertThrows(
-      classOf[FeatureCacheUpdateException],
-      () => cache.updateOrThrow(finalizedFeatures, 9))
+    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateOrThrow(finalizedFeatures, 9))
 
     // Check that the failed updateOrThrow call did not make any mutations.
     assertTrue(cache.get.isDefined)
@@ -69,9 +67,7 @@ class FinalizedFeatureCacheTest {
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     val cache = new FinalizedFeatureCache(brokerFeatures)
-    assertThrows(
-      classOf[FeatureCacheUpdateException],
-      () => cache.updateOrThrow(finalizedFeatures, 12))
+    assertThrows(classOf[FeatureCacheUpdateException], () => cache.updateOrThrow(finalizedFeatures, 12))
 
     // Check that the failed updateOrThrow call did not make any mutations.
     assertTrue(cache.isEmpty)

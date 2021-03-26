@@ -37,8 +37,9 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -70,8 +71,18 @@ import static org.junit.Assert.fail;
 @Category(IntegrationTest.class)
 @SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
-    @ClassRule
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
@@ -128,8 +139,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             TestUtils.waitForCondition(() -> counter.get() == 1, "Handler was called 1st time");
             // should call the UncaughtExceptionHandler after rebalancing to another thread
             TestUtils.waitForCondition(() -> counter.get() == 2, DEFAULT_DURATION.toMillis(), "Handler was called 2nd time");
-            // the stream should now turn into ERROR state after 2 threads are dead
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
+            // there is no threads running but the client is still in running
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(2));
         }
@@ -145,7 +156,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
@@ -194,7 +205,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
