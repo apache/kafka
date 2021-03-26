@@ -500,6 +500,8 @@ public class TaskManager {
 
         // even if commit failed, we should still continue and complete suspending those tasks,
         // so we would capture any exception and throw
+        // keep track of which tasks are corrupted so we can skip checkpointing them but allow it for the clean tasks
+        final Set<TaskId> corruptedTasks = new HashSet<>();
         try {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final RuntimeException e) {
@@ -508,7 +510,7 @@ public class TaskManager {
             // if we hit a TaskCorruptedException, we have to peel off any revoked tasks since they will be gone by
             // the time the exception is bubbled up through poll()
             if (e instanceof TaskCorruptedException) {
-                final Set<TaskId> corruptedTasks = ((TaskCorruptedException) e).corruptedTasks();
+                corruptedTasks.addAll(((TaskCorruptedException) e).corruptedTasks());
                 final Set<TaskId> stillAssignedCorruptedTasks = new HashSet<>();
                 final Set<TaskId> revokedCorruptedTasks = new HashSet<>();
 
@@ -522,23 +524,27 @@ public class TaskManager {
                 }
 
                 // If any of the corrupted tasks are being revoked, we need to filter them from the
-                // TaskCorruptedException otherwise we will try to revive tasks we no longer own
-                // Any revoked tasks will be detected and closed dirty in handleAssignment and wipe their state
+                // TaskCorruptedException otherwise we will try to revive tasks we no longer own after this rebalance
+
+                // Any revoked tasks will be detected and closed dirty in handleAssignment, and since we only throw
+                // TaskCorruptedException from the offset commit for EOS tasks this means their corrupted state will be wiped
                 if (!stillAssignedCorruptedTasks.isEmpty()) {
                     log.info("Removing revoked tasks {} from the corrupted list, the remaining tasks will be revived " +
                         "after the rebalance has completed.", revokedCorruptedTasks);
 
                     // TODO: usually we would always save the first seen exception to rethrow, but TaskCorruptedException
-                    // must be bubbled up to the StreamThread to ensure corrupted state is cleared and revived
+                    // must be bubbled up to the StreamThread to ensure corrupted state is cleared and revived, should
+                    // find a better way to handle corrupted tasks here
                     firstException.set(new TaskCorruptedException(stillAssignedCorruptedTasks));
                 } else {
-                    // If all corrupted tasks are being revoked, we can just close them dirty in handleAssignment
-                    // and can swallow the exception
-                    log.info("All the corrupted tasks are being revoked so the exception can be swallowed: {}",
+                    // If all corrupted tasks are being revoked, we can just close them dirty in handleAssignment and
+                    // can swallow the exception since there's no need to close and revive anything after this rebalance
+                    log.info("All the corrupted tasks are being revoked so the TaskCorruptedException can be swallowed: {}",
                              revokedCorruptedTasks);
                 }
             } else {
                 // TODO: KIP-572 need to handle TimeoutException, may be rethrown from committing offsets under ALOS
+                // currently we just let the thread die but we can probably just close those tasks as dirty and proceed
                 firstException.compareAndSet(null, e);
             }
         }
@@ -546,26 +552,30 @@ public class TaskManager {
         // only try to complete post-commit if committing succeeded;
         // we enforce checkpointing upon suspending a task: if it is resumed later we just
         // proceed normally, if it is going to be closed we would checkpoint by then
-        if (firstException.get() == null) {
+        if (firstException.get() == null || !corruptedTasks.isEmpty()) {
             for (final Task task : revokedActiveTasks) {
-                try {
-                    task.postCommit(true);
-                } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task " + task.id(), e);
-                    firstException.compareAndSet(null, e);
+                if (!corruptedTasks.contains(task.id())) {
+                    try {
+                        task.postCommit(true);
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        firstException.compareAndSet(null, e);
+                    }
                 }
             }
 
             if (shouldCommitAdditionalTasks) {
                 for (final Task task : commitNeededActiveTasks) {
-                    try {
-                        // for non-revoking active tasks, we should not enforce checkpoint
-                        // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
-                        task.postCommit(false);
-                    } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, e);
+                    if (!corruptedTasks.contains(task.id())) {
+                        try {
+                            // for non-revoking active tasks, we should not enforce checkpoint
+                            // since if it is EOS enabled, no checkpoint should be written while
+                            // the task is in RUNNING tate
+                            task.postCommit(false);
+                        } catch (final RuntimeException e) {
+                            log.error("Exception caught while post-committing task " + task.id(), e);
+                            firstException.compareAndSet(null, e);
+                        }
                     }
                 }
             }
