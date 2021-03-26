@@ -57,7 +57,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -172,7 +174,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             streamsThree.close();
             streamsThree = null;
         }
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
     private enum JoinType {
@@ -184,26 +186,25 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
-        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne);
     }
 
     private void verifyKTableKTableJoin(final JoinType joinType,
-                                        final Set<KeyValue<Integer, String>> expectedResult,
-                                        final boolean verifyQueryableState) throws Exception {
-        final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
-        final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
+                                        final Set<KeyValue<Integer, String>> expectedResult) throws Exception {
+        final String queryableName = joinType + "-store1";
+        final String queryableNameTwo = joinType + "-store2";
 
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
-        streams.start();
-        streamsTwo.start();
-        streamsThree.start();
+
+        final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                CONSUMER_CONFIG,
-                OUTPUT,
-                expectedResult.size()));
+            CONSUMER_CONFIG,
+            OUTPUT,
+            expectedResult.size()));
 
         assertEquals(expectedResult, result);
     }
@@ -215,6 +216,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        // increase the heartbeat interval and corresponding session timeout value, to avoid unnecessary rebalance
+        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
         return streamsConfig;
     }
 
@@ -274,7 +278,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
 
         table1.join(table2, tableOneKeyExtractor, joiner, materialized)
-              .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)
+            .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)
             .toStream()
             .to(OUTPUT,
                 Produced.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
