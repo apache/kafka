@@ -322,18 +322,6 @@ public class InternalMockProcessorContext
         forward(key, value, To.all());
     }
 
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final int childIndex) {
-        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final String childName) {
-        forward(key, value, To.child(childName));
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void forward(final Object key, final Object value, final To to) {

@@ -116,18 +116,6 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new StreamsException(EXPLANATION);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new StreamsException(EXPLANATION);
-    }
-
-    @Override
     public void commit() {
         delegate.commit();
     }

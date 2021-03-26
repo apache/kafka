@@ -106,18 +106,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        forward(key, value);
-    }
-
-    @Override
     public void commit() {}
 
     @Override
