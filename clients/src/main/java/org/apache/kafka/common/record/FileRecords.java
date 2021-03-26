@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
@@ -34,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
