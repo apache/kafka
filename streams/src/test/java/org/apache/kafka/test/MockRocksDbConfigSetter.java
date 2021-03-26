@@ -35,6 +35,5 @@ public class MockRocksDbConfigSetter implements RocksDBConfigSetter {
 
     @Override
     public void close(String storeName, Options options) {
-        LOG.warn("The default close was removed in 3.0.0 -- you should overwrite it if you have implemented RocksDBConfigSetter");
     }
 }
