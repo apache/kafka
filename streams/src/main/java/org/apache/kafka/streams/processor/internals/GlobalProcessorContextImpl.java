@@ -80,7 +80,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <KIn, VIn> void forward(final KIn key, final VIn value) {
         forward(new Record<>(key, value, timestamp(), headers()));
@@ -94,24 +93,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         if (!currentNode().children().isEmpty()) {
             throw new IllegalStateException("This method should only be called on 'GlobalStateStore.flush' that should not have any children.");
         }
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
     @Override
