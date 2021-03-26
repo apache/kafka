@@ -40,6 +40,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -177,6 +178,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         testShutdownApplication(2);
     }
 
+    @Ignore // TODO -- re-enable this test after KAFKA-12537
     @Test
     public void shouldShutdownSingleThreadApplication() throws InterruptedException {
         testShutdownApplication(1);

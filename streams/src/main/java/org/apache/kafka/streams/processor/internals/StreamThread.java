@@ -553,6 +553,9 @@ public class StreamThread extends Thread {
         boolean cleanRun = false;
         try {
             cleanRun = runLoop();
+        } catch (final Throwable e) {
+            failedStreamThreadSensor.record();
+            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -573,7 +576,7 @@ public class StreamThread extends Thread {
             try {
                 if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
                     log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
+                                 "All clients in this app will now begin to shutdown");
                     mainConsumer.enforceRebalance();
                 }
                 final Long size = cacheResizeSize.getAndSet(-1L);
@@ -588,7 +591,7 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
-                        "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                             "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
                     taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
@@ -599,24 +602,16 @@ public class StreamThread extends Thread {
             } catch (final UnsupportedVersionException e) {
                 final String errorMessage = e.getMessage();
                 if (errorMessage != null &&
-                        errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                                    "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                            StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                            EXACTLY_ONCE_BETA);
+                                  "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                              StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                              EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    return false;
-                }
-            } catch (final Throwable e) {
-                failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    return false;
-                }
+                return false;
             }
         }
         return true;
