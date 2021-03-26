@@ -498,10 +498,9 @@ public class TaskManager {
             prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
         }
 
-        // even if commit failed, we should still continue and complete suspending those tasks,
-        // so we would capture any exception and throw
-        // keep track of which tasks are corrupted so we can skip checkpointing them but allow it for the clean tasks
-        final Set<TaskId> corruptedTasks = new HashSet<>();
+        // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
+        // any exception and rethrow it at the end
+        boolean tasksCorrupted = false;
         try {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final RuntimeException e) {
@@ -510,12 +509,14 @@ public class TaskManager {
             // If we hit a TaskCorruptedException, we have to filter out any revoked tasks since they will no longer be
             // owned or recognized by the time the exception is bubbled up through poll() and rethrown
             if (e instanceof TaskCorruptedException) {
-                corruptedTasks.addAll(((TaskCorruptedException) e).corruptedTasks());
+                tasksCorrupted = true;
+                final Set<TaskId> corruptedTasks = new HashSet<>(((TaskCorruptedException) e).corruptedTasks());
                 final Set<TaskId> stillAssignedCorruptedTasks = new HashSet<>();
                 final Set<TaskId> revokedCorruptedTasks = new HashSet<>();
 
                 for (final TaskId taskId : corruptedTasks) {
                     final Task task = tasks.task(taskId);
+                    task.markChangelogAsCorrupted(task.changelogPartitions());
                     if (!revokedActiveTasks.contains(task)) {
                         stillAssignedCorruptedTasks.add(taskId);
                     } else {
@@ -523,8 +524,6 @@ public class TaskManager {
                     }
                 }
 
-                // Any revoked tasks will be detected and closed dirty in handleAssignment, and since we only throw
-                // TaskCorruptedException from the offset commit for EOS tasks this means their corrupted state will be wiped
                 if (!stillAssignedCorruptedTasks.isEmpty()) {
                     log.info("Removing revoked tasks {} from the corrupted list, the remaining tasks will be revived " +
                         "after the rebalance has completed.", revokedCorruptedTasks);
@@ -534,8 +533,8 @@ public class TaskManager {
                     // find a better way to handle corrupted tasks here
                     firstException.set(new TaskCorruptedException(stillAssignedCorruptedTasks));
                 } else {
-                    // If all corrupted tasks are being revoked, we can just close them dirty in handleAssignment and
-                    // can swallow the exception since there's no need to close and revive anything after this rebalance
+                    // If all corrupted tasks are being revoked, we can swallow the exception since there's no need
+                    // to close and revive anything after this rebalance
                     log.info("All the corrupted tasks are being revoked so the TaskCorruptedException can be swallowed: {}",
                              revokedCorruptedTasks);
                 }
@@ -546,33 +545,30 @@ public class TaskManager {
             }
         }
 
-        // only try to complete post-commit if committing succeeded;
-        // we enforce checkpointing upon suspending a task: if it is resumed later we just
-        // proceed normally, if it is going to be closed we would checkpoint by then
-        if (firstException.get() == null || !corruptedTasks.isEmpty()) {
+        // only try to complete post-commit if committing succeeded, or if he hit a TaskCorrupted and need to force a
+        // checkpoint with those corrupted changelogs removed
+        // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
+        // going to be closed we would checkpoint by then
+        if (firstException.get() == null || tasksCorrupted) {
             for (final Task task : revokedActiveTasks) {
-                if (!corruptedTasks.contains(task.id())) {
-                    try {
-                        task.postCommit(true);
-                    } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, e);
-                    }
+                try {
+                    task.postCommit(true);
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    firstException.compareAndSet(null, e);
                 }
             }
 
             if (shouldCommitAdditionalTasks) {
                 for (final Task task : commitNeededActiveTasks) {
-                    if (!corruptedTasks.contains(task.id())) {
-                        try {
-                            // for non-revoking active tasks, we should not enforce checkpoint
-                            // since if it is EOS enabled, no checkpoint should be written while
-                            // the task is in RUNNING tate
-                            task.postCommit(false);
-                        } catch (final RuntimeException e) {
-                            log.error("Exception caught while post-committing task " + task.id(), e);
-                            firstException.compareAndSet(null, e);
-                        }
+                    try {
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING tate
+                        task.postCommit(false);
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        firstException.compareAndSet(null, e);
                     }
                 }
             }
