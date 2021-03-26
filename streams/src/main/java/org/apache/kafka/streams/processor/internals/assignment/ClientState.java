@@ -110,7 +110,10 @@ public class ClientState {
     }
 
     public void assignActiveToConsumer(final TaskId task, final String consumer) {
-        assignedActiveTasks.consumerToTaskIds().computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
+        if (assignedActiveTasks.taskIds().contains(task)) {
+            assignedActiveTasks.consumerToTaskIds()
+                               .computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
+        }
     }
 
     public void assignStandbyToConsumer(final TaskId task, final String consumer) {
