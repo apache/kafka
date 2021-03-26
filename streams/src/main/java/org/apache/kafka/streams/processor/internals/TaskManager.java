@@ -507,8 +507,8 @@ public class TaskManager {
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
 
-            // if we hit a TaskCorruptedException, we have to peel off any revoked tasks since they will be gone by
-            // the time the exception is bubbled up through poll()
+            // If we hit a TaskCorruptedException, we have to filter out any revoked tasks since they will no longer be
+            // owned or recognized by the time the exception is bubbled up through poll() and rethrown
             if (e instanceof TaskCorruptedException) {
                 corruptedTasks.addAll(((TaskCorruptedException) e).corruptedTasks());
                 final Set<TaskId> stillAssignedCorruptedTasks = new HashSet<>();
@@ -522,9 +522,6 @@ public class TaskManager {
                         revokedCorruptedTasks.add(taskId);
                     }
                 }
-
-                // If any of the corrupted tasks are being revoked, we need to filter them from the
-                // TaskCorruptedException otherwise we will try to revive tasks we no longer own after this rebalance
 
                 // Any revoked tasks will be detected and closed dirty in handleAssignment, and since we only throw
                 // TaskCorruptedException from the offset commit for EOS tasks this means their corrupted state will be wiped
