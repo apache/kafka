@@ -68,10 +68,10 @@ controllers, you can tolerate 1 failure; with 5 controllers, you can tolerate 2 
 ## Process Roles
 Each Kafka server now has a new configuration key called `process.roles` which can have the following values:
 
-* If `process.roles` is set to `broker`, the server acts as a broker.
-* If `process.roles` is set to `controller`, the server acts as a controller.
-* If `process.roles` is set to `broker,controller`, the server acts as both a broker and a controller.
-* If `process.roles` is not set at all then we are assumed to be in ZooKeeper mode.  As mentioned earlier, you can't currently transition back and forth between ZK mode and Raft mode without reformatting.
+* If `process.roles` is set to `broker`, the server acts as a broker in Raft mode.
+* If `process.roles` is set to `controller`, the server acts as a controller in Raft mode.
+* If `process.roles` is set to `broker,controller`, the server acts as both a broker and a controller in Raft mode.
+* If `process.roles` is not set at all then we are assumed to be in ZooKeeper mode.  As mentioned earlier, you can't currently transition back and forth between ZooKeeper mode and Raft mode without reformatting.
 
 Nodes that act as both brokers and controllers are referred to as "combined" nodes.  Combined nodes are simpler to operate for simple use cases and allow you to avoid
 some fixed memory overheads associated with JVMs.  The key disadvantage is that the controller will be less isolated from the rest of the system.  For example, if activity on the broker causes an out of
