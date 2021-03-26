@@ -492,7 +492,7 @@ public class KafkaStreams implements AutoCloseable {
                 closeToError();
                 break;
             case SHUTDOWN_APPLICATION:
-                if (getNumLiveStreamThreads() <= 1) {
+                if (getNumLiveStreamThreads() == 1) {
                     log.warn("Attempt to shut down the application requires adding a thread to communicate the shutdown. No processing will be done on this thread");
                     addStreamThread();
                 }
@@ -500,6 +500,13 @@ public class KafkaStreams implements AutoCloseable {
                     log.error("This option requires running threads to shut down the application." +
                             "but the uncaught exception was an Error, which means this runtime is no " +
                             "longer in a well-defined state. Attempting to send the shutdown command anyway.", throwable);
+                }
+                if (Thread.currentThread().equals(globalStreamThread) && getNumLiveStreamThreads() == 0) {
+                    log.error("Exception in global thread caused the application to attempt to shutdown." +
+                            " This action will succeed only if there is at least one StreamThread running on this client." +
+                            " Currently there are no running threads so will now close the client.");
+                    closeToError();
+                    break;
                 }
                 processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
                 log.error("Encountered the following exception during processing " +

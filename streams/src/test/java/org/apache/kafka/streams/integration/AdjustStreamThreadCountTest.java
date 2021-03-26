@@ -190,44 +190,6 @@ public class AdjustStreamThreadCountTest {
     }
 
     @Test
-    public void shouldAddStreamThreadToGlobalOnly() throws Exception {
-        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
-        builder = new StreamsBuilder();
-        builder.globalTable(inputTopic);
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            addStreamStateChangeListener(kafkaStreams);
-            startStreamsAndWaitForRunning(kafkaStreams);
-
-            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {}));
-
-            stateTransitionHistory.clear();
-            final Optional<String> name = kafkaStreams.addStreamThread();
-
-            assertThat(name, not(Optional.empty()));
-            TestUtils.waitForCondition(
-                    () -> kafkaStreams.localThreadsMetadata().stream().sequential()
-                            .map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
-                    "Wait for the thread to be added"
-            );
-            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
-            assertThat(
-                    kafkaStreams
-                            .localThreadsMetadata()
-                            .stream()
-                            .map(t -> t.threadName().split("-StreamThread-")[1])
-                            .sorted().toArray(),
-                    equalTo(new String[] {"1"})
-            );
-
-            TestUtils.waitForCondition(
-                    () -> KafkaStreams.State.ERROR == kafkaStreams.state(),
-                    "Wait for the thread to be be in ERROR"
-            );
-        }
-    }
-
-    @Test
     public void shouldRemoveStreamThread() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             addStreamStateChangeListener(kafkaStreams);
