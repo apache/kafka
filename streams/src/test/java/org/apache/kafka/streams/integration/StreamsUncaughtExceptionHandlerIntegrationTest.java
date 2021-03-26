@@ -178,7 +178,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         testShutdownApplication(2);
     }
 
-    @Ignore // TODO -- re-enable this test after KAFKA-12537
     @Test
     public void shouldShutdownSingleThreadApplication() throws InterruptedException {
         testShutdownApplication(1);

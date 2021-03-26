@@ -2328,8 +2328,7 @@ public class StreamThreadTest {
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
-        thread.setState(StreamThread.State.STARTING);
-        thread.runLoop();
+        thread.run();
 
         verify(taskManager);
     }
@@ -2354,14 +2353,13 @@ public class StreamThreadTest {
 
         final Set<TaskId> corruptedTasks = singleton(taskId1);
 
-        expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
-        expect(task1.id()).andReturn(taskId1).anyTimes();
-        expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
-        expect(task2.id()).andReturn(taskId2).anyTimes();
+        expect(task1.state()).andStubReturn(Task.State.RUNNING);
+        expect(task1.id()).andStubReturn(taskId1);
+        expect(task2.state()).andStubReturn(Task.State.RUNNING);
+        expect(task2.id()).andStubReturn(taskId2);
 
         taskManager.handleCorruption(corruptedTasks);
         expectLastCall().andThrow(new TimeoutException());
-
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2395,9 +2393,8 @@ public class StreamThreadTest {
 
         final AtomicBoolean exceptionHandlerInvoked = new AtomicBoolean(false);
 
-        thread.setState(StreamThread.State.STARTING);
         thread.setStreamsUncaughtExceptionHandler(e -> exceptionHandlerInvoked.set(true));
-        thread.runLoop();
+        thread.run();
 
         verify(taskManager);
         assertThat(exceptionHandlerInvoked.get(), is(true));
@@ -2800,9 +2797,8 @@ public class StreamThreadTest {
         };
         EasyMock.replay(taskManager);
         thread.updateThreadMetadata("metadata");
-        thread.setState(StreamThread.State.STARTING);
 
-        thread.runLoop();
+        thread.run();
 
         final Metric failedThreads = StreamsTestUtils.getMetricByName(metrics.metrics(), "failed-stream-threads", "stream-metrics");
         assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
