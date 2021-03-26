@@ -662,6 +662,13 @@ subprojects {
     }
   }
 
+  normalization {
+    runtimeClasspath {
+        ignore '**/kafka-version.properties'
+        ignore '**/kafka-streams-version.properties'
+    }
+  }
+
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
