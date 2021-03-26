@@ -82,7 +82,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 /**
- * QuorumController implements the main logic of the self-managed controller (aka KIP-500).
+ * QuorumController implements the main logic of the Raft (aka KIP-500) controller.
  *
  * The node which is the leader of the metadata log becomes the active controller.  All
  * other nodes remain in standby mode.  Standby controllers cannot create new metadata log

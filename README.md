@@ -82,9 +82,9 @@ fail due to code changes. You can just run:
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
 
-### Running a Kafka broker in self-managed mode
+### Running a Kafka broker in Raft mode
 
-See [config/self-managed/README.md](https://github.com/apache/kafka/blob/trunk/config/self-managed/README.md).
+See [config/raft/README.md](https://github.com/apache/kafka/blob/trunk/config/raft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
