@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -59,7 +58,7 @@ public class JoinGroupRequestTest {
         }
     }
     
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testRequestVersionCompatibilityFailBuild() {
         assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(
             new JoinGroupRequestData()
