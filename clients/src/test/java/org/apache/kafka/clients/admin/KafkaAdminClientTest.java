@@ -5326,7 +5326,7 @@ public class KafkaAdminClientTest {
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 100);
             }
-            CountDownLatch readyLatch = new CountDownLatch(1);
+            CountDownLatch readyLatch = new CountDownLatch(2);
 
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
             env.kafkaClient().setReadyCallback(node -> readyLatch.countDown());
