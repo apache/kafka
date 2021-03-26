@@ -5326,6 +5326,10 @@ public class KafkaAdminClientTest {
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 100);
             }
+
+            // We use a countdown latch to ensure that we get to the first
+            // call to `ready` before we increment the time below to trigger
+            // the disconnect.
             CountDownLatch readyLatch = new CountDownLatch(2);
 
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
