@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -26,7 +25,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import java.util.{Optional, Properties}
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
@@ -160,10 +159,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @Test
   def testResponseIncludesLeaderEpoch(): Unit = {
-    val topicConfig = new Properties
-    // make sure we won't lose data when force-removing leader
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers, topicConfig)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
