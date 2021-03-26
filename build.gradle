@@ -1151,6 +1151,7 @@ project(':clients') {
     inputs.property('commitId', commitId)
     inputs.property('version', version)
     outputs.file receiptFile
+    outputs.cacheIf { true }
     doLast {
       def data = [
         commitId: commitId,
@@ -1267,6 +1268,7 @@ project(':raft') {
     inputs.property('commitId', commitId)
     inputs.property('version', version)
     outputs.file receiptFile
+    outputs.cacheIf { true }
     doLast {
       def data = [
         commitId: commitId,
@@ -1510,6 +1512,7 @@ project(':streams') {
     inputs.property('commitId', commitId)
     inputs.property('version', version)
     outputs.file receiptFile
+    outputs.cacheIf { true }
     doLast {
       def data = [
               commitId: commitId,
