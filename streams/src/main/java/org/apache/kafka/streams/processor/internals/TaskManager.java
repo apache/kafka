@@ -524,24 +524,25 @@ public class TaskManager {
         final Set<TaskId> corruptedTasks = new HashSet<>();
         try {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
+        } catch (final TaskCorruptedException e) {
+            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                     e.corruptedTasks());
+
+            // If we hit a TaskCorruptedException, we should just handle the cleanup for those corrupted tasks right here
+            corruptedTasks.addAll(e.corruptedTasks());
+            final Map<Task, Collection<TopicPartition>> corruptedTasksWithChangelogs = new HashMap<>();
+            for (final TaskId taskId : corruptedTasks) {
+                final Task task = tasks.task(taskId);
+                task.markChangelogAsCorrupted(task.changelogPartitions());
+                corruptedTasksWithChangelogs.put(task, task.changelogPartitions());
+            }
+            closeAndRevive(corruptedTasksWithChangelogs);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
 
-            // If we hit a TaskCorruptedException, we should just handle the cleanup for those corrupted tasks right here
-            if (e instanceof TaskCorruptedException) {
-                corruptedTasks.addAll(((TaskCorruptedException) e).corruptedTasks());
-                final Map<Task, Collection<TopicPartition>> corruptedTasksWithChangelogs = new HashMap<>();
-                for (final TaskId taskId : corruptedTasks) {
-                    final Task task = tasks.task(taskId);
-                    task.markChangelogAsCorrupted(task.changelogPartitions());
-                    corruptedTasksWithChangelogs.put(task, task.changelogPartitions());
-                }
-                closeAndRevive(corruptedTasksWithChangelogs);
-            } else {
-                // TODO: KIP-572 need to handle TimeoutException, may be rethrown from committing offsets under ALOS
-                // currently we just let the thread die but we can probably just close those tasks as dirty and proceed
-                firstException.compareAndSet(null, e);
-            }
+            // TODO: KIP-572 need to handle TimeoutException, may be rethrown from committing offsets under ALOS
+            // currently we just let the thread die but we can probably just close those tasks as dirty and proceed
+            firstException.compareAndSet(null, e);
         }
 
         // only try to complete post-commit if committing succeeded, or if we hit a TaskCorruptedException then we
