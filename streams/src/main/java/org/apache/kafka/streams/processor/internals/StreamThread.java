@@ -589,7 +589,11 @@ public class StreamThread extends Thread {
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                         "Will close the task as dirty and re-create and bootstrap from scratch.", e);
-                taskManager.handleCorruption(e.corruptedTasks());
+                try {
+                    taskManager.handleCorruption(e.corruptedTasks());
+                } catch (final TaskMigratedException taskMigrated) {
+                    handleTaskMigrated(taskMigrated);
+                }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final UnsupportedVersionException e) {
@@ -607,9 +611,6 @@ public class StreamThread extends Thread {
                 if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
                     return false;
                 }
-                // TODO: extract this catch block to encompass all of runLoop, in case exceptions slip through one of the
-                // handling methods in the other catch blocks. Note this we'll need to extract the UnsupportedVersionException
-                // as well since it invokes the exception handler, and the old-style handler relies on rethrowing exceptions
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);

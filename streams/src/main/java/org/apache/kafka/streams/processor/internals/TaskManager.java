@@ -167,7 +167,28 @@ public class TaskManager {
             }
         }
 
+        // Make sure to clean up any corrupted standby tasks in their entirety before committing
+        // since TaskMigrated can be thrown and the resulting handleLostAll will only clean up active tasks
         closeAndRevive(corruptedStandbyTasks);
+
+        // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
+        try {
+            commit(tasks()
+                       .values()
+                       .stream()
+                       .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                       .filter(t -> !corruptedTasks.contains(t.id()))
+                       .collect(Collectors.toSet())
+            );
+        } catch (final TaskCorruptedException e) {
+            log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
+                         "tasks to clean and revive: {}", e.corruptedTasks());
+            for (final TaskId taskId : e.corruptedTasks()) {
+                final Task task = tasks.task(taskId);
+                corruptedActiveTasks.put(task, task.changelogPartitions());
+            }
+        }
+
         closeAndRevive(corruptedActiveTasks);
     }
 
@@ -509,11 +530,13 @@ public class TaskManager {
             // If we hit a TaskCorruptedException, we should just handle the cleanup for those corrupted tasks right here
             if (e instanceof TaskCorruptedException) {
                 corruptedTasks.addAll(((TaskCorruptedException) e).corruptedTasks());
+                final Map<Task, Collection<TopicPartition>> corruptedTasksWithChangelogs = new HashMap<>();
                 for (final TaskId taskId : corruptedTasks) {
                     final Task task = tasks.task(taskId);
                     task.markChangelogAsCorrupted(task.changelogPartitions());
+                    corruptedTasksWithChangelogs.put(task, task.changelogPartitions());
                 }
-                handleCorruption(corruptedTasks);
+                closeAndRevive(corruptedTasksWithChangelogs);
             } else {
                 // TODO: KIP-572 need to handle TimeoutException, may be rethrown from committing offsets under ALOS
                 // currently we just let the thread die but we can probably just close those tasks as dirty and proceed
