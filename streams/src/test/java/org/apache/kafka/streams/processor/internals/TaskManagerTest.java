@@ -690,6 +690,7 @@ public class TaskManagerTest {
 
         task00.setChangelogOffsets(singletonMap(t1p0, 0L));
         taskManager.handleCorruption(singleton(taskId00));
+        assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
@@ -717,6 +718,7 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
         expectRestoreToBeCompleted(consumer, changeLogReader);
+        consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
@@ -729,6 +731,7 @@ public class TaskManagerTest {
         corruptedTask.setChangelogOffsets(singletonMap(t1p0, 0L));
         taskManager.handleCorruption(singleton(taskId00));
 
+        assertTrue(nonCorruptedTask.commitPrepared);
         assertThat(nonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
