@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -61,7 +64,7 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-
+import org.apache.kafka.clients.producer.ProducerConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -93,10 +96,14 @@ public class AdjustStreamThreadCountTest {
         final String testId = safeUniqueTestName(getClass(), testName);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
+        // The below line deletes and creates the topic
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
         builder = new StreamsBuilder();
         builder.stream(inputTopic);
+
+
+        publishDummyDataToTopic(inputTopic);
 
         properties  = mkObjectProperties(
             mkMap(
@@ -108,6 +115,33 @@ public class AdjustStreamThreadCountTest {
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
             )
         );
+    }
+
+    private void publishDummyDataToTopic(final String inputTopic) {
+        System.out.println("The input topic is: " + inputTopic);
+        final Properties props = new Properties();
+        props.put("acks", "all");
+        props.put("retries", 1);
+        props.put("transactional.id", "my-transactional-id");
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        final KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props);
+        System.out.println("Avi created a producer");
+        dummyProducer.initTransactions();
+        try {
+            dummyProducer.beginTransaction();
+            for (int i = 0; i < 2; i++)
+                dummyProducer.send(new ProducerRecord<String, String>(inputTopic, Integer.toString(i), Integer.toString(i)));
+            dummyProducer.commitTransaction();
+        } catch (final KafkaException e) {
+            // For all other exceptions, just abort the transaction and try again.
+            dummyProducer.abortTransaction();
+        }
+        dummyProducer.close();
+        System.out.println("Avi sent a message!");
+        return;
     }
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
