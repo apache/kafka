@@ -186,7 +186,7 @@ public class TaskManager {
             corruptedActiveTasks.addAll(tasks.tasks(e.corruptedTasks()));
         } catch (final TimeoutException e) {
             log.info("Hit TimeoutException when committing all non-corrupted tasks, these will be closed and revived");
-            final Collection<Task> uncorruptedTasks = tasks.activeTasks();
+            final Collection<Task> uncorruptedTasks = new HashSet<>(tasks.activeTasks());
             uncorruptedTasks.removeAll(corruptedActiveTasks);
             // Those tasks which just timed out can just be closed dirty without marking changelogs as corrupted
             closeDirtyAndRevive(uncorruptedTasks, false);
@@ -1037,7 +1037,6 @@ public class TaskManager {
                     .keySet()
                     .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
             }
-
 
             return committed;
         }

@@ -109,6 +109,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -813,6 +814,63 @@ public class TaskManagerTest {
 
         assertThat(corruptedStandby.commitPrepared, is(true));
         assertThat(corruptedStandby.state(), is(Task.State.CREATED));
+        verify(consumer);
+    }
+
+    @Test
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommit() {
+        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        replay(stateManager);
+
+        final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final StateMachineTask unCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
+            @Override
+            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+                fail("Should not try to mark changelogs as corrupted for uncorrupted task");
+            }
+
+            @Override
+            public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                                    final Exception cause) {
+                throw new TimeoutException();
+            }
+        };
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        unCorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+
+        // handleAssignment
+        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
+        assignment.putAll(taskId00Assignment);
+        assignment.putAll(taskId01Assignment);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, unCorruptedActive));
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+
+        consumer.commitSync(offsets);
+        expectLastCall().andThrow(new TimeoutException());
+
+        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+
+        // make sure this will be committed and throw
+        assertThat(unCorruptedActive.state(), is(Task.State.RUNNING));
+        assertThat(corruptedActive.state(), is(Task.State.RUNNING));
+
+        unCorruptedActive.setCommitNeeded();
+
+        corruptedActive.setChangelogOffsets(singletonMap(t1p0, 0L));
+        taskManager.handleCorruption(singleton(taskId00));
+
+        assertThat(corruptedActive.commitPrepared, is(true));
+        assertThat(corruptedActive.state(), is(Task.State.CREATED));
+        assertThat(unCorruptedActive.state(), is(Task.State.CREATED));
         verify(consumer);
     }
 
