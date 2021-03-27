@@ -159,7 +159,7 @@ Please note for this to work you should create/update user maven settings (typic
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
                            https://maven.apache.org/xsd/settings-1.0.0.xsd">
-    ...                           
+    ...
     <servers>
        ...
        <server>
@@ -206,6 +206,20 @@ You can run checkstyle using:
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+
+As of present, the auto-formatting configuration is working in progress. Auto-formatting is automatically invoked for the modules listed below when the 'checkstyleMain' or 'checkstyleTest' task is run.
+
+- (No modules specified yet)
+
+You can also run auto-formatting independently for a single module listed above, like:
+
+    ./gradlew :core:spotlessApply   # auto-format *.java files in core module, without running checkstyleMain or checkstyleTest.
+
+If you are using an IDE, you can use a plugin that provides real-time automatic formatting. For detailed information, refer to the following links:
+
+- [Eclipse](https://checkstyle.org/eclipse-cs)
+- [Intellij](https://plugins.jetbrains.com/plugin/1065-checkstyle-idea)
+- [Vscode](https://marketplace.visualstudio.com/items?itemName=shengchen.vscode-checkstyle)
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
