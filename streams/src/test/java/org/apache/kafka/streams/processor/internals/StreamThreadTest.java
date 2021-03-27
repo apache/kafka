@@ -36,6 +36,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -2327,10 +2328,76 @@ public class StreamThreadTest {
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
-        thread.setState(StreamThread.State.STARTING);
-        thread.runLoop();
+        thread.run();
 
         verify(taskManager);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldCatchTimeoutExceptionFromHandleCorruptionAndInvokeExceptionHandler() {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        consumer.subscribe((Collection<String>) anyObject(), anyObject());
+        EasyMock.expectLastCall().anyTimes();
+        consumer.unsubscribe();
+        EasyMock.expectLastCall().anyTimes();
+        EasyMock.replay(consumerGroupMetadata);
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+        final TaskId taskId1 = new TaskId(0, 0);
+        final TaskId taskId2 = new TaskId(0, 2);
+
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
+
+        expect(task1.state()).andStubReturn(Task.State.RUNNING);
+        expect(task1.id()).andStubReturn(taskId1);
+        expect(task2.state()).andStubReturn(Task.State.RUNNING);
+        expect(task2.id()).andStubReturn(taskId2);
+
+        taskManager.handleCorruption(corruptedTasks);
+        expectLastCall().andThrow(new TimeoutException());
+
+        EasyMock.replay(task1, task2, taskManager, consumer);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            null,
+            HANDLER,
+            null
+        ) {
+            @Override
+            void runOnce() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasks);
+            }
+        }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        final AtomicBoolean exceptionHandlerInvoked = new AtomicBoolean(false);
+
+        thread.setStreamsUncaughtExceptionHandler(e -> exceptionHandlerInvoked.set(true));
+        thread.run();
+
+        verify(taskManager);
+        assertThat(exceptionHandlerInvoked.get(), is(true));
     }
 
     @Test
@@ -2730,9 +2797,8 @@ public class StreamThreadTest {
         };
         EasyMock.replay(taskManager);
         thread.updateThreadMetadata("metadata");
-        thread.setState(StreamThread.State.STARTING);
 
-        thread.runLoop();
+        thread.run();
 
         final Metric failedThreads = StreamsTestUtils.getMetricByName(metrics.metrics(), "failed-stream-threads", "stream-metrics");
         assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
