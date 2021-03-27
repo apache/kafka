@@ -183,9 +183,13 @@ public class TaskManager {
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
                          "tasks to clean and revive: {}", e.corruptedTasks());
-            for (final TaskId taskId : e.corruptedTasks()) {
-                corruptedActiveTasks.add(tasks.task(taskId));
-            }
+            corruptedActiveTasks.addAll(tasks.tasks(e.corruptedTasks()));
+        } catch (final TimeoutException e) {
+            log.info("Hit TimeoutException when committing all non-corrupted tasks, these will be closed and revived");
+            final Collection<Task> uncorruptedTasks = tasks.activeTasks();
+            uncorruptedTasks.removeAll(corruptedActiveTasks);
+            // Those tasks which just timed out can just be closed dirty without marking changelogs as corrupted
+            closeDirtyAndRevive(uncorruptedTasks, false);
         }
 
         closeDirtyAndRevive(corruptedActiveTasks, true);
@@ -536,7 +540,7 @@ public class TaskManager {
             log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
             // If we hit a TimeoutException we can just close dirty and revive without wiping the state
-            closeDirtyAndRevive(tasks.allTasks(), false);
+            closeDirtyAndRevive(tasks.activeTasks(), false);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
             firstException.compareAndSet(null, e);
