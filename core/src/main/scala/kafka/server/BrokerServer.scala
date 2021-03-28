@@ -51,7 +51,7 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A Kafka broker that runs in Raft mode.
+ * A Kafka broker that runs in Kraft (Kafka Raft) mode.
  */
 class BrokerServer(
                     val config: KafkaConfig,

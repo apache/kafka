@@ -82,7 +82,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 /**
- * QuorumController implements the main logic of the Raft (aka KIP-500) controller.
+ * QuorumController implements the main logic of the Kraft (Kafka Raft Metadata) mode controller.
  *
  * The node which is the leader of the metadata log becomes the active controller.  All
  * other nodes remain in standby mode.  Standby controllers cannot create new metadata log

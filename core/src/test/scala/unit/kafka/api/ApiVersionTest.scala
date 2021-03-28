@@ -253,8 +253,7 @@ class ApiVersionTest {
       ListenerType.ZK_BROKER
     )
 
-    // Ensure that APIs needed for the Raft (aka KIP-500) mode
-    // are not exposed through ApiVersions until we are ready for them
+    // Ensure that APIs needed for the Kraft mode are not exposed through ApiVersions until we are ready for them
     val exposedApis = apiKeysInResponse(response)
     assertFalse(exposedApis.contains(ApiKeys.ENVELOPE))
     assertFalse(exposedApis.contains(ApiKeys.VOTE))

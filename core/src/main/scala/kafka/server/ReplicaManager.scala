@@ -1851,7 +1851,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (sendZkNotification)
       if (zkClient.isEmpty) {
-        warn("Unable to propagate log dir failure via Zookeeper in Raft mode")
+        warn("Unable to propagate log dir failure via Zookeeper in Kraft mode")
       } else {
         zkClient.get.propagateLogDirEvent(localBrokerId)
       }
