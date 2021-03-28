@@ -1043,6 +1043,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("table can't be null"));
     }
 
+    @Test
     public void shouldNotAllowNullTableOnTableLeftJoinWithJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
