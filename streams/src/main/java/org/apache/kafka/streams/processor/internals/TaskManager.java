@@ -526,54 +526,53 @@ public class TaskManager {
         // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
         // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
         // as such we just need to skip those dirty tasks in the checkpoint
-        final Set<TaskId> dirtyTaskIds = new HashSet<>();
+        final Set<Task> dirtyTasks = new HashSet<>();
         try {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
                      e.corruptedTasks());
 
-            // If we hit a TaskCorruptedException, just handle the cleanup for those corrupted tasks right here
-            dirtyTaskIds.addAll(e.corruptedTasks());
-            closeDirtyAndRevive(tasks.tasks(dirtyTaskIds), true);
+            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+            closeDirtyAndRevive(dirtyTasks, true);
         } catch (final TimeoutException e) {
             log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
-            // If we hit a TimeoutException we can just close dirty and revive without wiping the state
-            closeDirtyAndRevive(tasks.activeTasks(), false);
+            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
+            closeDirtyAndRevive(consumedOffsetsPerTask.keySet(), false);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
             firstException.compareAndSet(null, e);
+            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
         }
 
         // only try to complete post-commit if committing succeeded, or if we hit a TaskCorruptedException then we
         // can still checkpoint the uncorrupted tasks (if any)
         // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
         // going to be closed we would checkpoint by then
-        if (firstException.get() == null || !dirtyTaskIds.isEmpty()) {
-            for (final Task task : revokedActiveTasks) {
-                if (!dirtyTaskIds.contains(task.id())) {
+        for (final Task task : revokedActiveTasks) {
+            if (!dirtyTasks.contains(task)) {
+                try {
+                    task.postCommit(true);
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    firstException.compareAndSet(null, e);
+                }
+            }
+        }
+
+        if (shouldCommitAdditionalTasks) {
+            for (final Task task : commitNeededActiveTasks) {
+                if (!dirtyTasks.contains(task)) {
                     try {
-                        task.postCommit(true);
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING tate
+                        task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         firstException.compareAndSet(null, e);
-                    }
-                }
-            }
-
-            if (shouldCommitAdditionalTasks) {
-                for (final Task task : commitNeededActiveTasks) {
-                    if (!dirtyTaskIds.contains(task.id())) {
-                        try {
-                            // for non-revoking active tasks, we should not enforce checkpoint
-                            // since if it is EOS enabled, no checkpoint should be written while
-                            // the task is in RUNNING tate
-                            task.postCommit(false);
-                        } catch (final RuntimeException e) {
-                            log.error("Exception caught while post-committing task " + task.id(), e);
-                            firstException.compareAndSet(null, e);
-                        }
                     }
                 }
             }
