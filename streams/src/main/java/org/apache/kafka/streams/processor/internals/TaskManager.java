@@ -1004,6 +1004,8 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
+     * @throws TimeoutException if task.timeout.ms has been exceeded (non-EOS)
+     * @throws TaskCorruptedException if committing offsets failed due to TimeoutException (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commit(final Collection<Task> tasksToCommit) {
@@ -1058,6 +1060,11 @@ public class TaskManager {
         }
     }
 
+    /**
+     * @throws TaskMigratedException   if committing offsets failed due to CommitFailedException (non-EOS)
+     * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS)
+     * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
+     */
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
 
