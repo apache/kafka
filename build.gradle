@@ -33,6 +33,7 @@ plugins {
   id 'com.diffplug.spotless' version '5.10.2'
   id 'com.github.ben-manes.versions' version '0.36.0'
   id 'idea'
+  id 'java-library'
   id 'org.owasp.dependencycheck' version '6.1.1'
 
   id "com.github.spotbugs" version '4.6.0' apply false
@@ -271,7 +272,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -1575,12 +1576,9 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.junitJupiterApi
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.scalatest
+    testImplementation libs.junitJupiter
     testImplementation libs.easymock
     testImplementation libs.hamcrest
-
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -1622,7 +1620,6 @@ project(':streams:test-utils') {
 
   javadoc {
     include "**/org/apache/kafka/streams/test/**"
-    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {

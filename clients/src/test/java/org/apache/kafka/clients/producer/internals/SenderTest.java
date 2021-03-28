@@ -132,7 +132,7 @@ public class SenderTest {
     private static final String CLIENT_ID = "clientId";
     private static final double EPS = 0.0001;
     private static final int MAX_BLOCK_TIMEOUT = 1000;
-    private static final int REQUEST_TIMEOUT = 1000;
+    private static final int REQUEST_TIMEOUT = 5000;
     private static final long RETRY_BACKOFF_MS = 50;
     private static final int DELIVERY_TIMEOUT_MS = 1500;
     private static final long TOPIC_IDLE_MS = 60 * 1000;
@@ -2399,7 +2399,6 @@ public class SenderTest {
 
     @Test
     public void testNoDoubleDeallocation() throws Exception {
-        long deliverTimeoutMs = 1500L;
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-custom-metrics";
         MatchingBufferPool pool = new MatchingBufferPool(totalSize, batchSize, metrics, time, metricGrpName);
@@ -2411,7 +2410,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
-        time.sleep(deliverTimeoutMs);
+        time.sleep(REQUEST_TIMEOUT);
         assertFalse(pool.allMatch());
 
         sender.runOnce();  // expire the batch
