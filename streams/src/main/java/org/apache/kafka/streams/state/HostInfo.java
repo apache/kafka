@@ -20,10 +20,8 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 
 /**
@@ -31,8 +29,6 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
  * Instances of this class can be obtained by calling one of:
  *  {@link KafkaStreams#allMetadata()}
  *  {@link KafkaStreams#allMetadataForStore(String)}
- *  {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#metadataForKey(String, Object, Serializer)}
  *
  *  The HostInfo is constructed during Partition Assignment
  *  see {@link StreamsPartitionAssignor}
