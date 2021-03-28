@@ -173,7 +173,7 @@ public class TaskManager {
 
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
-            commit(tasks()
+            doCommit(tasks()
                        .values()
                        .stream()
                        .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -1009,38 +1009,55 @@ public class TaskManager {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commit(final Collection<Task> tasksToCommit) {
+        int committed = 0;
         if (rebalanceInProgress) {
-            return -1;
+            committed = -1;
         } else {
-            int committed = 0;
             final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            for (final Task task : tasksToCommit) {
-                if (task.commitNeeded()) {
-                    final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-                    if (task.isActive()) {
-                        consumedOffsetsAndMetadataPerTask.put(task, offsetAndMetadata);
-                    }
-                }
-            }
-
             try {
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-
-                for (final Task task : tasksToCommit) {
-                    if (task.commitNeeded()) {
-                        task.clearTaskTimeout();
-                        ++committed;
-                        task.postCommit(false);
-                    }
-                }
+                committed = commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
             } catch (final TimeoutException timeoutException) {
                 consumedOffsetsAndMetadataPerTask
                     .keySet()
                     .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
             }
-
-            return committed;
         }
+        return committed;
+    }
+
+    /**
+     * Prepare, commit, and post-commit all tasks.
+     */
+    private void doCommit(final Collection<Task> tasksToCommit) {
+        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
+    }
+
+    /**
+     * @param consumedOffsetsAndMetadataPerTask an empty map that will be filled in with the prepared offsets
+     */
+    private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit, final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
+        int committed = 0;
+
+        for (final Task task : tasksToCommit) {
+            if (task.commitNeeded()) {
+                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
+                if (task.isActive()) {
+                    consumedOffsetsAndMetadataPerTask.put(task, offsetAndMetadata);
+                }
+            }
+        }
+
+        commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+        for (final Task task : tasksToCommit) {
+            if (task.commitNeeded()) {
+                task.clearTaskTimeout();
+                ++committed;
+                task.postCommit(false);
+            }
+        }
+        return committed;
     }
 
     /**
