@@ -711,18 +711,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullOtherStreamOnJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.join(
-                null,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullOtherStreamOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -747,18 +735,6 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
-    }
-
-    @Test
-    public void shouldNotAllowNullValueJoinerOnJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.join(
-                testStream,
-                (ValueJoiner) null,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -795,18 +771,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullJoinWindowsOnJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.join(
-                testStream,
-                MockValueJoiner.TOSTRING_JOINER,
-                null,
-                StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullJoinWindowsOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -839,18 +803,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullOtherStreamOnLeftJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.leftJoin(
-                null,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -875,18 +827,6 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
-    }
-
-    @Test
-    public void shouldNotAllowNullValueJoinerOnLeftJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.leftJoin(
-                testStream,
-                (ValueJoiner) null,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -924,18 +864,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullJoinWindowsOnLeftJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.leftJoin(
-                testStream,
-                MockValueJoiner.TOSTRING_JOINER,
-                null,
-                StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullJoinWindowsOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -968,18 +896,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullOtherStreamOnOuterJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.outerJoin(
-                null,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
-    }
-
-    @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1004,18 +920,6 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
-    }
-
-    @Test
-    public void shouldNotAllowNullValueJoinerOnOuterJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.outerJoin(
-                testStream,
-                (ValueJoiner) null,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1048,18 +952,6 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
-    }
-
-    @Test
-    public void shouldNotAllowNullJoinWindowsOnOuterJoinWithJoined() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.outerJoin(
-                testStream,
-                MockValueJoiner.TOSTRING_JOINER,
-                null,
-                StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
@@ -1151,7 +1043,6 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("table can't be null"));
     }
 
-    @Test
     public void shouldNotAllowNullTableOnTableLeftJoinWithJoined() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
