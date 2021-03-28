@@ -544,7 +544,8 @@ public class TaskManager {
             log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
             // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-            closeDirtyAndRevive(consumedOffsetsPerTask.keySet(), false);
+            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            closeDirtyAndRevive(dirtyTasks, false);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
             firstException.compareAndSet(null, e);
