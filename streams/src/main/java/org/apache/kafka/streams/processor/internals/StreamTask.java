@@ -515,6 +515,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void closeClean() {
         validateClean();
         removeAllSensors();
+        clearCommitStatuses();
         close(true);
         log.info("Closed clean");
     }
@@ -537,6 +538,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void closeCleanAndRecycleState() {
         validateClean();
         removeAllSensors();
+        clearCommitStatuses();
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
