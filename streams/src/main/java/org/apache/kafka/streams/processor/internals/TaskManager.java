@@ -184,13 +184,19 @@ public class TaskManager {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
                          "tasks to clean and revive: {}", e.corruptedTasks());
             corruptedActiveTasks.addAll(tasks.tasks(e.corruptedTasks()));
+        } catch (final TimeoutException e) {
+            log.info("Hit TimeoutException when committing all non-corrupted tasks, these will be closed and revived");
+            final Collection<Task> uncorruptedTasks = new HashSet<>(tasks.activeTasks());
+            uncorruptedTasks.removeAll(corruptedActiveTasks);
+            // Those tasks which just timed out can just be closed dirty without marking changelogs as corrupted
+            closeDirtyAndRevive(uncorruptedTasks, false);
         }
 
         closeDirtyAndRevive(corruptedActiveTasks, true);
     }
 
-    private void closeDirtyAndRevive(final Collection<Task> dirtyTasks, final boolean markAsCorrupted) {
-        for (final Task task : dirtyTasks) {
+    private void closeDirtyAndRevive(final Collection<Task> taskWithChangelogs, final boolean markAsCorrupted) {
+        for (final Task task : taskWithChangelogs) {
             final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
 
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
@@ -535,13 +541,6 @@ public class TaskManager {
 
             // If we hit a TimeoutException we can just close dirty and revive without wiping the state
             closeDirtyAndRevive(tasks.activeTasks(), false);
-            dirtyTaskIds.addAll(tasks.activeTaskIds());
-
-            try {
-                tasks.activeTasks().forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), e));
-            } catch (final TimeoutException fatalTimeoutException) {
-                firstException.compareAndSet(null, fatalTimeoutException);
-            }
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
             firstException.compareAndSet(null, e);
@@ -1004,12 +1003,8 @@ public class TaskManager {
     }
 
     /**
-     *
-     *
-     * @throws TaskMigratedException   if committing offsets failed  (non-EOS)
-     *                                 or if the task producer got fenced (EOS)
-     * @throws TimeoutException        if task.timeout.ms has been exceeded (non-EOS)
-     * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commit(final Collection<Task> tasksToCommit) {
@@ -1064,10 +1059,6 @@ public class TaskManager {
         }
     }
 
-    /**
-     * @throws TimeoutException        if task.timeout.ms has been exceeded (non-EOS)
-     * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
-     */
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
 
