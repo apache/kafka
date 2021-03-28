@@ -173,12 +173,13 @@ public class TaskManager {
 
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
-            doCommit(tasks()
+            commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasks()
                        .values()
                        .stream()
                        .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
                        .filter(t -> !corruptedTasks.contains(t.id()))
-                       .collect(Collectors.toSet())
+                       .collect(Collectors.toSet()),
+                                new HashMap<>()
             );
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
@@ -215,8 +216,11 @@ public class TaskManager {
 
             try {
                 task.suspend();
+
                 // we need to enforce a checkpoint that removes the corrupted partitions
-                task.postCommit(true);
+                if (markAsCorrupted) {
+                    task.postCommit(true);
+                }
             } catch (final RuntimeException swallow) {
                 log.error("Error suspending corrupted task {} ", task.id(), swallow);
             }
@@ -1024,17 +1028,10 @@ public class TaskManager {
     }
 
     /**
-     * Prepare, commit, and post-commit all tasks.
-     */
-    private void doCommit(final Collection<Task> tasksToCommit) {
-        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
-    }
-
-    /**
      * @param consumedOffsetsAndMetadataPerTask an empty map that will be filled in with the prepared offsets
      */
-    private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit, final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
+    private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit,
+                                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
         int committed = 0;
 
         for (final Task task : tasksToCommit) {

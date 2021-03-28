@@ -818,32 +818,26 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommit() {
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
         replay(stateManager);
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final StateMachineTask unCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
+        final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
             @Override
             public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
                 fail("Should not try to mark changelogs as corrupted for uncorrupted task");
             }
-
-            @Override
-            public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                                    final Exception cause) {
-                throw new TimeoutException();
-            }
         };
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        unCorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
         // handleAssignment
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.putAll(taskId00Assignment);
         assignment.putAll(taskId01Assignment);
-        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, unCorruptedActive));
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, uncorruptedActive));
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
 
@@ -859,18 +853,31 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
-        // make sure this will be committed and throw
-        assertThat(unCorruptedActive.state(), is(Task.State.RUNNING));
+        assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
         assertThat(corruptedActive.state(), is(Task.State.RUNNING));
 
-        unCorruptedActive.setCommitNeeded();
-
+        // make sure this will be committed and throw
+        uncorruptedActive.setCommitNeeded();
         corruptedActive.setChangelogOffsets(singletonMap(t1p0, 0L));
+
+        assertThat(uncorruptedActive.commitPrepared, is(false));
+        assertThat(uncorruptedActive.commitNeeded, is(true));
+        assertThat(uncorruptedActive.commitCompleted, is(false));
+        assertThat(corruptedActive.commitPrepared, is(false));
+        assertThat(corruptedActive.commitNeeded, is(false));
+        assertThat(corruptedActive.commitCompleted, is(false));
+
         taskManager.handleCorruption(singleton(taskId00));
 
+        assertThat(uncorruptedActive.commitPrepared, is(true));
+        assertThat(uncorruptedActive.commitNeeded, is(false));
+        assertThat(uncorruptedActive.commitCompleted, is(false)); //if corrupted, we should close dirty without committing
         assertThat(corruptedActive.commitPrepared, is(true));
+        assertThat(corruptedActive.commitNeeded, is(false));
+        assertThat(corruptedActive.commitCompleted, is(true)); //if not corrupted, should enforce checkpoint with corrupted tasks removed
+
         assertThat(corruptedActive.state(), is(Task.State.CREATED));
-        assertThat(unCorruptedActive.state(), is(Task.State.CREATED));
+        assertThat(uncorruptedActive.state(), is(Task.State.CREATED));
         verify(consumer);
     }
 
@@ -3038,9 +3045,10 @@ public class TaskManagerTest {
 
     private static class StateMachineTask extends AbstractTask implements Task {
         private final boolean active;
-        private boolean commitNeeded = false;
+        private boolean commitNeeded = false; // TODO: make StreamTask's commitNeeded protected and use commitCompleted to indicate successful commit instead
         private boolean commitRequested = false;
         private boolean commitPrepared = false;
+        private boolean commitCompleted = false;
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
@@ -3118,6 +3126,7 @@ public class TaskManagerTest {
         @Override
         public void postCommit(final boolean enforceCheckpoint) {
             commitNeeded = false;
+            commitCompleted = true;
         }
 
         @Override
@@ -3136,6 +3145,14 @@ public class TaskManagerTest {
             if (state() == State.SUSPENDED) {
                 transitionTo(State.RUNNING);
             }
+        }
+
+        @Override
+        public void revive() {
+            //TODO: move clearing of commit-required statuses to closeDirty/Clean/AndRecycle methods
+            commitNeeded = false;
+            commitRequested = false;
+            super.revive();
         }
 
         @Override
