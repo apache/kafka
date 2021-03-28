@@ -547,8 +547,6 @@ public class TaskManager {
             dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
         }
 
-        // only try to complete post-commit if committing succeeded, or if we hit a TaskCorruptedException then we
-        // can still checkpoint the uncorrupted tasks (if any)
         // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
         // going to be closed we would checkpoint by then
         for (final Task task : revokedActiveTasks) {
