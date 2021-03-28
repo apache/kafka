@@ -66,8 +66,6 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("WeakerAccess")
     public final long advanceMs;
 
-    // By default grace period is 24 hours,
-    // in other words we allow out-of-order data for up to a day
     private final long graceMs;
 
     private TimeWindows(final long sizeMs, final long advanceMs, final long graceMs) {

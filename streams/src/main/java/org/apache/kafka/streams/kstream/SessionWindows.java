@@ -73,8 +73,6 @@ public final class SessionWindows {
 
     private final long gapMs;
 
-    // By default grace period is 24 hours,
-    // in other words we allow out-of-order data for up to a day
     private final long graceMs;
 
     private SessionWindows(final long gapMs, final long graceMs) {

@@ -74,8 +74,6 @@ public final class JoinWindows extends Windows<Window> {
     /** Maximum time difference for tuples that are after the join tuple. */
     public final long afterMs;
 
-    // By default grace period is 24 hours,
-    // in other words we allow out-of-order data for up to a day
     private final long graceMs;
 
     private JoinWindows(final long beforeMs,
