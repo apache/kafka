@@ -3045,7 +3045,9 @@ public class TaskManagerTest {
 
     private static class StateMachineTask extends AbstractTask implements Task {
         private final boolean active;
-        private boolean commitNeeded = false; // TODO: make StreamTask's commitNeeded protected and use commitCompleted to indicate successful commit instead
+
+        // TODO: KAFKA-12569 clean up usage of these flags and use the new commitCompleted flag where appropriate
+        private boolean commitNeeded = false;
         private boolean commitRequested = false;
         private boolean commitPrepared = false;
         private boolean commitCompleted = false;
@@ -3149,7 +3151,7 @@ public class TaskManagerTest {
 
         @Override
         public void revive() {
-            //TODO: move clearing of commit-required statuses to closeDirty/Clean/AndRecycle methods
+            //TODO: KAFKA-12569 move clearing of commit-required statuses to closeDirty/Clean/AndRecycle methods
             commitNeeded = false;
             commitRequested = false;
             super.revive();
