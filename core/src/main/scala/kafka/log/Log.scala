@@ -2342,7 +2342,7 @@ class Log(@volatile private var _dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
-    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix, true))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segment files ${segments.mkString(",")}")
@@ -2418,7 +2418,7 @@ class Log(@volatile private var _dir: File,
         deleteSegmentFiles(List(seg), asyncDelete = true, deleteProducerStateSnapshots = !newSegmentBaseOffsets.contains(seg.baseOffset))
       }
       // okay we are safe now, remove the swap suffix
-      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, "", true))
     }
   }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.nio.file.Path;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
@@ -200,17 +201,24 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void flush() throws IOException {
         channel.force(true);
         if (needFlushParentDir.getAndSet(false)) {
-            FileChannel dir = null;
-            try {
-                dir = FileChannel.open(file.getAbsoluteFile().getParentFile().toPath(),
-                    java.nio.file.StandardOpenOption.READ);
-                dir.force(true);
-            } catch (Exception e) {
-                throw new KafkaException("Attempt to flush the parent directory of " + file + " failed.");
-            } finally {
-                if (dir != null)
-                    dir.close();
-            }
+            flushParentDir();
+        }
+    }
+
+    /**
+     * Flush the parent directory of a file to the physical disk, which makes sure the file is accessible after crashing.
+     */
+    public void flushParentDir() throws IOException {
+        FileChannel dir = null;
+        try {
+            dir = FileChannel.open(file.toPath().getParent(), StandardOpenOption.READ);
+            dir.force(true);
+        } catch (Exception e) {
+            throw new KafkaException("Attempt to flush the parent directory of " + file + " failed.");
+        } finally {
+            if (dir != null)
+                dir.close();
+            needFlushParentDir.set(false);
         }
     }
 
@@ -266,7 +274,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
         } finally {
             this.file = f;
         }
-        needFlushParentDir.set(true);
     }
 
     /**
@@ -445,7 +452,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false, mutable && !fileAlreadyExists);
+        return new FileRecords(file, channel, 0, end, false, mutable);
     }
 
     public static FileRecords open(File file,
