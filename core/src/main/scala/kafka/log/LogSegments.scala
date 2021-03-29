@@ -99,12 +99,6 @@ class LogSegments(private val topicPartition: TopicPartition) {
   def numberOfSegments: Int = segments.size
 
   /**
-   * The active segment that is currently taking appends.
-   */
-  @threadsafe
-  def activeSegment = lastEntry.get.getValue
-
-  /**
    * @return the base offsets of all segments
    */
   def baseOffsets: Seq[Long] = segments.values().asScala.map(_.baseOffset).toSeq
@@ -151,6 +145,7 @@ class LogSegments(private val topicPartition: TopicPartition) {
   }
 
   def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = {
+    val activeSegment = lastSegment.get
     if (from > activeSegment.baseOffset)
       Seq.empty
     else

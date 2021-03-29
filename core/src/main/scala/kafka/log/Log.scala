@@ -2239,7 +2239,7 @@ class Log(@volatile private var _dir: File,
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment = segments.activeSegment
+  def activeSegment = segments.lastSegment.get
 
   /**
    * All the log segments in this log ordered from oldest to newest

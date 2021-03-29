@@ -107,7 +107,6 @@ class LogSegmentsTest {
     List(seg1, seg2, seg3, seg4).foreach {
       seg =>
         segments.add(seg)
-        assertEquals(seg, segments.activeSegment)
         assertEntry(seg1, segments.firstEntry.get)
         assertEquals(Some(seg1), segments.firstSegment)
         assertEntry(seg, segments.lastEntry.get)
