@@ -121,7 +121,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000") // low value to test log rolling on config update
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
-      props.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "10000000") // non-default value to trigger a new metric
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
