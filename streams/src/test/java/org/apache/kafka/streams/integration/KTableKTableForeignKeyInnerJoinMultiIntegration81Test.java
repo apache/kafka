@@ -43,14 +43,13 @@ import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -58,16 +57,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
-import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
     private final static int NUM_BROKERS = 1;
 
-    @ClassRule
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final static MockTime MOCK_TIME = CLUSTER.time;
     private final static String TABLE_1 = "table1";
@@ -87,8 +83,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
     private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeClass
-    public static void beforeTest() throws Exception {
-        //Us  alatiple partitionvs to ensure distribution of keys.
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        //Use multiple partitions to ensure distribution of keys.
 
         CLUSTER.createTopic(TABLE_1, 3, 1);
         CLUSTER.createTopic(TABLE_2, 5, 1);
@@ -110,76 +107,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-
-//        final List<KeyValue<Integer, Float>> table1 = asList(
-//            new KeyValue<>(1, 1.33f),
-//            new KeyValue<>(2, 2.22f),
-//            new KeyValue<>(3, -1.22f), //Won't be joined in yet.
-//            new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
-//        );
-//
-//        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-//        final List<KeyValue<String, Long>> table2 = asList(
-//            new KeyValue<>("0", 0L),  //partition 2
-//            new KeyValue<>("1", 10L), //partition 0
-//            new KeyValue<>("2", 20L), //partition 2
-//            new KeyValue<>("3", 30L), //partition 2
-//            new KeyValue<>("4", 40L), //partition 1
-//            new KeyValue<>("5", 50L), //partition 0
-//            new KeyValue<>("6", 60L), //partition 1
-//            new KeyValue<>("7", 70L), //partition 0
-//            new KeyValue<>("8", 80L), //partition 0
-//            new KeyValue<>("9", 90L)  //partition 2
-//        );
-//
-//        //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-//        final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
-//            new KeyValue<>(10, "waffle")
-//        );
-//
-//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
-//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
-//        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
-
-        CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
-        CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-        CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    }
-
-    @Before
-    public void before() throws IOException {
-        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
-        streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
-        streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
-
-        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
-    }
-
-    @After
-    public void after() throws IOException {
-        System.err.println("closing");
-        if (streams != null) {
-            streams.close();
-            streams = null;
-        }
-        if (streamsTwo != null) {
-            streamsTwo.close();
-            streamsTwo = null;
-        }
-        if (streamsThree != null) {
-            streamsThree.close();
-            streamsThree = null;
-        }
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
-    }
-
-    private enum JoinType {
-        INNER
-    }
-
-    private void produceRecords() {
         final List<KeyValue<Integer, Float>> table1 = asList(
             new KeyValue<>(1, 1.33f),
             new KeyValue<>(2, 2.22f),
@@ -209,6 +136,47 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
+
+        CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
+        CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+        CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
+    @Before
+    public void before() throws IOException {
+        final String stateDirBasePath = TestUtils.tempDirectory().getPath();
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
+        streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
+        streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
+
+        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
+    }
+
+    @After
+    public void after() throws IOException {
+        if (streams != null) {
+            streams.close();
+            streams = null;
+        }
+        if (streamsTwo != null) {
+            streamsTwo.close();
+            streamsTwo = null;
+        }
+        if (streamsThree != null) {
+            streamsThree.close();
+            streamsThree = null;
+        }
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+    }
+
+    private enum JoinType {
+        INNER
     }
 
     @Test
@@ -228,11 +196,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
-
-        final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
-
-        produceRecords();
+        streams.start();
+        streamsTwo.start();
+        streamsThree.start();
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -249,8 +215,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration81Test {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 5000);
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 15000);
         return streamsConfig;
     }
 
