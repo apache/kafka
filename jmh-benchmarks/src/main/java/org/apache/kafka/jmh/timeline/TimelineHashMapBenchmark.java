@@ -250,7 +250,7 @@ public class TimelineHashMapBenchmark {
 
         @Override
         public Integer get(Object key) {
-            return map.get((Integer) key).get();
+            return map.apply((Integer) key);
         }
 
         @Override
