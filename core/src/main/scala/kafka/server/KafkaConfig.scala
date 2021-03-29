@@ -915,10 +915,6 @@ object KafkaConfig {
   val FetchMaxBytesDoc = "The maximum number of bytes we will return for a fetch request. Must be at least 1024."
 
   /** ********* Quota Configuration ***********/
-  val ProducerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user>, <client-id> or <user, client-id> in Zookeeper. " +
-  "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
-  val ConsumerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user, <client-id> or <user, client-id> in Zookeeper. " +
-  "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
   val NumQuotaSamplesDoc = "The number of samples to retain in memory for client quotas"
   val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
   val NumAlterLogDirsReplicationQuotaSamplesDoc = "The number of samples to retain in memory for alter log dirs replication quotas"
