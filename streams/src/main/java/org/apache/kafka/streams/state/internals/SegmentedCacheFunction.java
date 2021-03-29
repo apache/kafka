@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.BytesComparators;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import java.nio.ByteBuffer;
@@ -77,7 +78,7 @@ class SegmentedCacheFunction implements CacheFunction {
         if (segmentCompare == 0) {
             final byte[] cacheKeyBytes = cacheKey.get();
             final byte[] storeKeyBytes = storeKey.get();
-            return Bytes.BYTES_LEXICO_COMPARATOR.compare(
+            return BytesComparators.BYTES_LEXICO_COMPARATOR.compare(
                 cacheKeyBytes, SEGMENT_ID_BYTES, cacheKeyBytes.length - SEGMENT_ID_BYTES,
                 storeKeyBytes, 0, storeKeyBytes.length
             );

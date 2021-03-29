@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.BytesComparators;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -206,6 +207,19 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
+        public KeyValueIterator<Bytes, byte[]> prefixRange(final Bytes from,
+                                                     final Bytes to,
+                                                     final boolean forward) {
+            return new RocksDBDualCFPrefixRangeIterator(name,
+                db.newIterator(newColumnFamily),
+                db.newIterator(oldColumnFamily),
+                from,
+                to,
+                forward,
+                true);
+        }
+
+        @Override
         public KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
             final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);
@@ -279,7 +293,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator = BytesComparators.BYTES_LEXICO_COMPARATOR;
 
         private final String storeName;
         private final RocksIterator iterWithTimestamp;
@@ -394,7 +408,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private final Comparator<byte[]> comparator;
         private final byte[] rawLastKey;
         private final boolean forward;
         private final boolean toInclusive;
@@ -406,9 +420,28 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                                    final Bytes to,
                                    final boolean forward,
                                    final boolean toInclusive) {
+            this(storeName,
+                iterWithTimestamp,
+                iterNoTimestamp,
+                from,
+                to,
+                forward,
+                toInclusive,
+                BytesComparators.BYTES_LEXICO_COMPARATOR);
+        }
+
+        RocksDBDualCFRangeIterator(final String storeName,
+                                   final RocksIterator iterWithTimestamp,
+                                   final RocksIterator iterNoTimestamp,
+                                   final Bytes from,
+                                   final Bytes to,
+                                   final boolean forward,
+                                   final boolean toInclusive,
+                                   final Comparator<byte[]> comparator) {
             super(storeName, iterWithTimestamp, iterNoTimestamp, forward);
             this.forward = forward;
             this.toInclusive = toInclusive;
+            this.comparator = Objects.requireNonNull(comparator, "comparator");
             if (forward) {
                 iterWithTimestamp.seek(from.get());
                 iterNoTimestamp.seek(from.get());
@@ -450,6 +483,25 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                     }
                 }
             }
+        }
+    }
+
+    private class RocksDBDualCFPrefixRangeIterator extends RocksDBDualCFRangeIterator {
+        RocksDBDualCFPrefixRangeIterator(final String storeName,
+                                   final RocksIterator iterWithTimestamp,
+                                   final RocksIterator iterNoTimestamp,
+                                   final Bytes from,
+                                   final Bytes to,
+                                   final boolean forward,
+                                   final boolean toInclusive) {
+            super(storeName,
+                iterWithTimestamp,
+                iterNoTimestamp,
+                from,
+                to,
+                forward,
+                toInclusive,
+                BytesComparators.PREFIX_BYTES_LEXICO_COMPARATOR);
         }
     }
 }

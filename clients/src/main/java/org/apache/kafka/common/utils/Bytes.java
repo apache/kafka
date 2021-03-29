@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Comparator;
 
 /**
  * Utility class that handles immutable byte arrays.
@@ -94,7 +92,7 @@ public class Bytes implements Comparable<Bytes> {
 
     @Override
     public int compareTo(Bytes that) {
-        return BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
+        return BytesComparators.BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
     }
 
     @Override
@@ -163,48 +161,6 @@ public class Bytes implements Comparable<Bytes> {
             return wrap(ret);
         } else {
             throw new IndexOutOfBoundsException();
-        }
-    }
-
-    /**
-     * A byte array comparator based on lexicograpic ordering.
-     */
-    public final static ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
-
-    public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
-
-        int compare(final byte[] buffer1, int offset1, int length1,
-                    final byte[] buffer2, int offset2, int length2);
-    }
-
-    private static class LexicographicByteArrayComparator implements ByteArrayComparator {
-
-        @Override
-        public int compare(byte[] buffer1, byte[] buffer2) {
-            return compare(buffer1, 0, buffer1.length, buffer2, 0, buffer2.length);
-        }
-
-        public int compare(final byte[] buffer1, int offset1, int length1,
-                           final byte[] buffer2, int offset2, int length2) {
-
-            // short circuit equal case
-            if (buffer1 == buffer2 &&
-                    offset1 == offset2 &&
-                    length1 == length2) {
-                return 0;
-            }
-
-            // similar to Arrays.compare() but considers offset and length
-            int end1 = offset1 + length1;
-            int end2 = offset2 + length2;
-            for (int i = offset1, j = offset2; i < end1 && j < end2; i++, j++) {
-                int a = buffer1[i] & 0xff;
-                int b = buffer2[j] & 0xff;
-                if (a != b) {
-                    return a - b;
-                }
-            }
-            return length1 - length2;
         }
     }
 }

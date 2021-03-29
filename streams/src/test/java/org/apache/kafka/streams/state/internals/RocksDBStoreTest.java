@@ -362,6 +362,71 @@ public class RocksDBStoreTest {
     }
 
     @Test
+    public void shouldReturnKeysWithGivenPrefixRange() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix1_k1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix2_k1")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix3_k1")),
+            stringSerializer.serialize(null, "c")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix4_k1")),
+            stringSerializer.serialize(null, "d")));
+
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.range(
+            new Bytes(stringSerializer.serialize(null, "prefix2")),
+            new Bytes(stringSerializer.serialize(null, "prefix3")),
+            true,
+            true
+        );
+
+        final List<String> valuesWithPrefix = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            valuesWithPrefix.add(new String(next.value));
+            numberOfKeysReturned++;
+        }
+
+        assertThat(numberOfKeysReturned, is(2));
+        assertThat(valuesWithPrefix.get(0), is("b"));
+        assertThat(valuesWithPrefix.get(1), is("c"));
+    }
+
+    @Test
+    public void shouldReturnNoKeysWithGivenPrefixRange() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix1_k1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "prefix2_k1")),
+            stringSerializer.serialize(null, "b")));
+
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.range(
+            new Bytes(stringSerializer.serialize(null, "prefix3")),
+            new Bytes(stringSerializer.serialize(null, "prefix4")),
+            true,
+            true
+        );
+
+        assertThat(keysWithPrefix.hasNext(), is(false));
+    }
+
+    @Test
     public void shouldReturnKeysWithGivenPrefix() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
