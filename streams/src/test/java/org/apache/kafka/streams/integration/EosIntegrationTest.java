@@ -274,7 +274,8 @@ public class EosIntegrationTest {
         }
     }
 
-    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult,
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
+                                   final List<KeyValue<Long, Long>> expectedResult,
                                    final String reason) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
@@ -414,7 +415,9 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
-            checkResultPerKey(committedRecords, committedDataBeforeFailure,
+            checkResultPerKey(
+                committedRecords,
+                committedDataBeforeFailure,
                 "The committed records before failure do not match what expected");
 
             writeInputData(uncommittedDataBeforeFailure);
@@ -425,7 +428,9 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            checkResultPerKey(uncommittedRecords, dataBeforeFailure,
+            checkResultPerKey(
+                uncommittedRecords,
+                dataBeforeFailure,
                 "The uncommitted records before failure do not match what expected");
 
             errorInjected.set(true);
@@ -460,9 +465,13 @@ public class EosIntegrationTest {
             expectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             expectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery,
+            checkResultPerKey(
+                allCommittedRecords,
+                allExpectedCommittedRecordsAfterRecovery,
                 "The all committed records after recovery do not match what expected");
-            checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery,
+            checkResultPerKey(
+                committedRecordsAfterFailure,
+                expectedCommittedRecordsAfterRecovery,
                 "The committed records after recovery do not match what expected");
 
             assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
@@ -510,7 +519,9 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
-            checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure),
+            checkResultPerKey(
+                committedRecords,
+                computeExpectedResult(committedDataBeforeFailure),
                 "The committed records before failure do not match what expected");
 
             writeInputData(uncommittedDataBeforeFailure);
@@ -524,9 +535,13 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
 
 
-            checkResultPerKey(uncommittedRecords, expectedResultBeforeFailure,
+            checkResultPerKey(
+                uncommittedRecords,
+                expectedResultBeforeFailure,
                 "The uncommitted records before failure do not match what expected");
-            verifyStateStore(streams, getMaxPerKey(expectedResultBeforeFailure),
+            verifyStateStore(
+                streams,
+                getMaxPerKey(expectedResultBeforeFailure),
                 "The state store content before failure do not match what expected");
 
             errorInjected.set(true);
@@ -558,14 +573,19 @@ public class EosIntegrationTest {
 
             final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(allExpectedCommittedRecordsAfterRecovery);
 
-            checkResultPerKey(allCommittedRecords, expectedResult,
+            checkResultPerKey(
+                allCommittedRecords,
+                expectedResult,
                 "The all committed records after recovery do not match what expected");
+
             checkResultPerKey(
                 committedRecordsAfterFailure,
                 expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()),
                 "The committed records after recovery do not match what expected");
 
-            verifyStateStore(streams, getMaxPerKey(expectedResult),
+            verifyStateStore(
+                streams,
+                getMaxPerKey(expectedResult),
                 "The state store content after recovery do not match what expected");
 
             assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
@@ -617,7 +637,9 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
-            checkResultPerKey(committedRecords, committedDataBeforeStall,
+            checkResultPerKey(
+                committedRecords,
+                committedDataBeforeStall,
                 "The committed records before stall do not match what expected");
 
             writeInputData(uncommittedDataBeforeStall);
@@ -628,7 +650,9 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeStall.size(), null);
-            checkResultPerKey(uncommittedRecords, dataBeforeStall,
+            checkResultPerKey(
+                uncommittedRecords,
+                dataBeforeStall,
                 "The uncommitted records before stall do not match what expected");
 
             LOG.info("Injecting Stall");
@@ -679,7 +703,9 @@ public class EosIntegrationTest {
             expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeStall);
             expectedCommittedRecordsAfterRebalance.addAll(dataToTriggerFirstRebalance);
 
-            checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance,
+            checkResultPerKey(
+                committedRecordsAfterRebalance,
+                expectedCommittedRecordsAfterRebalance,
                 "The all committed records after rebalance do not match what expected");
 
             LOG.info("Releasing Stall");
@@ -717,7 +743,9 @@ public class EosIntegrationTest {
             allExpectedCommittedRecordsAfterRecovery.addAll(dataToTriggerFirstRebalance);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterSecondRebalance);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery,
+            checkResultPerKey(
+                allCommittedRecords,
+                allExpectedCommittedRecordsAfterRecovery,
                 "The all committed records after recovery do not match what expected");
         }
     }
