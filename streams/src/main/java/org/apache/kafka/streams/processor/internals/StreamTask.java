@@ -486,8 +486,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
 
-        commitRequested = false;
+        clearCommitStatuses();
+    }
+
+    private void clearCommitStatuses() {
         commitNeeded = false;
+        commitRequested = false;
         hasPendingTxCommit = false;
     }
 
@@ -503,6 +507,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void closeClean() {
         validateClean();
         removeAllSensors();
+        clearCommitStatuses();
         close(true);
         log.info("Closed clean");
     }
@@ -510,6 +515,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeDirty() {
         removeAllSensors();
+        clearCommitStatuses();
         close(false);
         log.info("Closed dirty");
     }
@@ -524,6 +530,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void closeCleanAndRecycleState() {
         validateClean();
         removeAllSensors();
+        clearCommitStatuses();
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
