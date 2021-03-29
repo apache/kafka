@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.nio.file.Path;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
