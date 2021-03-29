@@ -46,7 +46,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import scala.jdk.CollectionConverters._
 
 /**
- * A Kafka controller that runs in Kraft (Kafka Raft) mode.
+ * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
                         val metaProperties: MetaProperties,

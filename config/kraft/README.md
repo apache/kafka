@@ -1,21 +1,21 @@
-Kraft (aka KIP-500) mode Early Access Release
+KRaft (aka KIP-500) mode Early Access Release
 =========================================================
 
 # Introduction
-It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `Kraft mode`.
-`Kraft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
+It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `KRaft mode`.
+`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
 is available for testing in the Kafka 2.8 release.
 
-When the Kafka cluster is in Kraft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a Kraft quorum of controller nodes.
+When the Kafka cluster is in KRaft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a KRaft quorum of controller nodes.
 
-Kraft mode has many benefits -- some obvious, and some not so obvious.  Clearly, it is nice to manage and configure one service rather than two services.  In addition, you can now run a single process Kafka cluster.
-Most important of all, Kraft mode is more scalable.  We expect to be able to [support many more topics and partitions](https://www.confluent.io/kafka-summit-san-francisco-2019/kafka-needs-no-keeper/) in this mode.
+KRaft mode has many benefits -- some obvious, and some not so obvious.  Clearly, it is nice to manage and configure one service rather than two services.  In addition, you can now run a single process Kafka cluster.
+Most important of all, KRaft mode is more scalable.  We expect to be able to [support many more topics and partitions](https://www.confluent.io/kafka-summit-san-francisco-2019/kafka-needs-no-keeper/) in this mode.
 
 # Quickstart
 
 ## Warning
-Kraft mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released,
-it will not be possible to upgrade your Kraft clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of Kraft mode.
+KRaft mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released,
+it will not be possible to upgrade your KRaft clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of KRaft mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -58,7 +58,7 @@ Created topic foo.
 # Deployment
 
 ## Controller Servers
-In Kraft mode, only a small group of specially selected servers can act as controllers (unlike the ZooKeeper-based mode, where any server can become the
+In KRaft mode, only a small group of specially selected servers can act as controllers (unlike the ZooKeeper-based mode, where any server can become the
 Controller).  The specially selected controller servers will participate in the metadata quorum.  Each controller server is either active, or a hot
 standby for the current active controller server.
 
@@ -69,10 +69,10 @@ controllers, you can tolerate 1 failure; with 5 controllers, you can tolerate 2 
 ## Process Roles
 Each Kafka server now has a new configuration key called `process.roles` which can have the following values:
 
-* If `process.roles` is set to `broker`, the server acts as a broker in Kraft mode.
-* If `process.roles` is set to `controller`, the server acts as a controller in Kraft mode.
-* If `process.roles` is set to `broker,controller`, the server acts as both a broker and a controller in Kraft mode.
-* If `process.roles` is not set at all then we are assumed to be in ZooKeeper mode.  As mentioned earlier, you can't currently transition back and forth between ZooKeeper mode and Kraft mode without reformatting.
+* If `process.roles` is set to `broker`, the server acts as a broker in KRaft mode.
+* If `process.roles` is set to `controller`, the server acts as a controller in KRaft mode.
+* If `process.roles` is set to `broker,controller`, the server acts as both a broker and a controller in KRaft mode.
+* If `process.roles` is not set at all then we are assumed to be in ZooKeeper mode.  As mentioned earlier, you can't currently transition back and forth between ZooKeeper mode and KRaft mode without reformatting.
 
 Nodes that act as both brokers and controllers are referred to as "combined" nodes.  Combined nodes are simpler to operate for simple use cases and allow you to avoid
 some fixed memory overheads associated with JVMs.  The key disadvantage is that the controller will be less isolated from the rest of the system.  For example, if activity on the broker causes an out of
@@ -110,7 +110,7 @@ nothing in the log, which would cause all metadata to be lost.
 We do not yet support generating or loading KIP-630 metadata snapshots.  This means that after a while, the time required to restart a broker will become very large.  This is a known issue and we are working on
 completing snapshots for the next release.
 
-We also don't support any kind of upgrade right now, either to or from Kraft mode.  This is another important gap that we are working on.
+We also don't support any kind of upgrade right now, either to or from KRaft mode.  This is another important gap that we are working on.
 
 Finally, the following Kafka features have not yet been fully implemented:
 

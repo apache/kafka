@@ -82,7 +82,7 @@ fail due to code changes. You can just run:
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
 
-### Running a Kafka broker in Kraft (Kafka Raft metadata) mode
+### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
 
 See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 

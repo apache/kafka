@@ -1,16 +1,16 @@
-Kraft (Kafka Raft)
+KRaft (Kafka Raft)
 ==================
-Kraft (Kafka Raft) is a protocol based on the [Raft Consensus Protocol](https://www.usenix.org/system/files/conference/atc14/atc14-paper-ongaro.pdf)
+KRaft (Kafka Raft) is a protocol based on the [Raft Consensus Protocol](https://www.usenix.org/system/files/conference/atc14/atc14-paper-ongaro.pdf)
 tailored for Apache Kafka.
 
-This is used by Apache Kafka in the [Kraft (Kafka Raft Metadata) mode](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md). We
+This is used by Apache Kafka in the [KRaft (Kafka Raft Metadata) mode](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md). We
 also have a standalone test server which can be used for performance testing. We describe the details to set this up below.
 
 ### Run Single Quorum ###
     bin/test-kraft-server-start.sh --config config/kraft.properties
 
 ### Run Multi Node Quorum ###
-Create 3 separate kraft quorum properties as the following:
+Create 3 separate KRaft quorum properties as the following:
 
 `cat << EOF >> config/kraft-quorum-1.properties`
     
