@@ -321,7 +321,6 @@ public class TestUtils {
         });
     }
 
-
     /**
      * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
      * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
