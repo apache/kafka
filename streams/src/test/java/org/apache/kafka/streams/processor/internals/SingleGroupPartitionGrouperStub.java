@@ -30,7 +30,7 @@ import java.util.Set;
 @SuppressWarnings("deprecation")
 public class SingleGroupPartitionGrouperStub implements org.apache.kafka.streams.processor.PartitionGrouper {
     private org.apache.kafka.streams.processor.PartitionGrouper defaultPartitionGrouper =
-        new DefaultPartitionGrouper();
+        new PartitionGrouper();
 
     @Override
     public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
