@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.api.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
@@ -36,11 +36,12 @@ class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn
         return new KStreamFlatMapProcessor();
     }
 
-    private class KStreamFlatMapProcessor extends AbstractProcessor<KIn, VIn, KOut, VOut> {
+    private class KStreamFlatMapProcessor extends ContextualProcessor<KIn, VIn, KOut, VOut> {
         @Override
         public void process(final Record<KIn, VIn> record) {
-            for (final KeyValue<? extends KOut, ? extends VOut> newPair :
-                mapper.apply(record.key(), record.value())) {
+            Iterable<? extends KeyValue<? extends KOut, ? extends VOut>> newKeyValues =
+                mapper.apply(record.key(), record.value());
+            for (final KeyValue<? extends KOut, ? extends VOut> newPair : newKeyValues) {
                 context().forward(record.withKey(newPair.key).withValue(newPair.value));
             }
         }

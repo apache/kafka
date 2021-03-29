@@ -17,25 +17,24 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.api.AbstractProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
-public class KStreamPrint<K, V> implements ProcessorSupplier<K, V, K, V> {
+public class KStreamPrint<K, V> implements ProcessorSupplier<K, V, Void, Void> {
 
     private final ForeachAction<K, V> action;
-    
+
     public KStreamPrint(final ForeachAction<K, V> action) {
         this.action = action;
     }
 
     @Override
-    public Processor<K, V, K, V> get() {
+    public Processor<K, V, Void, Void> get() {
         return new KStreamPrintProcessor();
     }
 
-    private class KStreamPrintProcessor extends AbstractProcessor<K, V, K, V> {
+    private class KStreamPrintProcessor implements Processor<K, V, Void, Void> {
 
         @Override
         public void process(final Record<K, V> record) {

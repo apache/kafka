@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.Printed;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
-public class PrintedInternal<K, V> extends Printed<K, V> {
-    public PrintedInternal(final Printed<K, V> printed) {
-        super(printed);
-    }
+public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
-    public ProcessorSupplier<K, V, Void, Void> build(final String processorName) {
-        return new KStreamPrint<>(new PrintForeachAction<>(outputStream, mapper, label != null ? label : processorName));
-    }
+  private final ForeachAction<K, V> action;
 
-    public String name() {
-        return processorName;
-    }
+  public ForeachProcessor(ForeachAction<K, V> action) {
+    this.action = action;
+  }
+
+  @Override
+  public void process(Record<K, V> record) {
+    action.apply(record.key(), record.value());
+  }
 }

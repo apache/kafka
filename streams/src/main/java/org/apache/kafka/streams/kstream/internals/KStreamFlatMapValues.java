@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.api.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
@@ -35,7 +35,7 @@ class KStreamFlatMapValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn
         return new KStreamFlatMapValuesProcessor();
     }
 
-    private class KStreamFlatMapValuesProcessor extends AbstractProcessor<KIn, VIn, KIn, VOut> {
+    private class KStreamFlatMapValuesProcessor extends ContextualProcessor<KIn, VIn, KIn, VOut> {
         @Override
         public void process(final Record<KIn, VIn> record) {
             final Iterable<? extends VOut> newValues = mapper.apply(record.key(), record.value());

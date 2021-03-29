@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.api.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
@@ -37,7 +37,7 @@ class KStreamFilter<K, V> implements ProcessorSupplier<K, V, K, V> {
         return new KStreamFilterProcessor();
     }
 
-    private class KStreamFilterProcessor extends AbstractProcessor<K, V, K, V> {
+    private class KStreamFilterProcessor extends ContextualProcessor<K, V, K, V> {
         @Override
         public void process(final Record<K, V> record) {
             if (filterNot ^ predicate.test(record.key(), record.value())) {

@@ -25,26 +25,15 @@ package org.apache.kafka.streams.processor.api;
  * @param <KOut> the type of output keys
  * @param <VOut> the type of output values
  */
-public abstract class AbstractProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
+public abstract class ContextualProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
     protected ProcessorContext<KOut, VOut> context;
 
-    protected AbstractProcessor() {}
+    protected ContextualProcessor() {}
 
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
         this.context = context;
-    }
-
-    /**
-     * Close this processor and clean up any resources.
-     * <p>
-     * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
-     */
-    @Override
-    public void close() {
-        // do nothing
     }
 
     /**
