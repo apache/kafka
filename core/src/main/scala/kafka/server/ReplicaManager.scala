@@ -1861,7 +1861,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (sendZkNotification)
       if (zkClient.isEmpty) {
-        warn("Unable to propagate log dir failure via Zookeeper in self-managed mode")
+        warn("Unable to propagate log dir failure via Zookeeper in KRaft mode")
       } else {
         zkClient.get.propagateLogDirEvent(localBrokerId)
       }
