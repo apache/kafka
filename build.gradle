@@ -149,7 +149,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'config/self-managed/README.md',
+        'config/kraft/README.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
