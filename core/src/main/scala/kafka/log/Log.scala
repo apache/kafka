@@ -344,7 +344,7 @@ class Log(@volatile private var _dir: File,
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the Log.producerStateManager instance witnessing the
     // deletion.
-    producerStateManager.removeStraySnapshots(segments.baseOffsets)
+    producerStateManager.removeStraySnapshots(segments.baseOffsets.toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
 
     // Delete partition metadata file if the version does not support topic IDs.

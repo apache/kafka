@@ -101,7 +101,7 @@ class LogSegments(topicPartition: TopicPartition) {
   /**
    * @return the base offsets of all segments
    */
-  def baseOffsets: Seq[Long] = segments.values().asScala.map(_.baseOffset).toSeq
+  def baseOffsets: Iterable[Long] = segments.values().asScala.map(_.baseOffset)
 
   /**
    * @param offset the segment to be checked
