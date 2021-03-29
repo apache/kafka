@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
-class ListOffsetsRequestTest extends BaseRequestTest {
+class ListOffsetsRequest2Test extends BaseRequestTest {
 
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)

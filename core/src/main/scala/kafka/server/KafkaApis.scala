@@ -938,6 +938,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def handleListOffsetRequestV0(request : RequestChannel.Request) : List[ListOffsetsTopicResponse] = {
+    System.err.println("handleListOffsetRequestV0")
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetsRequest]
@@ -977,11 +978,14 @@ class KafkaApis(val requestChannel: RequestChannel,
                     _ : KafkaStorageException) =>
             debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
               correlationId, clientId, topicPartition, e.getMessage))
+            System.err.println("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+              correlationId, clientId, topicPartition, e.getMessage))
             new ListOffsetsPartitionResponse()
               .setPartitionIndex(partition.partitionIndex)
               .setErrorCode(Errors.forException(e).code)
           case e: Throwable =>
             error("Error while responding to offset request", e)
+            System.err.println("Error while responding to offset request", e)
             new ListOffsetsPartitionResponse()
               .setPartitionIndex(partition.partitionIndex)
               .setErrorCode(Errors.forException(e).code)
@@ -997,6 +1001,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetsRequest]
     val version = request.header.apiVersion
+    System.err.println("V1:" + version)
 
     def buildErrorResponse(e: Errors, partition: ListOffsetsPartition): ListOffsetsPartitionResponse = {
       new ListOffsetsPartitionResponse()
@@ -1022,6 +1027,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
           debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
               s"failed because the partition is duplicated in the request.")
+          System.err.println(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
+            s"failed because the partition is duplicated in the request.")
           buildErrorResponse(Errors.INVALID_REQUEST, partition)
         } else {
           try {
@@ -1063,10 +1070,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                       _ : UnsupportedForMessageFormatException) =>
               debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                   s"partition $topicPartition failed due to ${e.getMessage}")
+              System.err.println(s"Offset request with correlation id $correlationId from client $clientId on " +
+                s"partition $topicPartition failed due to ${e.getMessage}")
               buildErrorResponse(Errors.forException(e), partition)
 
             // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
             case e: OffsetNotAvailableException =>
+              System.err.println("OffsetNotAvailableException:" + e)
               if (request.header.apiVersion >= 5) {
                 buildErrorResponse(Errors.forException(e), partition)
               } else {
@@ -1075,6 +1085,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
             case e: Throwable =>
               error("Error while responding to offset request", e)
+              System.err.println("Error while responding to offset request:" + e)
               buildErrorResponse(Errors.forException(e), partition)
           }
         }

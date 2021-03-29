@@ -1211,14 +1211,20 @@ class Partition(val topicPartition: TopicPartition,
     // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
     // or for a timestamp lookup that is beyond the last fetchable offset.
     timestamp match {
-      case ListOffsetsRequest.LATEST_TIMESTAMP =>
+      case ListOffsetsRequest.LATEST_TIMESTAMP => {
+        System.err.println("LATEST:" + maybeOffsetsError)
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
+      }
+      case ListOffsetsRequest.EARLIEST_TIMESTAMP => {
+        System.err.println("EARLIST:" + getOffsetByTimestamp)
         getOffsetByTimestamp
-      case _ =>
+      }
+      case _ => {
+        System.err.println("else:" + getOffsetByTimestamp + "," + lastFetchableOffset + maybeOffsetsError)
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
+      }
     }
   }
 
@@ -1254,13 +1260,17 @@ class Partition(val topicPartition: TopicPartition,
     val allOffsets = localLog.legacyFetchOffsetsBefore(timestamp, maxNumOffsets)
 
     if (!isFromConsumer) {
+      System.err.println("!isFromConsumer:" + allOffsets)
       allOffsets
     } else {
       val hw = localLog.highWatermark
-      if (allOffsets.exists(_ > hw))
+      if (allOffsets.exists(_ > hw)) {
+        System.err.println("_ > hw:" + hw + "," + allOffsets)
         hw +: allOffsets.dropWhile(_ > hw)
-      else
+      } else {
+        System.err.println("else:" + allOffsets)
         allOffsets
+      }
     }
   }
 
