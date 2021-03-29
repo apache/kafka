@@ -890,7 +890,7 @@ public class TaskManagerTest {
         setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+        final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
 
         final AtomicBoolean corruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
         final StateMachineTask corruptedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
