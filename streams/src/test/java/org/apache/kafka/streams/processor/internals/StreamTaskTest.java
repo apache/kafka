@@ -2032,6 +2032,24 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldClearCommitStatusesInCloseDirty() {
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
+        assertTrue(task.process(0L));
+        task.requestCommit();
+
+        task.suspend();
+        assertThat(task.commitNeeded(), is(true));
+        assertThat(task.commitRequested(), is(true));
+        task.closeDirty();
+        assertThat(task.commitNeeded(), is(false));
+        assertThat(task.commitRequested(), is(false));
+    }
+
+    @Test
     public void closeShouldBeIdempotent() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
