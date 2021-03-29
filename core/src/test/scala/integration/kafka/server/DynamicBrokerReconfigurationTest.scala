@@ -26,7 +26,6 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -52,6 +51,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
@@ -869,7 +869,12 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
     assertEquals(servers.map(_.config.brokerId).toSet, TestMetricsReporter.configuredBrokers.toSet)
 
+    // non-default value to trigger a new metric
     val clientId = "test-client-1"
+    servers.foreach { server =>
+      server.quotaManagers.produce.updateQuota(None, Some(clientId), Some(clientId),
+        Some(Quota.upperBound(10000000)))
+    }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, clientId)
     TestUtils.waitUntilTrue(() => consumerThread.received >= 5, "Messages not sent")
 

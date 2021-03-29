@@ -305,6 +305,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+        Some(new Quota(500, true)))
+
       // We have 10 second windows. Make sure that there is no quota violation
       // if we produce under the quota
       for (_ <- 0 until 10) {
@@ -350,6 +353,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireThrottleTimeSensor(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+        Some(new Quota(500, true)))
+
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove the throttle time sensor
       metrics.removeSensor("ProduceThrottleTime-:client1")
@@ -369,6 +375,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireQuotaSensors(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+        Some(new Quota(500, true)))
+
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove all the sensors
       metrics.removeSensor("ProduceThrottleTime-:client1")
@@ -393,6 +402,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     val clientId = "client@#$%"
     try {
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+        Some(new Quota(500, true)))
+
       maybeRecord(clientQuotaManager, "ANONYMOUS", clientId, 100)
 
       // The metrics should use the raw client ID, even if the reporters internally sanitize them
