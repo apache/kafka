@@ -170,7 +170,7 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
@@ -267,13 +267,13 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
     def cachedLastFetchedEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.lastFetchedEpoch)
+      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.lastFetchedEpoch)
       mapBuilder.result()
     }
 
@@ -394,7 +394,7 @@ class FetchSessionTest {
     )
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
-    context2.foreachPartition((topicPart, data) => {
+    context2.foreachResolvedPartition((topicPart, data) => {
       val entry = reqData2Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
@@ -462,7 +462,7 @@ class FetchSessionTest {
     )
     assertEquals(classOf[IncrementalFetchContext], context5.getClass)
     val reqData5Iter = reqData2.entrySet().iterator()
-    context5.foreachPartition((topicPart, data) => {
+    context5.foreachResolvedPartition((topicPart, data) => {
       val entry = reqData5Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
@@ -605,7 +605,7 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("foo", 1), new TopicPartition("bar", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachPartition((topicPart, _) => {
+    context2.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData2Iter.next(), topicPart)
     })
     assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
@@ -694,7 +694,7 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("bar", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachPartition((topicPart, _) => {
+    context2.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData2Iter.next(), topicPart)
     })
     assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
@@ -738,7 +738,7 @@ class FetchSessionTest {
     // Order switches since we don't order partitions that once had error.
     val parts3 = Set(new TopicPartition("bar", 0), new TopicPartition("foo", 1))
     val reqData3Iter = parts3.iterator
-    context3.foreachPartition((topicPart, _) => {
+    context3.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData3Iter.next(), topicPart)
     })
     assertEquals(None, context3.getFetchOffset(new TopicPartition("foo", 0)))
@@ -867,7 +867,7 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("foo", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachPartition((topicPart, _) => {
+    context2.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData2Iter.next(), topicPart)
     })
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
@@ -905,7 +905,7 @@ class FetchSessionTest {
     var parts3 = Set(new TopicPartition("foo", 0), new TopicPartition("bar", 1))
     var reqData3Iter = parts3.iterator
     // Before sending the response, foo is still in partitionMap
-    context3.foreachPartition((topicPart, _) => {
+    context3.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData3Iter.next(), topicPart)
     })
     assertEquals(0, context3.getFetchOffset(new TopicPartition("foo", 0)).get)
@@ -925,7 +925,7 @@ class FetchSessionTest {
     // foo should now be removed since the ID changed.
     parts3 = Set(new TopicPartition("bar", 1))
     reqData3Iter = parts3.iterator
-    context3.foreachPartition((topicPart, _) => {
+    context3.foreachResolvedPartition((topicPart, _) => {
       assertEquals(reqData3Iter.next(), topicPart)
     })
 
@@ -1494,7 +1494,7 @@ class FetchSessionTest {
 
   private def assertPartitionsOrder(context: FetchContext, partitions: Seq[TopicPartition]): Unit = {
     val partitionsInContext = ArrayBuffer.empty[TopicPartition]
-    context.foreachPartition { (tp, _) =>
+    context.foreachResolvedPartition { (tp, _) =>
       partitionsInContext += tp
     }
     assertEquals(partitions, partitionsInContext.toSeq)

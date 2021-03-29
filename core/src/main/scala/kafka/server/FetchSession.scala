@@ -271,11 +271,19 @@ class CachedUnresolvedPartition(val topicId: Uuid,
   * Each fetch session is protected by its own lock, which must be taken before mutable
   * fields are read or modified.  This includes modification of the session partition map.
   *
+  * For fetch versions 13 or greater, partitionMap will only contain partitions whose topic IDs were resolved on the
+  * server. unresolvedPartitions will contain those partitions whose topic IDs could not be resolved. All partitions
+  * in the request will be in one map or the other with is no overlap. Partitions in partitionMap can return records,
+  * but partitions in unresolvedPartitions will always return an error. On subsequent incremental fetch requests,
+  * unresolved partitions may be resolved if the server received metadata containing the topic ID. In this case,
+  * the partition will be moved from unresolvedPartitions to partitionMap.
+  *
   * @param id                     The unique fetch session ID.
   * @param privileged             True if this session is privileged.  Sessions crated by followers
-  *                               are privileged; sesssion created by consumers are not.
+  *                               are privileged; session created by consumers are not.
   * @param partitionMap           The CachedPartitionMap.
- *  @param unresolvedPartitions   The CachedUnresolvedPartitionMap
+ *  @param unresolvedPartitions   The CachedUnresolvedPartitionMap containing all partitions with topic IDs that
+ *                                were not found on the server.
   * @param creationMs             The time in milliseconds when this session was created.
   * @param lastUsedMs             The last used time in milliseconds.  This should only be updated by
   *                               FetchSessionCache#touch.
@@ -403,9 +411,9 @@ trait FetchContext extends Logging {
   def getFetchOffset(part: TopicPartition): Option[Long]
 
   /**
-    * Apply a function to each partition in the fetch request.
+    * Apply a function to each resolved partition in the fetch request.
     */
-  def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit
+  def foreachResolvedPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit
 
   /**
     * Get the response size to be used for quota computation. Since we are returning an empty response in case of
@@ -441,7 +449,7 @@ class SessionErrorContext(val error: Errors,
                           val reqMetadata: JFetchMetadata) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
+  override def foreachResolvedPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
     FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet.iterator, Collections.emptyList(), Collections.emptyMap())
@@ -471,7 +479,7 @@ class SessionlessFetchContext(val fetchDataAndError: FetchRequest.FetchDataAndEr
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchDataAndError.fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
+  override def foreachResolvedPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchDataAndError.fetchData.forEach(fun(_, _))
   }
 
@@ -535,7 +543,7 @@ class FullFetchContext(private val time: Time,
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchDataAndError.fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
+  override def foreachResolvedPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchDataAndError.fetchData.forEach(fun(_, _))
   }
 
@@ -614,8 +622,8 @@ class IncrementalFetchContext(private val time: Time,
   private val unresolvedTopicData = generateUnresolvedTopicData(topicIds)
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
-    // Take the session lock and iterate over all the cached partitions.
+  override def foreachResolvedPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
+    // Take the session lock and iterate over all the resolved cached partitions.
     session.synchronized {
       session.partitionMap.forEach { part =>
         fun(new TopicPartition(part.topic, part.partition), part.reqData)

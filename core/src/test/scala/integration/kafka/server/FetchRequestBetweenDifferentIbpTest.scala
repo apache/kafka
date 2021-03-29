@@ -20,7 +20,7 @@ package integration.kafka.server
 import java.time.Duration
 import java.util.Arrays.asList
 
-import kafka.api.{ApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV2}
+import kafka.api.{ApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_0_IV0}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
@@ -36,21 +36,21 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   override def brokerCount: Int = 3
   override def generateConfigs: Seq[KafkaConfig] = {
+    // Brokers should be at most 2 different IBP versions, but for more test coverage, three are used here.
     Seq(
       createConfig(0, KAFKA_2_7_IV0),
-      createConfig(1, KAFKA_2_8_IV2),
-      createConfig(2, KAFKA_2_8_IV2)
+      createConfig(1, KAFKA_2_8_IV1),
+      createConfig(2, KAFKA_3_0_IV0)
     )
   }
 
   @Test
   def testControllerOldIBP(): Unit = {
-
     val topic = "topic"
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version < KAFKA_2_8_IV0, and then create a topic where leader of partition 0 is not the controller,
+    // Ensure controller version < KAFKA_2_8_IV1, and then create a topic where leader of partition 0 is not the controller,
     // leader of partition 1 is.
     ensureControllerIn(Seq(0))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
@@ -71,12 +71,11 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerNewIBP(): Unit = {
-
     val topic = "topic"
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV2, and then create a topic where leader of partition 1 is the old version.
+    // Ensure controller version = KAFKA_3_0_IV0, and then create a topic where leader of partition 1 is the old version.
     ensureControllerIn(Seq(2))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
@@ -97,13 +96,12 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   @Test
   def testControllerNewToOldIBP(): Unit = {
-
     val topic = "topic"
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV2
-    ensureControllerIn(Seq(1))
+    // Ensure controller version = KAFKA_3_0_IV0
+    ensureControllerIn(Seq(2))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
     assertEquals(1, partitionLeaders(0))
