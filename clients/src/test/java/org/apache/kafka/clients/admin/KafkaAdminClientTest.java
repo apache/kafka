@@ -5365,22 +5365,20 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
             newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1",
                 AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000",
-                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "1"))) {
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
             final ListTopicsResult result = env.adminClient().listTopics();
-            while (true) {
+            TestUtils.waitForCondition(() -> {
                 time.sleep(1);
-                try {
-                    disconnectFuture.get(1, TimeUnit.MICROSECONDS);
-                    break;
-                } catch (java.util.concurrent.TimeoutException e) {
-                }
-            }
+                return disconnectFuture.isDone();
+            }, 5000, 1, () -> "Timed out waiting for expected disconnect");
+            assertFalse(disconnectFuture.isCompletedExceptionally());
             assertFalse(result.future.isDone());
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
-            log.debug("Advancing clock by 10 ms to trigger client-side retry.");
-            time.sleep(10);
+            TestUtils.waitForCondition(() -> {
+                return env.kafkaClient().hasInFlightRequests();
+            }, "Timed out waiting for retry");
+            env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
             assertEquals(0, result.listings().get().size());
         }
     }
