@@ -3,7 +3,7 @@ Kraft (aka KIP-500) mode Early Access Release
 
 # Introduction
 It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `Kraft mode`.
-`Kraft` is intended to be pronounced like `craft` (as in `craftmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
+`Kraft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
 is available for testing in the Kafka 2.8 release.
 
 When the Kafka cluster is in Kraft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a Kraft quorum of controller nodes.
