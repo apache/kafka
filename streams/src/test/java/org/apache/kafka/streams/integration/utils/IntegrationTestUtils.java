@@ -1372,15 +1372,6 @@ public class IntegrationTestUtils {
                                  final long totalRestored) {
         }
 
-        public boolean allStartOffsetsAtZero() {
-            for (final AtomicLong startOffset : changelogToStartOffset.values()) {
-                if (startOffset.get() != 0L) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         public long totalNumRestored() {
             long totalNumRestored = 0L;
             for (final AtomicLong numRestored : changelogToTotalNumRestored.values()) {

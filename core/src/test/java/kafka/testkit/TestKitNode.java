@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
 
-public final class WindowingDefaults {
-    private WindowingDefaults() {}
+package kafka.testkit;
 
-    public static final long DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000L; // one day
+public interface TestKitNode {
+    int id();
+    String metadataDirectory();
 }

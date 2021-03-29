@@ -20,9 +20,7 @@ import java.nio.charset.StandardCharsets
 buildscript {
   repositories {
     mavenCentral()
-    jcenter()
   }
-  apply from: file('gradle/buildscript.gradle'), to: buildscript
   apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
@@ -35,6 +33,7 @@ plugins {
   id 'com.diffplug.spotless' version '5.10.2'
   id 'com.github.ben-manes.versions' version '0.36.0'
   id 'idea'
+  id 'java-library'
   id 'org.owasp.dependencycheck' version '6.1.1'
 
   id "com.github.spotbugs" version '4.6.0' apply false
@@ -70,28 +69,28 @@ allprojects {
         }
       }
     }
-    configurations.all {
-      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
-      // that are unrelated to the project dependencies, we should not change them
-      if (name != "zinc") {
-        resolutionStrategy {
-          force(
-            // be explicit about the javassist dependency version instead of relying on the transitive version
-            libs.javassist,
-            // ensure we have a single version in the classpath despite transitive dependencies
-            libs.scalaLibrary,
-            libs.scalaReflect,
-            libs.jacksonAnnotations,
-            // be explicit about the Netty dependency version instead of relying on the version set by
-            // ZooKeeper (potentially older and containing CVEs)
-            libs.nettyHandler,
-            libs.nettyTransportNativeEpoll
-          )
-        }
+  }
+
+  configurations.all {
+    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+    // that are unrelated to the project dependencies, we should not change them
+    if (name != "zinc") {
+      resolutionStrategy {
+        force(
+          // be explicit about the javassist dependency version instead of relying on the transitive version
+          libs.javassist,
+          // ensure we have a single version in the classpath despite transitive dependencies
+          libs.scalaLibrary,
+          libs.scalaReflect,
+          libs.jacksonAnnotations,
+          // be explicit about the Netty dependency version instead of relying on the version set by
+          // ZooKeeper (potentially older and containing CVEs)
+          libs.nettyHandler,
+          libs.nettyTransportNativeEpoll
+        )
       }
     }
   }
-
 }
 
 ext {
@@ -150,6 +149,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
+        'config/self-managed/README.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
@@ -162,6 +162,7 @@ if (file('.git').exists()) {
   }
 }
 
+println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 
 subprojects {
 
@@ -271,7 +272,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -751,8 +752,6 @@ tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" })
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 
 project(':core') {
-  println "Building project 'core' with Scala version ${versions.scala}"
-
   apply plugin: 'scala'
   
   // scaladoc generation is configured at the sub-module level with an artifacts
@@ -1256,6 +1255,7 @@ project(':raft') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1306,6 +1306,12 @@ project(':raft') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
     }
   }
 
@@ -1425,9 +1431,11 @@ project(':streams') {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
-
+    
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+    
     implementation libs.slf4jApi
-    implementation libs.rocksDBJni
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
 
@@ -1554,7 +1562,6 @@ project(':streams') {
 }
 
 project(':streams:streams-scala') {
-  println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
@@ -1569,12 +1576,9 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.junitJupiterApi
-    testImplementation libs.junitVintageEngine
-    testImplementation libs.scalatest
+    testImplementation libs.junitJupiter
     testImplementation libs.easymock
     testImplementation libs.hamcrest
-
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -1616,7 +1620,6 @@ project(':streams:test-utils') {
 
   javadoc {
     include "**/org/apache/kafka/streams/test/**"
-    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1968,7 +1971,7 @@ project(':connect:transforms') {
 
   dependencies {
     api project(':connect:api')
-    
+
     implementation libs.slf4jApi
 
     testImplementation libs.easymock

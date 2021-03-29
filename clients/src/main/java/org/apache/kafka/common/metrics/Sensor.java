@@ -69,6 +69,11 @@ public final class Sensor {
         public MetricConfig config() {
             return configSupplier.get();
         }
+
+        @Override
+        public String toString() {
+            return "StatAndConfig(stat=" + stat + ')';
+        }
     }
 
     public enum RecordingLevel {

@@ -79,18 +79,6 @@ public class StoreToProcessorContextAdapterTest {
         context.forward("key", "value", To.all());
     }
 
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnForwardWithChildIndex() {
-        context.forward("key", "value", 1);
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnForwardWithChildName() {
-        context.forward("key", "value", "child1");
-    }
-
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowOnCommit() {
         context.commit();

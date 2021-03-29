@@ -576,7 +576,7 @@ public class Selector implements Selectable, AutoCloseable {
                     attemptRead(channel);
                 }
 
-                if (channel.hasBytesBuffered()) {
+                if (channel.hasBytesBuffered() && !explicitlyMutedChannels.contains(channel)) {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
                     //(possibly because no memory). it may be the case that the underlying socket will
                     //not come up in the next poll() and so we need to remember this channel for the
@@ -743,6 +743,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void mute(KafkaChannel channel) {
         channel.mute();
         explicitlyMutedChannels.add(channel);
+        keysWithBufferedRead.remove(channel.selectionKey());
     }
 
     @Override
@@ -755,6 +756,9 @@ public class Selector implements Selectable, AutoCloseable {
         // Remove the channel from explicitlyMutedChannels only if the channel has been actually unmuted.
         if (channel.maybeUnmute()) {
             explicitlyMutedChannels.remove(channel);
+            if (channel.hasBytesBuffered()) {
+                keysWithBufferedRead.add(channel.selectionKey());
+            }
         }
     }
 

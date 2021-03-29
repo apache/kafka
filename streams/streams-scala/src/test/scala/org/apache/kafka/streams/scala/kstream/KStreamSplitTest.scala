@@ -23,15 +23,15 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
-@RunWith(classOf[JUnitRunner])
-class KStreamSplitTest extends FlatSpec with Matchers with TestDriver {
-  "split" should "route messages according to predicates" in {
+class KStreamSplitTest extends TestDriver {
+
+  @Test
+  def testRouteMessagesAccordingToPredicates(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = Array("default", "even", "three");
@@ -56,15 +56,15 @@ class KStreamSplitTest extends FlatSpec with Matchers with TestDriver {
         .map(Integer.valueOf)
         .asJava
     )
-
-    testOutput(0).readValuesToList().asScala shouldBe List(1, 5)
-    testOutput(1).readValuesToList().asScala shouldBe List(2, 4)
-    testOutput(2).readValuesToList().asScala shouldBe List(3)
+    assertEquals(List(1, 5), testOutput(0).readValuesToList().asScala)
+    assertEquals(List(2, 4), testOutput(1).readValuesToList().asScala)
+    assertEquals(List(3), testOutput(2).readValuesToList().asScala)
 
     testDriver.close()
   }
 
-  "split" should "route messages to consumers" in {
+  @Test
+  def testRouteMessagesToConsumers(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
 
@@ -88,13 +88,14 @@ class KStreamSplitTest extends FlatSpec with Matchers with TestDriver {
     val even = testDriver.createOutput[Integer, Integer]("even")
     val mapped = testDriver.createOutput[Integer, Integer]("mapped")
 
-    even.readValuesToList().asScala shouldBe List(2, 4)
-    mapped.readValuesToList().asScala shouldBe List(9, 81)
+    assertEquals(List(2, 4), even.readValuesToList().asScala)
+    assertEquals(List(9, 81), mapped.readValuesToList().asScala)
 
     testDriver.close()
   }
 
-  "split" should "route messages to anonymous consumers" in {
+  @Test
+  def testRouteMessagesToAnonymousConsumers(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
 
@@ -118,8 +119,8 @@ class KStreamSplitTest extends FlatSpec with Matchers with TestDriver {
     val even = testDriver.createOutput[Integer, Integer]("even")
     val mapped = testDriver.createOutput[Integer, Integer]("mapped")
 
-    even.readValuesToList().asScala shouldBe List(2, 4)
-    mapped.readValuesToList().asScala shouldBe List(9, 81)
+    assertEquals(List(2, 4), even.readValuesToList().asScala)
+    assertEquals(List(9, 81), mapped.readValuesToList().asScala)
 
     testDriver.close()
   }
