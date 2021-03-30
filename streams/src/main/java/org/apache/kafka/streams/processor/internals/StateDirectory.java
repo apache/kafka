@@ -56,7 +56,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
  */
 public class StateDirectory {
 
-    private static final Pattern PATH_NAME = Pattern.compile("\\d+_\\d+");
+    private static final Pattern TASK_DIR_PATH_NAME = Pattern.compile("\\d+_\\d+");
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
     static final String LOCK_FILE_NAME = ".lock";
 
@@ -503,7 +503,7 @@ public class StateDirectory {
         } else {
             taskDirectories =
                 stateDir.listFiles(pathname -> {
-                    if (!pathname.isDirectory() || !PATH_NAME.matcher(pathname.getName()).matches()) {
+                    if (!pathname.isDirectory() || !TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches()) {
                         return false;
                     } else {
                         return !taskDirEmpty(pathname);
@@ -525,7 +525,7 @@ public class StateDirectory {
         } else {
             taskDirectories =
                 stateDir.listFiles(pathname -> pathname.isDirectory()
-                                                   && PATH_NAME.matcher(pathname.getName()).matches());
+                                                   && TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches());
         }
 
         return taskDirectories == null ? new File[0] : taskDirectories;
