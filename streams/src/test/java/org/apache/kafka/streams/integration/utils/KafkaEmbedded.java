@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import scala.collection.JavaConverters;
 
 /**
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
@@ -87,8 +88,6 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
-        effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
         effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
         effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
         effectiveConfig.put(KafkaConfig$.MODULE$.MessageMaxBytesProp(), 1000000);
@@ -108,8 +107,10 @@ public class KafkaEmbedded {
     @SuppressWarnings("WeakerAccess")
     public String brokerList() {
         final Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
-        return kafka.config().hostName() + ":" + kafka.boundPort(
-            new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
+        final ListenerName listenerName = new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT");
+        final String host = JavaConverters.asJavaCollection(kafka.config().advertisedListeners())
+            .stream().filter(l -> l.listenerName().equals(listenerName)).findFirst().get().host();
+        return host + ":" + kafka.boundPort(listenerName);
     }
 
 

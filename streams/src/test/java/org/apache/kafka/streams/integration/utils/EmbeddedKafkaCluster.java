@@ -89,7 +89,7 @@ public class EmbeddedKafkaCluster {
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
-        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.ListenersProp(), "PLAINTEXT://:" + DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
@@ -101,7 +101,7 @@ public class EmbeddedKafkaCluster {
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
-            log.debug("Starting a Kafka instance on port {} ...", brokerConfig.get(KafkaConfig$.MODULE$.PortProp()));
+            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig$.MODULE$.ListenersProp()));
             brokers[i] = new KafkaEmbedded(brokerConfig, time);
 
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
