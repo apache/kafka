@@ -36,7 +36,7 @@ public class RemoteLogSegmentMetadataUpdate {
     /**
      * Epoch time in milli seconds at which this event is generated.
      */
-    private final long eventTimestampMillis;
+    private final long eventTimestampMs;
 
     /**
      * It indicates the state in which the action is executed on this segment.
@@ -49,17 +49,17 @@ public class RemoteLogSegmentMetadataUpdate {
     private final int brokerId;
 
     /**
-     * @param remoteLogSegmentId   Universally unique remote log segment id.
-     * @param eventTimestampMillis Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
-     * @param state                State of the remote log segment.
-     * @param brokerId             Broker id from which this event is generated.
+     * @param remoteLogSegmentId Universally unique remote log segment id.
+     * @param eventTimestampMs   Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param state              State of the remote log segment.
+     * @param brokerId           Broker id from which this event is generated.
      */
-    public RemoteLogSegmentMetadataUpdate(RemoteLogSegmentId remoteLogSegmentId, long eventTimestampMillis,
+    public RemoteLogSegmentMetadataUpdate(RemoteLogSegmentId remoteLogSegmentId, long eventTimestampMs,
                                           RemoteLogSegmentState state, int brokerId) {
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
         this.brokerId = brokerId;
-        this.eventTimestampMillis = eventTimestampMillis;
+        this.eventTimestampMs = eventTimestampMs;
     }
 
     /**
@@ -72,8 +72,8 @@ public class RemoteLogSegmentMetadataUpdate {
     /**
      * @return Epoch time in milli seconds at which this event is generated.
      */
-    public long eventTimestamp() {
-        return eventTimestampMillis;
+    public long eventTimestampMs() {
+        return eventTimestampMs;
     }
 
     /**
@@ -99,7 +99,7 @@ public class RemoteLogSegmentMetadataUpdate {
             return false;
         }
         RemoteLogSegmentMetadataUpdate that = (RemoteLogSegmentMetadataUpdate) o;
-        return eventTimestampMillis == that.eventTimestampMillis &&
+        return eventTimestampMs == that.eventTimestampMs &&
                Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
                state == that.state &&
                brokerId == that.brokerId;
@@ -107,14 +107,14 @@ public class RemoteLogSegmentMetadataUpdate {
 
     @Override
     public int hashCode() {
-        return Objects.hash(remoteLogSegmentId, eventTimestampMillis, state, brokerId);
+        return Objects.hash(remoteLogSegmentId, eventTimestampMs, state, brokerId);
     }
 
     @Override
     public String toString() {
         return "RemoteLogSegmentMetadataUpdate{" +
                "remoteLogSegmentId=" + remoteLogSegmentId +
-               ", eventTimestamp=" + eventTimestampMillis +
+               ", eventTimestamp=" + eventTimestampMs +
                ", state=" + state +
                ", brokerId=" + brokerId +
                '}';
