@@ -19,7 +19,6 @@ package org.apache.kafka.common;
 import java.io.Closeable;
 import java.io.PrintStream;
 import java.util.Map;
-import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
