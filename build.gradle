@@ -33,6 +33,7 @@ plugins {
   id 'com.diffplug.spotless' version '5.10.2'
   id 'com.github.ben-manes.versions' version '0.36.0'
   id 'idea'
+  id 'java-library'
   id 'org.owasp.dependencycheck' version '6.1.1'
 
   id "com.github.spotbugs" version '4.6.0' apply false
@@ -148,7 +149,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
-        'config/self-managed/README.md',
+        'config/kraft/README.md',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',

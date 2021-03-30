@@ -32,8 +32,11 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
+import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -322,6 +325,7 @@ public class KafkaAdminClient extends AdminClient {
     static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
 
     private final Logger log;
+    private final LogContext logContext;
 
     /**
      * The default timeout to use for an operation.
@@ -576,6 +580,7 @@ public class KafkaAdminClient extends AdminClient {
                              LogContext logContext) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
+        this.logContext = logContext;
         this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = configureDefaultApiTimeoutMs(config);
         this.time = time;
@@ -736,19 +741,35 @@ public class KafkaAdminClient extends AdminClient {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
-        private int tries = 0;
+        protected int tries;
         private Node curNode = null;
-        private long nextAllowedTryMs = 0;
+        private long nextAllowedTryMs;
 
-        Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
+        Call(boolean internal,
+             String callName,
+             long nextAllowedTryMs,
+             int tries,
+             long deadlineMs,
+             NodeProvider nodeProvider
+        ) {
             this.internal = internal;
             this.callName = callName;
+            this.nextAllowedTryMs = nextAllowedTryMs;
+            this.tries = tries;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
         }
 
+        Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
+            this(internal, callName, 0, 0, deadlineMs, nodeProvider);
+        }
+
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
-            this(false, callName, deadlineMs, nodeProvider);
+            this(false, callName, 0, 0, deadlineMs, nodeProvider);
+        }
+
+        Call(String callName, long nextAllowedTryMs, int tries, long deadlineMs, NodeProvider nodeProvider) {
+            this(false, callName, nextAllowedTryMs, tries, deadlineMs, nodeProvider);
         }
 
         protected Node curNode() {
@@ -788,7 +809,7 @@ public class KafkaAdminClient extends AdminClient {
             nextAllowedTryMs = now + retryBackoffMs;
 
             // If the call has timed out, fail.
-            if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
+            if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
                 return;
             }
@@ -810,6 +831,10 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} failed: {}. Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
+            maybeRetry(now, throwable);
+        }
+
+        void maybeRetry(long now, Throwable throwable) {
             runnable.pendingCalls.add(this);
         }
 
@@ -833,8 +858,7 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @return          The AbstractRequest builder.
          */
-        @SuppressWarnings("rawtypes")
-        abstract AbstractRequest.Builder createRequest(int timeoutMs);
+        abstract AbstractRequest.Builder<?> createRequest(int timeoutMs);
 
         /**
          * Process the call response.
@@ -4701,6 +4725,82 @@ public class KafkaAdminClient extends AdminClient {
         };
         runnable.call(call, now);
         return new UnregisterBrokerResult(future);
+    }
+
+    @Override
+    public DescribeProducersResult describeProducers(Collection<TopicPartition> topicPartitions, DescribeProducersOptions options) {
+        DescribeProducersHandler handler = new DescribeProducersHandler(
+            new HashSet<>(topicPartitions),
+            options,
+            logContext
+        );
+        return new DescribeProducersResult(invokeDriver(handler, options.timeoutMs));
+    }
+
+    private <K, V> Map<K, KafkaFutureImpl<V>> invokeDriver(
+        AdminApiHandler<K, V> handler,
+        Integer timeoutMs
+    ) {
+        long currentTimeMs = time.milliseconds();
+        long deadlineMs = calcDeadlineMs(currentTimeMs, timeoutMs);
+
+        AdminApiDriver<K, V> driver = new AdminApiDriver<>(
+            handler,
+            deadlineMs,
+            retryBackoffMs,
+            logContext
+        );
+
+        maybeSendRequests(driver, currentTimeMs);
+        return driver.futures();
+    }
+
+    private <K, V> void maybeSendRequests(AdminApiDriver<K, V> driver, long currentTimeMs) {
+        for (AdminApiDriver.RequestSpec<K> spec : driver.poll()) {
+            runnable.call(newCall(driver, spec), currentTimeMs);
+        }
+    }
+
+    private <K, V> Call newCall(AdminApiDriver<K, V> driver, AdminApiDriver.RequestSpec<K> spec) {
+        NodeProvider nodeProvider = spec.scope.destinationBrokerId().isPresent() ?
+            new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
+            new LeastLoadedNodeProvider();
+
+        return new Call(spec.name, spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
+            @Override
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
+                return spec.request;
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                long currentTimeMs = time.milliseconds();
+                driver.onResponse(currentTimeMs, spec, response);
+                maybeSendRequests(driver, currentTimeMs);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                long currentTimeMs = time.milliseconds();
+                driver.onFailure(currentTimeMs, spec, throwable);
+                maybeSendRequests(driver, currentTimeMs);
+            }
+
+            @Override
+            void maybeRetry(long currentTimeMs, Throwable throwable) {
+                if (throwable instanceof DisconnectException) {
+                    // Disconnects are a special case. We want to give the driver a chance
+                    // to retry lookup rather than getting stuck on a node which is down.
+                    // For example, if a partition leader shuts down after our metadata query,
+                    // then we might get a disconnect. We want to try to find the new partition
+                    // leader rather than retrying on the same node.
+                    driver.onFailure(currentTimeMs, spec, throwable);
+                    maybeSendRequests(driver, currentTimeMs);
+                } else {
+                    super.maybeRetry(currentTimeMs, throwable);
+                }
+            }
+        };
     }
 
     /**

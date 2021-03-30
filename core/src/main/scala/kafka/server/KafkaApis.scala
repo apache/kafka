@@ -3241,22 +3241,32 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
     val describeProducersRequest = request.body[DescribeProducersRequest]
 
-    def partitionError(topicPartition: TopicPartition, error: Errors): DescribeProducersResponseData.PartitionResponse = {
+    def partitionError(
+      topicPartition: TopicPartition,
+      apiError: ApiError
+    ): DescribeProducersResponseData.PartitionResponse = {
       new DescribeProducersResponseData.PartitionResponse()
         .setPartitionIndex(topicPartition.partition)
-        .setErrorCode(error.code)
+        .setErrorCode(apiError.error.code)
+        .setErrorMessage(apiError.message)
     }
 
     val response = new DescribeProducersResponseData()
     describeProducersRequest.data.topics.forEach { topicRequest =>
       val topicResponse = new DescribeProducersResponseData.TopicResponse()
         .setName(topicRequest.name)
-      val topicError = if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name))
-        Some(Errors.TOPIC_AUTHORIZATION_FAILED)
-      else if (!metadataCache.contains(topicRequest.name))
-        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-      else
-        None
+
+      val invalidTopicError = checkValidTopic(topicRequest.name)
+
+      val topicError = invalidTopicError.orElse {
+        if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name)) {
+          Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
+        } else if (!metadataCache.contains(topicRequest.name))
+          Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+        else {
+          None
+        }
+      }
 
       topicRequest.partitionIndexes.forEach { partitionId =>
         val topicPartition = new TopicPartition(topicRequest.name, partitionId)
@@ -3274,8 +3284,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
+  private def checkValidTopic(topic: String): Option[ApiError] = {
+    try {
+      Topic.validate(topic)
+      None
+    } catch {
+      case e: Throwable => Some(ApiError.fromThrowable(e))
+    }
+  }
+
   def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
-    // This function will not be called when in self-managed quorum mode, since the
+    // This function will not be called when in KRaft mode, since the
     // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
     // manager.
     throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
