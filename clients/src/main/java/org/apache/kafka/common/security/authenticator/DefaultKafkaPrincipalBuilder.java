@@ -63,7 +63,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
      */
     public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer, SslPrincipalMapper sslPrincipalMapper) {
         this.kerberosShortNamer = kerberosShortNamer;
-        this.sslPrincipalMapper =  sslPrincipalMapper;
+        this.sslPrincipalMapper = sslPrincipalMapper;
     }
 
     @Override
