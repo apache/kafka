@@ -85,7 +85,7 @@ public class StateDirectory {
     private final File stateDir;
     private final boolean hasPersistentStores;
 
-    private final HashMap<TaskId, String> lockedTasksToStreamThreadOwner = new HashMap<>();
+    private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -283,9 +283,9 @@ public class StateDirectory {
             return true;
         }
 
-        final String lockOwner = lockedTasksToStreamThreadOwner.get(taskId);
+        final Thread lockOwner = lockedTasksToOwner.get(taskId);
         if (lockOwner != null) {
-            if (lockOwner.equals(Thread.currentThread().getName())) {
+            if (lockOwner.equals(Thread.currentThread())) {
                 log.trace("{} Found cached state dir lock for task {}", logPrefix(), taskId);
                 // we already own the lock
                 return true;
@@ -297,7 +297,7 @@ public class StateDirectory {
             log.error("Tried to lock task directory for {} but the state directory does not exist", taskId);
             throw new IllegalStateException("The state directory has been deleted");
         } else {
-            lockedTasksToStreamThreadOwner.put(taskId, Thread.currentThread().getName());
+            lockedTasksToOwner.put(taskId, Thread.currentThread());
             // make sure the task directory actually exists, and create it if not
             getOrCreateDirectoryForTask(taskId);
             return true;
@@ -353,9 +353,9 @@ public class StateDirectory {
      * Unlock the state directory for the given {@link TaskId}.
      */
     synchronized void unlock(final TaskId taskId) {
-        final String lockOwner = lockedTasksToStreamThreadOwner.get(taskId);
-        if (lockOwner != null && lockOwner.equals(Thread.currentThread().getName())) {
-            lockedTasksToStreamThreadOwner.remove(taskId);
+        final Thread lockOwner = lockedTasksToOwner.get(taskId);
+        if (lockOwner != null && lockOwner.equals(Thread.currentThread())) {
+            lockedTasksToOwner.remove(taskId);
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
         }
     }
@@ -374,8 +374,8 @@ public class StateDirectory {
             }
 
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
-            if (!lockedTasksToStreamThreadOwner.isEmpty()) {
-                log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", lockedTasksToStreamThreadOwner);
+            if (!lockedTasksToOwner.isEmpty()) {
+                log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", lockedTasksToOwner);
             }
             if (globalStateLock != null) {
                 log.error("Global state lock is present while closing the state, this indicates unclean shutdown");
@@ -423,7 +423,7 @@ public class StateDirectory {
         for (final File taskDir : listNonEmptyTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
-            if (!lockedTasksToStreamThreadOwner.containsKey(id)) {
+            if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
                         final long now = time.milliseconds();
@@ -452,7 +452,7 @@ public class StateDirectory {
         for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
-            if (!lockedTasksToStreamThreadOwner.containsKey(id)) {
+            if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
                         log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
