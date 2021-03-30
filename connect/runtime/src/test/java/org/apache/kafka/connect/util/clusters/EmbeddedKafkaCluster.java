@@ -67,6 +67,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import scala.collection.JavaConverters;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -125,7 +126,6 @@ public class EmbeddedKafkaCluster {
     private void start(int[] brokerPorts, String[] logDirs) {
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.HostNameProp(), "localhost");
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
@@ -140,7 +140,7 @@ public class EmbeddedKafkaCluster {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
             currentBrokerLogDirs[i] = logDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(KafkaConfig$.MODULE$.LogDirProp(), currentBrokerLogDirs[i]);
-            brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), brokerPorts[i]);
+            brokerConfig.put(KafkaConfig$.MODULE$.ListenersProp(), "PLAINTEXT://localhost:" + brokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
@@ -232,7 +232,9 @@ public class EmbeddedKafkaCluster {
     }
 
     public String address(KafkaServer server) {
-        return server.config().hostName() + ":" + server.boundPort(listenerName);
+        final String hostName = JavaConverters.asJavaCollection(server.config().advertisedListeners())
+            .stream().filter(l -> l.listenerName().equals(listenerName)).findFirst().get().host();
+        return hostName + ":" + server.boundPort(listenerName);
     }
 
     public String zKConnectString() {

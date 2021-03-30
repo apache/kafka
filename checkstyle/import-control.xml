@@ -528,6 +528,7 @@
         <allow class="javax.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
+        <allow class="scala.collection.JavaConverters" />
       </subpackage>
     </subpackage>
 
