@@ -18,8 +18,6 @@ package org.apache.kafka.common.security.auth;
 
 import javax.security.auth.x500.X500Principal;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
@@ -42,59 +40,11 @@ import static org.mockito.Mockito.when;
 public class DefaultKafkaPrincipalBuilderTest {
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testUseOldPrincipalBuilderForPlaintextIfProvided() throws Exception {
-        TransportLayer transportLayer = mock(TransportLayer.class);
-        Authenticator authenticator = mock(Authenticator.class);
-        PrincipalBuilder oldPrincipalBuilder = mock(PrincipalBuilder.class);
-
-        when(oldPrincipalBuilder.buildPrincipal(any(), any())).thenReturn(new DummyPrincipal("foo"));
-
-        DefaultKafkaPrincipalBuilder builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator,
-                transportLayer, oldPrincipalBuilder, null);
-
-        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(
-                InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
-        assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
-        assertEquals("foo", principal.getName());
-
-        builder.close();
-
-        verify(oldPrincipalBuilder).buildPrincipal(transportLayer, authenticator);
-        verify(oldPrincipalBuilder).close();
-    }
-
-    @Test
     public void testReturnAnonymousPrincipalForPlaintext() throws Exception {
         try (DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null)) {
             assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(
                     new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
         }
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void testUseOldPrincipalBuilderForSslIfProvided() throws Exception {
-        TransportLayer transportLayer = mock(TransportLayer.class);
-        Authenticator authenticator = mock(Authenticator.class);
-        PrincipalBuilder oldPrincipalBuilder = mock(PrincipalBuilder.class);
-        SSLSession session = mock(SSLSession.class);
-
-        when(oldPrincipalBuilder.buildPrincipal(any(), any()))
-                .thenReturn(new DummyPrincipal("foo"));
-
-        DefaultKafkaPrincipalBuilder builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator,
-                transportLayer, oldPrincipalBuilder, null);
-
-        KafkaPrincipal principal = builder.build(
-                new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
-        assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
-        assertEquals("foo", principal.getName());
-
-        builder.close();
-
-        verify(oldPrincipalBuilder).buildPrincipal(transportLayer, authenticator);
-        verify(oldPrincipalBuilder).close();
     }
 
     @Test
