@@ -2437,15 +2437,6 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testCloseWithTimeUnit() {
-        KafkaConsumer consumer = mock(KafkaConsumer.class);
-        doCallRealMethod().when(consumer).close(anyLong(), any());
-        consumer.close(1, TimeUnit.SECONDS);
-        verify(consumer).close(Duration.ofSeconds(1));
-    }
-
-    @Test
     public void testSubscriptionOnInvalidTopic() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
