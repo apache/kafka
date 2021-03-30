@@ -99,9 +99,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    TestUtils.resource(log.readSnapshot(snapshotId).get()) { snapshot =>
-      assertEquals(0, snapshot.sizeInBytes())
-    }
+    assertEquals(0, log.readSnapshot(snapshotId).get().sizeInBytes())
   }
 
   @Test

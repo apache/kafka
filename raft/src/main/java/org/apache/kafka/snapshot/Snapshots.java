@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
 import java.util.Optional;
 
@@ -50,10 +51,6 @@ public final class Snapshots {
         return logDir;
     }
 
-    public static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
-        return snapshotDir(logDir).resolve(filenameFromSnapshotId(snapshotId) + SUFFIX);
-    }
-
     static String filenameFromSnapshotId(OffsetAndEpoch snapshotId) {
         return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset), EPOCH_FORMATTER.format(snapshotId.epoch));
     }
@@ -62,8 +59,12 @@ public final class Snapshots {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
-    public static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
+    static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + DELETE_SUFFIX);
+    }
+
+    public static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
+        return snapshotDir(logDir).resolve(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
     public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
@@ -104,18 +105,29 @@ public final class Snapshots {
     }
 
     /**
-     * Delete the snapshot from the filesystem, the caller may firstly rename snapshot file to
-     * ${file}.deleted, so we try to delete the file as well as the renamed file if exists.
+     * Delete the snapshot from the filesystem.
      */
-    public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) {
-        Path immutablePath = Snapshots.snapshotPath(logDir, snapshotId);
-        Path deletingPath = Snapshots.deleteRename(immutablePath, snapshotId);
+    public static boolean deleteIfExists(Path logDir, OffsetAndEpoch snapshotId) {
+        Path immutablePath = snapshotPath(logDir, snapshotId);
+        Path deletedPath = deleteRename(immutablePath, snapshotId);
         try {
-            return Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletingPath);
+            return Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletedPath);
         } catch (IOException e) {
-            log.error("Error deleting snapshot file " + deletingPath, e);
+            log.error("Error deleting snapshot files {} and {}", immutablePath, deletedPath, e);
             return false;
         }
     }
 
+    /**
+     * Mark a snapshot for deletion by renaming with the deleted suffix
+     */
+    public static void markForDelete(Path logDir, OffsetAndEpoch snapshotId) {
+        Path immutablePath = snapshotPath(logDir, snapshotId);
+        Path deletedPath = deleteRename(immutablePath, snapshotId);
+        try {
+            Files.move(immutablePath, deletedPath, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            log.error("Error renaming snapshot file from {} to {}", immutablePath, deletedPath, e);
+        }
+    }
 }

@@ -24,7 +24,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import java.io.IOException;
 import java.nio.file.Path;
 
-public final class FileRawSnapshotReader implements RawSnapshotReader {
+public final class FileRawSnapshotReader implements RawSnapshotReader, AutoCloseable {
     private final FileRecords fileRecords;
     private final OffsetAndEpoch snapshotId;
 
@@ -54,8 +54,12 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
     }
 
     @Override
-    public void close() throws IOException {
-        fileRecords.close();
+    public void close() {
+        try {
+            fileRecords.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**

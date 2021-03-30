@@ -709,8 +709,5 @@ public class MockLog implements ReplicatedLog {
         public Records records() {
             return data;
         }
-
-        @Override
-        public void close() {}
     }
 }
