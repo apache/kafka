@@ -39,6 +39,7 @@ public class KStreamFilterTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     private final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
+    private final Predicate<Integer, String> isEven = (key, value) -> (key % 2) == 0;
 
     @Test
     public void testFilter() {
@@ -62,6 +63,27 @@ public class KStreamFilterTest {
     }
 
     @Test
+    public void testFilterWithComposedPredicate() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.filter(isMultipleOfThree.and(isEven)).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+        }
+
+        assertEquals(1, supplier.theCapturedProcessor().processed().size());
+    }
+
+    @Test
     public void testFilterNot() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
@@ -71,6 +93,48 @@ public class KStreamFilterTest {
 
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.filterNot(isMultipleOfThree).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+        }
+
+        assertEquals(5, supplier.theCapturedProcessor().processed().size());
+    }
+
+    @Test
+    public void testFilterNegatedPredicate() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.filter(isMultipleOfThree.negate()).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+        }
+
+        assertEquals(5, supplier.theCapturedProcessor().processed().size());
+    }
+
+    @Test
+    public void testFilterNotPredicate() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
+
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.filter(Predicate.not(isMultipleOfThree)).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
