@@ -62,8 +62,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
-
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
@@ -380,7 +378,7 @@ public class Sender implements Runnable {
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
-            failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
+            failBatch(expiredBatch, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
                 transactionManager.markSequenceUnresolved(expiredBatch);
@@ -635,17 +633,10 @@ public class Sender implements Runnable {
                 // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
                 completeBatch(batch, response);
             } else {
-                final RuntimeException exception;
-                if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
-                    exception = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
-                else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
-                    exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
-                else
-                    exception = error.exception(response.errorMessage);
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, exception, batch.attempts() < this.retries);
+                failBatch(batch, response, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
@@ -689,30 +680,57 @@ public class Sender implements Runnable {
             transactionManager.handleCompletedBatch(batch, response);
         }
 
-        if (batch.done(response.baseOffset, response.logAppendTime, null)) {
+        if (batch.complete(response.baseOffset, response.logAppendTime)) {
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
 
     private void failBatch(ProducerBatch batch,
                            ProduceResponse.PartitionResponse response,
-                           RuntimeException exception,
                            boolean adjustSequenceNumbers) {
-        failBatch(batch, response.baseOffset, response.logAppendTime, exception, adjustSequenceNumbers);
+        final RuntimeException topLevelException;
+        if (response.error == Errors.TOPIC_AUTHORIZATION_FAILED)
+            topLevelException = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
+        else if (response.error == Errors.CLUSTER_AUTHORIZATION_FAILED)
+            topLevelException = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
+        else
+            topLevelException = response.error.exception(response.errorMessage);
+
+        if (response.recordErrors == null || response.recordErrors.isEmpty()) {
+            failBatch(batch, topLevelException, adjustSequenceNumbers);
+        } else {
+            Map<Integer, RuntimeException> recordErrorMap = new HashMap<>(response.recordErrors.size());
+            for (ProduceResponse.RecordError recordError : response.recordErrors) {
+                if (recordError.message != null) {
+                    recordErrorMap.put(recordError.batchIndex, response.error.exception(recordError.message));
+                }
+            }
+
+            failBatch(batch, topLevelException, recordErrorMap, adjustSequenceNumbers);
+        }
     }
 
-    private void failBatch(ProducerBatch batch,
-                           long baseOffset,
-                           long logAppendTime,
-                           RuntimeException exception,
-                           boolean adjustSequenceNumbers) {
+    private void failBatch(
+        ProducerBatch batch,
+        RuntimeException topLevelException,
+        boolean adjustSequenceNumbers
+    ) {
+        failBatch(batch, topLevelException, Collections.emptyMap(), adjustSequenceNumbers);
+    }
+
+    private void failBatch(
+        ProducerBatch batch,
+        RuntimeException topLevelException,
+        Map<Integer, RuntimeException> recordExceptions,
+        boolean adjustSequenceNumbers
+    ) {
         if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumbers);
+            transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
-        if (batch.done(baseOffset, logAppendTime, exception)) {
+        if (batch.completeExceptionally(topLevelException, recordExceptions)) {
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
