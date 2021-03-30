@@ -383,11 +383,7 @@ object KafkaConfig {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   /** ********* Socket Server Configuration ***********/
-  val PortProp = "port"
-  val HostNameProp = "host.name"
   val ListenersProp = "listeners"
-  val AdvertisedHostNameProp: String = "advertised.host.name"
-  val AdvertisedPortProp = "advertised.port"
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val ControlPlaneListenerNameProp = "control.plane.listener.name"
@@ -682,12 +678,6 @@ object KafkaConfig {
   " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +
   " kafka.security.auth.Authorizer trait which was previously used for authorization."
   /** ********* Socket Server Configuration ***********/
-  val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "the port to listen and accept connections on"
-  val HostNameDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
-  "Use <code>listeners</code> instead. \n" +
-  "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
     s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp</code> must also be set.\n" +
     " Listener names and port numbers must be unique.\n" +
@@ -696,17 +686,6 @@ object KafkaConfig {
     " Examples of legal listener lists:\n" +
     " PLAINTEXT://myhost:9092,SSL://:9091\n" +
     " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
-  val AdvertisedHostNameDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the interface to which the broker binds. If this is not set, " +
-  "it will use the value for <code>host.name</code> if configured. Otherwise " +
-  "it will use the value returned from java.net.InetAddress.getCanonicalHostName()."
-  val AdvertisedPortDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
-  "Use <code>advertised.listeners</code> instead. \n" +
-  "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
-  "need to be different from the port to which the broker binds. If this is not set, " +
-  "it will publish the same port that the broker binds to."
   val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
     s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
@@ -1087,11 +1066,7 @@ object KafkaConfig {
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
 
       /** ********* Socket Server Configuration ***********/
-      .define(PortProp, INT, Defaults.Port, HIGH, PortDoc)
-      .define(HostNameProp, STRING, Defaults.HostName, HIGH, HostNameDoc)
       .define(ListenersProp, STRING, null, HIGH, ListenersDoc)
-      .define(AdvertisedHostNameProp, STRING, null, HIGH, AdvertisedHostNameDoc)
-      .define(AdvertisedPortProp, INT, null, HIGH, AdvertisedPortDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
