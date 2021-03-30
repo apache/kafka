@@ -81,8 +81,7 @@ object Defaults {
   val AuthorizerClassName = ""
 
   /** ********* Socket Server Configuration ***********/
-  val Port = 9092
-  val HostName: String = new String("")
+  val Listeners = "PLAINTEXT://:9092"
 
   val ListenerSecurityProtocolMap: String = EndPoint.DefaultSecurityProtocolMap.map { case (listenerName, securityProtocol) =>
     s"${listenerName.value}:${securityProtocol.name}"
@@ -1066,7 +1065,7 @@ object KafkaConfig {
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
 
       /** ********* Socket Server Configuration ***********/
-      .define(ListenersProp, STRING, null, HIGH, ListenersDoc)
+      .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
@@ -1553,11 +1552,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   /** ********* Socket Server Configuration ***********/
-  val hostName = getString(KafkaConfig.HostNameProp)
-  val port = getInt(KafkaConfig.PortProp)
-  val advertisedHostName = Option(getString(KafkaConfig.AdvertisedHostNameProp)).getOrElse(hostName)
-  val advertisedPort: java.lang.Integer = Option(getInt(KafkaConfig.AdvertisedPortProp)).getOrElse(port)
-
   val socketSendBufferBytes = getInt(KafkaConfig.SocketSendBufferBytesProp)
   val socketReceiveBufferBytes = getInt(KafkaConfig.SocketReceiveBufferBytesProp)
   val socketRequestMaxBytes = getInt(KafkaConfig.SocketRequestMaxBytesProp)
@@ -1779,9 +1773,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   // If the user did not define listeners but did define host or port, let's use them in backward compatible way
   // If none of those are defined, we default to PLAINTEXT://:9092
   def listeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
-      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
+    CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), listenerSecurityProtocolMap)
   }
 
   def controllerListenerNames: Seq[String] =
@@ -1813,8 +1805,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
-    else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
       listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
