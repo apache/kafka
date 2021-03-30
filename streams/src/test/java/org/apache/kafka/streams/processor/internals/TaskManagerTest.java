@@ -29,7 +29,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -824,16 +823,14 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
-        final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
-        stateManager.markChangelogAsCorrupted(taskId00Partitions);
-        replay(stateManager);
+        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new File[0]);
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
         // make sure this will attempt to be committed and throw
         final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
         uncorruptedActive.setCommitNeeded();
 
         // handleAssignment
@@ -843,15 +840,16 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, uncorruptedActive));
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
+        topologyBuilder.addSubscribedTopicsFromMetadata(eq(singleton(topic1)), anyObject());
+        expectLastCall().anyTimes();
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
-        consumer.commitSync(offsets);
-        expectLastCall().andThrow(new RebalanceInProgressException("You should not commit during a rebalance!"));
-
         expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader, stateDirectory, stateManager);
+
+        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -862,6 +860,8 @@ public class TaskManagerTest {
         assertThat(uncorruptedActive.commitNeeded, is(true));
         assertThat(uncorruptedActive.commitCompleted, is(false));
 
+        taskManager.handleRebalanceStart(singleton(topic1));
+        assertThat(taskManager.isRebalanceInProgress(), is(true));
         taskManager.handleCorruption(singleton(taskId00));
 
         assertThat(uncorruptedActive.commitPrepared, is(false));

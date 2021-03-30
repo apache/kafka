@@ -1083,6 +1083,9 @@ public class TaskManager {
     }
 
     /**
+     * Caution: do not invoke this directly if it's possible a rebalance is occurring, as the commit will fail. If
+     * this is a possibility, prefer the {@link #commitAndFillInConsumedOffsetsAndMetadataPerTaskMap} instead.
+     *
      * @throws TaskMigratedException   if committing offsets failed due to CommitFailedException (non-EOS)
      * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS)
      * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
