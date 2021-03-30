@@ -21,14 +21,13 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
@@ -150,6 +149,7 @@ class LogManager(logDirs: Seq[File],
           val created = dir.mkdirs()
           if (!created)
             throw new IOException(s"Failed to create data directory ${dir.getAbsolutePath}")
+          Utils.flushParentDir(dir.toPath)
         }
         if (!dir.isDirectory || !dir.canRead)
           throw new IOException(s"${dir.getAbsolutePath} is not a readable log directory.")
@@ -848,6 +848,7 @@ class LogManager(logDirs: Seq[File],
       val dir = new File(logDirPath, logDirName)
       try {
         Files.createDirectories(dir.toPath)
+        Utils.flushParentDir(dir.toPath)
         Success(dir)
       } catch {
         case e: IOException =>
