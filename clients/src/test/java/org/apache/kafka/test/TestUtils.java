@@ -309,8 +309,8 @@ public class TestUtils {
      */
     public static void waitForCondition(
         final TestCondition testCondition,
-        final long maxWaitMs,
         final long pollIntervalMs,
+        final long maxWaitMs,
         Supplier<String> conditionDetailsSupplier
     ) throws InterruptedException {
         retryOnExceptionWithTimeout(pollIntervalMs, maxWaitMs, () -> {
