@@ -3403,7 +3403,7 @@ class LogTest {
       segment.truncateTo(0)
     })
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
 
     val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
@@ -3431,7 +3431,7 @@ class LogTest {
       segment.truncateTo(0)
     }
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
 
     val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
@@ -3455,7 +3455,7 @@ class LogTest {
         segment.changeFileSuffixes("", Log.SwapFileSuffix)
     })
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
 
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
