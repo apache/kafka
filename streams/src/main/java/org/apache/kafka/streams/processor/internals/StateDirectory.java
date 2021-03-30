@@ -96,9 +96,8 @@ public class StateDirectory {
 
     private static class LockAndOwner {
         final FileLock lock;
-        final String owningThread;
-
-        LockAndOwner(final String owningThread, final FileLock lock) {
+        final Thread owningThread;
+        LockAndOwner(final Thread owningThread, final FileLock lock) {
             this.owningThread = owningThread;
             this.lock = lock;
         }
@@ -298,7 +297,7 @@ public class StateDirectory {
         final File lockFile;
         // we already have the lock so bail out here
         final LockAndOwner lockAndOwner = locks.get(taskId);
-        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
+        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread())) {
             log.trace("{} Found cached state dir lock for task {}", logPrefix(), taskId);
             return true;
         } else if (lockAndOwner != null) {
@@ -327,7 +326,7 @@ public class StateDirectory {
 
         final FileLock lock = tryLock(channel);
         if (lock != null) {
-            locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
+            locks.put(taskId, new LockAndOwner(Thread.currentThread(), lock));
 
             log.debug("{} Acquired state dir lock for task {}", logPrefix(), taskId);
         }
@@ -384,7 +383,7 @@ public class StateDirectory {
      */
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
-        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
+        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread())) {
             locks.remove(taskId);
             lockAndOwner.lock.release();
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);
