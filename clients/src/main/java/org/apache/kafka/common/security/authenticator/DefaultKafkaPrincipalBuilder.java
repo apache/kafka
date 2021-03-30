@@ -39,7 +39,6 @@ import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Principal;
@@ -52,7 +51,7 @@ import java.security.Principal;
  *
  * NOTE: This is an internal class and can change without notice.
  */
-public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde, Closeable {
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde {
     private final KerberosShortNamer kerberosShortNamer;
     private final SslPrincipalMapper sslPrincipalMapper;
 
@@ -133,7 +132,4 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
         DefaultPrincipalData data = new DefaultPrincipalData(new ByteBufferAccessor(buffer), version);
         return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
     }
-
-    @Override
-    public void close() { }
 }

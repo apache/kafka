@@ -41,10 +41,9 @@ public class DefaultKafkaPrincipalBuilderTest {
 
     @Test
     public void testReturnAnonymousPrincipalForPlaintext() throws Exception {
-        try (DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null)) {
-            assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(
-                    new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
-        }
+        DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
+        assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(
+                new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
     }
 
     @Test
@@ -59,8 +58,6 @@ public class DefaultKafkaPrincipalBuilderTest {
                 new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
-
-        builder.close();
 
         verify(session, atLeastOnce()).getPeerPrincipal();
     }
@@ -77,7 +74,6 @@ public class DefaultKafkaPrincipalBuilderTest {
                 new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.ANONYMOUS, principal);
 
-        builder.close();
         verify(session, atLeastOnce()).getPeerPrincipal();
     }
 
@@ -115,7 +111,6 @@ public class DefaultKafkaPrincipalBuilderTest {
         principal = builder.build(sslContext);
         assertEquals("OU=JavaSoft,O=Sun Microsystems,C=US", principal.getName());
 
-        builder.close();
         verify(session, times(4)).getPeerPrincipal();
     }
 
@@ -132,8 +127,6 @@ public class DefaultKafkaPrincipalBuilderTest {
                 SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
-
-        builder.close();
 
         verify(server, atLeastOnce()).getMechanismName();
         verify(server, atLeastOnce()).getAuthorizationID();
@@ -154,8 +147,6 @@ public class DefaultKafkaPrincipalBuilderTest {
                 SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
-
-        builder.close();
 
         verify(server, atLeastOnce()).getMechanismName();
         verify(server, atLeastOnce()).getAuthorizationID();
@@ -181,8 +172,6 @@ public class DefaultKafkaPrincipalBuilderTest {
         byte[] serializedPrincipal = builder.serialize(principal);
         KafkaPrincipal deserializedPrincipal = builder.deserialize(serializedPrincipal);
         assertEquals(principal, deserializedPrincipal);
-
-        builder.close();
 
         verify(server, atLeastOnce()).getMechanismName();
         verify(server, atLeastOnce()).getAuthorizationID();
