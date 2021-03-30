@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
@@ -908,6 +909,24 @@ public final class Utils {
                 inner.addSuppressed(outer);
                 throw inner;
             }
+        }
+    }
+
+    /**
+     * Flushes the parent directory to guarantee crash consistency.
+     *
+     * @throws IOException if flushing the parent directory fails.
+     */
+    public static void flushParentDir(Path path) throws IOException {
+        FileChannel dir = null;
+        try {
+            dir = FileChannel.open(path.getParent(), StandardOpenOption.READ);
+            dir.force(true);
+        } catch (Exception e) {
+            throw new KafkaException("Attempt to flush the parent directory of " + path + " failed.");
+        } finally {
+            if (dir != null)
+                dir.close();
         }
     }
 

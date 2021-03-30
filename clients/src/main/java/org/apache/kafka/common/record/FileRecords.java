@@ -208,15 +208,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Flush the parent directory of a file to the physical disk, which makes sure the file is accessible after crashing.
      */
     public void flushParentDir() throws IOException {
-        FileChannel dir = null;
         try {
-            dir = FileChannel.open(file.toPath().getParent(), StandardOpenOption.READ);
-            dir.force(true);
-        } catch (Exception e) {
-            throw new KafkaException("Attempt to flush the parent directory of " + file + " failed.");
+            Utils.flushParentDir(file.toPath());
         } finally {
-            if (dir != null)
-                dir.close();
             needFlushParentDir.set(false);
         }
     }
