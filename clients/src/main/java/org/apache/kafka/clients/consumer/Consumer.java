@@ -265,12 +265,6 @@ public interface Consumer<K, V> extends Closeable {
     void close();
 
     /**
-     * @see KafkaConsumer#close(long, TimeUnit)
-     */
-    @Deprecated
-    void close(long timeout, TimeUnit unit);
-
-    /**
      * @see KafkaConsumer#close(Duration)
      */
     void close(Duration timeout);

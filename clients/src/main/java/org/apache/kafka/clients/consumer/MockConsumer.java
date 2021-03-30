@@ -447,13 +447,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void close() {
-        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    }
-
-    @Deprecated
-    @Override
-    public synchronized void close(long timeout, TimeUnit unit) {
+    public final synchronized void close() {
         this.closed = true;
     }
 
