@@ -374,7 +374,7 @@ public class StateDirectory {
             }
 
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
-            if (lockedTasksToStreamThreadOwner.isEmpty()) {
+            if (!lockedTasksToStreamThreadOwner.isEmpty()) {
                 log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", lockedTasksToStreamThreadOwner);
             }
             if (globalStateLock != null) {
@@ -434,7 +434,7 @@ public class StateDirectory {
                             Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
                         }
                     }
-                } catch (final OverlappingFileLockException | IOException exception) {
+                } catch (final IOException exception) {
                     log.warn(
                         String.format("%s Swallowed the following exception during deletion of obsolete state directory %s for task %s:",
                             logPrefix(), dirName, id),
