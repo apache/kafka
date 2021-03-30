@@ -116,8 +116,8 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
     public void close() {
         // tell the admin client to close now
         this.adminClient.close(Duration.ZERO);
-        // block until it is really closed
-        this.adminClient.close();
+        // block for up to a minute until the internal threads shut down.
+        this.adminClient.close(Duration.ofMinutes(1));
     }
 
     static Map<String, Object> clientConfigs(String... overrides) {
