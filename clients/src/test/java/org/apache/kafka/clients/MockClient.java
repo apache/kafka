@@ -40,6 +40,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -86,6 +87,7 @@ public class MockClient implements KafkaClient {
     private volatile int numBlockingWakeups = 0;
     private volatile boolean active = true;
     private volatile CompletableFuture<String> disconnectFuture;
+    private volatile Consumer<Node> readyCallback;
 
     public MockClient(Time time) {
         this(time, new NoOpMetadataUpdater());
@@ -120,6 +122,9 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
+        if (readyCallback != null) {
+            readyCallback.accept(node);
+        }
         return connectionState(node.idString()).ready(now);
     }
 
@@ -169,6 +174,10 @@ public class MockClient implements KafkaClient {
     @Override
     public AuthenticationException authenticationException(Node node) {
         return authenticationErrors.get(node);
+    }
+
+    public void setReadyCallback(Consumer<Node> onReadyCall) {
+        this.readyCallback = onReadyCall;
     }
 
     public void setDisconnectFuture(CompletableFuture<String> disconnectFuture) {

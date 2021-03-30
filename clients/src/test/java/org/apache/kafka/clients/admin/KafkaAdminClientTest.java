@@ -207,6 +207,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
@@ -5512,12 +5513,23 @@ public class KafkaAdminClientTest {
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 100);
             }
+
+            // We use a countdown latch to ensure that we get to the first
+            // call to `ready` before we increment the time below to trigger
+            // the disconnect.
+            CountDownLatch readyLatch = new CountDownLatch(2);
+
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
-            final ListTopicsResult result = env.adminClient().listTopics();
+            env.kafkaClient().setReadyCallback(node -> readyLatch.countDown());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
+            final ListTopicsResult result = env.adminClient().listTopics();
+
+            readyLatch.await(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
             log.debug("Advancing clock by 25 ms to trigger client-side disconnect.");
             time.sleep(25);
             disconnectFuture.get();
+
             log.debug("Enabling nodes to send requests again.");
             for (Node node : cluster.nodes()) {
                 env.kafkaClient().delayReady(node, 0);
@@ -5540,22 +5552,19 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
             newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1",
                 AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000",
-                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "1"))) {
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().setDisconnectFuture(disconnectFuture);
             final ListTopicsResult result = env.adminClient().listTopics();
-            while (true) {
+            TestUtils.waitForCondition(() -> {
                 time.sleep(1);
-                try {
-                    disconnectFuture.get(1, TimeUnit.MICROSECONDS);
-                    break;
-                } catch (java.util.concurrent.TimeoutException e) {
-                }
-            }
+                return disconnectFuture.isDone();
+            }, 1, 5000, () -> "Timed out waiting for expected disconnect");
+            assertFalse(disconnectFuture.isCompletedExceptionally());
             assertFalse(result.future.isDone());
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
-            log.debug("Advancing clock by 10 ms to trigger client-side retry.");
-            time.sleep(10);
+            TestUtils.waitForCondition(env.kafkaClient()::hasInFlightRequests,
+                "Timed out waiting for retry");
+            env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
             assertEquals(0, result.listings().get().size());
         }
     }
