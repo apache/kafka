@@ -369,7 +369,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     now
                 ));
             } catch (Exception e) {
-                log.warn("Failed to write new session key to config topic; forcing a read to the end of the config topic before possibly retrying");
+                log.info("Failed to write new session key to config topic; forcing a read to the end of the config topic before possibly retrying");
                 canReadConfigs = false;
                 return;
             }
