@@ -274,4 +274,8 @@
               files="KafkaEventQueue.java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+
+    <!-- jmh-benchmarks -->
+   <suppress checks="(ClassFanOutComplexity|ClassDataAbstractionCoupling)"
+             files="KafkaApisFetchBenchmark.java"/>
 </suppressions>
