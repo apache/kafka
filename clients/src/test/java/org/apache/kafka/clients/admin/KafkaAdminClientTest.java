@@ -5525,7 +5525,7 @@ public class KafkaAdminClientTest {
 
             final ListTopicsResult result = env.adminClient().listTopics();
 
-            readyLatch.await();
+            readyLatch.await(TestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
             log.debug("Advancing clock by 25 ms to trigger client-side disconnect.");
             time.sleep(25);
             disconnectFuture.get();
@@ -5562,9 +5562,8 @@ public class KafkaAdminClientTest {
             }, 1, 5000, () -> "Timed out waiting for expected disconnect");
             assertFalse(disconnectFuture.isCompletedExceptionally());
             assertFalse(result.future.isDone());
-            TestUtils.waitForCondition(() -> {
-                return env.kafkaClient().hasInFlightRequests();
-            }, "Timed out waiting for retry");
+            TestUtils.waitForCondition(env.kafkaClient()::hasInFlightRequests,
+                "Timed out waiting for retry");
             env.kafkaClient().respond(prepareMetadataResponse(cluster, Errors.NONE));
             assertEquals(0, result.listings().get().size());
         }
