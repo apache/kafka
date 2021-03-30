@@ -200,7 +200,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void flush() throws IOException {
         channel.force(true);
         if (needFlushParentDir.getAndSet(false)) {
-            flushParentDir();
+            Utils.flushParentDir(file.toPath());
         }
     }
 
