@@ -20,12 +20,13 @@ package kafka.api
 import java.util
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -111,10 +112,13 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6"))
     assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6-IV0"))
 
-    assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7"))
     assertEquals(KAFKA_2_7_IV0, ApiVersion("2.7-IV0"))
     assertEquals(KAFKA_2_7_IV1, ApiVersion("2.7-IV1"))
     assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7-IV2"))
+
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8"))
+    assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8-IV0"))
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8-IV1"))
   }
 
   @Test
@@ -162,6 +166,7 @@ class ApiVersionTest {
     assertEquals("2.5", KAFKA_2_5_IV0.shortVersion)
     assertEquals("2.6", KAFKA_2_6_IV0.shortVersion)
     assertEquals("2.7", KAFKA_2_7_IV2.shortVersion)
+    assertEquals("2.8", KAFKA_2_8_IV0.shortVersion)
   }
 
   @Test
@@ -175,8 +180,10 @@ class ApiVersionTest {
   def shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       10,
-      RecordBatch.MAGIC_VALUE_V1,
-      Features.emptySupportedFeatures
+      RecordVersion.V1,
+      Features.emptySupportedFeatures,
+      None,
+      ListenerType.ZK_BROKER
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -189,12 +196,14 @@ class ApiVersionTest {
   def shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       10,
-      RecordBatch.MAGIC_VALUE_V1,
+      RecordVersion.V1,
       Features.supportedFeatures(
         Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1.toShort, 4.toShort)))),
       Features.finalizedFeatures(
         Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
-      10
+      10,
+      None,
+      ListenerType.ZK_BROKER
     )
 
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
@@ -222,10 +231,12 @@ class ApiVersionTest {
   def shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
-      RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures
+      RecordVersion.current(),
+      Features.emptySupportedFeatures,
+      None,
+      ListenerType.ZK_BROKER
     )
-    assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
+    assertEquals(new util.HashSet[ApiKeys](ApiKeys.zkBrokerApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
     assertTrue(response.data.supportedFeatures.isEmpty)
     assertTrue(response.data.finalizedFeatures.isEmpty)
@@ -236,12 +247,13 @@ class ApiVersionTest {
   def testMetadataQuorumApisAreDisabled(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
-      RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures
+      RecordVersion.current(),
+      Features.emptySupportedFeatures,
+      None,
+      ListenerType.ZK_BROKER
     )
 
-    // Ensure that APIs needed for the internal metadata quorum (KIP-500)
-    // are not exposed through ApiVersions until we are ready for them
+    // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
     val exposedApis = apiKeysInResponse(response)
     assertFalse(exposedApis.contains(ApiKeys.ENVELOPE))
     assertFalse(exposedApis.contains(ApiKeys.VOTE))

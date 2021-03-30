@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,21 +29,32 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
+ * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.
+ * More specifically, the set of unacknowledged voters are targets for BeginQuorumEpoch requests from the leader until
+ * they acknowledge the leader.
+ */
 public class LeaderState implements EpochState {
+    static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
+
     private final int localId;
     private final int epoch;
     private final long epochStartOffset;
 
     private Optional<LogOffsetMetadata> highWatermark;
-    private final Map<Integer, VoterState> voterReplicaStates = new HashMap<>();
-    private final Map<Integer, ReplicaState> observerReplicaStates = new HashMap<>();
-    private static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
+    private final Map<Integer, ReplicaState> voterStates = new HashMap<>();
+    private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
+    private final Set<Integer> grantingVoters = new HashSet<>();
+    private final Logger log;
 
     protected LeaderState(
         int localId,
         int epoch,
         long epochStartOffset,
-        Set<Integer> voters
+        Set<Integer> voters,
+        Set<Integer> grantingVoters,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -48,9 +62,11 @@ public class LeaderState implements EpochState {
         this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
-            boolean hasEndorsedLeader = voterId == localId;
-            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasEndorsedLeader));
+            boolean hasAcknowledgedLeader = voterId == localId;
+            this.voterStates.put(voterId, new ReplicaState(voterId, hasAcknowledgedLeader));
         }
+        this.grantingVoters.addAll(grantingVoters);
+        this.log = logContext.logger(LeaderState.class);
     }
 
     @Override
@@ -60,7 +76,7 @@ public class LeaderState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localId, voterReplicaStates.keySet());
+        return ElectionState.withElectedLeader(epoch, localId, voterStates.keySet());
     }
 
     @Override
@@ -69,27 +85,31 @@ public class LeaderState implements EpochState {
     }
 
     public Set<Integer> followers() {
-        return voterReplicaStates.keySet().stream().filter(id -> id != localId).collect(Collectors.toSet());
+        return voterStates.keySet().stream().filter(id -> id != localId).collect(Collectors.toSet());
+    }
+
+    public Set<Integer> grantingVoters() {
+        return this.grantingVoters;
     }
 
     public int localId() {
         return localId;
     }
 
-    public Set<Integer> nonEndorsingFollowers() {
-        Set<Integer> nonEndorsing = new HashSet<>();
-        for (VoterState state : voterReplicaStates.values()) {
-            if (!state.hasEndorsedLeader)
-                nonEndorsing.add(state.nodeId);
+    public Set<Integer> nonAcknowledgingVoters() {
+        Set<Integer> nonAcknowledging = new HashSet<>();
+        for (ReplicaState state : voterStates.values()) {
+            if (!state.hasAcknowledgedLeader)
+                nonAcknowledging.add(state.nodeId);
         }
-        return nonEndorsing;
+        return nonAcknowledging;
     }
 
     private boolean updateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
-        List<VoterState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
+        List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
 
-        int indexOfHw = voterReplicaStates.size() / 2;
+        int indexOfHw = voterStates.size() / 2;
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
         if (highWatermarkUpdateOpt.isPresent()) {
@@ -97,16 +117,22 @@ public class LeaderState implements EpochState {
             // leader. In order to avoid exposing a non-monotonically increasing value, we have
             // to wait for followers to catch up to the start of the leader's epoch.
             LogOffsetMetadata highWatermarkUpdateMetadata = highWatermarkUpdateOpt.get();
-            long highWatermarkUpdate = highWatermarkUpdateMetadata.offset;
+            long highWatermarkUpdateOffset = highWatermarkUpdateMetadata.offset;
 
-            if (highWatermarkUpdate >= epochStartOffset) {
+            if (highWatermarkUpdateOffset >= epochStartOffset) {
                 if (highWatermark.isPresent()) {
                     LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();
-                    if (highWatermarkUpdate > currentHighWatermarkMetadata.offset
-                        || (highWatermarkUpdate == currentHighWatermarkMetadata.offset &&
+                    if (highWatermarkUpdateOffset > currentHighWatermarkMetadata.offset
+                        || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
                         highWatermark = highWatermarkUpdateOpt;
                         return true;
+                    } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
+                        log.error("The latest computed high watermark {} is smaller than the current " +
+                                "value {}, which suggests that one of the voters has lost committed data. " +
+                                "Full voter replication state: {}", highWatermarkUpdateOffset,
+                            currentHighWatermarkMetadata.offset, voterStates.values());
+                        return false;
                     } else {
                         return false;
                     }
@@ -152,42 +178,45 @@ public class LeaderState implements EpochState {
 
     public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset().stream()
-                   .filter(state -> state.nodeId != localId)
-                   .map(state -> state.nodeId)
-                   .collect(Collectors.toList());
+            .filter(state -> state.nodeId != localId)
+            .map(state -> state.nodeId)
+            .collect(Collectors.toList());
     }
 
-    private List<VoterState> followersByDescendingFetchOffset() {
-        return new ArrayList<>(this.voterReplicaStates.values())
-            .stream().sorted().collect(Collectors.toList());
+    private List<ReplicaState> followersByDescendingFetchOffset() {
+        return new ArrayList<>(this.voterStates.values()).stream()
+            .sorted()
+            .collect(Collectors.toList());
     }
 
     private boolean updateEndOffset(ReplicaState state,
                                     LogOffsetMetadata endOffsetMetadata) {
         state.endOffset.ifPresent(currentEndOffset -> {
-            if (currentEndOffset.offset > endOffsetMetadata.offset)
-                throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + state.nodeId);
+            if (currentEndOffset.offset > endOffsetMetadata.offset) {
+                if (state.nodeId == localId) {
+                    throw new IllegalStateException("Detected non-monotonic update of local " +
+                        "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
+                } else {
+                    log.warn("Detected non-monotonic update of fetch offset from nodeId {}: {} -> {}",
+                        state.nodeId, currentEndOffset.offset, endOffsetMetadata.offset);
+                }
+            }
         });
 
         state.endOffset = Optional.of(endOffsetMetadata);
-
-        if (isVoter(state.nodeId)) {
-            ((VoterState) state).hasEndorsedLeader = true;
-            addEndorsementFrom(state.nodeId);
-            return updateHighWatermark();
-        }
-        return false;
+        state.hasAcknowledgedLeader = true;
+        return isVoter(state.nodeId) && updateHighWatermark();
     }
 
-    public void addEndorsementFrom(int remoteNodeId) {
-        VoterState voterState = ensureValidVoter(remoteNodeId);
-        voterState.hasEndorsedLeader = true;
+    public void addAcknowledgementFrom(int remoteNodeId) {
+        ReplicaState voterState = ensureValidVoter(remoteNodeId);
+        voterState.hasAcknowledgedLeader = true;
     }
 
-    private VoterState ensureValidVoter(int remoteNodeId) {
-        VoterState state = voterReplicaStates.get(remoteNodeId);
+    private ReplicaState ensureValidVoter(int remoteNodeId) {
+        ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null)
-            throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
+            throw new IllegalArgumentException("Unexpected acknowledgement from non-voter " + remoteNodeId);
         return state;
     }
 
@@ -195,22 +224,22 @@ public class LeaderState implements EpochState {
         return epochStartOffset;
     }
 
-    ReplicaState getReplicaState(int remoteNodeId) {
-        ReplicaState state = voterReplicaStates.get(remoteNodeId);
+    private ReplicaState getReplicaState(int remoteNodeId) {
+        ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
-            observerReplicaStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId));
-            return observerReplicaStates.get(remoteNodeId);
+            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
+            return observerStates.get(remoteNodeId);
         }
         return state;
     }
 
     Map<Integer, Long> getVoterEndOffsets() {
-        return getReplicaEndOffsets(voterReplicaStates);
+        return getReplicaEndOffsets(voterStates);
     }
 
     Map<Integer, Long> getObserverStates(final long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
-        return getReplicaEndOffsets(observerReplicaStates);
+        return getReplicaEndOffsets(observerStates);
     }
 
     private static <R extends ReplicaState> Map<Integer, Long> getReplicaEndOffsets(
@@ -223,25 +252,27 @@ public class LeaderState implements EpochState {
     }
 
     private void clearInactiveObservers(final long currentTimeMs) {
-        observerReplicaStates.entrySet().removeIf(
+        observerStates.entrySet().removeIf(
             integerReplicaStateEntry ->
                 currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp.orElse(-1)
                     >= OBSERVER_SESSION_TIMEOUT_MS);
     }
 
     private boolean isVoter(int remoteNodeId) {
-        return voterReplicaStates.containsKey(remoteNodeId);
+        return voterStates.containsKey(remoteNodeId);
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
         final int nodeId;
         Optional<LogOffsetMetadata> endOffset;
         OptionalLong lastFetchTimestamp;
+        boolean hasAcknowledgedLeader;
 
-        public ReplicaState(int nodeId) {
+        public ReplicaState(int nodeId, boolean hasAcknowledgedLeader) {
             this.nodeId = nodeId;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
+            this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
         void updateFetchTimestamp(long currentFetchTimeMs) {
@@ -261,15 +292,15 @@ public class LeaderState implements EpochState {
             else
                 return Long.compare(that.endOffset.get().offset, this.endOffset.get().offset);
         }
-    }
 
-    private static class VoterState extends ReplicaState {
-        boolean hasEndorsedLeader;
-
-        public VoterState(int nodeId,
-                          boolean hasEndorsedLeader) {
-            super(nodeId);
-            this.hasEndorsedLeader = hasEndorsedLeader;
+        @Override
+        public String toString() {
+            return "ReplicaState(" +
+                "nodeId=" + nodeId +
+                ", endOffset=" + endOffset +
+                ", lastFetchTimestamp=" + lastFetchTimestamp +
+                ", hasAcknowledgedLeader=" + hasAcknowledgedLeader +
+                ')';
         }
     }
 
@@ -286,5 +317,8 @@ public class LeaderState implements EpochState {
     public String name() {
         return "Leader";
     }
+
+    @Override
+    public void close() {}
 
 }

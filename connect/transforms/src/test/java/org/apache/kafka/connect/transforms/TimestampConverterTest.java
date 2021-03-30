@@ -25,8 +25,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Calendar;
 import java.util.Collections;
@@ -36,8 +36,9 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -77,33 +78,35 @@ public class TimestampConverterTest {
 
     // Configuration
 
-    @After
+    @AfterEach
     public void teardown() {
         xformKey.close();
         xformValue.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigNoTargetType() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidTargetType() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigMissingFormat() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidFormat() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
-        xformValue.configure(config);
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
     }
 
     // Conversions without schemas (most flexible Timestamp -> other types)

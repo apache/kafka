@@ -91,7 +91,7 @@ object ZkSecurityMigrator extends Logging {
       throw new IllegalArgumentException("Incorrect configuration")
     }
 
-    val zkAcl: Boolean = opts.options.valueOf(opts.zkAclOpt) match {
+    val zkAcl = opts.options.valueOf(opts.zkAclOpt) match {
       case "secure" =>
         info("zookeeper.acl option is secure")
         true

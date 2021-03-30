@@ -200,7 +200,7 @@ public class WorkerGroupMember {
     }
 
     public void requestRejoin() {
-        coordinator.requestRejoin();
+        coordinator.requestRejoin("connect worker requested rejoin");
     }
 
     public void maybeLeaveGroup(String leaveReason) {

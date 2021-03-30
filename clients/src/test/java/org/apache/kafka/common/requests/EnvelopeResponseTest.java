@@ -32,13 +32,13 @@ class EnvelopeResponseTest {
 
     @Test
     public void testToSend() {
-        for (short version = ApiKeys.ENVELOPE.oldestVersion(); version <= ApiKeys.ENVELOPE.latestVersion(); version++) {
+        for (short version : ApiKeys.ENVELOPE.allVersions()) {
             ByteBuffer responseData = ByteBuffer.wrap("foobar".getBytes());
             EnvelopeResponse response = new EnvelopeResponse(responseData, Errors.NONE);
             short headerVersion = ApiKeys.ENVELOPE.responseHeaderVersion(version);
             ResponseHeader header = new ResponseHeader(15, headerVersion);
 
-            Send send = response.toSend("a", header, version);
+            Send send = response.toSend(header, version);
             ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             assertEquals(header, ResponseHeader.parse(buffer, headerVersion));

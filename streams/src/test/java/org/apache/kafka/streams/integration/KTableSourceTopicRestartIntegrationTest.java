@@ -36,14 +36,15 @@ import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -59,20 +60,11 @@ public class KTableSourceTopicRestartIntegrationTest {
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final Time time = CLUSTER.time;
-    private final StreamsBuilder streamsBuilder = new StreamsBuilder();
-    private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
-
-    private String sourceTopic;
-    private KafkaStreams streams;
-    private Map<String, String> expectedInitialResultsMap;
-    private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
-
     @BeforeClass
-    public static void setUpBeforeAllTests() {
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -88,6 +80,21 @@ public class KTableSourceTopicRestartIntegrationTest {
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
+
+    private final Time time = CLUSTER.time;
+    private final StreamsBuilder streamsBuilder = new StreamsBuilder();
+    private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
+
+    private String sourceTopic;
+    private KafkaStreams streams;
+    private Map<String, String> expectedInitialResultsMap;
+    private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
 
     @Rule
     public TestName testName = new TestName();

@@ -44,14 +44,17 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -68,14 +71,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.emptyMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
@@ -100,6 +103,12 @@ public class AbstractCoordinatorTest {
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
     private final int defaultGeneration = -1;
+
+    @AfterEach
+    public void closeCoordinator() {
+        Utils.closeQuietly(coordinator, "close coordinator");
+        Utils.closeQuietly(consumerClient, "close consumer client");
+    }
 
     private void setupCoordinator() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
@@ -128,7 +137,7 @@ public class AbstractCoordinatorTest {
                                                         HEARTBEAT_INTERVAL_MS);
         metrics = new Metrics(mockTime);
 
-        mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
+        mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
@@ -446,8 +455,8 @@ public class AbstractCoordinatorTest {
             coordinator.resetGenerationOnLeaveGroup();
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                       && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                       && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, wrongProtocolName));
 
         // let the retry to complete successfully to break out of the while loop
@@ -466,8 +475,8 @@ public class AbstractCoordinatorTest {
             }
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                    && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                    && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, PROTOCOL_NAME));
 
         // No exception shall be thrown as the generation is reset.
@@ -496,8 +505,8 @@ public class AbstractCoordinatorTest {
                 return false;
             }
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
 
         return coordinator.joinGroupIfNeeded(mockTime.timer(5000L));
@@ -728,7 +737,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
 
-        coordinator.requestRejoin();
+        coordinator.requestRejoin("test");
 
         TestUtils.waitForCondition(() -> {
             coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
@@ -820,6 +829,35 @@ public class AbstractCoordinatorTest {
         assertEquals(Errors.UNKNOWN_MEMBER_ID.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
         assertTrue(coordinator.hasUnknownGeneration());
+    }
+
+    @Test
+    public void testJoinGroupRequestWithRebalanceInProgress() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        mockClient.prepareResponse(
+            joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.REBALANCE_IN_PROGRESS));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.message(), future.exception().getMessage());
+        assertTrue(coordinator.rejoinNeededOrPending());
+
+        // make sure we'll retry on next poll
+        assertEquals(0, coordinator.onJoinPrepareInvokes);
+        assertEquals(0, coordinator.onJoinCompleteInvokes);
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+        // make sure both onJoinPrepare and onJoinComplete got called
+        assertEquals(1, coordinator.onJoinPrepareInvokes);
+        assertEquals(1, coordinator.onJoinCompleteInvokes);
     }
 
     @Test
@@ -978,16 +1016,16 @@ public class AbstractCoordinatorTest {
 
         mockClient.backoff(node, 50);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
-        assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
+        assertTrue(noBrokersAvailableFuture.failed(), "Failed future expected");
         mockTime.sleep(50);
 
         RequestFuture<Void> future = coordinator.lookupCoordinator();
-        assertFalse("Request not sent", future.isDone());
-        assertSame("New request sent while one is in progress", future, coordinator.lookupCoordinator());
+        assertFalse(future.isDone(), "Request not sent");
+        assertSame(future, coordinator.lookupCoordinator(), "New request sent while one is in progress");
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
-        assertNotSame("New request not sent after previous completed", future, coordinator.lookupCoordinator());
+        assertNotSame(future, coordinator.lookupCoordinator(), "New request not sent after previous completed");
     }
 
     @Test

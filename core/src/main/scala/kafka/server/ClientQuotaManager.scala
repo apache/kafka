@@ -80,7 +80,9 @@ object ClientQuotaManager {
   val DefaultUserQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
   val DefaultUserClientIdQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
 
-  case class UserEntity(sanitizedUser: String) extends ClientQuotaEntity.ConfigEntity {
+  sealed trait BaseUserEntity extends ClientQuotaEntity.ConfigEntity
+
+  case class UserEntity(sanitizedUser: String) extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.USER
     override def name: String = Sanitizer.desanitize(sanitizedUser)
     override def toString: String = s"user $sanitizedUser"
@@ -92,7 +94,7 @@ object ClientQuotaManager {
     override def toString: String = s"client-id $clientId"
   }
 
-  case object DefaultUserEntity extends ClientQuotaEntity.ConfigEntity {
+  case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
     override def name: String = ConfigEntityName.Default
     override def toString: String = "default user"
@@ -104,7 +106,7 @@ object ClientQuotaManager {
     override def toString: String = "default client-id"
   }
 
-  case class KafkaQuotaEntity(userEntity: Option[ClientQuotaEntity.ConfigEntity],
+  case class KafkaQuotaEntity(userEntity: Option[BaseUserEntity],
                               clientIdEntity: Option[ClientQuotaEntity.ConfigEntity]) extends ClientQuotaEntity {
     override def configEntities: util.List[ClientQuotaEntity.ConfigEntity] =
       (userEntity.toList ++ clientIdEntity.toList).asJava
@@ -333,11 +335,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
    * @param channelThrottlingCallback Callback for channel throttling
    */
-  def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: Response => Unit): Unit = {
+  def throttle(
+    request: RequestChannel.Request,
+    throttleCallback: ThrottleCallback,
+    throttleTimeMs: Int
+  ): Unit = {
     if (throttleTimeMs > 0) {
       val clientSensors = getOrCreateQuotaSensors(request.session, request.headerForLoggingOrThrottling().clientId)
       clientSensors.throttleTimeSensor.record(throttleTimeMs)
-      val throttledChannel = new ThrottledChannel(request, time, throttleTimeMs, channelThrottlingCallback)
+      val throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback)
       delayQueue.add(throttledChannel)
       delayQueueSensor.record()
       debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))

@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.nio.ByteBuffer;
@@ -33,20 +33,12 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public CreateDelegationTokenRequest(Struct struct, short version) {
-        super(ApiKeys.CREATE_DELEGATION_TOKEN, version);
-        this.data = new CreateDelegationTokenRequestData(struct, version);
-    }
-
     public static CreateDelegationTokenRequest parse(ByteBuffer buffer, short version) {
-        return new CreateDelegationTokenRequest(ApiKeys.CREATE_DELEGATION_TOKEN.parseRequest(version, buffer), version);
+        return new CreateDelegationTokenRequest(new CreateDelegationTokenRequestData(new ByteBufferAccessor(buffer), version),
+            version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public CreateDelegationTokenRequestData data() {
         return data;
     }

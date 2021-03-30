@@ -119,7 +119,7 @@ public class StreamsResetter {
             + "* This tool will not clean up the local state on the stream application instances (the persisted "
             + "stores used to cache aggregation results).\n"
             + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
-            + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n"
+            + "directory specified by \"state.dir\" configuration (${java.io.tmpdir}/kafka-streams/<application.id> by default).\n"
             + "* When long session timeout has been configured, active members could take longer to get expired on the "
             + "broker thus blocking the reset job to complete. Use the \"--force\" option could remove those left-over "
             + "members immediately. Make sure to stop all stream applications when this option is specified "
@@ -489,19 +489,7 @@ public class StreamsResetter {
     private void resetByDuration(final Consumer<byte[], byte[]> client,
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
-        final Instant now = Instant.now();
-        final long timestamp = now.minus(duration).toEpochMilli();
-
-        final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            topicPartitionsAndTimes.put(topicPartition, timestamp);
-        }
-
-        final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
-
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
-        }
+        resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
     private void resetToDatetime(final Consumer<byte[], byte[]> client,

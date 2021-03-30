@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
@@ -135,6 +134,28 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
     public FileRecords slice(int position, int size) throws IOException {
+        int availableBytes = availableBytes(position, size);
+        int startPosition = this.start + position;
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+    }
+
+    /**
+     * Return a slice of records from this instance, the difference with {@link FileRecords#slice(int, int)} is
+     * that the position is not necessarily on an offset boundary.
+     *
+     * This method is reserved for cases where offset alignment is not necessary, such as in the replication of raft
+     * snapshots.
+     *
+     * @param position The start position to begin the read from
+     * @param size The number of bytes after the start position to include
+     * @return A unaligned slice of records on this message set limited based on the given position and size
+     */
+    public UnalignedFileRecords sliceUnaligned(int position, int size) {
+        int availableBytes = availableBytes(position, size);
+        return new UnalignedFileRecords(channel, this.start + position, availableBytes);
+    }
+
+    private int availableBytes(int position, int size) {
         // Cache current size in case concurrent write changes it
         int currentSizeInBytes = sizeInBytes();
 
@@ -146,10 +167,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
         int end = this.start + position + size;
-        // handle integer overflow or if end is beyond the end of the file
+        // Handle integer overflow or if end is beyond the end of the file
         if (end < 0 || end > start + currentSizeInBytes)
-            end = start + currentSizeInBytes;
-        return new FileRecords(file, channel, this.start + position, end, true);
+            end = this.start + currentSizeInBytes;
+        return end - (this.start + position);
     }
 
     /**
@@ -270,7 +291,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public long writeTo(GatheringByteChannel destChannel, long offset, int length) throws IOException {
+    public long writeTo(TransferableChannel destChannel, long offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
         if (newSize < oldSize)
@@ -279,15 +300,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        int count = Math.min(length, oldSize);
-        final long bytesTransferred;
-        if (destChannel instanceof TransportLayer) {
-            TransportLayer tl = (TransportLayer) destChannel;
-            bytesTransferred = tl.transferFrom(channel, position, count);
-        } else {
-            bytesTransferred = channel.transferTo(position, count, destChannel);
-        }
-        return bytesTransferred;
+        long count = Math.min(length, oldSize - offset);
+        return destChannel.transferFrom(channel, position, count);
     }
 
     /**

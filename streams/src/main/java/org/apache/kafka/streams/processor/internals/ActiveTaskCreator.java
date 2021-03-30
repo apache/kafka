@@ -132,8 +132,10 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
+    // TODO: change return type to `StreamTask`
     Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -178,7 +180,7 @@ class ActiveTaskCreator {
     }
 
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
-                                           final Set<TopicPartition> partitions,
+                                           final Set<TopicPartition> inputPartitions,
                                            final Consumer<byte[], byte[]> consumer) {
         final InternalProcessorContext context = standbyTask.processorContext();
         final ProcessorStateManager stateManager = standbyTask.stateMgr;
@@ -189,7 +191,7 @@ class ActiveTaskCreator {
 
         return createActiveTask(
             standbyTask.id,
-            partitions,
+            inputPartitions,
             consumer,
             logContext,
             builder.buildSubtopology(standbyTask.id.topicGroupId),
@@ -199,7 +201,7 @@ class ActiveTaskCreator {
     }
 
     private StreamTask createActiveTask(final TaskId taskId,
-                                        final Set<TopicPartition> partitions,
+                                        final Set<TopicPartition> inputPartitions,
                                         final Consumer<byte[], byte[]> consumer,
                                         final LogContext logContext,
                                         final ProcessorTopology topology,
@@ -230,7 +232,7 @@ class ActiveTaskCreator {
 
         final StreamTask task = new StreamTask(
             taskId,
-            partitions,
+            inputPartitions,
             topology,
             consumer,
             config,
@@ -240,10 +242,11 @@ class ActiveTaskCreator {
             time,
             stateManager,
             recordCollector,
-            context
+            context,
+            logContext
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }

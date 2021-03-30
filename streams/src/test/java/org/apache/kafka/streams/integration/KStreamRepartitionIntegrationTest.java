@@ -42,8 +42,9 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -83,8 +84,18 @@ import static org.junit.Assert.assertTrue;
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     private String topicB;
     private String inputTopic;
@@ -621,7 +632,10 @@ public class KStreamRepartitionIntegrationTest {
                .to(outputTopic);
 
         startStreams(builder);
-        final KafkaStreams kafkaStreamsToClose = startStreams(builder);
+        final Properties streamsToCloseConfigs = new Properties();
+        streamsToCloseConfigs.putAll(streamsConfiguration);
+        streamsToCloseConfigs.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + "-2");
+        final KafkaStreams kafkaStreamsToClose = startStreams(builder, streamsToCloseConfigs);
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -723,12 +737,24 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder) throws InterruptedException {
-        return startStreams(builder, REBALANCING, RUNNING, null);
+        return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
+    }
+
+    private KafkaStreams startStreams(final StreamsBuilder builder, final Properties streamsConfiguration) throws InterruptedException {
+        return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder,
                                       final State expectedOldState,
                                       final State expectedNewState,
+                                      final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
+        return startStreams(builder, expectedOldState, expectedNewState, streamsConfiguration, uncaughtExceptionHandler);
+    }
+
+    private KafkaStreams startStreams(final StreamsBuilder builder,
+                                      final State expectedOldState,
+                                      final State expectedNewState,
+                                      final Properties streamsConfiguration,
                                       final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
         final CountDownLatch latch;
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
