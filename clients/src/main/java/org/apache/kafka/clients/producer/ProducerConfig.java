@@ -27,6 +27,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,6 +46,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * href="http://kafka.apache.org/documentation.html#producerconfigs">Kafka documentation</a>
  */
 public class ProducerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ProducerConfig.class);
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS THESE ARE PART OF THE PUBLIC API AND
@@ -142,11 +145,17 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC =
-        "The maximum size of a request in bytes. This setting will limit the number of record " +
-        "batches the producer will send in a single request to avoid sending huge requests. " +
-        "This is also effectively a cap on the maximum uncompressed record batch size. Note that the server " +
-        "has its own cap on the record batch size (after compression if compression is enabled) which may be different from this.";
+    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size in bytes of: "
+        + "<ol><li>Each record size before compression.</li><li>Each produce request.</li></ol> "
+        + "<p>"
+        + "Firstly, this configuration is a cap on the maximum uncompressed record batch size. "
+        + "Note that the server has its own cap on the record batch size (after compression if compression is enabled) "
+        + "which may be different from this. "
+        + "<p>"
+        + "And secondly, this configuration will also limit the number of record batches the producer can send in a single request "
+        + "by limiting the total size of the produce request. Because of this, " + BATCH_SIZE_CONFIG
+        + "should not be greater than " + MAX_REQUEST_SIZE_CONFIG + ", otherwise the produce request size can be bigger "
+        + "than " + MAX_REQUEST_SIZE_CONFIG + ".";
 
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -435,11 +444,22 @@ public class ProducerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
+        warnIfBatchSizeGreaterThanMaxRequestSize(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideEnableIdempotence(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideAcksAndRetries(refinedConfigs);
         return refinedConfigs;
+    }
+
+    private static void warnIfBatchSizeGreaterThanMaxRequestSize(AbstractConfig config) {
+        int batchSize = config.getInt(BATCH_SIZE_CONFIG);
+        int maxRequestSize = config.getInt(MAX_REQUEST_SIZE_CONFIG);
+
+        if (batchSize > maxRequestSize)
+            log.warn("The value of '{}' ({}) should not be greater than the value of '{}' ({}).",
+                    BATCH_SIZE_CONFIG, batchSize,
+                    MAX_REQUEST_SIZE_CONFIG, maxRequestSize);
     }
 
     private void maybeOverrideClientId(final Map<String, Object> configs) {
