@@ -822,6 +822,57 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
+        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+        expect(stateDirectory.listNonEmptyTaskDirectories()).andStubReturn(new File[0]);
+
+        final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+
+        // make sure this will attempt to be committed and throw
+        final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
+        uncorruptedActive.setCommitNeeded();
+
+        // handleAssignment
+        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
+        assignment.putAll(taskId00Assignment);
+        assignment.putAll(taskId01Assignment);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(asList(corruptedActive, uncorruptedActive));
+        topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
+        expectLastCall().anyTimes();
+        topologyBuilder.addSubscribedTopicsFromMetadata(eq(singleton(topic1)), anyObject());
+        expectLastCall().anyTimes();
+
+        expectRestoreToBeCompleted(consumer, changeLogReader);
+
+        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader, stateDirectory, stateManager);
+
+        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+
+        taskManager.handleAssignment(assignment, emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+
+        assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
+
+        assertThat(uncorruptedActive.commitPrepared, is(false));
+        assertThat(uncorruptedActive.commitNeeded, is(true));
+        assertThat(uncorruptedActive.commitCompleted, is(false));
+
+        taskManager.handleRebalanceStart(singleton(topic1));
+        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        taskManager.handleCorruption(singleton(taskId00));
+
+        assertThat(uncorruptedActive.commitPrepared, is(false));
+        assertThat(uncorruptedActive.commitNeeded, is(true));
+        assertThat(uncorruptedActive.commitCompleted, is(false));
+
+        assertThat(uncorruptedActive.state(), is(State.RUNNING));
+        verify(consumer);
+    }
+
+    @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
