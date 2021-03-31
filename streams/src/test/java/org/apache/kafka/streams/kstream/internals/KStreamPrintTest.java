@@ -34,7 +34,7 @@ import static org.junit.Assert.assertEquals;
 public class KStreamPrintTest {
 
     private ByteArrayOutputStream byteOutStream;
-    private Processor<Integer, String, Integer, String> printProcessor;
+    private Processor<Integer, String, Void, Void> printProcessor;
 
     @Before
     public void setUp() {
@@ -46,7 +46,7 @@ public class KStreamPrintTest {
             "test-stream"));
 
         printProcessor = kStreamPrint.get();
-        final ProcessorContext<Integer, String> processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        final ProcessorContext<Void, Void> processorContext = EasyMock.createNiceMock(ProcessorContext.class);
         EasyMock.replay(processorContext);
 
         printProcessor.init(processorContext);
