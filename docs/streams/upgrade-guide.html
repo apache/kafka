@@ -94,10 +94,19 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+        We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
+    </p>
+    <p>
         We removed the following deprecated APIs:
     </p>
     <ul>
+        <li> <code>StreamsBuilder#addGlobalStore</code> (one overload): deprecated in Kafka 1.1.0 (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=74689212">KIP-233</a>).</li>
+        <li> <code>ProcessorContext#forward</code> (some overloads): deprecated in Kafka 2.0.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).</li>
         <li> <code>WindowBytesStoreSupplier#segments</code>: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>).</li>
+        <li> <code>segments, until, maintainMs</code> on <code>TimeWindows</code>, <code>JoinWindows</code>, and <code>SessionWindows</code>: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-328%3A+Ability+to+suppress+updates+for+KTables">KIP-328</a>).</li>
+        <li> Overloaded <code>JoinWindows#of, before, after</code>, <code>SessionWindows#with</code>, <code>TimeWindows#of, advanceBy</code>, <code>UnlimitedWindows#startOn</code> and <code>KafkaStreams#close</code> with <code>long</code> typed parameters: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>).</li>
+        <li> Overloaded <code>KafkaStreams#metadataForKey</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a>).</li>
+        <li> Overloaded <code>KafkaStreams#store</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a>).</li>
     </ul>
 
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>

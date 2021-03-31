@@ -284,7 +284,7 @@ class KafkaServer(
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         //
-        // Note that we allow the use of self-managed mode controller APIs when forwarding is enabled
+        // Note that we allow the use of KRaft mode controller APIs when forwarding is enabled
         // so that the Envelope request is exposed. This is only used in testing currently.
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
         socketServer.startup(startProcessingRequests = false)
