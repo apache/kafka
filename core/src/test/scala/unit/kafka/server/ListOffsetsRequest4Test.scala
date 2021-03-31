@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
