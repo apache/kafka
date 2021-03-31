@@ -93,8 +93,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.interbroker_sasl_mechanism = new_sasl_mechanism
         self.bounce()
 
-        # Bounce again with ACLs for new mechanism. Use old SimpleAclAuthorizer here to ensure that is also tested.
-        self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.SIMPLE_AUTHORIZER)
+        # Bounce again with ACLs for new mechanism.
+        self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.ACL_AUTHORIZER)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):
         # Enable the new internal listener on all brokers first
