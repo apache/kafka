@@ -681,16 +681,11 @@ public class TaskManager {
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
-                try {
-                    if (stateDirectory.lock(id)) {
-                        lockedTaskDirectories.add(id);
-                        if (!tasks.owned(id)) {
-                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
-                        }
+                if (stateDirectory.lock(id)) {
+                    lockedTaskDirectories.add(id);
+                    if (!tasks.owned(id)) {
+                        log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
-                } catch (final IOException e) {
-                    // if for any reason we can't lock this task dir, just move on
-                    log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
                 }
             } catch (final TaskIdFormatException e) {
                 // ignore any unknown files that sit in the same directory
@@ -709,14 +704,8 @@ public class TaskManager {
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
             if (!tasks.owned(id)) {
-                try {
-                    stateDirectory.unlock(id);
-                    taskIdIterator.remove();
-                } catch (final IOException e) {
-                    log.error(String.format("Caught the following exception while trying to unlock task %s", id), e);
-                    firstException.compareAndSet(null,
-                        new StreamsException(String.format("Failed to unlock task directory %s", id), e));
-                }
+                stateDirectory.unlock(id);
+                taskIdIterator.remove();
             }
         }
 
