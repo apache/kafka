@@ -86,15 +86,8 @@ final class StateManagerUtil {
         }
 
         final TaskId id = stateMgr.taskId();
-        try {
-            if (!stateDirectory.lock(id)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
-            }
-        } catch (final IOException e) {
-            throw new StreamsException(
-                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
-                e
-            );
+        if (!stateDirectory.lock(id)) {
+            throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
         }
         log.debug("Acquired state directory lock");
 
