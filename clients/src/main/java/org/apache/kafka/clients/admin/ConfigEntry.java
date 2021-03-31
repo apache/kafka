@@ -188,6 +188,7 @@ public class ConfigEntry {
         result = prime * result + (isReadOnly ? 1 : 0);
         result = prime * result + source.hashCode();
         result = prime * result + synonyms.hashCode();
+        result = prime * result + type.hashCode();
         return result;
     }
 
@@ -200,6 +201,7 @@ public class ConfigEntry {
                 ", isSensitive=" + isSensitive +
                 ", isReadOnly=" + isReadOnly +
                 ", synonyms=" + synonyms +
+                ", type=" + type +
                 ")";
     }
 
