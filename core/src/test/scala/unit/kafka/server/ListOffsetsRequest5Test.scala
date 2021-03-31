@@ -23,13 +23,12 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
-class ListOffsetsRequest2Test extends BaseRequestTest {
+class ListOffsetsRequest5Test extends BaseRequestTest {
 
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)
@@ -179,10 +178,7 @@ class ListOffsetsRequest2Test extends BaseRequestTest {
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
 
-    val request = builder.build()
-
-    test.TestUtils.retryOnExceptionWithTimeout(
-      () => assertResponseError(Errors.NONE, serverId, request))
+    builder.build()
   }
 
   @Test

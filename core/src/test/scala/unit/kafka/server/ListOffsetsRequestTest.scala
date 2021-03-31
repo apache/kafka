@@ -23,10 +23,10 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
@@ -81,7 +81,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
-  def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
+  private def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
     val listOffsetPartition = new ListOffsetsPartition()
       .setPartitionIndex(partition.partition)
       .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
@@ -124,10 +124,17 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
-  // -1 indicate "latest"
-  def fetchOffsetAndEpoch(serverId: Int,
-                          timestamp: Long,
-                          version: Short): (Long, Int) = {
+  /**
+   * fetch offset and the leader epoch of the topic: "topic" and partition: 0
+   *
+   * @param  serverId    the target broker Id
+   * @param  timestamp   the starting timestamp of the fetching records
+   * @param  version     the api version for the request, "-1" indicates the "latest"
+   * @return offset and the leader epoch
+   */
+  private def fetchOffsetAndEpoch(serverId: Int,
+                                  timestamp: Long,
+                                  version: Short): (Long, Int) = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -143,7 +150,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val response = sendRequest(serverId, request)
     val partitionData = response.topics.asScala.find(_.name == topic).get
       .partitions.asScala.find(_.partitionIndex == partition.partition).get
-    System.err.println("partitionData:" + partitionData)
 
     if (version == 0) {
       if (partitionData.oldStyleOffsets().isEmpty)
@@ -154,10 +160,29 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       (partitionData.offset, partitionData.leaderEpoch)
   }
 
-  private def waitForPartitionState(tp: TopicPartition): Unit = {
-    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
-    System.err.println("leaderIsrAndControllerEpochMap:" + leaderIsrAndControllerEpochMap)
-    leaderIsrAndControllerEpochMap.contains(tp)
+  /**
+   * wait for the offsets available on the broker id
+   *
+   * @param  serverId    the target broker Id
+   * @param  timestamp   the starting timestamp of the fetching records
+   * @return offset and the leader epoch
+   */
+  private def waitForOffsetAvailable(serverId: Int,
+                                     timestamp: Long): Unit = {
+    val targetTimes = List(new ListOffsetsTopic()
+      .setName(topic)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(partition.partition)
+        .setTimestamp(timestamp)).asJava)).asJava
+
+    val builder = ListOffsetsRequest.Builder
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+      .setTargetTimes(targetTimes)
+
+    val request = builder.build()
+
+    test.TestUtils.retryOnExceptionWithTimeout(
+      () => assertResponseError(Errors.NONE, serverId, request))
   }
 
   @Test
@@ -166,26 +191,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -203,26 +223,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -240,26 +255,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -277,26 +287,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -314,26 +319,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -351,26 +351,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -388,26 +383,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -425,26 +415,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -462,26 +447,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -499,26 +479,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -536,26 +511,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -573,26 +543,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -610,26 +575,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -647,26 +607,21 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
-    System.err.println("before kill broker")
-    waitForPartitionState(partition)
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
-    waitForPartitionState(partition)
+    waitForOffsetAvailable(secondLeaderId, 0L)
 
     // No changes to written data
     System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
-    val (a, b) = fetchOffsetAndEpoch(secondLeaderId, 0L, -1)
-    if (a == -1 && b == -1) {
-      System.err.println("-1, -1, sleep")
-      Thread.sleep(5000)
-    }
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
     System.err.println("passed")
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -679,11 +634,205 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testResponseIncludesLeaderEpoch15(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch16(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch17(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch18(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch19(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch20(): Unit = {
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(partition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
+    waitForOffsetAvailable(secondLeaderId, 0L)
+
+    // No changes to written data
+    System.err.println("failed pos: " + secondLeaderEpoch + ", " + secondLeaderId)
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    System.err.println("passed")
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
+  }
+
+
+  @Test
   def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
+    waitForOffsetAvailable(firstLeaderId, 0L)
 
     for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
       if (version == 0) {

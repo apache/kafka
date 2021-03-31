@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
-class ListOffsetsRequest2Test extends BaseRequestTest {
+class ListOffsetsRequest4Test extends BaseRequestTest {
 
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)
@@ -179,10 +179,7 @@ class ListOffsetsRequest2Test extends BaseRequestTest {
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
 
-    val request = builder.build()
-
-    test.TestUtils.retryOnExceptionWithTimeout(
-      () => assertResponseError(Errors.NONE, serverId, request))
+    builder.build()
   }
 
   @Test
