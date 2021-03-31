@@ -171,7 +171,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Create a new instance.
      *
-     * Note that if the node ID is empty, then the the client will behave as a
+     * Note that if the node ID is empty, then the client will behave as a
      * non-participating observer.
      */
     public KafkaRaftClient(
