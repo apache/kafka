@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Assertions._
 
 import java.util
 import java.util.Collections
-import java.util.concurrent.TimeUnit
 
 @Timeout(120000)
 class RaftClusterTest {
@@ -90,12 +89,12 @@ class RaftClusterTest {
         // Create a test topic
         val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
-        createTopicResult.all().get(60, TimeUnit.SECONDS)
+        createTopicResult.all().get()
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
           val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
+          val result = listTopicsResult.names().get().size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
               assertTrue(listTopicsResult.names().get().contains(topic.name()))
@@ -106,12 +105,12 @@ class RaftClusterTest {
 
         // Delete topic
         val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
-        deleteResult.all().get(60, TimeUnit.SECONDS)
+        deleteResult.all().get()
 
         // List again
         TestUtils.waitUntilTrue(() => {
           val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() != newTopic.size()
+          val result = listTopicsResult.names().get().size() != newTopic.size()
           if (result) {
             newTopic forEach(topic => {
               assertFalse(listTopicsResult.names().get().contains(topic.name()))
@@ -150,12 +149,12 @@ class RaftClusterTest {
         newTopic.add(new NewTopic("test-topic-2", 1, 3.toShort))
         newTopic.add(new NewTopic("test-topic-3", 1, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
-        createTopicResult.all().get(60, TimeUnit.SECONDS)
+        createTopicResult.all().get()
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
           val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
+          val result = listTopicsResult.names().get().size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
               assertTrue(listTopicsResult.names().get().contains(topic.name()))
@@ -193,12 +192,12 @@ class RaftClusterTest {
         newTopic.add(new NewTopic("test-topic-2", 3, 3.toShort))
         newTopic.add(new NewTopic("test-topic-3", 3, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
-        createTopicResult.all().get(60, TimeUnit.SECONDS)
+        createTopicResult.all().get()
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
           val listTopicsResult = admin.listTopics()
-          val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
+          val result = listTopicsResult.names().get().size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
               assertTrue(listTopicsResult.names().get().contains(topic.name()))
