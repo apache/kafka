@@ -86,15 +86,15 @@ public class RemoteLogSegmentMetadata {
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
      * then it should have an entry with epoch mapping to start-offset of this segment.
      *
-     * @param remoteLogSegmentId   Universally unique remote log segment id.
-     * @param startOffset          Start offset of this segment (inclusive).
-     * @param endOffset            End offset of this segment (inclusive).
-     * @param maxTimestampMs   Maximum timestamp in milli seconds in this segment.
-     * @param brokerId             Broker id from which this event is generated.
-     * @param eventTimestampMs Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
-     * @param segmentSizeInBytes   Size of this segment in bytes.
-     * @param state                State of the respective segment of remoteLogSegmentId.
-     * @param segmentLeaderEpochs  leader epochs occurred within this segment.
+     * @param remoteLogSegmentId  Universally unique remote log segment id.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
+     * @param maxTimestampMs      Maximum timestamp in milli seconds in this segment.
+     * @param brokerId            Broker id from which this event is generated.
+     * @param eventTimestampMs    Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param segmentSizeInBytes  Size of this segment in bytes.
+     * @param state               State of the respective segment of remoteLogSegmentId.
+     * @param segmentLeaderEpochs leader epochs occurred within this segment.
      */
     private RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                      long startOffset,
@@ -128,14 +128,14 @@ public class RemoteLogSegmentMetadata {
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
      * then it should have an entry with epoch mapping to start-offset of this segment.
      *
-     * @param remoteLogSegmentId   Universally unique remote log segment id.
-     * @param startOffset          Start offset of this segment (inclusive).
-     * @param endOffset            End offset of this segment (inclusive).
-     * @param maxTimestampMs   Maximum timestamp in this segment
-     * @param brokerId             Broker id from which this event is generated.
-     * @param eventTimestampMs Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
-     * @param segmentSizeInBytes   Size of this segment in bytes.
-     * @param segmentLeaderEpochs  leader epochs occurred within this segment
+     * @param remoteLogSegmentId  Universally unique remote log segment id.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
+     * @param maxTimestampMs      Maximum timestamp in this segment
+     * @param brokerId            Broker id from which this event is generated.
+     * @param eventTimestampMs    Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param segmentSizeInBytes  Size of this segment in bytes.
+     * @param segmentLeaderEpochs leader epochs occurred within this segment
      */
     public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                     long startOffset,
@@ -261,8 +261,7 @@ public class RemoteLogSegmentMetadata {
     @Override
     public int hashCode() {
         return Objects.hash(remoteLogSegmentId, startOffset, endOffset, brokerId, maxTimestampMs,
-                eventTimestampMs,
-                segmentLeaderEpochs, segmentSizeInBytes, state);
+                eventTimestampMs, segmentLeaderEpochs, segmentSizeInBytes, state);
     }
 
     @Override
@@ -272,8 +271,8 @@ public class RemoteLogSegmentMetadata {
                ", startOffset=" + startOffset +
                ", endOffset=" + endOffset +
                ", brokerId=" + brokerId +
-               ", maxTimestamp=" + maxTimestampMs +
-               ", eventTimestamp=" + eventTimestampMs +
+               ", maxTimestampMs=" + maxTimestampMs +
+               ", eventTimestampMs=" + eventTimestampMs +
                ", segmentLeaderEpochs=" + segmentLeaderEpochs +
                ", segmentSizeInBytes=" + segmentSizeInBytes +
                ", state=" + state +

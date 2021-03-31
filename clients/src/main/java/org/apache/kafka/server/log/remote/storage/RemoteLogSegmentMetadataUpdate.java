@@ -114,7 +114,7 @@ public class RemoteLogSegmentMetadataUpdate {
     public String toString() {
         return "RemoteLogSegmentMetadataUpdate{" +
                "remoteLogSegmentId=" + remoteLogSegmentId +
-               ", eventTimestamp=" + eventTimestampMs +
+               ", eventTimestampMs=" + eventTimestampMs +
                ", state=" + state +
                ", brokerId=" + brokerId +
                '}';
