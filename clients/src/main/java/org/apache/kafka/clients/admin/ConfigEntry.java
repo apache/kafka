@@ -47,29 +47,8 @@ public class ConfigEntry {
      * @param value the config value or null
      */
     public ConfigEntry(String name, String value) {
-        this(name, value, false, false, false);
-    }
-
-    /**
-     * Create a configuration with the provided values.
-     *
-     * @param name the non-null config name
-     * @param value the config value or null
-     * @param isDefault whether the config value is the default or if it's been explicitly set
-     * @param isSensitive whether the config value is sensitive, the broker never returns the value if it is sensitive
-     * @param isReadOnly whether the config is read-only and cannot be updated
-     * @deprecated since 1.1.0. This constructor will be removed in a future release.
-     */
-    @Deprecated
-    public ConfigEntry(String name, String value, boolean isDefault, boolean isSensitive, boolean isReadOnly) {
-        this(name,
-             value,
-             isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
-             isSensitive,
-             isReadOnly,
-             Collections.<ConfigSynonym>emptyList(),
-             ConfigType.UNKNOWN,
-             null);
+        this(name, value, ConfigSource.UNKNOWN, false, false,
+            Collections.emptyList(), ConfigType.UNKNOWN, null);
     }
 
     /**
