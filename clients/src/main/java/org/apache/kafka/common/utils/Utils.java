@@ -942,8 +942,6 @@ public final class Utils {
                 dir = FileChannel.open(parent, StandardOpenOption.READ);
                 dir.force(true);
             }
-        } catch (Exception e) {
-            throw new KafkaException("Attempt to flush the parent directory of " + path + " failed.");
         } finally {
             if (dir != null)
                 dir.close();
