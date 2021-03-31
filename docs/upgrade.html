@@ -28,6 +28,12 @@
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
     <li>The deprecated <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
+    <li>Deprecated security classes were removed: <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code>.
+        Furthermore, deprecated constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>,
+        <code>AclBinding</code> and <code>AclBindingFilter</code>.</li>
+    <li>The deprecated <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
+    <li>The deprecated <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
+        Please use the remaining public constructor instead.</li>
 </ul>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>

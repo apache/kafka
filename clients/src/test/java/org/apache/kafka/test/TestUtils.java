@@ -297,7 +297,23 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        retryOnExceptionWithTimeout(maxWaitMs, () -> {
+        waitForCondition(testCondition, DEFAULT_POLL_INTERVAL_MS, maxWaitMs, conditionDetailsSupplier);
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} with a polling interval of {@code pollIntervalMs}
+     * and throw assertion failure otherwise. This should be used instead of {@code Thread.sleep} whenever possible
+     * as it allows a longer timeout to be used without unnecessarily increasing test time (as the condition is
+     * checked frequently). The longer timeout is needed to avoid transient failures due to slow or overloaded
+     * machines.
+     */
+    public static void waitForCondition(
+        final TestCondition testCondition,
+        final long pollIntervalMs,
+        final long maxWaitMs,
+        Supplier<String> conditionDetailsSupplier
+    ) throws InterruptedException {
+        retryOnExceptionWithTimeout(pollIntervalMs, maxWaitMs, () -> {
             String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
             String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertTrue(testCondition.conditionMet(),
