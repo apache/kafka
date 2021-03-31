@@ -539,38 +539,25 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
-    val (error, success) = TestUtils.computeUntilTrue({
-      try {
-        assertDescribeEntityQuotas(entity, quotas)
-        None
-      } catch {
-        case ae: AssertionError => Some(ae)
+    TestUtils.tryUntilNoAssertionError(waitTime = 5000L) {
+      val components = entity.entries.asScala.map { case (entityType, entityName) =>
+        Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
+          .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
+          )
       }
-    }, waitTime = 5000)(_.isEmpty)
-
-    if (!success) {
-      throw error.get
-    }
-  }
-
-  private def assertDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
-    val components = entity.entries.asScala.map { case (entityType, entityName) =>
-      Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
-        .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
-      )
-    }
-    val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
-    if (quotas.isEmpty) {
-      assertEquals(0, describe.size)
-    } else {
-      assertEquals(1, describe.size)
-      val configs = describe.get(entity)
-      assertNotNull(configs)
-      assertEquals(quotas.size, configs.size)
-      quotas.foreach { case (k, v) =>
-        val value = configs.get(k)
-        assertNotNull(value)
-        assertEquals(v, value, 1e-6)
+      val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
+      if (quotas.isEmpty) {
+        assertEquals(0, describe.size)
+      } else {
+        assertEquals(1, describe.size)
+        val configs = describe.get(entity)
+        assertNotNull(configs)
+        assertEquals(quotas.size, configs.size)
+        quotas.foreach { case (k, v) =>
+          val value = configs.get(k)
+          assertNotNull(value)
+          assertEquals(v, value, 1e-6)
+        }
       }
     }
   }
