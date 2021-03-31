@@ -19,7 +19,6 @@ package kafka.server
 
 import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
-import kafka.test.ClusterInstance.ClusterType
 
 import java.net.InetAddress
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
@@ -540,13 +539,25 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
+    val (error, success) = TestUtils.computeUntilTrue({
+      try {
+        assertDescribeEntityQuotas(entity, quotas)
+        None
+      } catch {
+        case ae: AssertionError => Some(ae)
+      }
+    }, waitTime = 5000)(_.isEmpty)
+
+    if (!success) {
+      throw error.get
+    }
+  }
+
+  private def assertDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
     val components = entity.entries.asScala.map { case (entityType, entityName) =>
       Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
         .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
       )
-    }
-    if (cluster.clusterType() == ClusterType.RAFT) {
-      Thread.sleep(5000) // TODO how to avoid this? The previous result is the same size as the updated one.
     }
     val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
     if (quotas.isEmpty) {
