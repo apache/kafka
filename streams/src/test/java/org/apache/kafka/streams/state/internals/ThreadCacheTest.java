@@ -286,6 +286,25 @@ public class ThreadCacheTest {
     }
 
     @Test
+    public void shouldSkipToEntryWhentoInclusiveIsFalseInRange() {
+        final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
+        final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        for (final byte[] aByte : bytes) {
+            cache.put(namespace, Bytes.wrap(aByte), dirtyEntry(aByte));
+        }
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{1}), Bytes.wrap(new byte[]{4}), false);
+        int bytesIndex = 1;
+        while (iterator.hasNext()) {
+            final Bytes peekedKey = iterator.peekNextKey();
+            final KeyValue<Bytes, LRUCacheEntry> next = iterator.next();
+            assertArrayEquals(bytes[bytesIndex], peekedKey.get());
+            assertArrayEquals(bytes[bytesIndex], next.key.get());
+            bytesIndex++;
+        }
+        assertEquals(4, bytesIndex);
+    }
+
+    @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() {
         final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
         final ThreadCache cache = new ThreadCache(logContext, entrySize * 5, new MockStreamsMetrics(new Metrics()));
@@ -469,6 +488,19 @@ public class ThreadCacheTest {
         final NamedCache.LRUNode node = new NamedCache.LRUNode(Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[]{0}));
         cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
         assertEquals(cache.sizeBytes(), node.size());
+    }
+
+    @Test
+    public void shouldResizeAndShrink() {
+        final ThreadCache cache = new ThreadCache(logContext, 10000, new MockStreamsMetrics(new Metrics()));
+        cache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
+        cache.put(namespace, Bytes.wrap(new byte[]{2}), cleanEntry(new byte[]{0}));
+        cache.put(namespace, Bytes.wrap(new byte[]{3}), cleanEntry(new byte[]{0}));
+        assertEquals(141, cache.sizeBytes());
+        cache.resize(100);
+        assertEquals(94, cache.sizeBytes());
+        cache.put(namespace1, Bytes.wrap(new byte[]{4}), cleanEntry(new byte[]{0}));
+        assertEquals(94, cache.sizeBytes());
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {

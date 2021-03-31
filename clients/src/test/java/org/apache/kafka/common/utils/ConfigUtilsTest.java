@@ -17,14 +17,14 @@
 
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ConfigUtilsTest {
 
@@ -45,15 +45,15 @@ public class ConfigUtilsTest {
             {"cow", "beef", "heifer", "steer"}
         });
         assertEquals("baz", newConfig.get("foo.bar"));
-        assertEquals(null, newConfig.get("foobar.deprecated"));
+        assertNull(newConfig.get("foobar.deprecated"));
         assertEquals("1", newConfig.get("chicken"));
-        assertEquals(null, newConfig.get("rooster"));
-        assertEquals(null, newConfig.get("hen"));
+        assertNull(newConfig.get("rooster"));
+        assertNull(newConfig.get("hen"));
         assertEquals("moo", newConfig.get("cow"));
-        assertEquals(null, newConfig.get("beef"));
-        assertEquals(null, newConfig.get("heifer"));
-        assertEquals(null, newConfig.get("steer"));
-        assertEquals(null, config.get("cow"));
+        assertNull(newConfig.get("beef"));
+        assertNull(newConfig.get("heifer"));
+        assertNull(newConfig.get("steer"));
+        assertNull(config.get("cow"));
         assertEquals("blah", config.get("blah"));
         assertEquals("blah", newConfig.get("blah"));
         assertEquals(42, newConfig.get("unexpected.non.string.object"));

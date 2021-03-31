@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
 
@@ -32,26 +32,18 @@ public class RequestHeader implements AbstractRequestResponse {
     private final RequestHeaderData data;
     private final short headerVersion;
 
-    public RequestHeader(Struct struct, short headerVersion) {
-        this(new RequestHeaderData(struct, headerVersion), headerVersion);
-    }
-
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
         this(new RequestHeaderData().
                 setRequestApiKey(requestApiKey.id).
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
                 setCorrelationId(correlationId),
-            ApiKeys.forId(requestApiKey.id).requestHeaderVersion(requestVersion));
+            requestApiKey.requestHeaderVersion(requestVersion));
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
         this.data = data;
         this.headerVersion = headerVersion;
-    }
-
-    public Struct toStruct() {
-        return this.data.toStruct(headerVersion);
     }
 
     public ApiKeys apiKey() {
@@ -78,18 +70,28 @@ public class RequestHeader implements AbstractRequestResponse {
         return data;
     }
 
+    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
+    }
+
+    public int size(ObjectSerializationCache serializationCache) {
+        return data.size(serializationCache, headerVersion);
+    }
+
     public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(data.correlationId(),
-            apiKey().responseHeaderVersion(apiVersion()));
+        return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKey = -1;
         try {
+            // We derive the header version from the request api version, so we read that first.
+            // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
+            int position = buffer.position();
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
-            buffer.rewind();
+            buffer.position(position);
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);
         } catch (UnsupportedVersionException e) {

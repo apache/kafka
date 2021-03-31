@@ -160,7 +160,8 @@ public class StreamsUpgradeTest {
                     taskManager.processId(),
                     userEndPoint(),
                     taskManager.getTaskOffsetSums(),
-                    uniqueField
+                    uniqueField,
+                    0
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -260,8 +261,9 @@ public class StreamsUpgradeTest {
                                 info.processId(),
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums(),
-                                (byte) 0)
-                                .encode(),
+                                (byte) 0,
+                                0
+                            ).encode(),
                             subscription.ownedPartitions()
                         ));
                 }
@@ -320,7 +322,9 @@ public class StreamsUpgradeTest {
                 16 + // client ID
                 4 + activeTasks.size() * 8 +   // length + active tasks
                 4 + standbyTasks.size() * 8 +  // length + standby tasks
-                4 + endPointBytes.length       // length + endpoint
+                4 + endPointBytes.length +      // length + endpoint
+                4 + //uniqueField
+                4 //assignment error code
             );
 
             buf.putInt(version); // used version

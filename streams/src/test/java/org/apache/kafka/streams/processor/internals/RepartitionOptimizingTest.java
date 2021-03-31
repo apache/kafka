@@ -107,16 +107,9 @@ public class RepartitionOptimizingTest {
 
     @Before
     public void setUp() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            "maybe-optimized-test-app",
-            "dummy-bootstrap-servers-config",
-            Serdes.String().getClass().getName(),
-            Serdes.String().getClass().getName(),
-            props);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        streamsConfiguration.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, Integer.toString(1024 * 10));
+        streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(5000));
 
         processorValueCollector.clear();
     }
@@ -192,8 +185,8 @@ public class RepartitionOptimizingTest {
             .filter((k, v) -> k.equals("A"), Named.as("join-filter"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
-                  StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1), ofMillis(10000), true),
-                                                          Stores.inMemoryWindowStore("other-join-store",  ofDays(1), ofMillis(10000), true))
+                  StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1).plus(ofMillis(10000)), ofMillis(10000), true),
+                                                          Stores.inMemoryWindowStore("other-join-store", ofDays(1).plus(ofMillis(10000)), ofMillis(10000), true))
                                                     .withName("join")
                                                     .withKeySerde(Serdes.String())
                                                     .withValueSerde(Serdes.String())

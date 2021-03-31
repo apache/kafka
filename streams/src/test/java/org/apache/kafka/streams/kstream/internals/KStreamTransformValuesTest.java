@@ -32,7 +32,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.SingletonNoOpValueTransformer;
+import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -141,7 +141,7 @@ public class KStreamTransformValuesTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
+        final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KStreamTransformValues<String, String, String> transformValues = new KStreamTransformValues<>(transformer);
         final Processor<String, String> processor = transformValues.get();
 

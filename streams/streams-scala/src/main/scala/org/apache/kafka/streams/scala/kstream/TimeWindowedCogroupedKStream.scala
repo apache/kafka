@@ -23,10 +23,9 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.InitializerFrom
 /**
  * Wraps the Java class TimeWindowedCogroupedKStream and delegates method calls to the underlying Java object.
  *
- * @tparam K    Type of keys
- * @tparam V    Type of values
+ * @tparam K Type of keys
+ * @tparam V Type of values
  * @param inner The underlying Java abstraction for TimeWindowedCogroupedKStream
- *
  * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream`
  */
 class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStreamJ[K, V]) {
@@ -34,8 +33,8 @@ class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStream
   /**
    * Aggregate the values of records in these streams by the grouped key and defined window.
    *
-   * @param initializer   an initializer function that computes an initial intermediate aggregation result
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  an initializer function that computes an initial intermediate aggregation result
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the latest
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream#aggregate`
@@ -44,5 +43,20 @@ class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStream
     implicit materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
+
+  /**
+   * Aggregate the values of records in these streams by the grouped key and defined window.
+   *
+   * @param initializer  an initializer function that computes an initial intermediate aggregation result
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
+   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the latest
+   *         (rolling) aggregate for each key
+   * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream#aggregate`
+   */
+  def aggregate(initializer: => V, named: Named)(
+    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  ): KTable[Windowed[K], V] =
+    new KTable(inner.aggregate((() => initializer).asInitializer, named, materialized))
 
 }

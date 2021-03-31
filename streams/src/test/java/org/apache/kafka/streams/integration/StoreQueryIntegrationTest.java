@@ -48,6 +48,7 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +83,6 @@ public class StoreQueryIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
-    @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @Rule
@@ -92,7 +92,8 @@ public class StoreQueryIntegrationTest {
     private final MockTime mockTime = cluster.time;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() throws InterruptedException, IOException {
+        cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }
 
@@ -101,6 +102,7 @@ public class StoreQueryIntegrationTest {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
         }
+        cluster.stop();
     }
 
     @Test
@@ -136,13 +138,13 @@ public class StoreQueryIntegrationTest {
 
             final boolean kafkaStreams1IsActive = (keyQueryMetadata.activeHost().port() % 2) == 1;
 
-            // Assert that only active is able to query for a key by default
-            assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
             try {
                 if (kafkaStreams1IsActive) {
+                    assertThat(store1.get(key), is(notNullValue()));
                     assertThat(store2.get(key), is(nullValue()));
                 } else {
                     assertThat(store1.get(key), is(nullValue()));
+                    assertThat(store2.get(key), is(notNullValue()));
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
@@ -208,20 +210,16 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1, is(nullValue()));
             }
 
-            // Assert that only active for a specific requested partition serves key if stale stores and not enabled
-            assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
-
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
                 StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, keyValueStore())
                 .withPartition(keyDontBelongPartition);
-
-
 
             try {
                 // Assert that key is not served when wrong specific partition is requested
                 // If kafkaStreams1 is active for keyPartition, kafkaStreams2 would be active for keyDontBelongPartition
                 // So, in that case, store3 would be null and the store4 would not return the value for key as wrong partition was requested
                 if (kafkaStreams1IsActive) {
+                    assertThat(store1.get(key), is(notNullValue()));
                     assertThat(getStore(kafkaStreams2, storeQueryParam2).get(key), is(nullValue()));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
@@ -230,6 +228,7 @@ public class StoreQueryIntegrationTest {
                         containsString("The specified partition 1 for store source-table does not exist.")
                     );
                 } else {
+                    assertThat(store2.get(key), is(notNullValue()));
                     assertThat(getStore(kafkaStreams1, storeQueryParam2).get(key), is(nullValue()));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams2, storeQueryParam2).get(key));

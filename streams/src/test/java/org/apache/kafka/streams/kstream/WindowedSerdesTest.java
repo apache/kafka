@@ -35,7 +35,7 @@ public class WindowedSerdesTest {
 
     @Test
     public void shouldWrapForTimeWindowedSerde() {
-        final Serde<Windowed<String>> serde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        final Serde<Windowed<String>> serde = WindowedSerdes.timeWindowedSerdeFrom(String.class, Long.MAX_VALUE);
         assertTrue(serde.serializer() instanceof TimeWindowedSerializer);
         assertTrue(serde.deserializer() instanceof TimeWindowedDeserializer);
         assertTrue(((TimeWindowedSerializer) serde.serializer()).innerSerializer() instanceof StringSerializer);
@@ -54,7 +54,7 @@ public class WindowedSerdesTest {
     @Test
     public void testTimeWindowSerdeFrom() {
         final Windowed<Integer> timeWindowed = new Windowed<>(10, new TimeWindow(0, Long.MAX_VALUE));
-        final Serde<Windowed<Integer>> timeWindowedSerde = WindowedSerdes.timeWindowedSerdeFrom(Integer.class);
+        final Serde<Windowed<Integer>> timeWindowedSerde = WindowedSerdes.timeWindowedSerdeFrom(Integer.class, Long.MAX_VALUE);
         final byte[] bytes = timeWindowedSerde.serializer().serialize(topic, timeWindowed);
         final Windowed<Integer> windowed = timeWindowedSerde.deserializer().deserialize(topic, bytes);
         Assert.assertEquals(timeWindowed, windowed);

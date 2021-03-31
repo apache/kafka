@@ -280,8 +280,8 @@ class NamedCache {
         return cache.isEmpty();
     }
 
-    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true), true);
+    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to, final boolean toInclusive) {
+        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, toInclusive), true);
     }
 
     synchronized Iterator<Bytes> reverseKeyRange(final Bytes from, final Bytes to) {

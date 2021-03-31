@@ -31,7 +31,9 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -46,14 +48,15 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,9 +69,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -77,8 +82,29 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopics(
+                TOPIC_1,
+                TOPIC_2,
+                TOPIC_A,
+                TOPIC_C,
+                TOPIC_Y,
+                TOPIC_Z,
+                FA_TOPIC,
+                FOO_TOPIC);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
     private final MockTime mockTime = CLUSTER.time;
 
     private static final String TOPIC_1 = "topic-1";
@@ -99,22 +125,6 @@ public class RegexSourceIntegrationTest {
     private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
     private String outputTopic;
 
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(
-            TOPIC_1,
-            TOPIC_2,
-            TOPIC_A,
-            TOPIC_C,
-            TOPIC_Y,
-            TOPIC_Z,
-            FA_TOPIC,
-            FOO_TOPIC);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
-    }
-
     @Before
     public void setUp() throws InterruptedException {
         outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
@@ -123,6 +133,7 @@ public class RegexSourceIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 0L);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, new TestName()),
@@ -188,7 +199,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
+    public void testRegexRecordsAreProcessedAfterNewTopicCreatedWithMultipleSubtopologies() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
         final String topic2 = "TEST-TOPIC-2";
 
@@ -197,9 +208,19 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-            streams = new KafkaStreams(builder.build(), streamsConfiguration);
-            streams.start();
+            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+            final Topology topology = builder.build();
+            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            streams = new KafkaStreams(topology, streamsConfiguration);
+
+            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
 
             CLUSTER.createTopic(topic2);
 
@@ -424,6 +445,10 @@ public class RegexSourceIntegrationTest {
             if (newState == KafkaStreams.State.ERROR) {
                 expectError.set(true);
             }
+        });
+        streams.setUncaughtExceptionHandler(e -> {
+            expectError.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
         streams.start();
 

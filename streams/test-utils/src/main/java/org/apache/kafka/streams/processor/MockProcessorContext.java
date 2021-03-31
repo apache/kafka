@@ -68,7 +68,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private Integer partition;
     private Long offset;
     private Headers headers;
-    private Long timestamp;
+    private Long recordTimestamp;
+    private Long currentSystemTimeMs;
+    private Long currentStreamTimeMs;
 
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
@@ -220,12 +222,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
-        if (!configCopy.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
-        }
-        if (!configCopy.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
-        }
+        configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         this.taskId = taskId;
         this.config = streamsConfig;
@@ -263,6 +261,22 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        if (currentSystemTimeMs == null) {
+            throw new IllegalStateException("System time must be set before use via setCurrentSystemTimeMs().");
+        }
+        return currentSystemTimeMs;
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        if (currentStreamTimeMs == null) {
+            throw new IllegalStateException("Stream time must be set before use via setCurrentStreamTimeMs().");
+        }
+        return currentStreamTimeMs;
     }
 
     @Override
@@ -306,7 +320,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.partition = partition;
         this.offset = offset;
         this.headers = headers;
-        this.timestamp = timestamp;
+        this.recordTimestamp = timestamp;
     }
 
     /**
@@ -358,10 +372,31 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
      *
      * @param timestamp A record timestamp
+     * @deprecated Since 3.0.0; use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
      */
+    @Deprecated
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTimestamp(final long timestamp) {
-        this.timestamp = timestamp;
+        this.recordTimestamp = timestamp;
+    }
+
+    /**
+     * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
+     * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
+     *
+     * @param recordTimestamp A record timestamp
+     */
+    @SuppressWarnings({"WeakerAccess"})
+    public void setRecordTimestamp(final long recordTimestamp) {
+        this.recordTimestamp = recordTimestamp;
+    }
+
+    public void setCurrentSystemTimeMs(final long currentSystemTimeMs) {
+        this.currentSystemTimeMs = currentSystemTimeMs;
+    }
+
+    public void setCurrentStreamTimeMs(final long currentStreamTimeMs) {
+        this.currentStreamTimeMs = currentStreamTimeMs;
     }
 
     @Override
@@ -395,10 +430,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public long timestamp() {
-        if (timestamp == null) {
+        if (recordTimestamp == null) {
             throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
         }
-        return timestamp;
+        return recordTimestamp;
     }
 
     // mocks ================================================
@@ -445,38 +480,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return new LinkedList<>(punctuators);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
         forward(key, value, To.all());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
         capturedForwards.add(
             new CapturedForward(
-                to.timestamp == -1 ? to.withTimestamp(timestamp == null ? -1 : timestamp) : to,
-                new KeyValue(key, value)
+                to.timestamp == -1 ? to.withTimestamp(recordTimestamp == null ? -1 : recordTimestamp) : to,
+                new KeyValue<>(key, value)
             )
-        );
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException(
-            "Forwarding to a child by index is deprecated. " +
-                "Please transition processors to forward using a 'To' object instead."
-        );
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new UnsupportedOperationException(
-            "Forwarding to a child by name is deprecated. " +
-                "Please transition processors to forward using 'To.child(childName)' instead."
         );
     }
 

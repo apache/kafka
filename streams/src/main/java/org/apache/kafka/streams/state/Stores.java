@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -37,6 +36,7 @@ import java.time.Duration;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -275,9 +275,9 @@ public final class Stores {
                                                                   final boolean timestampedStore) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
         final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
@@ -340,13 +340,13 @@ public final class Stores {
         Objects.requireNonNull(name, "name cannot be null");
 
         final String repartitionPeriodErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, repartitionPeriodErrorMessagePrefix);
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, repartitionPeriodErrorMessagePrefix);
         if (retentionMs < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
 
         final String windowSizeErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, windowSizeErrorMessagePrefix);
+        final long windowSizeMs = validateMillisecondDuration(windowSize, windowSizeErrorMessagePrefix);
         if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
@@ -393,7 +393,7 @@ public final class Stores {
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+        return persistentSessionStore(name, validateMillisecondDuration(retentionPeriod, msgPrefix));
     }
 
     /**
@@ -409,7 +409,7 @@ public final class Stores {
         Objects.requireNonNull(name, "name cannot be null");
 
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionPeriodMs = ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
+        final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }

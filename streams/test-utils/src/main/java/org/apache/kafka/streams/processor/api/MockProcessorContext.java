@@ -242,12 +242,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
-        if (!configCopy.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
-        }
-        if (!configCopy.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
-        }
+        configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         this.taskId = taskId;
         this.config = streamsConfig;

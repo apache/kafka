@@ -25,9 +25,11 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -51,6 +53,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -117,9 +120,10 @@ public class InternalTopologyBuilderTest {
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowOffsetResetSourceWithoutTopics() {
-        builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer());
+        assertThrows(TopologyException.class, () -> builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source",
+            null, stringSerde.deserializer(), stringSerde.deserializer()));
     }
 
     @Test
@@ -159,24 +163,53 @@ public class InternalTopologyBuilderTest {
         } catch (final TopologyException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddProcessorWithWrongParent() {
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
+        assertThrows(TopologyException.class, () -> builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddProcessorWithSelfParent() {
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "processor");
+        assertThrows(TopologyException.class, () -> builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "processor"));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddProcessorWithEmptyParents() {
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>());
+        assertThrows(TopologyException.class, () -> builder.addProcessor("processor", new MockApiProcessorSupplier<>()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testAddProcessorWithNullParents() {
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
+        assertThrows(NullPointerException.class, () -> builder.addProcessor("processor",
+            new MockApiProcessorSupplier<>(), (String) null));
+    }
+
+    @Test
+    public void testAddProcessorWithBadSupplier() {
+        final Processor<Object, Object, Object, Object> processor = new MockApiProcessor<>();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addProcessor("processor", () -> processor, (String) null)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void testAddGlobalStoreWithBadSupplier() {
+        final org.apache.kafka.streams.processor.api.Processor<?, ?, Void, Void> processor = new MockApiProcessorSupplier<Object, Object, Void, Void>().get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addGlobalStore(
+                        new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+                        "globalSource",
+                        null,
+                        null,
+                        null,
+                        "globalTopic",
+                        "global-processor",
+                () -> processor)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -189,25 +222,26 @@ public class InternalTopologyBuilderTest {
         } catch (final TopologyException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddSinkWithWrongParent() {
-        builder.addSink("sink", "topic-2", null, null, null, "source");
+        assertThrows(TopologyException.class, () -> builder.addSink("sink", "topic-2", null, null, null, "source"));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddSinkWithSelfParent() {
-        builder.addSink("sink", "topic-2", null, null, null, "sink");
+        assertThrows(TopologyException.class, () -> builder.addSink("sink", "topic-2", null, null, null, "sink"));
     }
 
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddSinkWithEmptyParents() {
-        builder.addSink("sink", "topic", null, null, null);
+        assertThrows(TopologyException.class, () -> builder.addSink("sink", "topic", null, null, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testAddSinkWithNullParents() {
-        builder.addSink("sink", "topic", null, null, null, (String) null);
+        assertThrows(NullPointerException.class, () -> builder.addSink("sink", "topic", null,
+            null, null, (String) null));
     }
 
     @Test
@@ -353,9 +387,9 @@ public class InternalTopologyBuilderTest {
         } catch (final TopologyException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void testAddStateStoreWithNonExistingProcessor() {
-        builder.addStateStore(storeBuilder, "no-such-processor");
+        assertThrows(TopologyException.class, () -> builder.addStateStore(storeBuilder, "no-such-processor"));
     }
 
     @Test
@@ -678,64 +712,64 @@ public class InternalTopologyBuilderTest {
         assertNotEquals(oldNodeGroups, newNodeGroups);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullNameWhenAddingSink() {
-        builder.addSink(null, "topic", null, null, null);
+        assertThrows(NullPointerException.class, () -> builder.addSink(null, "topic", null, null, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTopicWhenAddingSink() {
-        builder.addSink("name", (String) null, null, null, null);
+        assertThrows(NullPointerException.class, () -> builder.addSink("name", (String) null, null, null, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTopicChooserWhenAddingSink() {
-        builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null);
+        assertThrows(NullPointerException.class, () -> builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullNameWhenAddingProcessor() {
-        builder.addProcessor(null, () -> null);
+        assertThrows(NullPointerException.class, () -> builder.addProcessor(null, () -> null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProcessorSupplier() {
-        builder.addProcessor("name", null);
+        assertThrows(NullPointerException.class, () -> builder.addProcessor("name", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullNameWhenAddingSource() {
-        builder.addSource(null, null, null, null, null, Pattern.compile(".*"));
+        assertThrows(NullPointerException.class, () -> builder.addSource(null, null, null, null, null, Pattern.compile(".*")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() {
-        builder.connectProcessorAndStateStores(null, "store");
+        assertThrows(NullPointerException.class, () -> builder.connectProcessorAndStateStores(null, "store"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullStateStoreNameWhenConnectingProcessorAndStateStores() {
-        builder.connectProcessorAndStateStores("processor", new String[]{null});
+        assertThrows(NullPointerException.class, () -> builder.connectProcessorAndStateStores("processor", new String[]{null}));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAddNullInternalTopic() {
-        builder.addInternalTopic(null, InternalTopicProperties.empty());
+        assertThrows(NullPointerException.class, () -> builder.addInternalTopic(null, InternalTopicProperties.empty()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAddNullInternalTopicProperties() {
-        builder.addInternalTopic("topic", null);
+        assertThrows(NullPointerException.class, () -> builder.addInternalTopic("topic", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotSetApplicationIdToNull() {
-        builder.setApplicationId(null);
+        assertThrows(NullPointerException.class, () -> builder.setApplicationId(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAddNullStateStoreSupplier() {
-        builder.addStateStore(null);
+        assertThrows(NullPointerException.class, () -> builder.addStateStore(null));
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode<?, ?, ?, ?>> nodes) {
@@ -955,10 +989,10 @@ public class InternalTopologyBuilderTest {
         assertFalse(topics.contains("topic-A"));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
-        builder.addGlobalStore(
+        assertThrows(TopologyException.class, () -> builder.addGlobalStore(
             storeBuilder,
             sameNameForSourceAndProcessor,
             null,
@@ -967,7 +1001,7 @@ public class InternalTopologyBuilderTest {
             "anyTopicName",
             sameNameForSourceAndProcessor,
             new MockApiProcessorSupplier<>()
-        );
+        ));
     }
 
     @Test

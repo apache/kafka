@@ -79,7 +79,6 @@ public class KStreamTransformTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(
             builder.build(),
-            new Properties(),
             Instant.ofEpochMilli(0L))) {
             final TestInputTopic<Integer, Integer> inputTopic =
                 driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());

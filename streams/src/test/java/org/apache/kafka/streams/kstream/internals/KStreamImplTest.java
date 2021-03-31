@@ -46,6 +46,7 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformer;
@@ -87,6 +88,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -480,7 +482,7 @@ public class KStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
     public void shouldNotAllowNullPredicatedOnBranch() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -489,7 +491,7 @@ public class KStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public void shouldHaveAtLeastOnPredicateWhenBranching() {
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -497,7 +499,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldHaveAtLeastOnPredicateWhenBranchingWithNamed() {
         final IllegalArgumentException exception = assertThrows(
@@ -506,7 +508,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldNotAllowNullNamedOnBranch() {
         final NullPointerException exception = assertThrows(
@@ -515,7 +517,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldCantHaveNullPredicate() {
         final NullPointerException exception = assertThrows(
@@ -524,7 +526,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("predicates can't be null"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldCantHaveNullPredicateWithNamed() {
         final NullPointerException exception = assertThrows(
@@ -768,9 +770,18 @@ public class KStreamImplTest {
     public void shouldNotAllowNullValueJoinerOnJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.join(testStream, null, JoinWindows.of(ofMillis(10))));
+            () -> testStream.join(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
 
     @Deprecated
     @Test
@@ -790,10 +801,22 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(
-                testStream,
-                null,
-                JoinWindows.of(ofMillis(10)),
-                StreamJoined.as("name")));
+                  testStream,
+                  (ValueJoiner<? super String, ? super String, ?>) null,
+                  JoinWindows.of(ofMillis(10)),
+                  StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                    testStream,
+                    (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
+                    JoinWindows.of(ofMillis(10)),
+                    StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -892,7 +915,15 @@ public class KStreamImplTest {
     public void shouldNotAllowNullValueJoinerOnLeftJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.leftJoin(testStream, null, JoinWindows.of(ofMillis(10))));
+            () -> testStream.leftJoin(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -915,11 +946,24 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.leftJoin(
                 testStream,
-                null,
+                (ValueJoiner<? super String, ? super String, ?>) null,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                testStream,
+                    (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
+                    JoinWindows.of(ofMillis(10)),
+                    StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
 
     @Test
     public void shouldNotAllowNullJoinWindowsOnLeftJoin() {
@@ -1016,7 +1060,15 @@ public class KStreamImplTest {
     public void shouldNotAllowNullValueJoinerOnOuterJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.outerJoin(testStream, null, JoinWindows.of(ofMillis(10))));
+            () -> testStream.outerJoin(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoin() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1039,9 +1091,21 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.outerJoin(
                 testStream,
-                null,
+                (ValueJoiner<? super String, ? super String, ?>) null,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoinWithStreamJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.outerJoin(
+                    testStream,
+                    (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
+                    JoinWindows.of(ofMillis(10)),
+                    StreamJoined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1120,18 +1184,34 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullValueMapperOnTableJoin() {
+    public void shouldNotAllowNullValueJoinerOnTableJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.join(testTable, null));
+            () -> testStream.join(testTable, (ValueJoiner<? super String, ? super String, ?>) null));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @Test
-    public void shouldNotAllowNullValueMapperOnTableJoinWithJoiner() {
+    public void shouldNotAllowNullValueJoinerWithKeyOnTableJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.join(testTable, null, Joined.as("name")));
+            () -> testStream.join(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnTableJoinWithJoiner() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testTable, (ValueJoiner<? super String, ? super String, ?>) null, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnTableJoinWithJoiner() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, Joined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1160,18 +1240,34 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullValueMapperOnTableLeftJoin() {
+    public void shouldNotAllowNullValueJoinerOnTableLeftJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.leftJoin(testTable, null));
+            () -> testStream.leftJoin(testTable, (ValueJoiner<? super String, ? super String, ?>) null));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @Test
-    public void shouldNotAllowNullValueMapperOnTableLeftJoinWithJoined() {
+    public void shouldNotAllowNullValueJoinerWithKeyOnTableLeftJoin() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.leftJoin(testTable, null, Joined.as("name")));
+            () -> testStream.leftJoin(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnTableLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testTable, (ValueJoiner<? super String, ? super String, ?>) null, Joined.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnTableLeftJoinWithJoined() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testTable, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, Joined.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1224,22 +1320,42 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
+    public void shouldNotAllowNullValueJoinerOnJoinWithGlobalTable() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), null));
+            () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoiner<? super String, ? super String, ?>) null));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @Test
-    public void shouldNotAllowNullJoinerOnJoinWithGlobalTableWithNamed() {
+    public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithGlobalTable() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnJoinWithGlobalTableWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(
                 testGlobalTable,
                 MockMapper.selectValueMapper(),
-                null,
+                (ValueJoiner<? super String, ? super String, ?>) null,
                 Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.join(
+                    testGlobalTable,
+                    MockMapper.selectValueMapper(),
+                    (ValueJoiner<? super String, ? super String, ?>) null,
+                    Named.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1284,22 +1400,42 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
+    public void shouldNotAllowNullValueJoinerOnLeftJoinWithGlobalTable() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), null));
+            () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoiner<? super String, ? super String, ?>) null));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
     @Test
-    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTableWithNamed() {
+    public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithGlobalTable() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(testGlobalTable, MockMapper.selectValueMapper(), (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerOnLeftJoinWithGlobalTableWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(
                 testGlobalTable,
                 MockMapper.selectValueMapper(),
-                null,
+                (ValueJoiner<? super String, ? super String, ?>) null,
                 Named.as("name")));
+        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithGlobalTableWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                    testGlobalTable,
+                    MockMapper.selectValueMapper(),
+                    (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
+                    Named.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
@@ -1866,6 +2002,46 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"), "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1946,11 +2122,51 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues((ValueTransformerSupplier<Object, Object>) null));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValues() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test

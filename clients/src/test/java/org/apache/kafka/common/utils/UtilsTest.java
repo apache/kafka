@@ -18,7 +18,9 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.function.Executable;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.Closeable;
@@ -32,6 +34,11 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -58,17 +65,13 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
@@ -360,7 +363,8 @@ public class UtilsTest {
      * Test to read content of named pipe as string. As reading/writing to a pipe can block,
      * timeout test after a minute (test finishes within 100 ms normally).
      */
-    @Test(timeout = 60 * 1000)
+    @Timeout(60)
+    @Test
     public void testFileAsStringNamedPipe() throws Exception {
 
         // Create a temporary name for named pipe
@@ -452,24 +456,24 @@ public class UtilsTest {
             String msg = "hello, world";
             channel.write(ByteBuffer.wrap(msg.getBytes()), 0);
             channel.force(true);
-            assertEquals("Message should be written to the file channel", channel.size(), msg.length());
+            assertEquals(channel.size(), msg.length(), "Message should be written to the file channel");
 
             ByteBuffer perfectBuffer = ByteBuffer.allocate(msg.length());
             ByteBuffer smallBuffer = ByteBuffer.allocate(5);
             ByteBuffer largeBuffer = ByteBuffer.allocate(msg.length() + 1);
             // Scenario 1: test reading into a perfectly-sized buffer
             Utils.readFullyOrFail(channel, perfectBuffer, 0, "perfect");
-            assertFalse("Buffer should be filled up", perfectBuffer.hasRemaining());
-            assertEquals("Buffer should be populated correctly", msg, new String(perfectBuffer.array()));
+            assertFalse(perfectBuffer.hasRemaining(), "Buffer should be filled up");
+            assertEquals(msg, new String(perfectBuffer.array()), "Buffer should be populated correctly");
             // Scenario 2: test reading into a smaller buffer
             Utils.readFullyOrFail(channel, smallBuffer, 0, "small");
-            assertFalse("Buffer should be filled", smallBuffer.hasRemaining());
-            assertEquals("Buffer should be populated correctly", "hello", new String(smallBuffer.array()));
+            assertFalse(smallBuffer.hasRemaining(), "Buffer should be filled");
+            assertEquals("hello", new String(smallBuffer.array()), "Buffer should be populated correctly");
             // Scenario 3: test reading starting from a non-zero position
             smallBuffer.clear();
             Utils.readFullyOrFail(channel, smallBuffer, 7, "small");
-            assertFalse("Buffer should be filled", smallBuffer.hasRemaining());
-            assertEquals("Buffer should be populated correctly", "world", new String(smallBuffer.array()));
+            assertFalse(smallBuffer.hasRemaining(), "Buffer should be filled");
+            assertEquals("world", new String(smallBuffer.array()), "Buffer should be populated correctly");
             // Scenario 4: test end of stream is reached before buffer is filled up
             try {
                 Utils.readFullyOrFail(channel, largeBuffer, 0, "large");
@@ -491,9 +495,8 @@ public class UtilsTest {
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         String expectedBufferContent = fileChannelMockExpectReadWithRandomBytes(channelMock, bufferSize);
         Utils.readFullyOrFail(channelMock, buffer, 0L, "test");
-        assertEquals("The buffer should be populated correctly", expectedBufferContent,
-                     new String(buffer.array()));
-        assertFalse("The buffer should be filled", buffer.hasRemaining());
+        assertEquals(expectedBufferContent, new String(buffer.array()), "The buffer should be populated correctly");
+        assertFalse(buffer.hasRemaining(), "The buffer should be filled");
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
 
@@ -508,9 +511,8 @@ public class UtilsTest {
         String expectedBufferContent = fileChannelMockExpectReadWithRandomBytes(channelMock, bufferSize);
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         Utils.readFully(channelMock, buffer, 0L);
-        assertEquals("The buffer should be populated correctly.", expectedBufferContent,
-                     new String(buffer.array()));
-        assertFalse("The buffer should be filled", buffer.hasRemaining());
+        assertEquals(expectedBufferContent, new String(buffer.array()), "The buffer should be populated correctly.");
+        assertFalse(buffer.hasRemaining(), "The buffer should be filled");
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
 
@@ -609,7 +611,7 @@ public class UtilsTest {
 
         static void checkClosed(TestCloseable... closeables) {
             for (TestCloseable closeable : closeables)
-                assertTrue("Close not invoked for " + closeable.id, closeable.closed);
+                assertTrue(closeable.closed, "Close not invoked for " + closeable.id);
         }
 
         static void checkException(IOException e, TestCloseable... closeablesWithException) {
@@ -621,7 +623,8 @@ public class UtilsTest {
         }
     }
 
-    @Test(timeout = 120000)
+    @Timeout(120)
+    @Test
     public void testRecursiveDelete() throws IOException {
         Utils.delete(null); // delete of null does nothing.
 
@@ -654,12 +657,7 @@ public class UtilsTest {
         bitField = Utils.to32BitField(bytes);
         assertEquals(bytes, Utils.from32BitField(bitField));
 
-        bytes = mkSet((byte) 0, (byte) 11, (byte) 32);
-        try {
-            Utils.to32BitField(bytes);
-            fail("Expected exception not thrown");
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(IllegalArgumentException.class, () -> Utils.to32BitField(mkSet((byte) 0, (byte) 11, (byte) 32)));
     }
 
     @Test
@@ -668,8 +666,8 @@ public class UtilsTest {
         final Set<String> anotherSet = mkSet("c", "d", "e");
         final Set<String> union = union(TreeSet::new, oneSet, anotherSet);
 
-        assertThat(union, is(mkSet("a", "b", "c", "d", "e")));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("a", "b", "c", "d", "e"), union);
+        assertEquals(TreeSet.class, union.getClass());
     }
 
     @Test
@@ -677,8 +675,8 @@ public class UtilsTest {
         final Set<String> oneSet = mkSet("a", "b", "c");
         final Set<String> union = union(TreeSet::new, oneSet);
 
-        assertThat(union, is(mkSet("a", "b", "c")));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("a", "b", "c"), union);
+        assertEquals(TreeSet.class, union.getClass());
     }
 
     @Test
@@ -689,16 +687,16 @@ public class UtilsTest {
         final Set<String> fourSet = mkSet("x", "y", "z");
         final Set<String> union = union(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
 
-        assertThat(union, is(mkSet("a", "b", "c", "d", "e", "x", "y", "z")));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("a", "b", "c", "d", "e", "x", "y", "z"), union);
+        assertEquals(TreeSet.class, union.getClass());
     }
 
     @Test
     public void testUnionOfNone() {
         final Set<String> union = union(TreeSet::new);
 
-        assertThat(union, is(emptySet()));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(emptySet(), union);
+        assertEquals(TreeSet.class, union.getClass());
     }
 
     @Test
@@ -707,8 +705,8 @@ public class UtilsTest {
         final Set<String> anotherSet = mkSet("c", "d", "e");
         final Set<String> intersection = intersection(TreeSet::new, oneSet, anotherSet);
 
-        assertThat(intersection, is(mkSet("c")));
-        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("c"), intersection);
+        assertEquals(TreeSet.class, intersection.getClass());
     }
 
     @Test
@@ -716,8 +714,8 @@ public class UtilsTest {
         final Set<String> oneSet = mkSet("a", "b", "c");
         final Set<String> intersection = intersection(TreeSet::new, oneSet);
 
-        assertThat(intersection, is(mkSet("a", "b", "c")));
-        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("a", "b", "c"), intersection);
+        assertEquals(TreeSet.class, intersection.getClass());
     }
 
     @Test
@@ -725,10 +723,10 @@ public class UtilsTest {
         final Set<String> oneSet = mkSet("a", "b", "c");
         final Set<String> twoSet = mkSet("c", "d", "e");
         final Set<String> threeSet = mkSet("b", "c", "d");
-        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet);
+        final Set<String> intersection = intersection(TreeSet::new, oneSet, twoSet, threeSet);
 
-        assertThat(union, is(mkSet("c")));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("c"), intersection);
+        assertEquals(TreeSet.class, intersection.getClass());
     }
 
     @Test
@@ -737,10 +735,10 @@ public class UtilsTest {
         final Set<String> twoSet = mkSet("c", "d", "e");
         final Set<String> threeSet = mkSet("b", "c", "d");
         final Set<String> fourSet = mkSet("x", "y", "z");
-        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+        final Set<String> intersection = intersection(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
 
-        assertThat(union, is(emptySet()));
-        assertThat(union.getClass(), equalTo(TreeSet.class));
+        assertEquals(emptySet(), intersection);
+        assertEquals(TreeSet.class, intersection.getClass());
     }
 
     @Test
@@ -749,8 +747,8 @@ public class UtilsTest {
         final Set<String> anotherSet = mkSet("c", "d", "e");
         final Set<String> diff = diff(TreeSet::new, oneSet, anotherSet);
 
-        assertThat(diff, is(mkSet("a", "b")));
-        assertThat(diff.getClass(), equalTo(TreeSet.class));
+        assertEquals(mkSet("a", "b"), diff);
+        assertEquals(TreeSet.class, diff.getClass());
     }
 
     @Test
@@ -800,16 +798,51 @@ public class UtilsTest {
     }
 
     @Test
-    public void shouldThrowOnInvalidDateFormat() {
-        //check some invalid formats
-        assertThat(assertThrows(ParseException.class, () -> {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
-        }).getMessage(), containsString("Unparseable date"));
+    public void shouldThrowOnInvalidDateFormatOrNullTimestamp() {
+        // check some invalid formats
+        // test null timestamp
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> {
+            Utils.getDateTime(null);
+        }).getMessage().contains("Error parsing timestamp with null value"));
 
-        assertThat(assertThrows(ParseException.class, () -> {
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.X
+        checkExceptionForGetDateTimeMethod(() -> {
             invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-        }).getMessage(), containsString("Unparseable date"));
+        });
 
+        // test pattern: yyyy-MM-dd HH:mm:ss
+        assertTrue(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+        }).getMessage().contains("It does not contain a 'T' according to ISO8601 format"));
+
+        // KAFKA-10685: use DateTimeFormatter generate micro/nano second timestamp
+        final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+            .toFormatter();
+        final LocalDateTime timestampWithNanoSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 56, 123456789);
+        final LocalDateTime timestampWithMicroSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.MICROS);
+        final LocalDateTime timestampWithSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.SECONDS);
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithNanoSeconds));
+        });
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSS
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithMicroSeconds));
+        });
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithSeconds));
+        });
+    }
+
+    private void checkExceptionForGetDateTimeMethod(Executable executable) {
+        assertTrue(assertThrows(ParseException.class, executable)
+            .getMessage().contains("Unparseable date"));
     }
 
     private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
@@ -818,4 +851,12 @@ public class UtilsTest {
         Utils.getDateTime(formattedCheckpoint);
     }
 
+    @Test
+    void testIsBlank() {
+        assertTrue(Utils.isBlank(null));
+        assertTrue(Utils.isBlank(""));
+        assertTrue(Utils.isBlank(" "));
+        assertFalse(Utils.isBlank("bob"));
+        assertFalse(Utils.isBlank(" bob "));
+    }
 }

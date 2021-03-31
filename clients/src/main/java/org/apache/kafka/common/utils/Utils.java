@@ -17,11 +17,13 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -548,15 +550,15 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a list joined by the given separator
-     * @param list The list of items
+     * Create a string representation of a collection joined by the given separator
+     * @param collection The list of items
      * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String separator) {
-        Objects.requireNonNull(list);
+    public static <T> String join(Collection<T> collection, String separator) {
+        Objects.requireNonNull(collection);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
+        Iterator<T> iter = collection.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
@@ -753,22 +755,7 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
-
-            @Override
-            public V getValue() {
-                return v;
-            }
-
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**
@@ -996,7 +983,7 @@ public final class Utils {
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
-     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
+     * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
@@ -1091,7 +1078,7 @@ public final class Utils {
      *
      * @throws IOException If an I/O error occurs
      */
-    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1110,6 +1097,29 @@ public final class Utils {
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
         while (sourceBuffer.hasRemaining())
             channel.write(sourceBuffer);
+    }
+
+    /**
+     * Trying to write data in source buffer to a {@link TransferableChannel}, we may need to call this method multiple
+     * times since this method doesn't ensure the data in the source buffer can be fully written to the destination channel.
+     *
+     * @param destChannel The destination channel
+     * @param position From which the source buffer will be written
+     * @param length The max size of bytes can be written
+     * @param sourceBuffer The source buffer
+     *
+     * @return The length of the actual written data
+     * @throws IOException If an I/O error occurs
+     */
+    public static long tryWriteTo(TransferableChannel destChannel,
+                                  int position,
+                                  int length,
+                                  ByteBuffer sourceBuffer) throws IOException {
+
+        ByteBuffer dup = sourceBuffer.duplicate();
+        dup.position(position);
+        dup.limit(position + length);
+        return destChannel.write(dup);
     }
 
     /**
@@ -1281,31 +1291,63 @@ public final class Utils {
 
     /**
      * Convert timestamp to an epoch value
-     * @param timestamp to be converted
-     * @return epoch value of a given timestamp
-     * @throws ParseException for timestamp that doesn't follow ISO8601 format
+     * @param timestamp the timestamp to be converted, the accepted formats are:
+     *                 (1) yyyy-MM-dd'T'HH:mm:ss.SSS, ex: 2020-11-10T16:51:38.198
+     *                 (2) yyyy-MM-dd'T'HH:mm:ss.SSSZ, ex: 2020-11-10T16:51:38.198+0800
+     *                 (3) yyyy-MM-dd'T'HH:mm:ss.SSSX, ex: 2020-11-10T16:51:38.198+08
+     *                 (4) yyyy-MM-dd'T'HH:mm:ss.SSSXX, ex: 2020-11-10T16:51:38.198+0800
+     *                 (5) yyyy-MM-dd'T'HH:mm:ss.SSSXXX, ex: 2020-11-10T16:51:38.198+08:00
+     *
+     * @return epoch value of a given timestamp (i.e. the number of milliseconds since January 1, 1970, 00:00:00 GMT)
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format or the format is not expected
      */
-    public static long getDateTime(String timestamp) throws ParseException {
+    public static long getDateTime(String timestamp) throws ParseException, IllegalArgumentException {
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Error parsing timestamp with null value");
+        }
+
         final String[] timestampParts = timestamp.split("T");
         if (timestampParts.length < 2) {
             throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
         }
 
         final String secondPart = timestampParts[1];
-        if (secondPart == null || secondPart.isEmpty()) {
-            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
-        }
-
         if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
             timestamp = timestamp + "Z";
         }
 
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat();
+        // strictly parsing the date/time format
+        simpleDateFormat.setLenient(false);
         try {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            final Date date = simpleDateFormat.parse(timestamp);
             return date.getTime();
         } catch (final ParseException e) {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+            final Date date = simpleDateFormat.parse(timestamp);
             return date.getTime();
         }
     }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
+    }
+
+    /**
+     * Checks if a string is null, empty or whitespace only.
+     * @param str a string to be checked
+     * @return true if the string is null, empty or whitespace only; otherwise, return false.
+     */    
+    public static boolean isBlank(String str) {
+        return str == null || str.trim().isEmpty();
+    }
+
+    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
+        Map<K, V> res = new HashMap<>(keys.size());
+        keys.forEach(key -> res.put(key, valueSupplier.get()));
+        return res;
+    }
+
 }

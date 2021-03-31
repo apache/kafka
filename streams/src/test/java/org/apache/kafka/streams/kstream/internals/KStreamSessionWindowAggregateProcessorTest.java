@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
@@ -105,7 +106,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             metrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
+            new ThreadCache(new LogContext("testCache "), 100000, metrics),
+            Time.SYSTEM
         ) {
             @SuppressWarnings("unchecked")
             @Override
@@ -624,7 +626,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
+            Time.SYSTEM
         ) {
             @SuppressWarnings("unchecked")
             @Override

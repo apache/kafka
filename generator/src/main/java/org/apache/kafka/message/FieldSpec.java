@@ -299,6 +299,7 @@ public final class FieldSpec {
             }
         } else if ((type instanceof FieldType.Int8FieldType) ||
             (type instanceof FieldType.Int16FieldType) ||
+            (type instanceof FieldType.Uint16FieldType) ||
             (type instanceof FieldType.Int32FieldType) ||
             (type instanceof FieldType.Int64FieldType)) {
             int base = 10;
@@ -331,6 +332,22 @@ public final class FieldSpec {
                     }
                     return "(short) " + fieldDefault;
                 }
+            } else if (type instanceof FieldType.Uint16FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "0";
+                } else {
+                    try {
+                        int value = Integer.valueOf(defaultString, base);
+                        if (value < 0 || value > 65535) {
+                            throw new RuntimeException("Invalid default for uint16 field " +
+                                    name + ": out of range.");
+                        }
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for uint16 field " +
+                            name + ": " + defaultString, e);
+                    }
+                    return fieldDefault;
+                }
             } else if (type instanceof FieldType.Int32FieldType) {
                 if (defaultString.isEmpty()) {
                     return "0";
@@ -361,7 +378,7 @@ public final class FieldSpec {
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             if (fieldDefault.isEmpty()) {
-                return "UUID.ZERO_UUID";
+                return "Uuid.ZERO_UUID";
             } else {
                 try {
                     ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(fieldDefault));
@@ -372,7 +389,7 @@ public final class FieldSpec {
                         name + ": " + fieldDefault, e);
                 }
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-                return "UUID.fromString(\"" + fieldDefault + "\")";
+                return "Uuid.fromString(\"" + fieldDefault + "\")";
             }
         } else if (type instanceof FieldType.Float64FieldType) {
             if (fieldDefault.isEmpty()) {
@@ -457,13 +474,15 @@ public final class FieldSpec {
             return "byte";
         } else if (type instanceof FieldType.Int16FieldType) {
             return "short";
+        } else if (type instanceof FieldType.Uint16FieldType) {
+            return "int";
         } else if (type instanceof FieldType.Int32FieldType) {
             return "int";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "long";
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-            return "UUID";
+            return "Uuid";
         } else if (type instanceof FieldType.Float64FieldType) {
             return "double";
         } else if (type.isString()) {
@@ -570,7 +589,7 @@ public final class FieldSpec {
                         fieldPrefix, camelCaseName(), fieldPrefix, camelCaseName());
                 }
             }
-        } else if (type().isString() || type().isStruct()) {
+        } else if (type().isString() || type().isStruct() || type() instanceof FieldType.UUIDFieldType) {
             if (fieldDefault.equals("null")) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {

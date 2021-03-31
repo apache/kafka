@@ -491,29 +491,6 @@ public class StreamsBuilder {
     }
 
     /**
-     * @deprecated Use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
-     */
-    @Deprecated
-    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                              final String topic,
-                                                              final String sourceName,
-                                                              final Consumed<K, V> consumed,
-                                                              final String processorName,
-                                                              final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
-        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            new ConsumedInternal<>(consumed),
-            processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
-        );
-        return this;
-    }
-
-    /**
      * Adds a global {@link StateStore} to the topology.
      * The {@link StateStore} sources its data from all partitions of the provided input topic.
      * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
@@ -530,6 +507,10 @@ public class StreamsBuilder {
      * <p>
      * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
+     * <p>
+     * The supplier should always generate a new instance each time {@link  ProcessorSupplier#get()} gets called. Creating
+     * a single {@link Processor} object and returning the same object reference in {@link ProcessorSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from
@@ -565,6 +546,9 @@ public class StreamsBuilder {
      * <p>
      * The provided {@link ProcessorSupplier}} will be used to create an
      * {@link Processor} that will receive all records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance. Creating a single {@link Processor} object
+     * and returning the same object reference in {@link ProcessorSupplier#get()} is a
+     * violation of the supplier pattern and leads to runtime exceptions.
      * NOTE: you should not use the {@link Processor} to insert transformed records into
      * the global state store. This store uses the source topic as changelog and during restore will insert records directly
      * from the source.

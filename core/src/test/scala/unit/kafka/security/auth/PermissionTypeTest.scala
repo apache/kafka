@@ -18,9 +18,8 @@ package kafka.security.auth
 
 import kafka.common.KafkaException
 import org.apache.kafka.common.acl.AclPermissionType
-import org.junit.Assert.assertEquals
-import org.junit.Test
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 @deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")
 class PermissionTypeTest {
@@ -30,12 +29,7 @@ class PermissionTypeTest {
     val permissionType = PermissionType.fromString("Allow")
     assertEquals(Allow, permissionType)
 
-    try {
-      PermissionType.fromString("badName")
-      fail("Expected exception on invalid PermissionType name.")
-    } catch {
-      case _: KafkaException => // expected
-    }
+    assertThrows(classOf[KafkaException], () => PermissionType.fromString("badName"))
   }
 
   /**

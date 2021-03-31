@@ -25,24 +25,4 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOptions> {
-
-    /**
-     * - True means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request must be
-     *   issued only to the controller.
-     * - False means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request can be
-     *   issued to any random broker.
-     */
-    private boolean sendRequestToController = false;
-
-    /**
-     * Sets a flag indicating that the describe features request must be issued only to the controller.
-     */
-    public DescribeFeaturesOptions sendRequestToController(boolean sendRequestToController) {
-        this.sendRequestToController = sendRequestToController;
-        return this;
-    }
-
-    public boolean sendRequestToController() {
-        return sendRequestToController;
-    }
 }

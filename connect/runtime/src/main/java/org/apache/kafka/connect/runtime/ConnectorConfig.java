@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -220,7 +219,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Plugins plugins) {
-        this(plugins, new HashMap<String, String>());
+        this(plugins, Collections.emptyMap());
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
@@ -495,7 +494,7 @@ public class ConnectorConfig extends AbstractConfig {
                         .filter(c -> Modifier.isPublic(c.getModifiers()))
                         .map(Class::getName)
                         .collect(Collectors.joining(", "));
-                String message = childClassNames.trim().isEmpty() ?
+                String message = Utils.isBlank(childClassNames) ?
                         aliasKind + " is abstract and cannot be created." :
                         aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
                 throw new ConfigException(key, String.valueOf(cls), message);

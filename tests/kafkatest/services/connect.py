@@ -438,10 +438,10 @@ class VerifiableSource(VerifiableConnector):
         self.throughput = throughput
 
     def committed_messages(self):
-        return filter(lambda m: 'committed' in m and m['committed'], self.messages())
+        return list(filter(lambda m: 'committed' in m and m['committed'], self.messages()))
 
     def sent_messages(self):
-        return filter(lambda m: 'committed' not in m or not m['committed'], self.messages())
+        return list(filter(lambda m: 'committed' not in m or not m['committed'], self.messages()))
 
     def start(self):
         self.logger.info("Creating connector VerifiableSourceConnector %s", self.name)
@@ -467,10 +467,10 @@ class VerifiableSink(VerifiableConnector):
         self.topics = topics
 
     def flushed_messages(self):
-        return filter(lambda m: 'flushed' in m and m['flushed'], self.messages())
+        return list(filter(lambda m: 'flushed' in m and m['flushed'], self.messages()))
 
     def received_messages(self):
-        return filter(lambda m: 'flushed' not in m or not m['flushed'], self.messages())
+        return list(filter(lambda m: 'flushed' not in m or not m['flushed'], self.messages()))
 
     def start(self):
         self.logger.info("Creating connector VerifiableSinkConnector %s", self.name)

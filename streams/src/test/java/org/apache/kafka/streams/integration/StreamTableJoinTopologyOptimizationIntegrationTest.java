@@ -39,8 +39,9 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -68,13 +69,23 @@ import static org.junit.Assert.assertTrue;
 public class StreamTableJoinTopologyOptimizationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     private String tableTopic;
     private String inputTopic;
     private String outputTopic;
     private String applicationId;
+    private KafkaStreams kafkaStreams;
 
     private Properties streamsConfiguration;
 
@@ -119,6 +130,9 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+        }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
@@ -137,7 +151,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
             .join(table, (value1, value2) -> value2)
             .to(outputTopic);
 
-        startStreams(streamsBuilder);
+        kafkaStreams = startStreams(streamsBuilder);
 
         final long timestamp = System.currentTimeMillis();
 
@@ -148,8 +162,6 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
 
         sendEvents(inputTopic, timestamp, expectedRecords);
         sendEvents(outputTopic, timestamp, expectedRecords);
-
-        startStreams(streamsBuilder);
 
         validateReceivedMessages(
             outputTopic,

@@ -17,19 +17,18 @@
 package kafka.log
 
 import java.nio.ByteBuffer
-
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.BrokerTopicStats
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -58,6 +57,11 @@ private[kafka] object AppendOrigin {
    * The log append came from the client, which implies full validation.
    */
   case object Client extends AppendOrigin
+
+  /**
+   * The log append come from the raft leader, which implies the offsets has been assigned
+   */
+  case object RaftLeader extends AppendOrigin
 }
 
 private[log] object LogValidator extends Logging {

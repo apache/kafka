@@ -110,7 +110,7 @@ public class ByteBufferAccessor implements Readable, Writable {
 
     @Override
     public void writeByteBuffer(ByteBuffer src) {
-        buf.put(src);
+        buf.put(src.duplicate());
     }
 
     @Override
@@ -133,4 +133,11 @@ public class ByteBufferAccessor implements Readable, Writable {
         return ByteUtils.readVarlong(buf);
     }
 
+    public void flip() {
+        buf.flip();
+    }
+
+    public ByteBuffer buffer() {
+        return buf;
+    }
 }

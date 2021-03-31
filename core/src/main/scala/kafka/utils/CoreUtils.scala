@@ -23,10 +23,9 @@ import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
-
 import com.typesafe.scalalogging.Logger
-import javax.management._
 
+import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
@@ -320,7 +319,7 @@ object CoreUtils {
 
   @nowarn("cat=unused") // see below for explanation
   def groupMapReduce[T, K, B](elements: Iterable[T])(key: T => K)(f: T => B)(reduce: (B, B) => B): Map[K, B] = {
-    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppres the unused warning
+    // required for Scala 2.12 compatibility, unused in Scala 2.13 and hence we need to suppress the unused warning
     import scala.collection.compat._
     elements.groupMapReduce(key)(f)(reduce)
   }
