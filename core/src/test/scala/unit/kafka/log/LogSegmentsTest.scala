@@ -32,7 +32,7 @@ class LogSegmentsTest {
   private def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+    LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
   }
 
   private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[java.lang.Long, LogSegment]): Unit = {
