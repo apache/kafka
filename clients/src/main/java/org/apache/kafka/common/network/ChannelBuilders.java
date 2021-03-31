@@ -220,23 +220,7 @@ public class ChannelBuilders {
             throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
     }
 
-    // Use FQN to avoid deprecated import warnings
-    @SuppressWarnings("deprecation")
-    private static org.apache.kafka.common.security.auth.PrincipalBuilder createPrincipalBuilder(
-            Class<?> principalBuilderClass, Map<String, ?> configs) {
-        org.apache.kafka.common.security.auth.PrincipalBuilder principalBuilder;
-        if (principalBuilderClass == null)
-            principalBuilder = new org.apache.kafka.common.security.auth.DefaultPrincipalBuilder();
-        else
-            principalBuilder = (org.apache.kafka.common.security.auth.PrincipalBuilder) Utils.newInstance(principalBuilderClass);
-        principalBuilder.configure(configs);
-        return principalBuilder;
-    }
-
-    @SuppressWarnings("deprecation")
     public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
-                                                               TransportLayer transportLayer,
-                                                               Authenticator authenticator,
                                                                KerberosShortNamer kerberosShortNamer,
                                                                SslPrincipalMapper sslPrincipalMapper) {
         Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
@@ -246,15 +230,9 @@ public class ChannelBuilders {
             builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer, sslPrincipalMapper);
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
-        } else if (org.apache.kafka.common.security.auth.PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
-            org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder =
-                    createPrincipalBuilder(principalBuilderClass, configs);
-            builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator, transportLayer,
-                    oldPrincipalBuilder, kerberosShortNamer);
         } else {
             throw new InvalidConfigurationException("Type " + principalBuilderClass.getName() + " is not " +
-                    "an instance of " + org.apache.kafka.common.security.auth.PrincipalBuilder.class.getName() + " or " +
-                    KafkaPrincipalBuilder.class.getName());
+                    "an instance of " + KafkaPrincipalBuilder.class.getName());
         }
 
         if (builder instanceof Configurable)
