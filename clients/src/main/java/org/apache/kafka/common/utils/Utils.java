@@ -937,8 +937,11 @@ public final class Utils {
     public static void flushParentDir(Path path) throws IOException {
         FileChannel dir = null;
         try {
-            dir = FileChannel.open(path.getParent(), StandardOpenOption.READ);
-            dir.force(true);
+            Path parent = path.toAbsolutePath().getParent();
+            if (parent != null) {
+                dir = FileChannel.open(parent, StandardOpenOption.READ);
+                dir.force(true);
+            }
         } catch (Exception e) {
             throw new KafkaException("Attempt to flush the parent directory of " + path + " failed.");
         } finally {
