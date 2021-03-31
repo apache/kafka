@@ -22,8 +22,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.message.DefaultPrincipalData;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
@@ -41,12 +39,9 @@ import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Principal;
-
-import static java.util.Objects.requireNonNull;
 
 /**
  * Default implementation of {@link KafkaPrincipalBuilder} which provides basic support for
@@ -54,52 +49,11 @@ import static java.util.Objects.requireNonNull;
  * class applies {@link org.apache.kafka.common.security.kerberos.KerberosShortNamer} to transform
  * the name.
  *
- * NOTE: This is an internal class and can change without notice. Unlike normal implementations
- * of {@link KafkaPrincipalBuilder}, there is no default no-arg constructor since this class
- * must adapt implementations of the older {@link org.apache.kafka.common.security.auth.PrincipalBuilder} interface.
+ * NOTE: This is an internal class and can change without notice.
  */
-public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde, Closeable {
-    // Use FQN to avoid import deprecation warnings
-    @SuppressWarnings("deprecation")
-    private final org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder;
-    private final Authenticator authenticator;
-    private final TransportLayer transportLayer;
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde {
     private final KerberosShortNamer kerberosShortNamer;
     private final SslPrincipalMapper sslPrincipalMapper;
-
-    /**
-     * Construct a new instance which wraps an instance of the older {@link org.apache.kafka.common.security.auth.PrincipalBuilder}.
-     *
-     * @param authenticator The authenticator in use
-     * @param transportLayer The underlying transport layer
-     * @param oldPrincipalBuilder Instance of {@link org.apache.kafka.common.security.auth.PrincipalBuilder}
-     * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
-     */
-    @SuppressWarnings("deprecation")
-    public static DefaultKafkaPrincipalBuilder fromOldPrincipalBuilder(Authenticator authenticator,
-                                                                       TransportLayer transportLayer,
-                                                                       org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder,
-                                                                       KerberosShortNamer kerberosShortNamer) {
-        return new DefaultKafkaPrincipalBuilder(
-                requireNonNull(authenticator),
-                requireNonNull(transportLayer),
-                requireNonNull(oldPrincipalBuilder),
-                kerberosShortNamer,
-                null);
-    }
-
-    @SuppressWarnings("deprecation")
-    private DefaultKafkaPrincipalBuilder(Authenticator authenticator,
-                                         TransportLayer transportLayer,
-                                         org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder,
-                                         KerberosShortNamer kerberosShortNamer,
-                                         SslPrincipalMapper sslPrincipalMapper) {
-        this.authenticator = authenticator;
-        this.transportLayer = transportLayer;
-        this.oldPrincipalBuilder = oldPrincipalBuilder;
-        this.kerberosShortNamer = kerberosShortNamer;
-        this.sslPrincipalMapper =  sslPrincipalMapper;
-    }
 
     /**
      * Construct a new instance.
@@ -108,22 +62,16 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
      * @param sslPrincipalMapper SSL Principal mapper or null if none have been configured
      */
     public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer, SslPrincipalMapper sslPrincipalMapper) {
-        this(null, null, null, kerberosShortNamer, sslPrincipalMapper);
+        this.kerberosShortNamer = kerberosShortNamer;
+        this.sslPrincipalMapper = sslPrincipalMapper;
     }
 
     @Override
     public KafkaPrincipal build(AuthenticationContext context) {
         if (context instanceof PlaintextAuthenticationContext) {
-            if (oldPrincipalBuilder != null)
-                return convertToKafkaPrincipal(oldPrincipalBuilder.buildPrincipal(transportLayer, authenticator));
-
             return KafkaPrincipal.ANONYMOUS;
         } else if (context instanceof SslAuthenticationContext) {
             SSLSession sslSession = ((SslAuthenticationContext) context).session();
-
-            if (oldPrincipalBuilder != null)
-                return convertToKafkaPrincipal(oldPrincipalBuilder.buildPrincipal(transportLayer, authenticator));
-
             try {
                 return applySslPrincipalMapper(sslSession.getPeerPrincipal());
             } catch (SSLPeerUnverifiedException se) {
@@ -164,10 +112,6 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
         }
     }
 
-    private KafkaPrincipal convertToKafkaPrincipal(Principal principal) {
-        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName());
-    }
-
     @Override
     public byte[] serialize(KafkaPrincipal principal) {
         DefaultPrincipalData data = new DefaultPrincipalData()
@@ -187,11 +131,5 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
 
         DefaultPrincipalData data = new DefaultPrincipalData(new ByteBufferAccessor(buffer), version);
         return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
-    }
-
-    @Override
-    public void close() {
-        if (oldPrincipalBuilder != null)
-            oldPrincipalBuilder.close();
     }
 }
