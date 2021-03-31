@@ -187,10 +187,10 @@ public class StandbyTaskEOSIntegrationTest {
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true);
 
-        new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ".checkpoint"))
+        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
 
-        assertTrue(new File(stateDirectory.directoryForTask(taskId),
+        assertTrue(new File(stateDirectory.getOrCreateDirectoryForTask(taskId),
                             "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
 
         builder.stream(inputTopic,
