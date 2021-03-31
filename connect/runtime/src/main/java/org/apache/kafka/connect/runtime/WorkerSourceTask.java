@@ -235,6 +235,7 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     public void execute() {
         try {
+            log.info("{} Executing source task", this);
             synchronized (this) {
                 if (startedShutdownBeforeStartCompleted) {
                     tryStop();

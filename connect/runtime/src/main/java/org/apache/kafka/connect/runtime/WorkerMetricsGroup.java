@@ -122,16 +122,10 @@ class WorkerMetricsGroup {
         }
 
         @Override
-        public void onShutdown(final String connector) {
-            delegateListener.onShutdown(connector);
-        }
-
-        @Override
-        public void onFailure(final String connector, final Throwable cause) {
-            if (!startupSucceeded) {
-                recordConnectorStartupFailure();
-            }
-            delegateListener.onFailure(connector, cause);
+        public void onStartup(final String connector) {
+            startupSucceeded = true;
+            recordConnectorStartupSuccess();
+            delegateListener.onStartup(connector);
         }
 
         @Override
@@ -145,10 +139,16 @@ class WorkerMetricsGroup {
         }
 
         @Override
-        public void onStartup(final String connector) {
-            delegateListener.onStartup(connector);
-            startupSucceeded = true;
-            recordConnectorStartupSuccess();
+        public void onFailure(final String connector, final Throwable cause) {
+            if (!startupSucceeded) {
+                recordConnectorStartupFailure();
+            }
+            delegateListener.onFailure(connector, cause);
+        }
+
+        @Override
+        public void onShutdown(final String connector) {
+            delegateListener.onShutdown(connector);
         }
 
         @Override

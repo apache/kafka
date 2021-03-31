@@ -191,9 +191,9 @@ class WorkerSinkTask extends WorkerTask {
         consumer.wakeup();
     }
 
-
     @Override
     public void execute() {
+        log.info("{} Executing sink task", this);
         // Make sure any uncommitted data has been committed and the task has
         // a chance to clean up its state
         try (UncheckedCloseable suppressible = this::closePartitions) {
