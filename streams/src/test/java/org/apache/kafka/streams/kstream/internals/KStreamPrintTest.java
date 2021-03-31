@@ -53,7 +53,6 @@ public class KStreamPrintTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testPrintStreamWithProvidedKeyValueMapper() {
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
