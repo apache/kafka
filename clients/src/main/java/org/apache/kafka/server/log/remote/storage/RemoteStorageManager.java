@@ -45,27 +45,27 @@ public interface RemoteStorageManager extends Configurable, Closeable {
         /**
          * Represents offset index.
          */
-        Offset,
+        OFFSET,
 
         /**
          * Represents timestamp index.
          */
-        Timestamp,
+        TIMESTAMP,
 
         /**
          * Represents producer snapshot index.
          */
-        ProducerSnapshot,
+        PRODUCER_SNAPSHOT,
 
         /**
          * Represents transaction index.
          */
-        Transaction,
+        TRANSACTION,
 
         /**
          * Represents leader epoch index.
          */
-        LeaderEpoch,
+        LEADER_EPOCH,
     }
 
     /**
@@ -137,5 +137,4 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadata.
      */
     void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
-
 }
