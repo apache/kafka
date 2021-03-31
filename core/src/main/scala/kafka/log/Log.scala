@@ -581,7 +581,7 @@ class Log(@volatile private var _dir: File,
 
     def newLeaderEpochFileCache(): LeaderEpochFileCache = {
       val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-      new LeaderEpochFileCache(topicPartition, () => logEndOffset, checkpointFile)
+      new LeaderEpochFileCache(topicPartition, checkpointFile)
     }
 
     if (recordVersion.precedes(RecordVersion.V2)) {
@@ -1348,7 +1348,7 @@ class Log(@volatile private var _dir: File,
 
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
-      val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch)
+      val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch, logEndOffset)
       if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
