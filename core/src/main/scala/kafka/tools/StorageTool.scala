@@ -74,7 +74,7 @@ object StorageTool extends Logging {
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
-              "a legacy cluster. Formatting is only supported for clusters in self-managed mode.")
+              "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
           }
           Exit.exit(formatCommand(System.out, directories, metaProperties, ignoreFormatted ))
 
@@ -144,12 +144,12 @@ object StorageTool extends Logging {
     prevMetadata.foreach { prev =>
       if (selfManagedMode) {
         if (prev.version == 0) {
-          problems += "The kafka configuration file appears to be for a cluster in self-managed mode, but " +
+          problems += "The kafka configuration file appears to be for a cluster in KRaft mode, but " +
             "the directories are formatted for legacy mode."
         }
       } else if (prev.version == 1) {
         problems += "The kafka configuration file appears to be for a legacy cluster, but " +
-          "the directories are formatted for a cluster in self-managed mode."
+          "the directories are formatted for a cluster in KRaft mode."
       }
     }
 
