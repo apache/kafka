@@ -532,6 +532,9 @@ public class TaskManager {
         // as such we just need to skip those dirty tasks in the checkpoint
         final Set<Task> dirtyTasks = new HashSet<>();
         try {
+            // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+            // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+            // offset commit because we are in a rebalance
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
@@ -681,16 +684,11 @@ public class TaskManager {
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
                 final TaskId id = TaskId.parse(dir.getName());
-                try {
-                    if (stateDirectory.lock(id)) {
-                        lockedTaskDirectories.add(id);
-                        if (!tasks.owned(id)) {
-                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
-                        }
+                if (stateDirectory.lock(id)) {
+                    lockedTaskDirectories.add(id);
+                    if (!tasks.owned(id)) {
+                        log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
-                } catch (final IOException e) {
-                    // if for any reason we can't lock this task dir, just move on
-                    log.warn(String.format("Exception caught while attempting to lock task %s:", id), e);
                 }
             } catch (final TaskIdFormatException e) {
                 // ignore any unknown files that sit in the same directory
@@ -709,14 +707,8 @@ public class TaskManager {
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
             if (!tasks.owned(id)) {
-                try {
-                    stateDirectory.unlock(id);
-                    taskIdIterator.remove();
-                } catch (final IOException e) {
-                    log.error(String.format("Caught the following exception while trying to unlock task %s", id), e);
-                    firstException.compareAndSet(null,
-                        new StreamsException(String.format("Failed to unlock task directory %s", id), e));
-                }
+                stateDirectory.unlock(id);
+                taskIdIterator.remove();
             }
         }
 
@@ -1013,28 +1005,34 @@ public class TaskManager {
      */
     int commit(final Collection<Task> tasksToCommit) {
         int committed = 0;
-        if (rebalanceInProgress) {
-            committed = -1;
-        } else {
-            final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-            try {
-                committed = commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
-            } catch (final TimeoutException timeoutException) {
-                consumedOffsetsAndMetadataPerTask
-                    .keySet()
-                    .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
-            }
+
+        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        try {
+            committed = commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
+        } catch (final TimeoutException timeoutException) {
+            consumedOffsetsAndMetadataPerTask
+                .keySet()
+                .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
         }
+
         return committed;
     }
 
     /**
+     * @throws TaskMigratedException if committing offsets failed (non-EOS)
+     *                               or if the task producer got fenced (EOS)
+     * @throws TimeoutException if committing offsets failed due to TimeoutException (non-EOS)
+     * @throws TaskCorruptedException if committing offsets failed due to TimeoutException (EOS)
      * @param consumedOffsetsAndMetadataPerTask an empty map that will be filled in with the prepared offsets
+     * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit,
                                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
-        int committed = 0;
+        if (rebalanceInProgress) {
+            return -1;
+        }
 
+        int committed = 0;
         for (final Task task : tasksToCommit) {
             if (task.commitNeeded()) {
                 final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
@@ -1074,6 +1072,9 @@ public class TaskManager {
     }
 
     /**
+     * Caution: do not invoke this directly if it's possible a rebalance is occurring, as the commit will fail. If
+     * this is a possibility, prefer the {@link #commitAndFillInConsumedOffsetsAndMetadataPerTaskMap} instead.
+     *
      * @throws TaskMigratedException   if committing offsets failed due to CommitFailedException (non-EOS)
      * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS)
      * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
