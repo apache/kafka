@@ -15,14 +15,14 @@
 
 # the types of metadata quorums we support
 zk = 'ZK' # ZooKeeper, used before/during the KIP-500 bridge release(s)
-colocated_raft = 'COLOCATED_RAFT' # co-located self-managed Controllers, used during/after the KIP-500 bridge release(s)
-remote_raft = 'REMOTE_RAFT' # separate self-managed Controllers, used during/after the KIP-500 bridge release(s)
+colocated_raft = 'COLOCATED_RAFT' # co-located Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
+remote_raft = 'REMOTE_RAFT' # separate Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
 
 # How we will parameterize tests that exercise all quorum styles
 #   [“ZK”, “REMOTE_RAFT”, "COLOCATED_RAFT"] during the KIP-500 bridge release(s)
 #   [“REMOTE_RAFT”, "COLOCATED_RAFT”] after the KIP-500 bridge release(s)
 all = [zk, remote_raft, colocated_raft]
-# How we will parameterize tests that exercise all Raft quorum styles
+# How we will parameterize tests that exercise all KRaft quorum styles
 all_raft = [remote_raft, colocated_raft]
 # How we will parameterize tests that are unrelated to upgrades:
 #   [“ZK”] before the KIP-500 bridge release(s)
@@ -43,12 +43,12 @@ class ServiceQuorumInfo:
     """
     Exposes quorum-related information for a KafkaService
 
-    Kafka can use either ZooKeeper or a Raft Controller quorum for its
-    metadata.  Raft Controllers can either be co-located with Kafka in
+    Kafka can use either ZooKeeper or a KRaft (Kafka Raft) Controller quorum for
+    its metadata.  KRaft Controllers can either be co-located with Kafka in
     the same JVM or remote in separate JVMs.  The choice is made via
     the 'metadata_quorum' parameter defined for the system test: if it
     is not explicitly defined, or if it is set to 'ZK', then ZooKeeper
-    is used.  If it is explicitly set to 'COLOCATED_RAFT' then Raft
+    is used.  If it is explicitly set to 'COLOCATED_RAFT' then KRaft
     controllers will be co-located with the brokers; the value
     `REMOTE_RAFT` indicates remote controllers.
 

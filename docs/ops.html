@@ -2453,8 +2453,8 @@ All of the following metrics have a recording level of <code>info</code>:
 </table>
 
 <h5 class="anchor-heading"><a id="kafka_streams_task_monitoring" class="anchor-link"></a><a href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for the dropped-records-*,
-active-process-ratio, and record-e2e-latency-* metrics which have a recording level of <code>info</code>:
+All of the following metrics have a recording level of <code>debug</code>, except for the dropped-records-* and
+active-process-ratio metrics which have a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -2534,31 +2534,19 @@ active-process-ratio, and record-e2e-latency-* metrics which have a recording le
       </tr>
       <tr>
         <td>active-process-ratio</td>
-        <td>The total number of records dropped within this task.</td>
-        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>record-e2e-latency-avg</td>
-        <td>The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
-        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>record-e2e-latency-max</td>
-        <td>The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
-        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>record-e2e-latency-min</td>
-        <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>The fraction of time the stream thread spent on processing this task among all assigned active tasks.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_node_monitoring" class="anchor-link"></a><a href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
- The following metrics are only available on certain types of nodes, i.e., process-rate and process-total are
- only available for source processor nodes and suppression-emit-rate and suppression-emit-total are only available
- for suppression operation nodes. All of the metrics have a recording level of <code>debug</code>:
+ The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for
+ source processor nodes, the suppression-emit-* metrics are only available for suppression operation nodes, and the
+ record-e2e-latency-* metrics are only available for source processor nodes and terminal nodes (nodes without successor
+ nodes).
+ All of the metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have
+ a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -2586,7 +2574,22 @@ active-process-ratio, and record-e2e-latency-* metrics which have a recording le
         <td>The total number of records that have been emitted downstream from suppression operation nodes.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
- </tbody>
+      <tr>
+        <td>record-e2e-latency-avg</td>
+        <td>The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-max</td>
+        <td>The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-min</td>
+        <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      </tbody>
  </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_store_monitoring" class="anchor-link"></a><a href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>

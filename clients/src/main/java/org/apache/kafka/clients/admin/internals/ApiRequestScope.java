@@ -14,23 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin.internals;
 
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Collection;
-import java.util.Set;
+import java.util.OptionalInt;
 
 /**
- * Options for {@link Admin#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
- *
- * @deprecated Since 2.4.0. Use {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * This interface is used by {@link AdminApiDriver} to bridge the gap
+ * to the internal `NodeProvider` defined in
+ * {@link org.apache.kafka.clients.admin.KafkaAdminClient}. However, a
+ * request scope is more than just a target broker specification. It also
+ * provides a way to group key lookups according to different batching
+ * mechanics. See {@link AdminApiLookupStrategy#lookupScope(Object)} for
+ * more detail.
  */
-@InterfaceStability.Evolving
-@Deprecated
-public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
+public interface ApiRequestScope {
+
+    /**
+     * Get the target broker ID that a request is intended for or
+     * empty if the request can be sent to any broker.
+     *
+     * @return optional broker id
+     */
+    default OptionalInt destinationBrokerId() {
+        return OptionalInt.empty();
+    }
+
 }

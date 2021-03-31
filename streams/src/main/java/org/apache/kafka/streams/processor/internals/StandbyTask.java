@@ -44,13 +44,13 @@ public class StandbyTask extends AbstractTask implements Task {
     private final StreamsMetricsImpl streamsMetrics;
 
     /**
-     * @param id             the ID of this task
-     * @param inputPartitions     input topic partitions, used for thread metadata only
-     * @param topology       the instance of {@link ProcessorTopology}
-     * @param config         the {@link StreamsConfig} specified by the user
-     * @param streamsMetrics the {@link StreamsMetrics} created by the thread
-     * @param stateMgr       the {@link ProcessorStateManager} for this task
-     * @param stateDirectory the {@link StateDirectory} created by the thread
+     * @param id              the ID of this task
+     * @param inputPartitions input topic partitions, used for thread metadata only
+     * @param topology        the instance of {@link ProcessorTopology}
+     * @param config          the {@link StreamsConfig} specified by the user
+     * @param streamsMetrics  the {@link StreamsMetrics} created by the thread
+     * @param stateMgr        the {@link ProcessorStateManager} for this task
+     * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
@@ -111,7 +111,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void completeRestoration() {
+    public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         throw new IllegalStateException("Standby task " + id + " should never be completing restoration");
     }
 
