@@ -344,10 +344,6 @@ class Partition(val topicPartition: TopicPartition,
       val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
       maybeLog = Some(log)
       updateHighWatermark(log)
-      // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
-      if (log.topicId == None) {
-        topicId.foreach(topicId => log.writeTopicIdToExistingLog(topicId))
-      }
       log
     } finally {
       logManager.finishedInitializingLog(topicPartition, maybeLog)

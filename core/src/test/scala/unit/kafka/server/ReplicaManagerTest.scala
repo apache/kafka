@@ -1495,7 +1495,8 @@ class ReplicaManagerTest {
       producerStateManager = new ProducerStateManager(new TopicPartition(topic, topicPartition),
         new File(new File(config.logDirs.head), s"$topic-$topicPartition"), 30000),
       logDirFailureChannel = mockLogDirFailureChannel,
-      topicId = topicId) {
+      topicId = topicId,
+      keepPartitionMetadataFile = true) {
 
       override def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
         assertEquals(leaderEpoch, leaderEpochFromLeader)
@@ -2315,7 +2316,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testInvalidIdReturnsError(): Unit = {
+  def testInconsistentIdReturnsError(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -2347,7 +2348,7 @@ class ReplicaManagerTest {
       val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, topicIds), (_, _) => ())
       assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
 
-      // Send request with invalid ID.
+      // Send request with inconsistent ID.
       val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, invalidTopicIds), (_, _) => ())
       assertEquals(Errors.INCONSISTENT_TOPIC_ID, response3.partitionErrors(invalidTopicNames).get(topicPartition))
 

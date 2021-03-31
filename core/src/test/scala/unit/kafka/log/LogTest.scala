@@ -110,7 +110,7 @@ class LogTest {
 
           val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxPidExpirationMs)
           val log = new Log(logDir, config, logStartOffset, logRecoveryPoint, time.scheduler, brokerTopicStats, time, maxPidExpirationMs,
-            LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, hadCleanShutdown, None) {
+            LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, hadCleanShutdown, None, true) {
             override def recoverLog(): Long = {
               if (simulateError)
                 throw new RuntimeException
@@ -1025,7 +1025,7 @@ class LogTest {
       // Intercept all segment read calls
       new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, mockTime.scheduler,
         brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
-        topicPartition, producerStateManager, new LogDirFailureChannel(10), hadCleanShutdown = false, topicId = None) {
+        topicPartition, producerStateManager, new LogDirFailureChannel(10), hadCleanShutdown = false, topicId = None, keepPartitionMetadataFile = true) {
 
         override def addSegment(segment: LogSegment): LogSegment = {
           val wrapper = new LogSegment(segment.log, segment.lazyOffsetIndex, segment.lazyTimeIndex, segment.txnIndex, segment.baseOffset,
@@ -1129,7 +1129,8 @@ class LogTest {
       producerStateManager = stateManager,
       logDirFailureChannel = new LogDirFailureChannel(1),
       hadCleanShutdown = false,
-      topicId = None)
+      topicId = None,
+      keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
 
@@ -1208,7 +1209,8 @@ class LogTest {
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
       logDirFailureChannel = null,
-      topicId = None)
+      topicId = None,
+      keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
   }
@@ -1247,7 +1249,8 @@ class LogTest {
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
       logDirFailureChannel = null,
-      topicId = None)
+      topicId = None,
+      keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
   }
@@ -1288,7 +1291,8 @@ class LogTest {
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
       logDirFailureChannel = null,
-      topicId = None)
+      topicId = None,
+      keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
   }
@@ -4959,7 +4963,8 @@ object LogTest {
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
-      topicId = topicId)
+      topicId = topicId,
+      keepPartitionMetadataFile = true)
   }
 
   /**

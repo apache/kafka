@@ -52,7 +52,8 @@ object StressTestLog {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None)
+      topicId = None,
+      keepPartitionMetadataFile = true)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)

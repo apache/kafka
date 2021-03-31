@@ -389,7 +389,7 @@ class RaftReplicaManager(config: KafkaConfig,
   private def checkTopicId(receivedTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid], topicPartition: TopicPartition): Unit = {
     receivedTopicIdOpt match {
       case Some(receivedTopicId) =>
-        logTopicIdOpt.foreach(logTopicId => {
+        logTopicIdOpt.foreach { logTopicId =>
           if (receivedTopicId != logTopicId) {
             // not sure if we need both the logger and the error thrown
             stateChangeLogger.error(s"Topic ID in memory: $logTopicId does not" +
@@ -397,7 +397,7 @@ class RaftReplicaManager(config: KafkaConfig,
               s"$receivedTopicId.")
             throw new InconsistentTopicIdException(s"Topic partition $topicPartition had an inconsistent topic ID.")
           }
-        })
+        }
       case None => throw new IllegalStateException(s"Topic partition $topicPartition is missing a topic ID")
     }
   }

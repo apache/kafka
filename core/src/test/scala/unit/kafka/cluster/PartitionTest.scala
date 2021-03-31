@@ -1672,9 +1672,12 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(topicId, partition2.topicId.get)
     assertFalse(partition2.log.isDefined)
 
-    // Calling makeLeader with a new topic ID should not overwrite the old topic ID. We should get the same log.
-    // This scenario should not occur, since the topic ID check will fail, but it is good to check we grab the old log.
-    partition2.makeLeader(leaderState, offsetCheckpoints, Some(Uuid.randomUuid()))
+    // Calling makeLeader with a new topic ID should not overwrite the old topic ID. We should get an IllegalStateException.
+    // This scenario should not occur, since the topic ID check will fail.
+    assertThrows(classOf[IllegalStateException], () => partition2.makeLeader(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
+
+    // Calling makeLeader with no topic ID should not overwrite the old topic ID. We should get the original log.
+    partition2.makeLeader(leaderState, offsetCheckpoints, None)
     checkTopicId(topicId, partition2)
   }
 
@@ -1713,9 +1716,12 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(topicId, partition2.topicId.get)
     assertFalse(partition2.log.isDefined)
 
-    // Calling makeFollower with a new topic ID should not overwrite the old topic ID. We should get the same log.
-    // This scenario should not occur, since the topic ID check will fail, but it is good to check we grab the old log.
-    partition2.makeFollower(leaderState, offsetCheckpoints, Some(Uuid.randomUuid()))
+    // Calling makeFollower with a new topic ID should not overwrite the old topic ID. We should get an IllegalStateException.
+    // This scenario should not occur, since the topic ID check will fail.
+    assertThrows(classOf[IllegalStateException], () => partition2.makeFollower(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
+
+    // Calling makeFollower with no topic ID should not overwrite the old topic ID. We should get the original log.
+    partition2.makeFollower(leaderState, offsetCheckpoints, None)
     checkTopicId(topicId, partition2)
   }
 
@@ -1941,7 +1947,8 @@ class PartitionTest extends AbstractPartitionTest {
     log.topicPartition,
     log.producerStateManager,
     new LogDirFailureChannel(1),
-    topicId = None) {
+    topicId = None,
+    keepPartitionMetadataFile = true) {
 
     override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
       appendSemaphore.acquire()

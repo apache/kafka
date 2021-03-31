@@ -267,7 +267,7 @@ class Log(@volatile private var _dir: File,
           logDirFailureChannel: LogDirFailureChannel,
           private val hadCleanShutdown: Boolean = true,
           @volatile var topicId: Option[Uuid],
-          val keepPartitionMetadataFile: Boolean = true) extends Logging with KafkaMetricsGroup {
+          val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -365,8 +365,8 @@ class Log(@volatile private var _dir: File,
               s"but log already contained topic ID $fileTopicId")
           topicId = Some(fileTopicId)
         }
-    } else if (topicId.isDefined && keepPartitionMetadataFile) {
-      partitionMetadataFile.write(topicId.get)
+    } else if (keepPartitionMetadataFile) {
+      topicId.foreach(partitionMetadataFile.write)
     }
   }
 
@@ -590,7 +590,7 @@ class Log(@volatile private var _dir: File,
   }
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
-  def writeTopicIdToExistingLog(topicId: Uuid): Unit = {
+  def assignTopicId(topicId: Uuid): Unit = {
     partitionMetadataFile.write(topicId)
     this.topicId = Some(topicId)
   }
@@ -2620,7 +2620,7 @@ object Log {
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
-            keepPartitionMetadataFile: Boolean = true): Log = {
+            keepPartitionMetadataFile: Boolean): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,

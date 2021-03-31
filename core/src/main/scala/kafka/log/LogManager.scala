@@ -776,12 +776,12 @@ class LogManager(logDirs: Seq[File],
    * @param topicPartition The partition whose log needs to be returned or created
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
-   * @param topicId The topic ID of the topic used in the case of log creation.
+   * @param topicId The topic ID of the partition's topic
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    */
   def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false, topicId: Option[Uuid]): Log = {
     logCreationOrDeletionLock synchronized {
-      getLog(topicPartition, isFuture).getOrElse {
+      val log = getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
         if (!isNew && offlineLogDirs.nonEmpty)
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
@@ -842,6 +842,20 @@ class LogManager(logDirs: Seq[File],
 
         log
       }
+      // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
+      if (log.topicId.isEmpty) {
+        topicId.foreach(log.assignTopicId)
+      }
+
+      // Ensure topic IDs are consistent
+      topicId.foreach { topicId =>
+        log.topicId.foreach { logTopicId =>
+          if (topicId != logTopicId)
+            throw new IllegalStateException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+              s"but log already contained topic ID $logTopicId")
+        }
+      }
+      log
     }
   }
 
