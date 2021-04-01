@@ -74,9 +74,9 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
     }
   }
 
-  def renameTo(f: File): Unit = {
+  def renameTo(f: File, needFlushParentDir: Boolean): Unit = {
     inLock(lock) {
-      indexWrapper.renameTo(f)
+      indexWrapper.renameTo(f, needFlushParentDir)
     }
   }
 
@@ -114,7 +114,7 @@ object LazyIndex {
 
     def updateParentDir(f: File): Unit
 
-    def renameTo(f: File): Unit
+    def renameTo(f: File, needFlushParentDir: Boolean): Unit
 
     def deleteIfExists(): Boolean
 
@@ -130,8 +130,8 @@ object LazyIndex {
 
     def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
-    def renameTo(f: File): Unit = {
-      try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
+    def renameTo(f: File, needFlushParentDir: Boolean): Unit = {
+      try Utils.atomicMoveWithFallback(file.toPath, f.toPath, needFlushParentDir)
       catch {
         case _: NoSuchFileException if !file.exists => ()
       }
@@ -152,7 +152,7 @@ object LazyIndex {
 
     def updateParentDir(parentDir: File): Unit = index.updateParentDir(parentDir)
 
-    def renameTo(f: File): Unit = index.renameTo(f)
+    def renameTo(f: File, needFlushParentDir: Boolean): Unit = index.renameTo(f, needFlushParentDir)
 
     def deleteIfExists(): Boolean = index.deleteIfExists()
 

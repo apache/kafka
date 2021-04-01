@@ -3022,7 +3022,7 @@ class LogTest {
     append(10)
     // Kind of a hack, but renaming the index to a directory ensures that the append
     // to the index will fail.
-    log.activeSegment.txnIndex.renameTo(log.dir)
+    log.activeSegment.txnIndex.renameTo(log.dir, false)
     assertThrows(classOf[KafkaStorageException], () => appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1))
     assertThrows(classOf[KafkaStorageException], () => log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
     assertThrows(classOf[KafkaStorageException], () => readLog(log, 0, 4096).records.records.iterator.next().offset)
@@ -4587,7 +4587,7 @@ class LogTest {
 
     // Kind of a hack, but renaming the index to a directory ensures that the append
     // to the index will fail.
-    log.activeSegment.txnIndex.renameTo(log.dir)
+    log.activeSegment.txnIndex.renameTo(log.dir, false)
 
     // The append will be written to the log successfully, but the write to the index will fail
     assertThrows(classOf[KafkaStorageException],

@@ -200,12 +200,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void flush() throws IOException {
         channel.force(true);
         if (needFlushParentDir.getAndSet(false)) {
-            try {
-                Utils.flushParentDir(file.toPath());
-            } catch (Exception e) {
-                needFlushParentDir.set(true);
-                throw e;
-            }
+            Utils.flushParentDir(file.toPath());
         }
     }
 
@@ -213,8 +208,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Flush the parent directory of a file to the physical disk, which makes sure the file is accessible after crashing.
      */
     public void flushParentDir() throws IOException {
-        Utils.flushParentDir(file.toPath());
         needFlushParentDir.set(false);
+        Utils.flushParentDir(file.toPath());
     }
 
     /**
@@ -263,9 +258,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Rename the file that backs this message set
      * @throws IOException if rename fails.
      */
-    public void renameTo(File f) throws IOException {
+    public void renameTo(File f, boolean needFlushParentDir) throws IOException {
         try {
-            Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
+            Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), needFlushParentDir);
         } finally {
             this.file = f;
         }

@@ -106,10 +106,10 @@ class TransactionIndex(val startOffset: Long, @volatile private var _file: File)
     maybeChannel = None
   }
 
-  def renameTo(f: File): Unit = {
+  def renameTo(f: File, needFlushParentDir: Boolean): Unit = {
     try {
       if (file.exists)
-        Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath, needFlushParentDir)
     } finally _file = f
   }
 

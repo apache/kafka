@@ -159,7 +159,7 @@ class TransactionIndexTest {
     val renamed = TestUtils.tempFile()
     index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 2))
 
-    index.renameTo(renamed)
+    index.renameTo(renamed, false)
     index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 16))
 
     val abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions

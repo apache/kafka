@@ -2342,7 +2342,7 @@ class Log(@volatile private var _dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
-    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix, false))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segment files ${segments.mkString(",")}")
