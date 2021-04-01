@@ -346,6 +346,7 @@ object KafkaMetadataLog {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
+      topicId = None,
       keepPartitionMetadataFile = false
     )
 
