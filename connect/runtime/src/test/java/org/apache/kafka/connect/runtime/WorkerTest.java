@@ -352,11 +352,14 @@ public class WorkerTest extends ThreadedTest {
             assertEquals(exception, e.getCause());
         }
 
+        assertStartupStatistics(worker, 1, 1, 0, 0);
         assertEquals(Collections.emptySet(), worker.connectorNames());
 
         assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 1, 0, 0);
         worker.stopAndAwaitConnector(CONNECTOR_ID);
         assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 1, 0, 0);
 
         PowerMock.verifyAll();
     }
@@ -897,10 +900,13 @@ public class WorkerTest extends ThreadedTest {
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 0, 0);
 
         assertFalse(worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+        assertStartupStatistics(worker, 0, 0, 1, 1);
 
         assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 0, 0, 1, 1);
         assertEquals(Collections.emptySet(), worker.taskIds());
 
         PowerMock.verifyAll();
