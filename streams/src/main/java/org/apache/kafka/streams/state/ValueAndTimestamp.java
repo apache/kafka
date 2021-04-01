@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.KeyValue;
 
 import java.util.Objects;
+import org.apache.kafka.streams.processor.api.Record;
 
 /**
  * Combines a value from a {@link KeyValue} with a timestamp.
@@ -60,6 +61,10 @@ public final class ValueAndTimestamp<V> {
      */
     public static <V> V getValueOrNull(final ValueAndTimestamp<V> valueAndTimestamp) {
         return valueAndTimestamp == null ? null : valueAndTimestamp.value();
+    }
+
+    public static <V> ValueAndTimestamp<V> make(Record<?,V> record) {
+        return record.value() == null ? null : new ValueAndTimestamp<>(record.value(), record.timestamp());
     }
 
     public V value() {

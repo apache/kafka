@@ -17,10 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -31,7 +32,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
-public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
+public class KTableSource<K, V> implements ProcessorSupplier<K, V, K, Change<V>> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
     private final String storeName;
@@ -51,7 +52,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, V, K, Change<V>> get() {
         return new KTableSourceProcessor();
     }
 
@@ -72,57 +73,59 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         return queryableName != null;
     }
 
-    private class KTableSourceProcessor extends AbstractProcessor<K, V> {
+    private class KTableSourceProcessor extends ContextualProcessor<K, V, K, Change<V>> {
 
         private TimestampedKeyValueStore<K, V> store;
-        private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private TupleChangeForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TimestampedTupleForwarder<>(
+                store = context.getStateStore(queryableName);
+                tupleForwarder = new TupleChangeForwarder<>(
                     store,
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TupleChangeCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
 
         @Override
-        public void process(final K key, final V value) {
+        public void process(final Record<K, V> record) {
             // if the key is null, then ignore the record
-            if (key == null) {
-                LOG.warn(
-                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
-                    context().topic(), context().partition(), context().offset()
-                );
+            if (record.key() == null) {
+                // TODO check if context needed for logging
+//                LOG.warn(
+//                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
+//                    context().topic(), context().partition(), context().offset()
+//                );
                 droppedRecordsSensor.record();
                 return;
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(key);
+                final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(record.key());
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
-                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
+                    if (record.timestamp() < oldValueAndTimestamp.timestamp()) {
                         LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
-                            store.name(), context().offset(), context().partition());
+                            store.name(),
+                            context().recordMetadata().get().offset(),
+                            context().recordMetadata().get().partition());
                     }
                 } else {
                     oldValue = null;
                 }
-                store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
-                tupleForwarder.maybeForward(key, value, oldValue);
+                store.put(record.key(), ValueAndTimestamp.make(record));
+                tupleForwarder.maybeForward(record, record.value(), oldValue);
             } else {
-                context().forward(key, new Change<>(value, null));
+                context().forward(record.withValue(new Change<>(record.value(), null)));
             }
         }
     }

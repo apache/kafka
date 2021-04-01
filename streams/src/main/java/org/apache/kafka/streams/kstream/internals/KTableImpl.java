@@ -135,7 +135,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final Serde<V> valueSerde,
                       final Set<String> subTopologySourceNodes,
                       final String queryableStoreName,
-                      final ProcessorSupplier<KIn, Change<VIn>, KOut, Change<VOut>> processorSupplier,
+                      final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                       final GraphNode graphNode,
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
