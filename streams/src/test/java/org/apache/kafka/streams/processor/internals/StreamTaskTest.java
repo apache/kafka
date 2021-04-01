@@ -1498,7 +1498,7 @@ public class StreamTaskTest {
         task.prepareCommit();
         task.postCommit(false);
         final File checkpointFile = new File(
-            stateDirectory.directoryForTask(taskId),
+            stateDirectory.getOrCreateDirectoryForTask(taskId),
             StateManagerUtil.CHECKPOINT_FILE_NAME
         );
 
