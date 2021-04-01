@@ -609,7 +609,7 @@ primary.bootstrap.servers = broker3-primary:9092
 secondary.bootstrap.servers = broker5-secondary:9092
 
 # Define replication flows
-primary->secondary.enable = true
+primary->secondary.enabled = true
 primary->secondary.topics = foobar-topic, quux-.*
 </code></pre>
 
@@ -654,7 +654,7 @@ us-east.bootstrap.servers = broker5-east:9092
 topics = .*   # all topics to be replicated by default
 
 # Specific replication flow settings (here: flow from us-west to us-east)
-us-west->us-east.enable = true
+us-west->us-east.enabled = true
 us-west->us.east.topics = foo.*, bar.*  # override the default above
 </code></pre>
 
@@ -735,7 +735,7 @@ secondary.bootstrap.servers = broker5-secondary:9092,broker6-secondary:9092
   </p>
 
 <pre class="line-numbers"><code class="language-text"># Enable replication from primary to secondary
-primary->secondary.enable = true
+primary->secondary.enabled = true
 </code></pre>
 
   <p>
@@ -773,7 +773,7 @@ topics = .*
 groups = consumer-group1, consumer-group2
 
 # Don't forget to enable a flow!
-us-west->us-east.enable = true
+us-west->us-east.enabled = true
 
 # Custom settings for specific replication flows
 us-west->us-east.topics = foo.*
