@@ -44,6 +44,18 @@ public class Replicas {
     }
 
     /**
+     * Convert an array of integers to a list of ints and append a final element.
+     *
+     * @param array         The input array.
+     * @return              The output list.
+     */
+    public static List<Integer> toList(int[] array, int last) {
+        List<Integer> list = toList(array);
+        list.add(last);
+        return list;
+    }
+
+    /**
      * Convert a list of integers to an array of ints.
      *
      * @param list          The input list.

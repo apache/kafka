@@ -35,6 +35,8 @@ public class ReplicasTest {
         assertEquals(Arrays.asList(1, 2, 3, 4), Replicas.toList(new int[] {1, 2, 3, 4}));
         assertEquals(Arrays.asList(), Replicas.toList(Replicas.NONE));
         assertEquals(Arrays.asList(2), Replicas.toList(new int[] {2}));
+        assertEquals(Arrays.asList(2, 3), Replicas.toList(new int[] {2}, 3));
+        assertEquals(Arrays.asList(3), Replicas.toList(new int[] {}, 3));
     }
 
     @Test

@@ -783,7 +783,8 @@ public class ReplicationControlManager {
                 record.setIsr(Replicas.toList(newIsr));
                 if (partition.leader == brokerId) {
                     // The fenced node will no longer be the leader.
-                    int newLeader = bestLeader(partition.replicas, newIsr, false);
+                    int newLeader = bestLeader(partition.replicas, newIsr,
+                        configurationControl.shouldUseUncleanLeaderElection(topic.name));
                     record.setLeader(newLeader);
                 } else {
                     // Bump the partition leader epoch.
@@ -832,13 +833,33 @@ public class ReplicationControlManager {
                 throw new RuntimeException("Partition " + topicIdPartition +
                     " existed in isrMembers, but not in the partitions map.");
             }
-            // TODO: if this partition is configured for unclean leader election,
-            // check the replica set rather than the ISR.
-            if (Replicas.contains(partition.isr, brokerId)) {
-                records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
+            boolean brokerInIsr = Replicas.contains(partition.isr, brokerId);
+            boolean shouldBecomeLeader;
+            if (configurationControl.shouldUseUncleanLeaderElection(topic.name)) {
+                shouldBecomeLeader = Replicas.contains(partition.replicas, brokerId);
+            } else {
+                shouldBecomeLeader = brokerInIsr;
+            }
+            if (shouldBecomeLeader) {
+                if (brokerInIsr) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("The newly active node {} will be the leader for the " +
+                            "previously offline partition {}.",
+                            brokerId, topicIdPartition);
+                    }
+                } else {
+                    log.info("The newly active node {} will be the leader for the " +
+                        "previously offline partition {}, after an UNCLEAN leader election.",
+                        brokerId, topicIdPartition);
+                }
+                PartitionChangeRecord record = new PartitionChangeRecord().
                     setPartitionId(topicIdPartition.partitionId()).
                     setTopicId(topic.id).
-                    setLeader(brokerId), (short) 0));
+                    setLeader(brokerId);
+                if (!brokerInIsr) {
+                    record.setIsr(Replicas.toList(partition.isr, brokerId));
+                }
+                records.add(new ApiMessageAndVersion(record, (short) 0));
             }
         }
     }

@@ -915,7 +915,7 @@ public final class QuorumController implements Controller {
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
-        this.configurationControl = new ConfigurationControlManager(logContext,
+        this.configurationControl = new ConfigurationControlManager(logContext, nodeId,
             snapshotRegistry, configDefs);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,

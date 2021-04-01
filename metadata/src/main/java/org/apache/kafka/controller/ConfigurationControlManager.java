@@ -44,18 +44,25 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
+
 
 
 public class ConfigurationControlManager {
+    private static final ConfigResource DEFAULT_NODE_RESOURCE = new ConfigResource(Type.BROKER, "");
+
     private final Logger log;
+    private final ConfigResource currentNodeResource;
     private final SnapshotRegistry snapshotRegistry;
     private final Map<ConfigResource.Type, ConfigDef> configDefs;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
 
     ConfigurationControlManager(LogContext logContext,
+                                int nodeId,
                                 SnapshotRegistry snapshotRegistry,
                                 Map<ConfigResource.Type, ConfigDef> configDefs) {
         this.log = logContext.logger(ConfigurationControlManager.class);
+        this.currentNodeResource = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.snapshotRegistry = snapshotRegistry;
         this.configDefs = configDefs;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -372,6 +379,27 @@ public class ConfigurationControlManager {
 
     void deleteTopicConfigs(String name) {
         configData.remove(new ConfigResource(Type.TOPIC, name));
+    }
+
+    private boolean getBoolean(ConfigResource configResource, String key) {
+        TimelineHashMap<String, String> map = configData.get(configResource);
+        if (map == null) return false;
+        String value = map.getOrDefault(key, "false");
+        return value.equalsIgnoreCase("true");
+    }
+
+    /**
+     * Check if the given topic should use an unclean leader election.
+     *
+     * @param topicName     The topic name.
+     * @return              True if the controller or topic was configured to use unclean
+     *                      leader election.
+     */
+    boolean shouldUseUncleanLeaderElection(String topicName) {
+        // Check the node config, cluster config, and topic config.
+        return getBoolean(currentNodeResource, UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG) ||
+            getBoolean(DEFAULT_NODE_RESOURCE, UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG) ||
+            getBoolean(new ConfigResource(Type.TOPIC, topicName), UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
     }
 
     class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
