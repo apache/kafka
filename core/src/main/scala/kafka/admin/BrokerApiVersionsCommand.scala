@@ -314,7 +314,6 @@ object BrokerApiVersionsCommand {
         requestTimeoutMs,
         connectionSetupTimeoutMs,
         connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         new ApiVersions,
