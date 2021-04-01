@@ -25,7 +25,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
+import org.apache.kafka.common.errors.{ApiException, InconsistentTopicIdException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
@@ -1672,9 +1672,9 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(topicId, partition2.topicId.get)
     assertFalse(partition2.log.isDefined)
 
-    // Calling makeLeader with a new topic ID should not overwrite the old topic ID. We should get an IllegalStateException.
+    // Calling makeLeader with a new topic ID should not overwrite the old topic ID. We should get an InconsistentTopicIdException.
     // This scenario should not occur, since the topic ID check will fail.
-    assertThrows(classOf[IllegalStateException], () => partition2.makeLeader(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
+    assertThrows(classOf[InconsistentTopicIdException], () => partition2.makeLeader(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
 
     // Calling makeLeader with no topic ID should not overwrite the old topic ID. We should get the original log.
     partition2.makeLeader(leaderState, offsetCheckpoints, None)
@@ -1716,9 +1716,9 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(topicId, partition2.topicId.get)
     assertFalse(partition2.log.isDefined)
 
-    // Calling makeFollower with a new topic ID should not overwrite the old topic ID. We should get an IllegalStateException.
+    // Calling makeFollower with a new topic ID should not overwrite the old topic ID. We should get an InconsistentTopicIdException.
     // This scenario should not occur, since the topic ID check will fail.
-    assertThrows(classOf[IllegalStateException], () => partition2.makeFollower(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
+    assertThrows(classOf[InconsistentTopicIdException], () => partition2.makeFollower(leaderState, offsetCheckpoints, Some(Uuid.randomUuid())))
 
     // Calling makeFollower with no topic ID should not overwrite the old topic ID. We should get the original log.
     partition2.makeFollower(leaderState, offsetCheckpoints, None)

@@ -29,7 +29,7 @@ import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -778,6 +778,7 @@ class LogManager(logDirs: Seq[File],
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @param topicId The topic ID of the partition's topic
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
+   * @throws InconsistentTopicIdException if the topic ID in the log does not match the topic ID provided
    */
   def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false, topicId: Option[Uuid]): Log = {
     logCreationOrDeletionLock synchronized {
@@ -851,7 +852,7 @@ class LogManager(logDirs: Seq[File],
       topicId.foreach { topicId =>
         log.topicId.foreach { logTopicId =>
           if (topicId != logTopicId)
-            throw new IllegalStateException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
               s"but log already contained topic ID $logTopicId")
         }
       }

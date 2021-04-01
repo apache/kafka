@@ -361,7 +361,7 @@ class Log(@volatile private var _dir: File,
         else {
           val fileTopicId = partitionMetadataFile.read().topicId
           if (topicId.isDefined && !topicId.contains(fileTopicId))
-            throw new IllegalStateException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
               s"but log already contained topic ID $fileTopicId")
           topicId = Some(fileTopicId)
         }

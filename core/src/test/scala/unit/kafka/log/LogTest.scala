@@ -2586,7 +2586,7 @@ class LogTest {
       log = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()))
       log.close()
     } catch {
-      case e: Throwable => assertTrue(e.isInstanceOf[IllegalStateException])
+      case e: Throwable => assertTrue(e.isInstanceOf[InconsistentTopicIdException])
     }
   }
 

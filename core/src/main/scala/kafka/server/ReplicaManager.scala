@@ -1326,7 +1326,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"epoch ${leaderAndIsrRequest.controllerEpoch}")
         }
       val topicIds = leaderAndIsrRequest.topicIds()
-      def getTopicId(topicName: String): Option[Uuid] = {
+      def topicIdFromRequest(topicName: String): Option[Uuid] = {
         val topicId = topicIds.get(topicName)
         // if invalid topic ID return None
         if (topicId == null || topicId == Uuid.ZERO_UUID)
@@ -1375,12 +1375,12 @@ class ReplicaManager(val config: KafkaConfig,
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              val requestTopicId = topicIds.get(topicPartition.topic)
+              val requestTopicId = topicIdFromRequest(topicPartition.topic)
 
               if (!hasConsistentTopicId(requestTopicId, partition.topicId)) {
                 stateChangeLogger.error(s"Topic ID in memory: ${partition.topicId.get} does not" +
                   s" match the topic ID for partition $topicPartition received: " +
-                  s"$requestTopicId.")
+                  s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
               } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
@@ -1418,12 +1418,12 @@ class ReplicaManager(val config: KafkaConfig,
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
-              highWatermarkCheckpoints, getTopicId)
+              highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
           val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
             makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
-              highWatermarkCheckpoints, getTopicId)
+              highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
 
@@ -1446,7 +1446,7 @@ class ReplicaManager(val config: KafkaConfig,
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
 
-          maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints, getTopicId)
+          maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints, topicIdFromRequest)
 
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -1492,15 +1492,15 @@ class ReplicaManager(val config: KafkaConfig,
    * If the log does not exist or the topic ID is not yet set, logTopicIdOpt will be None.
    * In both cases, the ID is not inconsistent so return true.
    *
-   * @param requestTopicId the topic ID from the LeaderAndIsr request
+   * @param requestTopicIdOpt the topic ID from the LeaderAndIsr request if it exists
    * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exist
    * @return true if the request topic id is consistent, false otherwise
    */
-  private def hasConsistentTopicId(requestTopicId: Uuid, logTopicIdOpt: Option[Uuid]): Boolean = {
-    if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID) {
-      true
-    } else
-      logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
+  private def hasConsistentTopicId(requestTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid]): Boolean = {
+    requestTopicIdOpt match {
+      case None => true
+      case Some(requestTopicId) => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
+    }
   }
 
   /**
