@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.net.InetAddress
+import java.nio.ByteBuffer
 import java.util.{Collections, Optional, Properties}
 
 import kafka.controller.KafkaController
@@ -25,7 +26,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createBroker
-import org.apache.kafka.clients.NodeApiVersions
+import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsRequestData}
@@ -301,7 +302,7 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testTopicCreationWithMetadataContextPassPrincipal(): Unit = {
+  def testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion(): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       Some(brokerToController),
@@ -320,14 +321,10 @@ class AutoTopicCreationManagerTest {
     Mockito.when(brokerToController.controllerApiVersions())
       .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
 
-    val argumentCaptor = ArgumentCaptor.forClass[ControllerRequestCompletionHandler]
-    Mockito.when(brokerToController.sendRequest(any[AbstractRequest.Builder[_ <: AbstractRequest]], .capture())).
-
     Mockito.when(controller.isActive).thenReturn(false)
 
     val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
       "clientId", 0)
-
     val principalSerde = new KafkaPrincipalSerde {
       override def serialize(principal: KafkaPrincipal): Array[Byte] = {
         Utils.utf8(principal.toString)
@@ -341,6 +338,31 @@ class AutoTopicCreationManagerTest {
 
     autoTopicCreationManager.createTopics(
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+
+    // Should only trigger once
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Complete with unsupported version will not trigger a retry, but cleanup the inflight topics instead
+    val header = new RequestHeader(ApiKeys.ENVELOPE, 0, "client", 1)
+    val response = new EnvelopeResponse(ByteBuffer.allocate(0), Errors.UNSUPPORTED_VERSION)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, response)
+    argumentCaptor.getValue.asInstanceOf[RequestCompletionHandler].onComplete(clientResponse)
+    Mockito.verify(brokerToController, Mockito.times(1)).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Could do the send again as inflight topics are cleared.
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+    Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
   }
 
   private def testErrorWithCreationInZk(error: Errors,
