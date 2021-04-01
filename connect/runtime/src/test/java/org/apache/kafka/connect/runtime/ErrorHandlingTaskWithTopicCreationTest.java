@@ -79,6 +79,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
@@ -585,7 +586,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
                 producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-                statusBackingStore);
+                statusBackingStore, Executors.newCachedThreadPool());
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
