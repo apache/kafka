@@ -810,7 +810,6 @@ class KafkaConfigTest {
         case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case KafkaConfig.DelegationTokenSecretKeyAliasProp => // ignore
         case KafkaConfig.DelegationTokenSecretKeyProp => // ignore
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
