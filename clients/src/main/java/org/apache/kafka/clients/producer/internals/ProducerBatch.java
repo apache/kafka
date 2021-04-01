@@ -274,13 +274,14 @@ public final class ProducerBatch {
         for (int i = 0; i < thunks.size(); i++) {
             try {
                 Thunk thunk = thunks.get(i);
-                if (recordExceptions == null) {
-                    RecordMetadata metadata = thunk.future.value();
-                    if (thunk.callback != null)
+                if (thunk.callback != null) {
+                    if (recordExceptions == null) {
+                        RecordMetadata metadata = thunk.future.value();
                         thunk.callback.onCompletion(metadata, null);
-                } else if (thunk.callback != null) {
-                    RuntimeException exception = recordExceptions.apply(i);
-                    thunk.callback.onCompletion(null, exception);
+                    } else {
+                        RuntimeException exception = recordExceptions.apply(i);
+                        thunk.callback.onCompletion(null, exception);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
