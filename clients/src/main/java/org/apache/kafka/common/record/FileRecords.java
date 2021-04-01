@@ -455,7 +455,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     public static FileRecords open(File file, boolean mutable) throws IOException {
-        return open(file, mutable, false, 0, false, true);
+        return open(file, mutable, false, 0, false, false);
     }
 
     public static FileRecords open(File file) throws IOException {

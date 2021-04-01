@@ -153,7 +153,7 @@ public class LazyDownConversionRecordsTest {
             try (TransferableChannel channel = toTransferableChannel(FileChannel.open(outputFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE))) {
                 int written = 0;
                 while (written < bytesToConvert) written += lazySend.writeTo(channel, written, bytesToConvert - written);
-                try (FileRecords convertedRecords = FileRecords.open(outputFile, true, written, false, true)) {
+                try (FileRecords convertedRecords = FileRecords.open(outputFile, true, written, false, false)) {
                     convertedRecordsBuffer = ByteBuffer.allocate(convertedRecords.sizeInBytes());
                     convertedRecords.readInto(convertedRecordsBuffer, 0);
                 }
