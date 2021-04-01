@@ -106,15 +106,11 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             sessionMerger);
     }
 
-
-
-    @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
     private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            // NOTE: in the future, when we remove sessionWindows#maintainMs(), we should set the default retention
-            // to be (sessionWindows.inactivityGap() + sessionWindows.grace()). This will yield the same default behavior.
-            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : sessionWindows.maintainMs();
+            final long retentionPeriod = materialized.retention() != null ?
+                materialized.retention().toMillis() : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
 
             if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the session store "
