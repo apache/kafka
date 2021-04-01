@@ -439,21 +439,22 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean mutable,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
-                                   boolean preallocate) throws IOException {
+                                   boolean preallocate,
+                                   boolean hadCleanShutdown) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false, mutable);
+        return new FileRecords(file, channel, 0, end, false, mutable && !hadCleanShutdown);
     }
 
     public static FileRecords open(File file,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
-                                   boolean preallocate) throws IOException {
-        return open(file, true, fileAlreadyExists, initFileSize, preallocate);
+                                   boolean preallocate, boolean hadCleanShutdown) throws IOException {
+        return open(file, true, fileAlreadyExists, initFileSize, preallocate, hadCleanShutdown);
     }
 
     public static FileRecords open(File file, boolean mutable) throws IOException {
-        return open(file, mutable, false, 0, false);
+        return open(file, mutable, false, 0, false, true);
     }
 
     public static FileRecords open(File file) throws IOException {

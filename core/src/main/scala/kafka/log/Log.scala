@@ -320,7 +320,7 @@ class Log(@volatile private var _dir: File,
     initializeLeaderEpochCache()
     initializePartitionMetadata()
 
-    val nextOffset = loadSegments()
+    val nextOffset = loadSegments(hadCleanShutdown)
 
     /* Calculate the offset of the next message */
     nextOffsetMetadata = LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size)
@@ -669,7 +669,7 @@ class Log(@volatile private var _dir: File,
    * caller is responsible for closing them appropriately, if needed.
    * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
    */
-  private def loadSegmentFiles(): Unit = {
+  private def loadSegmentFiles(hadCleanShutdown: Boolean): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
     for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
@@ -689,7 +689,8 @@ class Log(@volatile private var _dir: File,
           baseOffset = baseOffset,
           config,
           time = time,
-          fileAlreadyExists = true)
+          fileAlreadyExists = true,
+          hadCleanShutdown = hadCleanShutdown)
 
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
@@ -769,7 +770,7 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that overflow index offset; or when
    *                                           we find an unexpected number of .log files with overflow
    */
-  private def loadSegments(): Long = {
+  private def loadSegments(hadCleanShutdown: Boolean): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles()
@@ -783,7 +784,7 @@ class Log(@volatile private var _dir: File,
       // call to loadSegmentFiles().
       segments.close()
       segments.clear()
-      loadSegmentFiles()
+      loadSegmentFiles(hadCleanShutdown)
     }
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
