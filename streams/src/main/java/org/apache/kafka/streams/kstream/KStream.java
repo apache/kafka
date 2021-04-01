@@ -26,8 +26,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -3173,12 +3173,12 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
@@ -3300,12 +3300,12 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} in
      * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
@@ -3432,12 +3432,12 @@ public interface KStream<K, V> {
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record)
      * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
@@ -3558,12 +3558,12 @@ public interface KStream<K, V> {
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * Note that it is possible to emit records by using {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record)
      * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
@@ -3649,7 +3649,7 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * pairs can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -3757,7 +3757,7 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * pairs can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -3870,7 +3870,7 @@ public interface KStream<K, V> {
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -3982,7 +3982,7 @@ public interface KStream<K, V> {
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4099,7 +4099,7 @@ public interface KStream<K, V> {
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4221,7 +4221,7 @@ public interface KStream<K, V> {
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4345,7 +4345,7 @@ public interface KStream<K, V> {
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4468,7 +4468,7 @@ public interface KStream<K, V> {
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * can be emitted via {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
@@ -4615,7 +4615,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 
     /**
@@ -4709,7 +4709,14 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
+
+    <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,
+        final String... stateStoreNames);
+
+    <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames);
 }
