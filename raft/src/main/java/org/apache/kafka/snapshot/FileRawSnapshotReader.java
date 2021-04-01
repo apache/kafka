@@ -74,7 +74,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
             true, // fileAlreadyExists
             0, // initFileSize
             false, // preallocate
-            true // hadCleanShutdown
+            false // needsRecovery
         );
 
         return new FileRawSnapshotReader(fileRecords, snapshotId);
