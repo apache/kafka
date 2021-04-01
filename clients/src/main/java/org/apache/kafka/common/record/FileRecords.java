@@ -200,7 +200,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void flush() throws IOException {
         channel.force(true);
         if (needFlushParentDir.getAndSet(false)) {
-            Utils.flushParentDir(file.toPath());
+            try {
+                Utils.flushParentDir(file.toPath());
+            } catch (Exception e) {
+                needFlushParentDir.set(true);
+                throw e;
+            }
         }
     }
 
@@ -208,8 +213,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Flush the parent directory of a file to the physical disk, which makes sure the file is accessible after crashing.
      */
     public void flushParentDir() throws IOException {
-        needFlushParentDir.set(false);
         Utils.flushParentDir(file.toPath());
+        needFlushParentDir.set(false);
     }
 
     /**
