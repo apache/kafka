@@ -58,7 +58,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressi
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -124,18 +124,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String TOPIC_SUFFIX = "-topic";
     private static final String SINK_NAME = "KTABLE-SINK-";
 
-    private final ProcessorSupplier<?, ?> processorSupplier;
+    private final ProcessorSupplier<?, ?, ?, ?> processorSupplier;
 
     private final String queryableStoreName;
 
     private boolean sendOldValues = false;
 
-    public KTableImpl(final String name,
+    public <KIn, VIn, KOut, VOut> KTableImpl(final String name,
                       final Serde<K> keySerde,
                       final Serde<V> valueSerde,
                       final Set<String> subTopologySourceNodes,
                       final String queryableStoreName,
-                      final ProcessorSupplier<?, ?> processorSupplier,
+                      final ProcessorSupplier<KIn, Change<VIn>, KOut, Change<VOut>> processorSupplier,
                       final GraphNode graphNode,
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
@@ -179,8 +179,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
 
-        final KTableProcessorSupplier<K, V, V> processorSupplier =
-            new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
+        final ProcessorSupplier<K, Change<V>, K, Change<V>> processorSupplier = new KTableFilter<>(this, predicate, filterNot,
+            queryableStoreName);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
@@ -194,7 +194,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.graphNode, tableNode);
 
-        return new KTableImpl<>(
+        return new KTableImpl<K, S, V>(
             name,
             keySerde,
             valueSerde,
@@ -292,7 +292,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
+        final ProcessorSupplier<K, Change<V>, K, Change<VR>> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -310,7 +310,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // don't inherit parent value serde, since this operation may change the value type, more specifically:
         // we preserve the key following the order of 1) materialized, 2) parent, 3) null
         // we preserve the value following the order of 1) materialized, 2) null
-        return new KTableImpl<>(
+        return new KTableImpl<K, S, VR>(
             name,
             keySerde,
             valueSerde,
@@ -805,6 +805,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             groupedInternal,
             groupByMapNode
         );
+    }
+
+    public KTableValueAndTimestampGetterSupplier<K, V> valueAndTimestampGetterSupplier() {
+        if (processorSupplier instanceof KTableSource) {
+            final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
+            // whenever a source ktable is required for getter, it should be materialized
+            source.materialize();
+            return new KTableSourceValueAndTimestampGetterSupplier<>(source.queryableName());
+        } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+            return ((AggregationProcessorSupplier<?, K, S, V, ?>) processorSupplier).view();
+        } else {
+            return ((KTableChangeProcessorSupplier<K, S, V, ?, ?>) processorSupplier).view();
+        }
     }
 
     @SuppressWarnings("unchecked")

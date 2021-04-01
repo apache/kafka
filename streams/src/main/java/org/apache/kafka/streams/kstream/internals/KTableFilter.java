@@ -17,15 +17,16 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
+class KTableFilter<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V> {
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
@@ -45,7 +46,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTableFilterProcessor();
     }
 
@@ -86,38 +87,37 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
 
-    private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableFilterProcessor extends ContextualProcessor<K, Change<V>, K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
-        private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private TupleChangeForwarder<K, V> tupleForwarder;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TimestampedTupleForwarder<>(
+                store = context.getStateStore(queryableName);
+                tupleForwarder = new TupleChangeForwarder<>(
                     store,
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TupleChangeCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
 
         @Override
-        public void process(final K key, final Change<V> change) {
-            final V newValue = computeValue(key, change.newValue);
-            final V oldValue = computeOldValue(key, change);
+        public void process(final Record<K, Change<V>> record) {
+            final V newValue = computeValue(record.key(), record.value().newValue);
+            final V oldValue = computeOldValue(record.key(), record.value());
 
             if (sendOldValues && oldValue == null && newValue == null) {
                 return; // unnecessary to forward here.
             }
 
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
-                tupleForwarder.maybeForward(key, newValue, oldValue);
+                store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
+                tupleForwarder.maybeForward(record, newValue, oldValue);
             } else {
-                context().forward(key, new Change<>(newValue, oldValue));
+                context().forward(record.withValue(new Change<>(newValue, oldValue)));
             }
         }
 
@@ -133,16 +133,17 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view() {
+    public KTableValueAndTimestampGetterSupplier<K, V> view() {
         // if the KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply filter on-the-fly
         if (queryableName != null) {
-            return new KTableMaterializedValueGetterSupplier<>(queryableName);
+            return new KTableMaterializedValueAndTimestampGetterSupplier<>(queryableName);
         } else {
-            return new KTableValueGetterSupplier<K, V>() {
-                final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
+            return new KTableValueAndTimestampGetterSupplier<K, V>() {
+                final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier =
+                    parent.valueAndTimestampGetterSupplier();
 
-                public KTableValueGetter<K, V> get() {
+                public KTableValueAndTimestampGetter<K, V> get() {
                     return new KTableFilterValueGetter(parentValueGetterSupplier.get());
                 }
 
@@ -155,15 +156,15 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
 
-    private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
-        private final KTableValueGetter<K, V> parentGetter;
+    private class KTableFilterValueGetter implements KTableValueAndTimestampGetter<K, V> {
+        private final KTableValueAndTimestampGetter<K, V> parentGetter;
 
-        KTableFilterValueGetter(final KTableValueGetter<K, V> parentGetter) {
+        KTableFilterValueGetter(final KTableValueAndTimestampGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
         }
 

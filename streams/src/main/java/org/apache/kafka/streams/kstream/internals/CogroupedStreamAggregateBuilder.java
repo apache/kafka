@@ -237,7 +237,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             "-cogroup-merge",
             builder,
             CogroupedKStreamImpl.MERGE_NAME);
-        final KTableProcessorSupplier<K, VOut, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
+        final KTableChangeProcessorSupplier<K, VOut, VOut, K, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
         final ProcessorParameters<K, VOut, ?, ?> processorParameters = new ProcessorParameters(passThrough, mergeProcessorName);
         final ProcessorGraphNode<K, VOut> mergeNode =
             new ProcessorGraphNode<>(mergeProcessorName, processorParameters);
