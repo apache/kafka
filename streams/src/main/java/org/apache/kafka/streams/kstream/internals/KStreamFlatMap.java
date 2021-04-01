@@ -39,7 +39,7 @@ class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn
     private class KStreamFlatMapProcessor extends ContextualProcessor<KIn, VIn, KOut, VOut> {
         @Override
         public void process(final Record<KIn, VIn> record) {
-            Iterable<? extends KeyValue<? extends KOut, ? extends VOut>> newKeyValues =
+            final Iterable<? extends KeyValue<? extends KOut, ? extends VOut>> newKeyValues =
                 mapper.apply(record.key(), record.value());
             for (final KeyValue<? extends KOut, ? extends VOut> newPair : newKeyValues) {
                 context().forward(record.withKey(newPair.key).withValue(newPair.value));

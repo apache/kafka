@@ -21,14 +21,14 @@ import org.apache.kafka.streams.processor.api.Record;
 
 public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
-  private final ForeachAction<K, V> action;
+    private final ForeachAction<K, V> action;
 
-  public ForeachProcessor(ForeachAction<K, V> action) {
-    this.action = action;
-  }
+    public ForeachProcessor(final ForeachAction<K, V> action) {
+        this.action = action;
+    }
 
-  @Override
-  public void process(Record<K, V> record) {
-    action.apply(record.key(), record.value());
-  }
+    @Override
+    public void process(final Record<K, V> record) {
+        action.apply(record.key(), record.value());
+    }
 }
