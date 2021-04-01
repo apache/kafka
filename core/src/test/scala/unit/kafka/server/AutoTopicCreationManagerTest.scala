@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.net.InetAddress
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -34,12 +34,13 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq}
 
@@ -224,7 +225,7 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testTopicCreationWithMetadataContext(): Unit = {
+  def testTopicCreationWithMetadataContextPassPrincipal(): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       Some(brokerToController),
@@ -247,6 +248,49 @@ class AutoTopicCreationManagerTest {
 
     val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
       "clientId", 0)
+
+    val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+    val principalSerde = new KafkaPrincipalSerde {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+        assertEquals(principal, userPrincipal)
+        Utils.utf8(principal.toString)
+      }
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      userPrincipal, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false, Optional.of(principalSerde))
+
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+  }
+
+  @Test
+  def testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      Some(brokerToController),
+      Some(adminManager),
+      Some(controller),
+      groupCoordinator,
+      transactionCoordinator)
+
+    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
+    val topicName = "topic"
+    topicsCollection.add(getNewTopic(topicName))
+    val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
+      .setApiKey(ApiKeys.CREATE_TOPICS.id)
+      .setMinVersion(0)
+      .setMaxVersion(0)
+    Mockito.when(brokerToController.controllerApiVersions())
+      .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+
+    Mockito.when(controller.isActive).thenReturn(false)
+
+    val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
+      "clientId", 0)
+
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
@@ -254,6 +298,49 @@ class AutoTopicCreationManagerTest {
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext)))
+  }
+
+  @Test
+  def testTopicCreationWithMetadataContextPassPrincipal(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      Some(brokerToController),
+      Some(adminManager),
+      Some(controller),
+      groupCoordinator,
+      transactionCoordinator)
+
+    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
+    val topicName = "topic"
+    topicsCollection.add(getNewTopic(topicName))
+    val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
+      .setApiKey(ApiKeys.CREATE_TOPICS.id)
+      .setMinVersion(0)
+      .setMaxVersion(0)
+    Mockito.when(brokerToController.controllerApiVersions())
+      .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+
+    val argumentCaptor = ArgumentCaptor.forClass[ControllerRequestCompletionHandler]
+    Mockito.when(brokerToController.sendRequest(any[AbstractRequest.Builder[_ <: AbstractRequest]], .capture())).
+
+    Mockito.when(controller.isActive).thenReturn(false)
+
+    val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
+      "clientId", 0)
+
+    val principalSerde = new KafkaPrincipalSerde {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+        Utils.utf8(principal.toString)
+      }
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+
+    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false, Optional.of(principalSerde))
+
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
   }
 
   private def testErrorWithCreationInZk(error: Errors,

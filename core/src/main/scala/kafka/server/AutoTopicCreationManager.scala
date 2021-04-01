@@ -176,7 +176,7 @@ class DefaultAutoTopicCreationManager(
       }
 
       override def onComplete(response: ClientResponse): Unit = {
-        debug(s"Auto topic creation completed for ${creatableTopics.keys}.")
+        debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody.toString}.")
         clearInflightRequests(creatableTopics)
       }
     }
@@ -189,6 +189,8 @@ class DefaultAutoTopicCreationManager(
       val requestVersion =
         channelManager.controllerApiVersions() match {
           case None =>
+            // We will rely on the Metadata request to be retried in the case
+            // that the latest version is not usable by the controller.
             ApiKeys.CREATE_TOPICS.latestVersion()
           case Some(nodeApiVersions) =>
             nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
