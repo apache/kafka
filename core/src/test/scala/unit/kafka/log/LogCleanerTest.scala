@@ -100,19 +100,27 @@ class LogCleanerTest {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024 : java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
     val topicPartition = Log.parseTopicPartitionName(dir)
-    val producerStateManager = new ProducerStateManager(topicPartition, dir)
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val logLoader = new LogLoader(dir, topicPartition, config, time.scheduler, time, logDirFailureChannel)
+    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
     val log = new Log(dir,
-                      config = LogConfig.fromProps(logConfig.originals, logProps),
-                      logStartOffset = 0L,
-                      recoveryPoint = 0L,
+                      config = config,
+                      segments = logComponents.segments,
+                      logStartOffset = logComponents.logStartOffset,
+                      recoveryPoint = logComponents.recoveryPoint,
+                      nextOffsetMetadata = logComponents.nextOffsetMetadata,
                       scheduler = time.scheduler,
-                      brokerTopicStats = new BrokerTopicStats, time,
-                      maxProducerIdExpirationMs = 60 * 60 * 1000,
+                      brokerTopicStats = new BrokerTopicStats,
+                      time,
+                      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       topicPartition = topicPartition,
-                      producerStateManager = producerStateManager,
-                      logDirFailureChannel = new LogDirFailureChannel(10),
+                      leaderEpochCache = logComponents.leaderEpochCache,
+                      producerStateManager = logComponents.producerStateManager,
+                      logDirFailureChannel = logDirFailureChannel,
                       topicId = None,
                       keepPartitionMetadataFile = true) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
@@ -1755,7 +1763,7 @@ class LogCleanerTest {
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
   private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
-    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
+    LogTestUtils.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 }
 

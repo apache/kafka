@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Properties
 
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
@@ -94,19 +95,25 @@ class LogCleanerManagerTest extends Logging {
     val logSegmentSize = TestUtils.singletonRecords("test".getBytes).sizeInBytes * 10
     val logSegmentsCount = 2
     val tpDir = new File(logDir, "A-1")
-
+    Files.createDirectories(tpDir.toPath)
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val logLoader = new LogLoader(tpDir, tp, config, time.scheduler, time, logDirFailureChannel)
+    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
     // the exception should be catched and the partition that caused it marked as uncleanable
-    class LogMock(dir: File, config: LogConfig) extends Log(dir, config, 0L, 0L,
-      time.scheduler, new BrokerTopicStats, time, 60 * 60 * 1000, LogManager.ProducerIdExpirationCheckIntervalMs,
-      topicPartition, new ProducerStateManager(tp, tpDir, 60 * 60 * 1000),
-      new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true) {
-
+    class LogMock(dir: File, config: LogConfig, logComponents: LogComponents)
+      extends Log(dir, config, logComponents.segments, logComponents.logStartOffset,
+        logComponents.recoveryPoint, logComponents.nextOffsetMetadata, time.scheduler,
+        new BrokerTopicStats, time, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+        topicPartition, logComponents.leaderEpochCache, logComponents.producerStateManager,
+        logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
         throw new IllegalStateException("Error!")
     }
 
-    val log: Log = new LogMock(tpDir, createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact))
+    val log: Log = new LogMock(tpDir, config, logComponents)
     writeRecords(log = log,
       numBatches = logSegmentsCount * 2,
       recordsPerBatch = 10,
