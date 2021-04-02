@@ -51,6 +51,7 @@ import scala.math._
  * @param indexIntervalBytes The approximate number of bytes between entries in the index
  * @param rollJitterMs The maximum random jitter subtracted from the scheduled segment roll time
  * @param time The time instance
+ * @param needsFlushParentDir Whether or not we need to flush the parent directory during the first flush
  */
 @nonthreadsafe
 class LogSegment private[log] (val log: FileRecords,
