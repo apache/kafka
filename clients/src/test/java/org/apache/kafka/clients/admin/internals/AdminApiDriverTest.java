@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupRes
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -45,6 +46,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
@@ -461,6 +463,47 @@ class AdminApiDriverTest {
     }
 
     @Test
+    public void testFulfillmentUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1
+        ));
+
+        Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException("unsupported api")),
+            mkSet("bar"), completed("bar", 30L)
+        );
+
+        ctx.poll(emptyMap(), fulfillmentResults);
+
+        ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
+    public void testFulfillmentRetryUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1
+        ));
+
+        ctx.handler.addRetriableUnsupportedVersionKey("foo");
+
+        ctx.handler.expectRequest(mkSet("foo"), failed("foo", new UnsupportedVersionException("unsupported api")));
+        ctx.handler.expectRequest(mkSet("bar"), failed("foo", new UnsupportedVersionException("unsupported api")));
+
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+        assertEquals(2, requestSpecs.size());
+
+        requestSpecs.forEach(requestSpec -> {
+            ctx.driver.onFailure(ctx.time.milliseconds(), requestSpec, new UnsupportedVersionException("unsupported api"));
+        });
+
+        ctx.poll(emptyMap(), map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException("unsupported api"))
+        ));
+    }
+
+    @Test
     public void testFulfillmentRetryBookkeeping() {
         TestContext ctx = TestContext.staticMapped(map("foo", 0));
 
@@ -736,6 +779,7 @@ class AdminApiDriverTest {
 
     private static class MockAdminApiHandler<K, V> implements AdminApiHandler<K, V> {
         private final Map<Set<K>, ApiResult<K, V>> expectedRequests = new HashMap<>();
+        private final Set<K> retriableUnsupportedVersionKeys = new HashSet<>();
         private final MockLookupStrategy<K> lookupStrategy;
 
         private MockAdminApiHandler(MockLookupStrategy<K> lookupStrategy) {
@@ -756,6 +800,10 @@ class AdminApiDriverTest {
             expectedRequests.put(keys, result);
         }
 
+        public void addRetriableUnsupportedVersionKey(K key) {
+            retriableUnsupportedVersionKeys.add(key);
+        }
+
         @Override
         public AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys) {
             // The request is just a placeholder in these tests
@@ -768,6 +816,14 @@ class AdminApiDriverTest {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );
+        }
+
+        @Override
+        public Map<K, Throwable> handleUnsupportedVersion(RequestSpec<K> spec, UnsupportedVersionException t) {
+            return spec.keys.stream().filter(key -> !retriableUnsupportedVersionKeys.contains(key)).collect(Collectors.toMap(
+                Function.identity(),
+                key -> t
+            ));
         }
 
         public void reset() {
