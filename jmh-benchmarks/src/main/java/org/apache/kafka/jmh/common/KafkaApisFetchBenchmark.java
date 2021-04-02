@@ -175,6 +175,11 @@ public class KafkaApisFetchBenchmark {
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
 
         scheduler.startup();
+        for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
+            String topicName = Uuid.randomUuid().toString();
+            topics.add(topicName);
+            topicIds.put(topicName, Uuid.randomUuid());
+        }
         initializeMetadataCache();
         replicaManager = createReplicaManager();
         kafkaApis = createKafkaApis();
@@ -193,12 +198,6 @@ public class KafkaApisFetchBenchmark {
                 return new Properties();
             }
         };
-
-        for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
-            String topicName = Uuid.randomUuid().toString();
-            topics.add(topicName);
-            topicIds.put(topicName, Uuid.randomUuid());
-        }
         ReplicaManager replicaManager = new ReplicaManager(
                 brokerProperties,
                 metrics,
