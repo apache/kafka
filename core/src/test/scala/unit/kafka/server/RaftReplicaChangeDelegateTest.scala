@@ -24,7 +24,7 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.{MetadataBroker, MetadataBrokers, MetadataPartition}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -43,10 +43,13 @@ class RaftReplicaChangeDelegateTest {
     val leaderId = 0
     val topicPartition = new TopicPartition("foo", 5)
     val replicas = Seq(0, 1, 2).map(Int.box).asJava
+    val topicId = Uuid.randomUuid()
+    val topicIds = (topicName: String) => if (topicName == "foo") Some(topicId) else None
 
     val helper = mockedHelper()
     val partition = mock(classOf[Partition])
     when(partition.topicPartition).thenReturn(topicPartition)
+    when(partition.topic).thenReturn(topicPartition.topic)
 
     val highWatermarkCheckpoints = mock(classOf[OffsetCheckpoints])
     when(highWatermarkCheckpoints.fetch(
@@ -81,16 +84,17 @@ class RaftReplicaChangeDelegateTest {
 
     val delegate = new RaftReplicaChangeDelegate(helper)
     val updatedPartitions = if (isLeader) {
-      when(partition.makeLeader(expectedLeaderAndIsr, highWatermarkCheckpoints))
+      when(partition.makeLeader(expectedLeaderAndIsr, highWatermarkCheckpoints, Some(topicId)))
         .thenReturn(true)
       delegate.makeLeaders(
         prevPartitionsAlreadyExisting = Set.empty,
         partitionStates = Map(partition -> metadataPartition),
         highWatermarkCheckpoints,
-        metadataOffset = Some(500)
+        metadataOffset = Some(500),
+        topicIds
       )
     } else {
-      when(partition.makeFollower(expectedLeaderAndIsr, highWatermarkCheckpoints))
+      when(partition.makeFollower(expectedLeaderAndIsr, highWatermarkCheckpoints, Some(topicId)))
         .thenReturn(true)
       when(partition.leaderReplicaIdOpt).thenReturn(Some(leaderId))
       delegate.makeFollowers(
@@ -98,7 +102,8 @@ class RaftReplicaChangeDelegateTest {
         currentBrokers = aliveBrokers(replicas),
         partitionStates = Map(partition -> metadataPartition),
         highWatermarkCheckpoints,
-        metadataOffset = Some(500)
+        metadataOffset = Some(500),
+        topicIds
       )
     }
 
