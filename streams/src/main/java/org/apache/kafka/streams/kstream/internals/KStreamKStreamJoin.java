@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.state.internals.ValueOrOtherValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -79,11 +81,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+        private static final boolean DISABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX_DEFAULT = false;
 
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, ValueOrOtherValue>> outerJoinWindowStore = Optional.empty();
+        private boolean internalOuterJoinFixDisabled;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -92,9 +96,25 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindow = context.getStateStore(otherWindowName);
-            outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
+
+            internalOuterJoinFixDisabled = internalOuterJoinFixDisabled(context.appConfigs());
+            if (!internalOuterJoinFixDisabled) {
+                outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
+            }
         }
 
+        private boolean internalOuterJoinFixDisabled(final Map<String, Object> configs) {
+            final Object value = configs.get(StreamsConfig.InternalConfig.INTERNAL_DISABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX);
+            if (value == null) {
+                return DISABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX_DEFAULT;
+            }
+
+            if (value instanceof Boolean) {
+                return (Boolean) value;
+            } else {
+                return Boolean.valueOf((String) value);
+            }
+        }
 
         @Override
         public void process(final K key, final V1 value) {
@@ -161,7 +181,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     //
                     // the condition below allows us to process the late record without the need
                     // to hold it in the temporary outer store
-                    if (timeTo < maxStreamTime) {
+                    if (internalOuterJoinFixDisabled || timeTo < maxStreamTime) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
                         outerJoinWindowStore.ifPresent(store -> store.put(

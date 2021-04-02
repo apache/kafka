@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -52,6 +53,65 @@ public class KStreamKStreamLeftJoinTest {
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    @Test
+    public void testLeftJoinWithSpuriousResultFixDisabled() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        final Collection<Set<String>> copartitionGroups =
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+
+        assertEquals(1, copartitionGroups.size());
+        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+
+        props.put(StreamsConfig.InternalConfig.INTERNAL_DISABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // push two items to the primary stream; the other window is empty
+            // w1 {}
+            // w2 {}
+            // --> w1 = { 0:A0, 1:A1 }
+            // --> w2 = {}
+            for (int i = 0; i < 2; i++) {
+                inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
+            }
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
+                new KeyValueTimestamp<>(1, "A1+null", 0));
+
+            // push two items to the other stream; this should produce two items
+            // w1 = { 0:A0, 1:A1 }
+            // w2 {}
+            // --> w1 = { 0:A0, 1:A1 }
+            // --> w2 = { 0:a0, 1:a1 }
+            for (int i = 0; i < 2; i++) {
+                inputTopic2.pipeInput(expectedKeys[i], "a" + expectedKeys[i]);
+            }
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+a0", 0),
+                new KeyValueTimestamp<>(1, "A1+a1", 0));
+        }
+    }
 
     @Test
     public void testLeftJoin() {
