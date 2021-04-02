@@ -46,8 +46,8 @@ object TopicCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new TopicCommandOptions(args)
     opts.checkArgs()
-    
-    val topicService = AdminClientTopicService(opts.commandConfig, opts.bootstrapServer)
+
+    val topicService = TopicService(opts.commandConfig, opts.bootstrapServer)
 
     var exitCode = 0
     try {
@@ -196,23 +196,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  trait TopicService extends AutoCloseable {
-    def createTopic(opts: TopicCommandOptions): Unit = {
-      val topic = new CommandTopicPartition(opts)
-      if (Topic.hasCollisionChars(topic.name))
-        println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could " +
-          "collide. To avoid issues it is best to use either, but not both.")
-      createTopic(topic)
-    }
-    def createTopic(topic: CommandTopicPartition): Unit
-    def listTopics(opts: TopicCommandOptions): Unit
-    def alterTopic(opts: TopicCommandOptions): Unit
-    def describeTopic(opts: TopicCommandOptions): Unit
-    def deleteTopic(opts: TopicCommandOptions): Unit
-    def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String]
-  }
-
-  object AdminClientTopicService {
+  object TopicService {
     def createAdminClient(commandConfig: Properties, bootstrapServer: Option[String]): Admin = {
       bootstrapServer match {
         case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
@@ -221,13 +205,21 @@ object TopicCommand extends Logging {
       Admin.create(commandConfig)
     }
 
-    def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =
-      new AdminClientTopicService(createAdminClient(commandConfig, bootstrapServer))
+    def apply(commandConfig: Properties, bootstrapServer: Option[String]): TopicService =
+      new TopicService(createAdminClient(commandConfig, bootstrapServer))
   }
 
-  case class AdminClientTopicService private (adminClient: Admin) extends TopicService {
+  case class TopicService private (adminClient: Admin) extends AutoCloseable {
 
-    override def createTopic(topic: CommandTopicPartition): Unit = {
+    def createTopic(opts: TopicCommandOptions): Unit = {
+      val topic = new CommandTopicPartition(opts)
+      if (Topic.hasCollisionChars(topic.name))
+        println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could " +
+          "collide. To avoid issues it is best to use either, but not both.")
+      createTopic(topic)
+    }
+
+    def createTopic(topic: CommandTopicPartition): Unit = {
       if (topic.replicationFactor.exists(rf => rf > Short.MaxValue || rf < 1))
         throw new IllegalArgumentException(s"The replication factor must be between 1 and ${Short.MaxValue} inclusive")
       if (topic.partitions.exists(partitions => partitions < 1))
@@ -262,11 +254,11 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def listTopics(opts: TopicCommandOptions): Unit = {
+    def listTopics(opts: TopicCommandOptions): Unit = {
       println(getTopics(opts.topic, opts.excludeInternalTopics).mkString("\n"))
     }
 
-    override def alterTopic(opts: TopicCommandOptions): Unit = {
+    def alterTopic(opts: TopicCommandOptions): Unit = {
       val topic = new CommandTopicPartition(opts)
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
@@ -290,7 +282,7 @@ object TopicCommand extends Logging {
       }
     }
 
-    private def listAllReassignments(topicPartitions: util.Set[TopicPartition]): Map[TopicPartition, PartitionReassignment] = {
+    def listAllReassignments(topicPartitions: util.Set[TopicPartition]): Map[TopicPartition, PartitionReassignment] = {
       try {
         adminClient.listPartitionReassignments(topicPartitions).reassignments().get().asScala
       } catch {
@@ -304,7 +296,7 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def describeTopic(opts: TopicCommandOptions): Unit = {
+    def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
 
@@ -346,14 +338,14 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def deleteTopic(opts: TopicCommandOptions): Unit = {
+    def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
       adminClient.deleteTopics(topics.asJavaCollection, new DeleteTopicsOptions().retryOnQuotaViolation(false))
         .all().get()
     }
 
-    override def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+    def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
       val allTopics = if (excludeInternalTopics) {
         adminClient.listTopics()
       } else {
@@ -362,7 +354,7 @@ object TopicCommand extends Logging {
       doGetTopics(allTopics.names().get().asScala.toSeq.sorted, topicIncludelist, excludeInternalTopics)
     }
 
-    override def close(): Unit = adminClient.close()
+    def close(): Unit = adminClient.close()
   }
 
   /**
@@ -453,6 +445,8 @@ object TopicCommand extends Logging {
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
+      .required()
+
     private val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
       "This is used only with --bootstrap-server option for describing and altering broker configs.")
       .withRequiredArg
@@ -517,9 +511,6 @@ object TopicCommand extends Logging {
 
     private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
-    // This is not currently used, but we keep it for compatibility
-    parser.accepts("force", "Suppress console prompts")
-
     private val excludeInternalTopicOpt = parser.accepts("exclude-internal",
       "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 
@@ -573,16 +564,13 @@ object TopicCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
       // check required args
-      if (!has(bootstrapServerOpt))
-        throw new IllegalArgumentException("--bootstrap-server must be specified")
-
-      if(has(describeOpt) && has(ifExistsOpt))
+      if (has(describeOpt) && has(ifExistsOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (!has(listOpt) && !has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (has(createOpt) && !has(replicaAssignmentOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
-      if (has(bootstrapServerOpt) && has(alterOpt)) {
+      if (has(alterOpt)) {
         CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt),
         Some(kafkaConfigsCanAlterTopicConfigsViaBootstrapServer))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
@@ -595,7 +583,7 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, allTopicLevelOpts -- Set(createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, allTopicLevelOpts -- Set(createOpt,alterOpt))
       if(options.has(createOpt))
-          CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Set(partitionsOpt, replicationFactorOpt))
+        CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Set(partitionsOpt, replicationFactorOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnderReplicatedPartitionsOpt,
         allTopicLevelOpts -- Set(describeOpt) ++ allReplicationReportOpts - reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnderMinIsrPartitionsOpt,
