@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * This state represents a leader which has fenced itself either because it
@@ -132,8 +131,9 @@ public class ResignedState implements EpochState {
     }
 
     @Override
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
-        log.debug("Rejecting vote request since we have resigned as candidate/leader in this epoch");
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in this epoch",
+            candidateId);
         return false;
     }
 

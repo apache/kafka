@@ -76,14 +76,14 @@ class VotedStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testGrantVote(boolean grantVote) {
+    public void testGrantVote(boolean isLogUpToDate) {
         VotedState state = newVotedState(
             Utils.mkSet(1, 2, 3),
             Optional.empty()
         );
 
-        assertTrue(state.grantVote(1, () -> grantVote));
-        assertFalse(state.grantVote(2, () -> grantVote));
-        assertFalse(state.grantVote(3, () -> grantVote));
+        assertTrue(state.canGrantVote(1, isLogUpToDate));
+        assertFalse(state.canGrantVote(2, isLogUpToDate));
+        assertFalse(state.canGrantVote(3, isLogUpToDate));
     }
 }

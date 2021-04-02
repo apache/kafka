@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class CandidateState implements EpochState {
@@ -242,8 +241,8 @@ public class CandidateState implements EpochState {
     }
 
     @Override
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
-        log.debug("Rejecting vote request since we are already candidate on that epoch");
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we are already candidate on that epoch", candidateId);
         return false;
     }
 

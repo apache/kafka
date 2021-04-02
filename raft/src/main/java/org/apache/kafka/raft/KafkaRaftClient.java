@@ -592,11 +592,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToUnattached(candidateEpoch);
         }
 
-        Supplier<Boolean> logComparator = () -> {
-            OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-            return lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0;
-        };
-        boolean voteGranted = quorum.grantVote(candidateId, logComparator);
+        OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
+        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
 
         if (voteGranted && quorum.isUnattached()) {
             transitionToVoted(candidateId, candidateEpoch);

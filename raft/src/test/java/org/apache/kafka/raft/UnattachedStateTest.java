@@ -74,14 +74,14 @@ public class UnattachedStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testGrantVote(boolean grantVote) {
+    public void testGrantVote(boolean isLogUpToDate) {
         UnattachedState state = newUnattachedState(
                 Utils.mkSet(1, 2, 3),
                 Optional.empty()
         );
 
-        assertEquals(grantVote, state.grantVote(1, () -> grantVote));
-        assertEquals(grantVote, state.grantVote(2, () -> grantVote));
-        assertEquals(grantVote, state.grantVote(3, () -> grantVote));
+        assertEquals(isLogUpToDate, state.canGrantVote(1, isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(3, isLogUpToDate));
     }
 }

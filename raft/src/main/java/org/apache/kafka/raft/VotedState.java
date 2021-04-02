@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.
@@ -99,13 +98,13 @@ public class VotedState implements EpochState {
     }
 
     @Override
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
         if (votedId() == candidateId) {
             return true;
         }
 
-        log.debug("Rejecting vote request since we already have voted for " +
-            "another candidate {} on that epoch", votedId());
+        log.debug("Rejecting vote request from candidate {} since we already have voted for " +
+            "another candidate {} on that epoch", candidateId, votedId());
         return false;
     }
 

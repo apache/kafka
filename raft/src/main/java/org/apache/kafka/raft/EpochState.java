@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 public interface EpochState extends Closeable {
 
@@ -32,7 +31,7 @@ public interface EpochState extends Closeable {
      *
      * @return true If grant vote.
      */
-    boolean grantVote(int candidateId, Supplier<Boolean> logComparator);
+    boolean canGrantVote(int candidateId, boolean isLogUpToDate);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.

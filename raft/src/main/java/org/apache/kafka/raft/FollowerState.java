@@ -27,7 +27,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.function.Supplier;
 
 public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
@@ -147,9 +146,9 @@ public class FollowerState implements EpochState {
     }
 
     @Override
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
-        log.debug("Rejecting vote request since we already have a leader {} on that epoch",
-                leaderId());
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we already have a leader {} on that epoch",
+                candidateId, leaderId());
         return false;
     }
 

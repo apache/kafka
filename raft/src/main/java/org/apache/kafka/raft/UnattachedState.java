@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * A voter is "unattached" when it learns of an ongoing election (typically
@@ -95,13 +94,13 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
-        boolean voteGranted = logComparator.get();
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
 
-        if (!voteGranted) {
-            log.debug("Rejecting vote request since candidate epoch/offset is not up to date with us");
+        if (!isLogUpToDate) {
+            log.debug("Rejecting vote request from candidate {} since candidate epoch/offset is not up to date with us",
+                candidateId);
         }
-        return voteGranted;
+        return isLogUpToDate;
     }
 
     @Override

@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -472,8 +471,8 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean grantVote(int candidateId, Supplier<Boolean> logComparator) {
-        return state.grantVote(candidateId, logComparator);
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        return state.canGrantVote(candidateId, isLogUpToDate);
     }
 
     public FollowerState followerStateOrThrow() {
