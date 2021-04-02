@@ -24,6 +24,8 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -60,6 +62,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -701,12 +704,36 @@ public class Sender implements Runnable {
         } else {
             Map<Integer, RuntimeException> recordErrorMap = new HashMap<>(response.recordErrors.size());
             for (ProduceResponse.RecordError recordError : response.recordErrors) {
+                // The API leaves us with some awkwardness interpreting the errors in the response.
+                // We cannot differentiate between different error cases (such as INVALID_TIMESTAMP)
+                // from the single error code at the partition level, so instead we use INVALID_RECORD
+                // for all failed records and rely on the message to distinguish the cases.
+                final String errorMessage;
                 if (recordError.message != null) {
-                    recordErrorMap.put(recordError.batchIndex, response.error.exception(recordError.message));
+                    errorMessage = recordError.message;
+                } else if (response.errorMessage != null) {
+                    errorMessage = response.errorMessage;
+                } else {
+                    errorMessage = response.error.message();
                 }
+
+                recordErrorMap.put(recordError.batchIndex, new InvalidRecordException(errorMessage));
             }
 
-            failBatch(batch, topLevelException, recordErrorMap, adjustSequenceNumbers);
+            Function<Integer, RuntimeException> recordExceptions = batchIndex -> {
+                RuntimeException exception = recordErrorMap.get(batchIndex);
+                if (exception != null) {
+                    return exception;
+                } else {
+                    // If the response contains record errors, then the records which failed validation
+                    // will be present in the response. To avoid confusion for the remaining records, we
+                    // return a generic exception.
+                    return new KafkaException("Failed to append record because it was part of a batch " +
+                        "which had one more more invalid records");
+                }
+            };
+
+            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers);
         }
     }
 
@@ -715,13 +742,13 @@ public class Sender implements Runnable {
         RuntimeException topLevelException,
         boolean adjustSequenceNumbers
     ) {
-        failBatch(batch, topLevelException, Collections.emptyMap(), adjustSequenceNumbers);
+        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers);
     }
 
     private void failBatch(
         ProducerBatch batch,
         RuntimeException topLevelException,
-        Map<Integer, RuntimeException> recordExceptions,
+        Function<Integer, RuntimeException> recordExceptions,
         boolean adjustSequenceNumbers
     ) {
         if (transactionManager != null) {

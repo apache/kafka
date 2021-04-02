@@ -2472,7 +2472,8 @@ public class SenderTest {
 
         OffsetAndError offsetAndError = new OffsetAndError(-1L, Errors.INVALID_RECORD, Arrays.asList(
             new BatchIndexAndErrorMessage().setBatchIndex(0).setBatchIndexErrorMessage("0"),
-            new BatchIndexAndErrorMessage().setBatchIndex(2).setBatchIndexErrorMessage("2")
+            new BatchIndexAndErrorMessage().setBatchIndex(2).setBatchIndexErrorMessage("2"),
+            new BatchIndexAndErrorMessage().setBatchIndex(3)
         ));
 
         client.respond(produceResponse(Collections.singletonMap(tp0, offsetAndError)));
@@ -2482,12 +2483,16 @@ public class SenderTest {
             FutureRecordMetadata future = futureEntry.getValue();
             assertTrue(future.isDone());
 
-            InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
+            KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
+                assertTrue(exception instanceof InvalidRecordException);
                 assertEquals(index.toString(), exception.getMessage());
-            } else {
+            } else if (index == 3) {
+                assertTrue(exception instanceof InvalidRecordException);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
+            } else {
+                assertEquals(KafkaException.class, exception.getClass());
             }
         }
     }

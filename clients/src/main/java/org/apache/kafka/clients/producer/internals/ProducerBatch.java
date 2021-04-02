@@ -43,6 +43,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -185,16 +186,17 @@ public final class ProducerBatch {
      * for each record future contained in the batch.
      *
      * @param topLevelException top-level partition error
-     * @param recordExceptionMap Record exception map keyed by batchIndex which overrides `topLevelException`
-     *                           for records present in the map
+     * @param recordExceptions Record exception function mapping batchIndex to the respective record exception
      * @return true if the batch was completed as a result of this call, and false
      *   if it had been completed previously
      */
     public boolean completeExceptionally(
         RuntimeException topLevelException,
-        Map<Integer, RuntimeException> recordExceptionMap
+        Function<Integer, RuntimeException> recordExceptions
     ) {
-        return done(ProduceResponse.INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, topLevelException, recordExceptionMap);
+        Objects.requireNonNull(topLevelException);
+        Objects.requireNonNull(recordExceptions);
+        return done(ProduceResponse.INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, topLevelException, recordExceptions);
     }
 
     /**
@@ -213,15 +215,14 @@ public final class ProducerBatch {
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param topLevelException The exception that occurred (or null if the request was successful)
-     * @param recordExceptionMap Record exception map keyed by batchIndex which overrides `topLevelException`
-     *                           for records present in the map
+     * @param recordExceptions Record exception function mapping batchIndex to the respective record exception
      * @return true if the batch was completed successfully and false if the batch was previously aborted
      */
     private boolean done(
         long baseOffset,
         long logAppendTime,
         RuntimeException topLevelException,
-        Map<Integer, RuntimeException> recordExceptionMap
+        Function<Integer, RuntimeException> recordExceptions
     ) {
         final FinalState tryFinalState = (topLevelException == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
         if (tryFinalState == FinalState.SUCCEEDED) {
@@ -231,16 +232,6 @@ public final class ProducerBatch {
         }
 
         if (this.finalState.compareAndSet(null, tryFinalState)) {
-            Function<Integer, RuntimeException> recordExceptions = null;
-            if (topLevelException != null) {
-                recordExceptions = batchIndex -> {
-                    if (recordExceptionMap == null) {
-                        return topLevelException;
-                    } else {
-                        return recordExceptionMap.getOrDefault(batchIndex, topLevelException);
-                    }
-                };
-            }
             completeFutureAndFireCallbacks(baseOffset, logAppendTime, recordExceptions);
             return true;
         }

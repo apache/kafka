@@ -53,10 +53,10 @@
           "about": "The log start offset." },
         { "name": "RecordErrors", "type": "[]BatchIndexAndErrorMessage", "versions": "8+", "ignorable": true,
           "about": "The batch indices of records that caused the batch to be dropped", "fields": [
-          { "name":  "BatchIndex", "type": "int32", "versions":  "8+",
-            "about":  "The batch index of the record that cause the batch to be dropped" },
+          { "name": "BatchIndex", "type": "int32", "versions":  "8+",
+            "about": "The batch index of the record that cause the batch to be dropped" },
           { "name": "BatchIndexErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+",
-            "about":  "The error message of the record that caused the batch to be dropped"}
+            "about": "The error message of the record that caused the batch to be dropped"}
         ]},
         { "name":  "ErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+", "ignorable":  true,
           "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"}

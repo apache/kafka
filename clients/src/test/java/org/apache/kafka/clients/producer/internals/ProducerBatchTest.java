@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
@@ -83,7 +84,7 @@ public class ProducerBatchTest {
 
         // subsequent completion should be ignored
         assertFalse(batch.complete(500L, 2342342341L));
-        assertFalse(batch.completeExceptionally(new KafkaException(), Collections.emptyMap()));
+        assertFalse(batch.completeExceptionally(new KafkaException(), index -> new KafkaException()));
         assertEquals(1, callback.invocations);
 
         assertTrue(future.isDone());
@@ -270,9 +271,14 @@ public class ProducerBatchTest {
     public void testCompleteExceptionallyWithRecordErrors() {
         int recordCount = 5;
         RuntimeException topLevelException = new RuntimeException();
-        Map<Integer, RuntimeException> recordExceptions = new HashMap<>();
-        recordExceptions.put(0, new RuntimeException());
-        recordExceptions.put(3, new RuntimeException());
+
+        Map<Integer, RuntimeException> recordExceptionMap = new HashMap<>();
+        recordExceptionMap.put(0, new RuntimeException());
+        recordExceptionMap.put(3, new RuntimeException());
+
+        Function<Integer, RuntimeException> recordExceptions = batchIndex ->
+            recordExceptionMap.getOrDefault(batchIndex, topLevelException);
+
         testCompleteExceptionally(recordCount, topLevelException, recordExceptions);
     }
 
@@ -280,13 +286,14 @@ public class ProducerBatchTest {
     public void testCompleteExceptionallyWithNullRecordErrors() {
         int recordCount = 5;
         RuntimeException topLevelException = new RuntimeException();
-        testCompleteExceptionally(recordCount, topLevelException, null);
+        assertThrows(NullPointerException.class, () ->
+            testCompleteExceptionally(recordCount, topLevelException, null));
     }
 
     private void testCompleteExceptionally(
         int recordCount,
         RuntimeException topLevelException,
-        Map<Integer, RuntimeException> recordExceptions
+        Function<Integer, RuntimeException> recordExceptions
     ) {
         ProducerBatch batch = new ProducerBatch(
             new TopicPartition("topic", 1),
@@ -306,9 +313,7 @@ public class ProducerBatchTest {
         for (int i = 0; i < futures.size(); i++) {
             FutureRecordMetadata future = futures.get(i);
             RuntimeException caughtException = TestUtils.assertFutureThrows(future, RuntimeException.class);
-            RuntimeException expectedException = recordExceptions == null ?
-                topLevelException :
-                recordExceptions.getOrDefault(i, topLevelException);
+            RuntimeException expectedException = recordExceptions.apply(i);
             assertEquals(expectedException, caughtException);
         }
     }
