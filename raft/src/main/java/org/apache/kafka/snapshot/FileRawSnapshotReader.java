@@ -73,8 +73,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
             false, // mutable
             true, // fileAlreadyExists
             0, // initFileSize
-            false, // preallocate
-            false // needsRecovery
+            false // preallocate
         );
 
         return new FileRawSnapshotReader(fileRecords, snapshotId);

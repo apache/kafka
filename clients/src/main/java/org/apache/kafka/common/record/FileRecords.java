@@ -33,7 +33,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -51,7 +50,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final AtomicInteger size;
     private final FileChannel channel;
     private volatile File file;
-    private final AtomicBoolean needsFlushParentDir;
 
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
@@ -61,15 +59,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                 FileChannel channel,
                 int start,
                 int end,
-                boolean isSlice,
-                boolean needsFlushParentDir) throws IOException {
+                boolean isSlice) throws IOException {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = isSlice;
         this.size = new AtomicInteger();
-        this.needsFlushParentDir = new AtomicBoolean(needsFlushParentDir);
 
         if (isSlice) {
             // don't check the file size if this is just a slice view
@@ -140,7 +136,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public FileRecords slice(int position, int size) throws IOException {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true, false);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
     }
 
     /**
@@ -199,16 +195,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void flush() throws IOException {
         channel.force(true);
-        if (needsFlushParentDir.getAndSet(false)) {
-            Utils.flushParentDir(file.toPath());
-        }
     }
 
     /**
      * Flush the parent directory of a file to the physical disk, which makes sure the file is accessible after crashing.
      */
     public void flushParentDir() throws IOException {
-        needsFlushParentDir.set(false);
         Utils.flushParentDir(file.toPath());
     }
 
@@ -258,9 +250,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Rename the file that backs this message set
      * @throws IOException if rename fails.
      */
-    public void renameTo(File f, boolean needsFlushParentDir) throws IOException {
+    public void renameTo(File f) throws IOException {
         try {
-            Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), needsFlushParentDir);
+            Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
         } finally {
             this.file = f;
         }
@@ -439,11 +431,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean mutable,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
-                                   boolean preallocate,
-                                   boolean needsRecovery) throws IOException {
+                                   boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false, mutable && needsRecovery);
+        return new FileRecords(file, channel, 0, end, false);
     }
 
     public static FileRecords open(File file,
@@ -451,11 +442,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    int initFileSize,
                                    boolean preallocate,
                                    boolean needsRecovery) throws IOException {
-        return open(file, true, fileAlreadyExists, initFileSize, preallocate, needsRecovery);
+        return open(file, true, fileAlreadyExists, initFileSize, preallocate);
     }
 
     public static FileRecords open(File file, boolean mutable) throws IOException {
-        return open(file, mutable, false, 0, false, false);
+        return open(file, mutable, false, 0, false);
     }
 
     public static FileRecords open(File file) throws IOException {
