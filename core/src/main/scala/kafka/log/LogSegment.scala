@@ -672,7 +672,7 @@ object LogSegment {
            needsRecovery: Boolean = true): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
-      FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate, needsRecovery),
+      FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
       LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
       LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
       new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
@@ -680,7 +680,7 @@ object LogSegment {
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
       time,
-      needsRecovery || !fileAlreadyExists)
+      needsFlushParentDir = needsRecovery || !fileAlreadyExists)
   }
 
   def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {

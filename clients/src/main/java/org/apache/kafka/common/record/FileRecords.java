@@ -440,8 +440,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public static FileRecords open(File file,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
-                                   boolean preallocate,
-                                   boolean needsRecovery) throws IOException {
+                                   boolean preallocate) throws IOException {
         return open(file, true, fileAlreadyExists, initFileSize, preallocate);
     }
 

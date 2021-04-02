@@ -366,7 +366,7 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateTrue() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true, false);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         long position = fileRecords.channel().position();
         int size = fileRecords.sizeInBytes();
         assertEquals(0, position);
@@ -380,7 +380,7 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateFalse() throws IOException {
         File temp = tempFile();
-        FileRecords set = FileRecords.open(temp, false, 1024 * 1024, false, false);
+        FileRecords set = FileRecords.open(temp, false, 1024 * 1024, false);
         long position = set.channel().position();
         int size = set.sizeInBytes();
         assertEquals(0, position);
@@ -394,7 +394,7 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateClearShutdown() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true, false);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         append(fileRecords, values);
 
         int oldPosition = (int) fileRecords.channel().position();
@@ -404,7 +404,7 @@ public class FileRecordsTest {
         fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());
-        FileRecords setReopen = FileRecords.open(tempReopen, true, 1024 * 1024, true, false);
+        FileRecords setReopen = FileRecords.open(tempReopen, true, 1024 * 1024, true);
         int position = (int) setReopen.channel().position();
         int size = setReopen.sizeInBytes();
 
@@ -439,7 +439,7 @@ public class FileRecordsTest {
 
     private void testSearchForTimestamp(RecordVersion version) throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true, false);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         appendWithOffsetAndTimestamp(fileRecords, version, 10L, 5, 0);
         appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
 
