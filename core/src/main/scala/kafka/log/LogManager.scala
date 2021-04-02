@@ -27,9 +27,9 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -270,6 +270,7 @@ class LogManager(logDirs: Seq[File],
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       lastShutdownClean = hadCleanShutdown,
+      topicId = None,
       keepPartitionMetadataFile = keepPartitionMetadataFile)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
@@ -775,11 +776,13 @@ class LogManager(logDirs: Seq[File],
    * @param topicPartition The partition whose log needs to be returned or created
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
+   * @param topicId The topic ID of the partition's topic
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
+   * @throws InconsistentTopicIdException if the topic ID in the log does not match the topic ID provided
    */
-  def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false): Log = {
+  def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false, topicId: Option[Uuid]): Log = {
     logCreationOrDeletionLock synchronized {
-      getLog(topicPartition, isFuture).getOrElse {
+      val log = getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
         if (!isNew && offlineLogDirs.nonEmpty)
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
@@ -826,6 +829,7 @@ class LogManager(logDirs: Seq[File],
           time = time,
           brokerTopicStats = brokerTopicStats,
           logDirFailureChannel = logDirFailureChannel,
+          topicId = topicId,
           keepPartitionMetadataFile = keepPartitionMetadataFile)
 
         if (isFuture)
@@ -839,6 +843,20 @@ class LogManager(logDirs: Seq[File],
 
         log
       }
+      // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
+      if (log.topicId.isEmpty) {
+        topicId.foreach(log.assignTopicId)
+      }
+
+      // Ensure topic IDs are consistent
+      topicId.foreach { topicId =>
+        log.topicId.foreach { logTopicId =>
+          if (topicId != logTopicId)
+            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+              s"but log already contained topic ID $logTopicId")
+        }
+      }
+      log
     }
   }
 

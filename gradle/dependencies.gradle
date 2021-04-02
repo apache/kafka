@@ -100,7 +100,7 @@ versions += [
   mavenArtifact: "3.6.3",
   metrics: "2.2.0",
   mockito: "3.6.0",
-  netty: "4.1.59.Final",
+  netty: "4.1.62.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
   rocksDB: "5.18.4",
