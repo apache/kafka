@@ -98,7 +98,7 @@ class LogSegment private[log] (val log: FileRecords,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
-  /* whether or not we need to flush the parent dir during flush */
+  /* whether or not we need to flush the parent dir during the next flush */
   private val atomicNeedsFlushParentDir = new AtomicBoolean(needsFlushParentDir)
 
   // The timestamp we used for time based log rolling and for ensuring max compaction delay
