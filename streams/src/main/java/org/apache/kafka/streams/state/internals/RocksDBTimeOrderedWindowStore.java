@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -140,6 +141,89 @@ public class RocksDBTimeOrderedWindowStore
     private void maybeUpdateSeqnumForDups() {
         if (retainDuplicates) {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        }
+    }
+
+    static class TimeOrderedWindowStoreIteratorWrapper {
+        private final KeyValueIterator<Bytes, byte[]> bytesIterator;
+        private final long windowSize;
+
+        TimeOrderedWindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
+                                              final long windowSize) {
+            this.bytesIterator = bytesIterator;
+            this.windowSize = windowSize;
+        }
+
+        public WindowStoreIterator<byte[]> valuesIterator() {
+            return new WrappedWindowStoreIterator(bytesIterator);
+        }
+
+        public KeyValueIterator<Windowed<Bytes>, byte[]> keyValueIterator() {
+            return new WrappedKeyValueIterator(bytesIterator, windowSize);
+        }
+
+        private static class WrappedWindowStoreIterator implements WindowStoreIterator<byte[]> {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator;
+
+            WrappedWindowStoreIterator(
+                final KeyValueIterator<Bytes, byte[]> bytesIterator) {
+                this.bytesIterator = bytesIterator;
+            }
+
+            @Override
+            public Long peekNextKey() {
+                return TimeOrderedKeySchema.extractStoreTimestamp(bytesIterator.peekNextKey().get());
+            }
+
+            @Override
+            public boolean hasNext() {
+                return bytesIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Long, byte[]> next() {
+                final KeyValue<Bytes, byte[]> next = bytesIterator.next();
+                final long timestamp = TimeOrderedKeySchema.extractStoreTimestamp(next.key.get());
+                return KeyValue.pair(timestamp, next.value);
+            }
+
+            @Override
+            public void close() {
+                bytesIterator.close();
+            }
+        }
+
+        private static class WrappedKeyValueIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator;
+            final long windowSize;
+
+            WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
+                                    final long windowSize) {
+                this.bytesIterator = bytesIterator;
+                this.windowSize = windowSize;
+            }
+
+            @Override
+            public Windowed<Bytes> peekNextKey() {
+                final byte[] nextKey = bytesIterator.peekNextKey().get();
+                return TimeOrderedKeySchema.fromStoreBytesKey(nextKey, windowSize);
+            }
+
+            @Override
+            public boolean hasNext() {
+                return bytesIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Windowed<Bytes>, byte[]> next() {
+                final KeyValue<Bytes, byte[]> next = bytesIterator.next();
+                return KeyValue.pair(TimeOrderedKeySchema.fromStoreBytesKey(next.key.get(), windowSize), next.value);
+            }
+
+            @Override
+            public void close() {
+                bytesIterator.close();
+            }
         }
     }
 }

@@ -90,7 +90,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                     windowSize);
             case TIME_ORDERED_WINDOW_STORE:
                 return new RocksDBTimeOrderedWindowStore(
-                    new RocksDBTimeOrderedSegmentedBytesStore(
+                    new RocksDBSegmentedBytesStore(
                         name,
                         metricsScope(),
                         retentionPeriod,

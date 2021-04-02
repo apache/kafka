@@ -40,26 +40,6 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     private static final int SEQNUM_SIZE = 4;
     private static final int PREFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
 
-    public static Bytes lowerTimeRange(final long from) {
-        final ByteBuffer rangeStart = ByteBuffer.allocate(TIMESTAMP_SIZE);
-
-        return Bytes.wrap(
-            rangeStart
-                .putLong(from)
-                .array()
-        );
-    }
-
-    public static Bytes upperTimeRange(final long to) {
-        final ByteBuffer rangeStart = ByteBuffer.allocate(TIMESTAMP_SIZE);
-
-        return Bytes.wrap(
-            rangeStart
-                .putLong(to)
-                .array()
-        );
-    }
-
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxPrefix = ByteBuffer.allocate(PREFIX_SIZE)
