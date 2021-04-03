@@ -17,6 +17,7 @@
 package kafka.admin
 
 import java.util.{Collections, Optional, Properties}
+
 import kafka.admin.TopicCommand.{TopicCommandOptions, TopicService}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{ConfigType, KafkaConfig}
