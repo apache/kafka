@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
@@ -893,10 +894,23 @@ public final class Utils {
 
     /**
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
+     * This function also flushes the parent directory to guarantee crash consistency.
      *
      * @throws IOException if both atomic and non-atomic moves fail
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
+        atomicMoveWithFallback(source, target, true);
+    }
+
+    /**
+     * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
+     * This function allows callers to decide whether to flush the parent directory. This is needed
+     * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
+     * to repeatedly flush the same parent directory.
+     *
+     * @throws IOException if both atomic and non-atomic moves fail
+     */
+    public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
@@ -908,6 +922,29 @@ public final class Utils {
                 inner.addSuppressed(outer);
                 throw inner;
             }
+        } finally {
+            if (needFlushParentDir) {
+                flushParentDir(target);
+            }
+        }
+    }
+
+    /**
+     * Flushes the parent directory to guarantee crash consistency.
+     *
+     * @throws IOException if flushing the parent directory fails.
+     */
+    public static void flushParentDir(Path path) throws IOException {
+        FileChannel dir = null;
+        try {
+            Path parent = path.toAbsolutePath().getParent();
+            if (parent != null) {
+                dir = FileChannel.open(parent, StandardOpenOption.READ);
+                dir.force(true);
+            }
+        } finally {
+            if (dir != null)
+                dir.close();
         }
     }
 
