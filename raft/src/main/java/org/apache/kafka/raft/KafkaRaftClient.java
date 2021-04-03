@@ -91,6 +91,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -146,6 +147,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
+    private final AtomicBoolean acceptAppends = new AtomicBoolean(true);
     private final Logger logger;
     private final Time time;
     private final int fetchMaxWaitMs;
@@ -399,6 +401,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState state = quorum.leaderStateOrThrow();
 
         log.initializeLeaderEpoch(quorum.epoch());
+
+        // Reset the flag so that this newly appointed leader
+        // can start accepting scheduled appends.
+        boolean canAcceptAppends = acceptAppends.compareAndSet(false, true);
+
+        if (canAcceptAppends)
+            logger.debug("The Leader can start accepting appends now.");
 
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
@@ -1911,23 +1920,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         long timeUnitFlush = accumulator.timeUntilDrain(currentTimeMs);
         if (timeUnitFlush <= 0) {
-            List<BatchAccumulator.CompletedBatch<T>> batches = accumulator.drain();
-            Iterator<BatchAccumulator.CompletedBatch<T>> iterator = batches.iterator();
-
-            try {
-                while (iterator.hasNext()) {
-                    BatchAccumulator.CompletedBatch<T> batch = iterator.next();
-                    appendBatch(state, batch, currentTimeMs);
-                }
-                flushLeaderLog(state, currentTimeMs);
-            } finally {
-                // Release and discard any batches which failed to be appended
-                while (iterator.hasNext()) {
-                    iterator.next().release();
-                }
-            }
+            drainAndFlushCompletedBatches(state, currentTimeMs);
         }
         return timeUnitFlush;
+    }
+
+    private void drainAndFlushCompletedBatches(LeaderState state, long currentTimeMs) {
+        List<BatchAccumulator.CompletedBatch<T>> batches = accumulator.drain();
+        Iterator<BatchAccumulator.CompletedBatch<T>> iterator = batches.iterator();
+
+        try {
+            while (iterator.hasNext()) {
+                BatchAccumulator.CompletedBatch<T> batch = iterator.next();
+                appendBatch(state, batch, currentTimeMs);
+            }
+            flushLeaderLog(state, currentTimeMs);
+        } finally {
+            // Release and discard any batches which failed to be appended
+            while (iterator.hasNext()) {
+                iterator.next().release();
+            }
+        }
     }
 
     private long pollResigned(long currentTimeMs) throws IOException {
@@ -2242,13 +2255,21 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    public boolean canAcceptAppends() {
+        return acceptAppends.get();
+    }
+
     @Override
     public Long scheduleAppend(int epoch, List<T> records) {
+        if (!canAcceptAppends())
+            return null;
         return append(epoch, records, false);
     }
 
     @Override
     public Long scheduleAtomicAppend(int epoch, List<T> records) {
+        if (!canAcceptAppends())
+            return null;
         return append(epoch, records, true);
     }
 
@@ -2300,6 +2321,24 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
+        if (quorum.isLeader()) {
+            // Stop any appends happening now as the Leader is about to close.
+            acceptAppends.set(false);
+            // Try to flush any batches in the accumulator.
+            drainAndFlushCompletedBatches(
+                quorum.leaderStateOrThrow(),
+                time.milliseconds()
+            );
+            // Try to gracefully shutdown now. This will also ensure that
+            // Leadership is relinquished.
+            shutdown(5000).whenComplete((complete, exception) -> {
+                if (exception != null) {
+                    logger.error("Graceful shutdown of RaftClient failed", exception);
+                } else {
+                    logger.info("Completed graceful shutdown of RaftClient");
+                }
+            });
+        }
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }

@@ -1674,6 +1674,69 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderGracefulShutdownOnClose() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int lingerMs = 50;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(lingerMs)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        int epoch = context.currentEpoch();
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+
+        context.client.poll();
+        assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
+
+        context.time.sleep(20);
+
+        // client closed now.
+        context.client.close();
+
+        // Flag for accepting appends should be toggled to false.
+        assertFalse(context.client.canAcceptAppends());
+
+        // acceptAppends flag set to false so no writes should be accepted by the Leader now.
+        assertNull(context.client.scheduleAppend(epoch, singletonList("b")));
+
+        // The leader should trigger a flush for whatever batches are present in the BatchAccumulator
+        assertEquals(2L, context.log.endOffset().offset);
+
+        // Now shutdown
+
+        // We should still be running until we have had a chance to send EndQuorumEpoch
+        assertTrue(context.client.isShuttingDown());
+        assertTrue(context.client.isRunning());
+
+        // Send EndQuorumEpoch request to the other voter
+        context.pollUntilRequest();
+        assertTrue(context.client.isShuttingDown());
+        assertTrue(context.client.isRunning());
+        context.assertSentEndQuorumEpochRequest(1, otherNodeId);
+
+        // We should still be able to handle vote requests during graceful shutdown
+        // in order to help the new leader get elected
+        context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch, 1L));
+        context.client.poll();
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+
+        // Graceful shutdown completes when a new leader is elected
+        context.deliverRequest(context.beginEpochRequest(2, otherNodeId));
+
+        TestUtils.waitForCondition(() -> {
+            context.client.poll();
+            return !context.client.isRunning();
+        }, 5000, "Client failed to shutdown before expiration of timeout");
+        assertFalse(context.client.isShuttingDown());
+    }
+
+    @Test
     public void testFollowerGracefulShutdown() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
