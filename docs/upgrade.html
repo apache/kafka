@@ -51,6 +51,9 @@
             instead.</li>
         <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Plese use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
+        <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
+            format v2, which has been the default since 0.11, moved the checksum from the record to the record batch. As such, these methods
+            don't make sense and no replacements exist.</li>
     </ul>
 </ul>
 
