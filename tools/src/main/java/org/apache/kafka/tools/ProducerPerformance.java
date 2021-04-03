@@ -113,11 +113,6 @@ public class ProducerPerformance {
             /* setup perf test */
             byte[] payload = null;
             Random random = new Random(0);
-            if (recordSize != null) {
-                payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
-            }
             ProducerRecord<byte[], byte[]> record;
             Stats stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
@@ -127,11 +122,17 @@ public class ProducerPerformance {
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
+
+                if (recordSize != null) {
+                    payload = new byte[recordSize];
+                    for (int j = 0; j < payload.length; ++j)
+                        payload[j] = (byte) (random.nextInt(26) + 65);
+                }
+
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
-
 
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
