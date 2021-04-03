@@ -483,37 +483,119 @@ Eclipse Public License - v 2.0
 
       You may add additional accurate notices of copyright ownership.
 
-------------------------------------------------------------------------------------
-This distribution has a binary dependency on zstd, which is available under the BSD 3-Clause License as described below.
+-------------------------------------------------------------------------------
+This project bundles some components that are also licensed under the Apache
+License Version 2.0:
 
-BSD License
+audience-annotations-0.5.0
+commons-cli-1.4
+commons-lang3-3.8.1
+jackson-annotations-2.10.5
+jackson-core-2.10.5
+jackson-databind-2.10.5.1
+jackson-dataformat-csv-2.10.5
+jackson-datatype-jdk8-2.10.5
+jackson-jaxrs-base-2.10.5
+jackson-jaxrs-json-provider-2.10.5
+jackson-module-jaxb-annotations-2.10.5
+jackson-module-paranamer-2.10.5
+jackson-module-scala_2.13-2.10.5
+jakarta.validation-api-2.0.2
+javassist-3.27.0-GA
+jetty-client-9.4.38.v20210224
+jetty-continuation-9.4.38.v20210224
+jetty-http-9.4.38.v20210224
+jetty-io-9.4.38.v20210224
+jetty-security-9.4.38.v20210224
+jetty-server-9.4.38.v20210224
+jetty-servlet-9.4.38.v20210224
+jetty-servlets-9.4.38.v20210224
+jetty-util-9.4.38.v20210224
+jetty-util-ajax-9.4.38.v20210224
+jersey-common-2.31
+jersey-server-2.31
+log4j-1.2.17
+lz4-java-1.7.1
+maven-artifact-3.6.3
+metrics-core-2.2.0
+netty-buffer-4.1.59.Final
+netty-codec-4.1.59.Final
+netty-common-4.1.59.Final
+netty-handler-4.1.59.Final
+netty-resolver-4.1.59.Final
+netty-transport-4.1.59.Final
+netty-transport-native-epoll-4.1.59.Final
+netty-transport-native-epoll-4.1.59.Final
+netty-transport-native-unix-common-4.1.59.Final
+plexus-utils-3.2.1
+rocksdbjni-5.18.4
+scala-collection-compat_2.13-2.3.0
+scala-library-2.13.5
+scala-logging_2.13-3.9.2
+scala-reflect-2.13.5
+scala-java8-compat_2.13-0.9.1
+snappy-java-1.1.8.1
+zookeeper-3.5.9
+zookeeper-jute-3.5.9
 
-For Zstandard software
+===============================================================================
+This product bundles various third-party components under other open source
+licenses. This section summarizes those components and their licenses.
+See licenses/ for text of these licenses.
 
-Copyright (c) 2016-present, Facebook, Inc. All rights reserved.
+---------------------------------------
+Eclipse Distribution License - v 1.0
+see: licenses/eclipse-distribution-license-1.0
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+jakarta.activation-api-1.2.1
+jakarta.xml.bind-api-2.3.2
 
- * Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
+---------------------------------------
+Eclipse Public License - v 2.0
+see: licenses/eclipse-public-license-2.0
 
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+jakarta.annotation-api-1.3.5
+jakarta.ws.rs-api-2.1.6
+javax.ws.rs-api-2.1.1
+hk2-api-2.6.1
+hk2-locator-2.6.1
+hk2-utils-2.6.1
+osgi-resource-locator-1.0.3
+aopalliance-repackaged-2.6.1
+jakarta.inject-2.6.1
+jersey-container-servlet-2.31
+jersey-container-servlet-core-2.31
+jersey-client-2.31
+jersey-hk2-2.31
+jersey-media-jaxb-2.31
 
- * Neither the name Facebook nor the names of its contributors may be used to
-   endorse or promote products derived from this software without specific
-   prior written permission.
+---------------------------------------
+CDDL 1.1 + GPLv2 with classpath exception
+see: licenses/CDDL+GPL-1.1
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+javax.servlet-api-3.1.0
+jaxb-api-2.3.0
+activation-1.1.1
 
+---------------------------------------
+MIT License
+see: licences/MIT
+
+argparse4j-0.7.0
+jopt-simple-5.0.4
+slf4j-api-1.7.30
+slf4j-log4j12-1.7.30
+
+---------------------------------------
+BSD 2-Clause
+see: licenses/BSD-2-clause
+
+netty-common-4.1.59.Final
+reflections-0.9.12
+zstd-jni-1.4.9-1
+
+---------------------------------------
+BSD 3-Clause
+see: licenses/BSD-3-clause
+
+paranamer-2.8
