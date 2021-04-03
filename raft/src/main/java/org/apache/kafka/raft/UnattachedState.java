@@ -95,7 +95,6 @@ public class UnattachedState implements EpochState {
 
     @Override
     public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-
         if (!isLogUpToDate) {
             log.debug("Rejecting vote request from candidate {} since candidate epoch/offset is not up to date with us",
                 candidateId);

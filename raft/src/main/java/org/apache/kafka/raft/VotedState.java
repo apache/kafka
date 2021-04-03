@@ -104,7 +104,7 @@ public class VotedState implements EpochState {
         }
 
         log.debug("Rejecting vote request from candidate {} since we already have voted for " +
-            "another candidate {} on that epoch", candidateId, votedId());
+            "another candidate {} in epoch {}", candidateId, votedId(), epoch);
         return false;
     }
 

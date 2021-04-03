@@ -147,8 +147,8 @@ public class FollowerState implements EpochState {
 
     @Override
     public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we already have a leader {} on that epoch",
-                candidateId, leaderId());
+        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
+                candidateId, leaderId(), epoch);
         return false;
     }
 

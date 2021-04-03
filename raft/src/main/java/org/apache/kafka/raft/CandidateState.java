@@ -242,7 +242,10 @@ public class CandidateState implements EpochState {
 
     @Override
     public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we are already candidate on that epoch", candidateId);
+        // Still reject vote request even candidateId = localId, Although the candidate votes for
+        // itself, this vote is implicit and not "granted".
+        log.debug("Rejecting vote request from candidate {} since we are already candidate in epoch {}",
+            candidateId, epoch);
         return false;
     }
 

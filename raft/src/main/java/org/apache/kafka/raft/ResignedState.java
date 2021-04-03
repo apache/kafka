@@ -132,8 +132,8 @@ public class ResignedState implements EpochState {
 
     @Override
     public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in this epoch",
-            candidateId);
+        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in epoch {}",
+            candidateId, epoch);
         return false;
     }
 
