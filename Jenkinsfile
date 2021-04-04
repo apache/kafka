@@ -100,6 +100,9 @@ def tryStreamsArchetype() {
 
 pipeline {
   agent none
+  options {
+    disableConcurrentBuilds()
+  }
   stages {
     stage('Build') {
       parallel {
