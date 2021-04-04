@@ -33,12 +33,17 @@ def doValidation() {
   '''
 }
 
+def retryFlagsString(jobConfig) {
+    if (jobConfig.isPrJob) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
+    else ""
+}
+
 def doTest(target = "unitTest integrationTest") {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-        -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-  """
+        -PignoreFailures=true -PmaxParallelForks=2
+  """ + retryFlagsString(config)
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
