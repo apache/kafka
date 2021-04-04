@@ -34,7 +34,7 @@ def doValidation() {
 }
 
 def isChangeRequest(env) {
-  if (env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty())
+  env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
 def retryFlagsString(env) {
