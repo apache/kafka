@@ -132,6 +132,16 @@ public interface ConsumerPartitionAssignor {
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
         }
+
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                "topics=" + topics +
+                (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
+                ", ownedPartitions=" + ownedPartitions +
+                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
+                ")";
+        }
     }
 
     final class Assignment {
@@ -158,9 +168,9 @@ public interface ConsumerPartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
-                    (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
-                    ')';
+                "partitions=" + partitions +
+                (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
+                ')';
         }
     }
 
@@ -174,6 +184,13 @@ public interface ConsumerPartitionAssignor {
         public Map<String, Subscription> groupSubscription() {
             return subscriptions;
         }
+
+        @Override
+        public String toString() {
+            return "GroupSubscription(" +
+                "subscriptions=" + subscriptions +
+                ")";
+        }
     }
 
     final class GroupAssignment {
@@ -185,6 +202,13 @@ public interface ConsumerPartitionAssignor {
 
         public Map<String, Assignment> groupAssignment() {
             return assignments;
+        }
+
+        @Override
+        public String toString() {
+            return "GroupAssignment(" +
+                "assignments=" + assignments +
+                ")";
         }
     }
 

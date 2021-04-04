@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.util.concurrent.CompletableFuture
 
 import kafka.common.{InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
@@ -26,17 +27,20 @@ import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.raft.internals.StringSerde
+import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
+
+import scala.collection.Seq
 
 /**
- * This class implements the KIP-500 server which relies on a self-managed
- * Raft quorum for maintaining cluster metadata. It is responsible for
+ * This class implements the KRaft (Kafka Raft) mode server which relies
+ * on a KRaft quorum for maintaining cluster metadata. It is responsible for
  * constructing the controller and/or broker based on the `process.roles`
  * configuration and for managing their basic lifecycle (startup and shutdown).
  *
- * Note that this server is a work in progress and relies on stubbed
- * implementations of the controller [[ControllerServer]] and broker
- * [[BrokerServer]].
+ * Note that this server is a work in progress and we are releasing it as
+ * early access in 2.8.0.
  */
 class KafkaRaftServer(
   config: KafkaConfig,
@@ -47,7 +51,7 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
-  private val (metaProps, _) = KafkaRaftServer.initializeLogDirs(config)
+  private val (metaProps, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
 
   private val metrics = Server.initializeMetrics(
     config,
@@ -55,24 +59,49 @@ class KafkaRaftServer(
     metaProps.clusterId.toString
   )
 
-  private val raftManager = new KafkaRaftManager(
+  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
+    RaftConfig.parseVoterConnections(config.quorumVoters))
+
+  private val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
     metaProps,
     config,
-    new StringSerde,
+    new MetadataRecordSerde,
     KafkaRaftServer.MetadataPartition,
     time,
     metrics,
-    threadNamePrefix
+    threadNamePrefix,
+    controllerQuorumVotersFuture
   )
 
+  private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
+
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    Some(new BrokerServer())
+    Some(new BrokerServer(
+      config,
+      metaProps,
+      metaLogShim,
+      time,
+      metrics,
+      threadNamePrefix,
+      offlineDirs,
+      controllerQuorumVotersFuture,
+      Server.SUPPORTED_FEATURES
+    ))
   } else {
     None
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
-    Some(new ControllerServer())
+    Some(new ControllerServer(
+      metaProps,
+      config,
+      metaLogShim,
+      raftManager,
+      time,
+      metrics,
+      threadNamePrefix,
+      controllerQuorumVotersFuture
+    ))
   } else {
     None
   }
@@ -83,6 +112,7 @@ class KafkaRaftServer(
     controller.foreach(_.startup())
     broker.foreach(_.startup())
     AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
+    info(KafkaBroker.STARTED_MESSAGE)
   }
 
   override def shutdown(): Unit = {
@@ -118,7 +148,7 @@ object KafkaRaftServer {
    *         be consistent across all log dirs) and the offline directories
    */
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
-    val logDirs = config.logDirs :+ config.metadataLogDir
+    val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
 

@@ -16,6 +16,7 @@
 {
   "apiKey": 37,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "CreatePartitionsRequest",
   // Version 1 is the same as version 0.
   //

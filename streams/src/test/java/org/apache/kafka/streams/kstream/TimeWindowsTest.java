@@ -29,7 +29,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 public class TimeWindowsTest {
 
     private static final long ANY_SIZE = 123L;
@@ -43,19 +42,6 @@ public class TimeWindowsTest {
     public void shouldSetWindowAdvance() {
         final long anyAdvance = 4;
         assertEquals(anyAdvance, TimeWindows.of(ofMillis(ANY_SIZE)).advanceBy(ofMillis(anyAdvance)).advanceMs);
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test
-    public void shouldSetWindowRetentionTime() {
-        assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).until(ANY_SIZE).maintainMs());
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test
-    public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
-        final long windowSize = 2 * TimeWindows.of(ofMillis(1)).maintainMs();
-        assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
     }
 
     @Test
@@ -90,25 +76,12 @@ public class TimeWindowsTest {
         }
     }
 
-    @Deprecated
     @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.of(ofMillis(ANY_SIZE));
         try {
             windowSpec.advanceBy(ofMillis(ANY_SIZE + 1));
             fail("should not accept advance greater than window size");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
-    }
-
-    @Deprecated
-    @Test
-    public void retentionTimeMustNoBeSmallerThanWindowSize() {
-        final TimeWindows windowSpec = TimeWindows.of(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.until(ANY_SIZE - 1);
-            fail("should not accept retention time smaller than window size");
         } catch (final IllegalArgumentException e) {
             // expected
         }

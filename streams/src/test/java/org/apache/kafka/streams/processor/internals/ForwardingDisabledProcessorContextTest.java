@@ -48,16 +48,4 @@ public class ForwardingDisabledProcessorContextTest {
     public void shouldThrowOnForwardWithTo() {
         assertThrows(StreamsException.class, () -> context.forward("key", "value", To.all()));
     }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test
-    public void shouldThrowOnForwardWithChildIndex() {
-        assertThrows(StreamsException.class, () -> context.forward("key", "value", 1));
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test
-    public void shouldThrowOnForwardWithChildName() {
-        assertThrows(StreamsException.class, () -> context.forward("key", "value", "child1"));
-    }
 }

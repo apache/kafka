@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
@@ -62,6 +63,7 @@ public class GlobalStreamThread extends Thread {
     private final ThreadCache cache;
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
+    private final AtomicLong cacheSize;
     private volatile StreamsException startupException;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
 
@@ -215,6 +217,7 @@ public class GlobalStreamThread extends Thread {
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.cacheSize = new AtomicLong(-1L);
     }
 
     static class StateConsumer {
@@ -302,6 +305,10 @@ public class GlobalStreamThread extends Thread {
         boolean wipeStateStore = false;
         try {
             while (stillRunning()) {
+                final long size = cacheSize.getAndSet(-1L);
+                if (size != -1L) {
+                    cache.resize(size);
+                }
                 stateConsumer.pollAndUpdate();
             }
         } catch (final InvalidOffsetException recoverableException) {
@@ -344,7 +351,7 @@ public class GlobalStreamThread extends Thread {
     }
 
     public void resize(final long cacheSize) {
-        cache.resize(cacheSize);
+        this.cacheSize.set(cacheSize);
     }
 
     private StateConsumer initialize() {
@@ -363,7 +370,8 @@ public class GlobalStreamThread extends Thread {
                 config,
                 stateMgr,
                 streamsMetrics,
-                cache
+                cache,
+                time
             );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 

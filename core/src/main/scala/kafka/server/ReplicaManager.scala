@@ -56,7 +56,6 @@ import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
@@ -149,7 +148,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                               lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[AbortedTransaction]],
+                              abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]],
                               preferredReadReplica: Option[Int],
                               isReassignmentFetch: Boolean)
 
@@ -1328,6 +1327,14 @@ class ReplicaManager(val config: KafkaConfig,
             s"epoch ${leaderAndIsrRequest.controllerEpoch}")
         }
       val topicIds = leaderAndIsrRequest.topicIds()
+      def topicIdFromRequest(topicName: String): Option[Uuid] = {
+        val topicId = topicIds.get(topicName)
+        // if invalid topic ID return None
+        if (topicId == null || topicId == Uuid.ZERO_UUID)
+          None
+        else
+          Some(topicId)
+      }
 
       val response = {
         if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
@@ -1365,11 +1372,18 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
             }
 
-            // Next check partition's leader epoch
+            // Next check the topic ID and the partition's leader epoch
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (requestLeaderEpoch > currentLeaderEpoch) {
+              val requestTopicId = topicIdFromRequest(topicPartition.topic)
+
+              if (!hasConsistentTopicId(requestTopicId, partition.topicId)) {
+                stateChangeLogger.error(s"Topic ID in memory: ${partition.topicId.get} does not" +
+                  s" match the topic ID for partition $topicPartition received: " +
+                  s"${requestTopicId.get}.")
+                responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
+              } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
@@ -1405,12 +1419,12 @@ class ReplicaManager(val config: KafkaConfig,
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
-              highWatermarkCheckpoints)
+              highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
           val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
             makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
-              highWatermarkCheckpoints)
+              highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
 
@@ -1425,70 +1439,42 @@ class ReplicaManager(val config: KafkaConfig,
            * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
            * we need to map this topic-partition to OfflinePartition instead.
            */
-            val local = localLog(topicPartition)
-            if (local.isEmpty)
+            if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
-            else {
-              val id = topicIds.get(topicPartition.topic())
-              // Ensure we have not received a request from an older protocol
-              if (id != null && !id.equals(Uuid.ZERO_UUID)) {
-                val log = local.get
-                // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-                // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-                if (log.topicId.equals(Uuid.ZERO_UUID)) {
-                  log.partitionMetadataFile.write(id)
-                  log.topicId = id
-                  // Warn if the topic ID in the request does not match the log.
-                } else if (!log.topicId.equals(id)) {
-                  stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
-                    s" match the topic Id provided in the request: " +
-                    s"${id.toString}.")
-                }
-              }
-            }
           }
 
           // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
 
-          maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints)
+          maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints, topicIdFromRequest)
 
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-          if (leaderAndIsrRequest.version() < 5) {
-            val responsePartitions = responseMap.iterator.map { case (tp, error) =>
-              new LeaderAndIsrPartitionError()
+
+          val data = new LeaderAndIsrResponseData().setErrorCode(Errors.NONE.code)
+          if (leaderAndIsrRequest.version < 5) {
+            responseMap.forKeyValue { (tp, error) =>
+              data.partitionErrors.add(new LeaderAndIsrPartitionError()
                 .setTopicName(tp.topic)
                 .setPartitionIndex(tp.partition)
-                .setErrorCode(error.code)
-            }.toBuffer
-            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-              .setErrorCode(Errors.NONE.code)
-              .setPartitionErrors(responsePartitions.asJava), leaderAndIsrRequest.version())
-          } else {
-            val topics = new mutable.HashMap[String, List[LeaderAndIsrPartitionError]]
-            responseMap.asJava.forEach { case (tp, error) =>
-              if (!topics.contains(tp.topic)) {
-                topics.put(tp.topic, List(new LeaderAndIsrPartitionError()
-                                                                .setPartitionIndex(tp.partition)
-                                                                .setErrorCode(error.code)))
-              } else {
-                topics.put(tp.topic, new LeaderAndIsrPartitionError()
-                  .setPartitionIndex(tp.partition)
-                  .setErrorCode(error.code)::topics(tp.topic))
-              }
+                .setErrorCode(error.code))
             }
-            val topicErrors = topics.iterator.map { case (topic, partitionError) =>
-              new LeaderAndIsrTopicError()
-                .setTopicId(topicIds.get(topic))
-                .setPartitionErrors(partitionError.asJava)
-            }.toBuffer
-            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-              .setErrorCode(Errors.NONE.code)
-              .setTopics(topicErrors.asJava), leaderAndIsrRequest.version())
+          } else {
+            responseMap.forKeyValue { (tp, error) =>
+              val topicId = topicIds.get(tp.topic)
+              var topic = data.topics.find(topicId)
+              if (topic == null) {
+                topic = new LeaderAndIsrTopicError().setTopicId(topicId)
+                data.topics.add(topic)
+              }
+              topic.partitionErrors.add(new LeaderAndIsrPartitionError()
+                .setPartitionIndex(tp.partition)
+                .setErrorCode(error.code))
+            }
           }
+          new LeaderAndIsrResponse(data, leaderAndIsrRequest.version)
         }
       }
       val endMs = time.milliseconds()
@@ -1496,6 +1482,25 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Finished LeaderAndIsr request in ${elapsedMs}ms correlationId $correlationId from controller " +
         s"$controllerId for ${requestPartitionStates.size} partitions")
       response
+    }
+  }
+
+  /**
+   * Checks if the topic ID provided in the LeaderAndIsr request is consistent with the topic ID in the log.
+   *
+   * If the request had an invalid topic ID (null or zero), then we assume that topic IDs are not supported.
+   * The topic ID was not inconsistent, so return true.
+   * If the log does not exist or the topic ID is not yet set, logTopicIdOpt will be None.
+   * In both cases, the ID is not inconsistent so return true.
+   *
+   * @param requestTopicIdOpt the topic ID from the LeaderAndIsr request if it exists
+   * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exist
+   * @return true if the request topic id is consistent, false otherwise
+   */
+  private def hasConsistentTopicId(requestTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid]): Boolean = {
+    requestTopicIdOpt match {
+      case None => true
+      case Some(requestTopicId) => logTopicIdOpt.isEmpty || logTopicIdOpt.contains(requestTopicId)
     }
   }
 
@@ -1514,7 +1519,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def maybeAddLogDirFetchers(partitions: Set[Partition],
-                                     offsetCheckpoints: OffsetCheckpoints): Unit = {
+                                       offsetCheckpoints: OffsetCheckpoints,
+                                       topicIds: String => Option[Uuid]): Unit = {
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
@@ -1526,7 +1532,8 @@ class ReplicaManager(val config: KafkaConfig,
           partition.createLogIfNotExists(
             isNew = false,
             isFutureReplica = true,
-            offsetCheckpoints)
+            offsetCheckpoints,
+            topicIds(partition.topic))
 
           // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
           // replica from source dir to destination dir
@@ -1560,7 +1567,8 @@ class ReplicaManager(val config: KafkaConfig,
                           partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                           correlationId: Int,
                           responseMap: mutable.Map[TopicPartition, Errors],
-                          highWatermarkCheckpoints: OffsetCheckpoints): Set[Partition] = {
+                          highWatermarkCheckpoints: OffsetCheckpoints,
+                          topicIds: String => Option[Uuid]): Set[Partition] = {
     val traceEnabled = stateChangeLogger.isTraceEnabled
     partitionStates.keys.foreach { partition =>
       if (traceEnabled)
@@ -1581,7 +1589,7 @@ class ReplicaManager(val config: KafkaConfig,
       // Update the partition information to be the leader
       partitionStates.forKeyValue { (partition, partitionState) =>
         try {
-          if (partition.makeLeader(partitionState, highWatermarkCheckpoints))
+          if (partition.makeLeader(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
             partitionsToMakeLeaders += partition
           else
             stateChangeLogger.info(s"Skipped the become-leader state change after marking its " +
@@ -1642,7 +1650,8 @@ class ReplicaManager(val config: KafkaConfig,
                             partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
-                            highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
+                            highWatermarkCheckpoints: OffsetCheckpoints,
+                            topicIds: String => Option[Uuid]) : Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
     partitionStates.forKeyValue { (partition, partitionState) =>
       if (traceLoggingEnabled)
@@ -1661,7 +1670,7 @@ class ReplicaManager(val config: KafkaConfig,
           metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {
             // Only change partition state when the leader is available
             case Some(_) =>
-              if (partition.makeFollower(partitionState, highWatermarkCheckpoints))
+              if (partition.makeFollower(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName)))
                 partitionsToMakeFollower += partition
               else
                 stateChangeLogger.info(s"Skipped the become-follower state change after marking its partition as " +
@@ -1679,7 +1688,7 @@ class ReplicaManager(val config: KafkaConfig,
               // Create the local replica even if the leader is unavailable. This is required to ensure that we include
               // the partition's high watermark in the checkpoint file (see KAFKA-1647)
               partition.createLogIfNotExists(isNew = partitionState.isNew, isFutureReplica = false,
-                highWatermarkCheckpoints)
+                highWatermarkCheckpoints, topicIds(partitionState.topicName))
           }
         } catch {
           case e: KafkaStorageException =>
@@ -1877,7 +1886,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (sendZkNotification)
       if (zkClient.isEmpty) {
-        warn("Unable to propagate log dir failure via Zookeeper in KIP-500 mode") // will be handled via KIP-589
+        warn("Unable to propagate log dir failure via Zookeeper in KRaft mode")
       } else {
         zkClient.get.propagateLogDirEvent(localBrokerId)
       }
@@ -1891,6 +1900,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("UnderReplicatedPartitions")
     removeMetric("UnderMinIsrPartitionCount")
     removeMetric("AtMinIsrPartitionCount")
+    removeMetric("ReassigningPartitions")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests

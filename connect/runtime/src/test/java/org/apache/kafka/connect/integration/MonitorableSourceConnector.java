@@ -130,6 +130,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                     throttler.throttle();
                 }
                 taskHandle.record(batchSize);
+                log.info("Returning batch of {} records", batchSize);
                 return LongStream.range(0, batchSize)
                         .mapToObj(i -> new SourceRecord(
                                 Collections.singletonMap("task.id", taskId),

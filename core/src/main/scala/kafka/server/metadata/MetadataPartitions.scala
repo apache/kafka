@@ -23,13 +23,15 @@ import java.util.Collections
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.metadata.{IsrChangeRecord, PartitionRecord}
+import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 
 import scala.jdk.CollectionConverters._
 
 
 object MetadataPartition {
+  val NO_LEADER_CHANGE = -2
+
   def apply(name: String, record: PartitionRecord): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
@@ -37,6 +39,7 @@ object MetadataPartition {
       record.leaderEpoch(),
       record.replicas(),
       record.isr(),
+      record.partitionEpoch(),
       Collections.emptyList(), // TODO KAFKA-12285 handle offline replicas
       Collections.emptyList(),
       Collections.emptyList())
@@ -50,6 +53,7 @@ object MetadataPartition {
       partition.leaderEpoch(),
       partition.replicas(),
       partition.isr(),
+      partition.zkVersion(),
       partition.offlineReplicas(),
       prevPartition.flatMap(p => Some(p.addingReplicas)).getOrElse(Collections.emptyList()),
       prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList())
@@ -63,6 +67,7 @@ case class MetadataPartition(topicName: String,
                              leaderEpoch: Int,
                              replicas: util.List[Integer],
                              isr: util.List[Integer],
+                             partitionEpoch: Int,
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
                              removingReplicas: util.List[Integer]) {
@@ -77,19 +82,30 @@ case class MetadataPartition(topicName: String,
       setIsr(isr).
       setAddingReplicas(addingReplicas).
       setRemovingReplicas(removingReplicas).
-      setIsNew(isNew)
-    // Note: we don't set ZKVersion here.
+      setIsNew(isNew).
+      setZkVersion(partitionEpoch)
   }
 
   def isReplicaFor(brokerId: Int): Boolean = replicas.contains(Integer.valueOf(brokerId))
 
-  def copyWithIsrChanges(record: IsrChangeRecord): MetadataPartition = {
+  def merge(record: PartitionChangeRecord): MetadataPartition = {
+    val (newLeader, newLeaderEpoch) = if (record.leader() == MetadataPartition.NO_LEADER_CHANGE) {
+      (leaderId, leaderEpoch)
+    } else {
+      (record.leader(), leaderEpoch + 1)
+    }
+    val newIsr = if (record.isr() == null) {
+      isr
+    } else {
+      record.isr()
+    }
     MetadataPartition(topicName,
       partitionIndex,
-      record.leader(),
-      record.leaderEpoch(),
+      newLeader,
+      newLeaderEpoch,
       replicas,
-      record.isr(),
+      newIsr,
+      partitionEpoch + 1,
       offlineReplicas,
       addingReplicas,
       removingReplicas)
@@ -100,27 +116,54 @@ class MetadataPartitionsBuilder(val brokerId: Int,
                                 val prevPartitions: MetadataPartitions) {
   private var newNameMap = prevPartitions.copyNameMap()
   private var newIdMap = prevPartitions.copyIdMap()
+  private var newReverseIdMap = prevPartitions.copyReverseIdMap()
   private val changed = Collections.newSetFromMap[Any](new util.IdentityHashMap())
   private val _localChanged = new util.HashSet[MetadataPartition]
   private val _localRemoved = new util.HashSet[MetadataPartition]
 
   def topicIdToName(id: Uuid): Option[String] = Option(newIdMap.get(id))
 
+  def topicNameToId(name: String): Option[Uuid] = Option(newReverseIdMap.get(name))
+
   def removeTopicById(id: Uuid): Iterable[MetadataPartition] = {
-    Option(newIdMap.remove(id)) match {
-      case None => throw new RuntimeException(s"Unable to locate topic with ID $id")
-      case Some(name) => newNameMap.remove(name).values().asScala
+    val name = Option(newIdMap.remove(id)).getOrElse {
+      throw new RuntimeException(s"Unable to locate topic with ID $id")
+    }
+
+    newReverseIdMap.remove(name)
+
+    val prevPartitionMap = newNameMap.remove(name)
+    if (prevPartitionMap == null) {
+      Seq.empty
+    } else {
+      changed.remove(prevPartitionMap)
+
+      val removedPartitions = prevPartitionMap.values
+      if (prevImageHasTopicId(id)) {
+        removedPartitions.forEach { partition =>
+          if (partition.isReplicaFor(brokerId)) {
+            _localRemoved.add(partition)
+          }
+        }
+      } else {
+        removedPartitions.forEach { partition =>
+          if (partition.isReplicaFor(brokerId)) {
+            _localChanged.remove(partition)
+          }
+        }
+      }
+      removedPartitions.asScala
     }
   }
 
-  def handleIsrChange(record: IsrChangeRecord): Unit = {
-    Option(newIdMap.get(record.topicId())) match {
+  def handleChange(record: PartitionChangeRecord): Unit = {
+    topicIdToName(record.topicId) match {
       case None => throw new RuntimeException(s"Unable to locate topic with ID ${record.topicId()}")
       case Some(name) => Option(newNameMap.get(name)) match {
         case None => throw new RuntimeException(s"Unable to locate topic with name $name")
         case Some(partitionMap) => Option(partitionMap.get(record.partitionId())) match {
           case None => throw new RuntimeException(s"Unable to locate $name-${record.partitionId}")
-          case Some(partition) => set(partition.copyWithIsrChanges(record))
+          case Some(partition) => set(partition.merge(record))
         }
       }
     }
@@ -128,10 +171,14 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
   def addUuidMapping(name: String, id: Uuid): Unit = {
     newIdMap.put(id, name)
+    newReverseIdMap.put(name, id)
   }
 
   def removeUuidMapping(id: Uuid): Unit = {
-    newIdMap.remove(id)
+    val topicName = newIdMap.remove(id)
+    if (topicName != null) {
+      newReverseIdMap.remove(topicName)
+    }
   }
 
   def get(topicName: String, partitionId: Int): Option[MetadataPartition] = {
@@ -155,42 +202,58 @@ class MetadataPartitionsBuilder(val brokerId: Int,
     val prevPartition = newPartitionMap.put(partition.partitionIndex, partition)
     if (partition.isReplicaFor(brokerId)) {
       _localChanged.add(partition)
-    } else if (prevPartition != null && prevPartition.isReplicaFor(brokerId)) {
-      _localRemoved.add(prevPartition)
+    } else if (prevPartition != null) {
+      maybeAddToLocalRemoved(prevPartition)
     }
     newNameMap.put(partition.topicName, newPartitionMap)
+  }
+
+  private def maybeAddToLocalRemoved(partition: MetadataPartition): Unit = {
+    if (partition.isReplicaFor(brokerId)) {
+      val currentTopicId = newReverseIdMap.get(partition.topicName)
+      val prevImageHasTopic = if (currentTopicId != null) {
+        prevImageHasTopicId(currentTopicId)
+      } else {
+        prevPartitions.allTopicNames().contains(partition.topicName)
+      }
+
+      if (prevImageHasTopic) {
+        _localRemoved.add(partition)
+      }
+    }
+  }
+
+  private def prevImageHasTopicId(topicId: Uuid): Boolean = {
+    prevPartitions.topicIdToName(topicId).isDefined
   }
 
   def remove(topicName: String, partitionId: Int): Unit = {
     val prevPartitionMap = newNameMap.get(topicName)
     if (prevPartitionMap != null) {
-      if (changed.contains(prevPartitionMap)) {
-        val prevPartition = prevPartitionMap.remove(partitionId)
-        if (prevPartition.isReplicaFor(brokerId)) {
-          _localRemoved.add(prevPartition)
-        }
+      val removedPartition = if (changed.contains(prevPartitionMap)) {
+        Option(prevPartitionMap.remove(partitionId))
       } else {
-        Option(prevPartitionMap.get(partitionId)).foreach { prevPartition =>
-          if (prevPartition.isReplicaFor(brokerId)) {
-            _localRemoved.add(prevPartition)
-          }
+        Option(prevPartitionMap.get(partitionId)).map { prevPartition =>
           val newPartitionMap = new util.HashMap[Int, MetadataPartition](prevPartitionMap.size() - 1)
           prevPartitionMap.forEach { (prevPartitionId, prevPartition) =>
-            if (!prevPartitionId.equals(partitionId)) {
+            if (prevPartitionId != partitionId) {
               newPartitionMap.put(prevPartitionId, prevPartition)
             }
           }
           changed.add(newPartitionMap)
           newNameMap.put(topicName, newPartitionMap)
+          prevPartition
         }
       }
+      removedPartition.foreach(maybeAddToLocalRemoved)
     }
   }
 
   def build(): MetadataPartitions = {
-    val result = MetadataPartitions(newNameMap, newIdMap)
+    val result = new MetadataPartitions(newNameMap, newIdMap, newReverseIdMap)
     newNameMap = Collections.unmodifiableMap(newNameMap)
     newIdMap = Collections.unmodifiableMap(newIdMap)
+    newReverseIdMap = Collections.unmodifiableMap(newReverseIdMap)
     result
   }
 
@@ -216,15 +279,15 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
   def topicNameToId(name: String): Option[Uuid] = Option(reverseIdMap.get(name))
 
   def copyNameMap(): util.Map[String, util.Map[Int, MetadataPartition]] = {
-    val copy = new util.HashMap[String, util.Map[Int, MetadataPartition]](nameMap.size())
-    copy.putAll(nameMap)
-    copy
+    new util.HashMap(nameMap)
   }
 
   def copyIdMap(): util.Map[Uuid, String] = {
-    val copy = new util.HashMap[Uuid, String](idMap.size())
-    copy.putAll(idMap)
-    copy
+    new util.HashMap(idMap)
+  }
+
+  def copyReverseIdMap(): util.Map[String, Uuid] = {
+    new util.HashMap(reverseIdMap)
   }
 
   def allPartitions(): Iterator[MetadataPartition] = new AllPartitionsIterator(nameMap).asScala

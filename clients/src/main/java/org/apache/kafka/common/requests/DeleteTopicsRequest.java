@@ -101,6 +101,12 @@ public class DeleteTopicsRequest extends AbstractRequest {
             return data.topics().stream().map(topic -> topic.name()).collect(Collectors.toList());
         return data.topicNames(); 
     }
+
+    public int numberOfTopics() {
+        if (version() >= 6)
+            return data.topics().size();
+        return data.topicNames().size();
+    }
     
     public List<Uuid> topicIds() {
         if (version() >= 6)

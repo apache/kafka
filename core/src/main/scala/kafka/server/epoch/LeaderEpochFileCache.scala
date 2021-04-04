@@ -36,10 +36,8 @@ import scala.jdk.CollectionConverters._
  *
  * @param topicPartition the associated topic partition
  * @param checkpoint the checkpoint file
- * @param logEndOffset function to fetch the current log end offset
  */
 class LeaderEpochFileCache(topicPartition: TopicPartition,
-                           logEndOffset: () => Long,
                            checkpoint: LeaderEpochCheckpoint) extends Logging {
   this.logIdent = s"[LeaderEpochCache $topicPartition] "
 
@@ -184,9 +182,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     * so that the follower falls back to High Water Mark.
     *
     * @param requestedEpoch requested leader epoch
-    * @return found leader epoch and end offset
+    * @param logEndOffset the existing Log End Offset
+    * @return found leader epoch and end offset  
     */
-  def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
+  def endOffsetFor(requestedEpoch: Int, logEndOffset: Long): (Int, Long) = {
     inReadLock(lock) {
       val epochAndOffset =
         if (requestedEpoch == UNDEFINED_EPOCH) {
@@ -198,7 +197,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
           // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
           // might if it is verifying its committed offset following a group rebalance. In this case, we return
           // the current log end offset which makes the truncation check work as expected.
-          (requestedEpoch, logEndOffset())
+          (requestedEpoch, logEndOffset)
         } else {
           val higherEntry = epochs.higherEntry(requestedEpoch)
           if (higherEntry == null) {
@@ -221,7 +220,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
             }
           }
         }
-      debug(s"Processed end offset request for epoch $requestedEpoch and returning epoch ${epochAndOffset._1} " +
+      trace(s"Processed end offset request for epoch $requestedEpoch and returning epoch ${epochAndOffset._1} " +
         s"with end offset ${epochAndOffset._2} from epoch cache of size ${epochs.size}")
       epochAndOffset
     }

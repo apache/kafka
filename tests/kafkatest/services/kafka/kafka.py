@@ -31,6 +31,7 @@ from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
+from kafkatest.version import KafkaVersion
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
@@ -154,8 +155,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
     # Kafka Authorizer
     ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
-    # Old Kafka Authorizer. This is deprecated but still supported.
-    SIMPLE_AUTHORIZER = "kafka.security.auth.SimpleAclAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
     JAAS_CONF_PROPERTY = "java.security.auth.login.config=/mnt/security/jaas.conf"
@@ -231,7 +230,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param str tls_version: version of the TLS protocol.
         :param str interbroker_security_protocol: security protocol to use for broker-to-broker (and Raft controller-to-controller) communication
         :param str client_sasl_mechanism: sasl mechanism for clients to use
-        :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
+        :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker (and to-controller) communication
         :param str authorizer_class_name: which authorizer class to use
         :param str version: which kafka version to use. Defaults to "dev" branch
         :param jmx_object_names:
@@ -442,14 +441,55 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     @property
     def security_config(self):
         if not self._security_config:
-            client_sasl_mechanism_to_use = self.client_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.controller_sasl_mechanism
-            interbroker_sasl_mechanism_to_use = self.interbroker_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.intercontroller_sasl_mechanism
-            self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+            # we will later change the security protocols to PLAINTEXT if this is a remote Raft controller case since
+            # those security protocols are irrelevant there and we don't want to falsely indicate the use of SASL or TLS
+            security_protocol_to_use=self.security_protocol
+            interbroker_security_protocol_to_use=self.interbroker_security_protocol
+            # determine uses/serves controller sasl mechanisms
+            serves_controller_sasl_mechanism=None
+            serves_intercontroller_sasl_mechanism=None
+            uses_controller_sasl_mechanism=None
+            if self.quorum_info.has_brokers:
+                if self.controller_quorum.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    uses_controller_sasl_mechanism = self.controller_quorum.controller_sasl_mechanism
+            if self.quorum_info.has_controllers:
+                if self.intercontroller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    serves_intercontroller_sasl_mechanism = self.intercontroller_sasl_mechanism
+                    uses_controller_sasl_mechanism = self.intercontroller_sasl_mechanism # won't change from above in co-located case
+                if self.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    serves_controller_sasl_mechanism = self.controller_sasl_mechanism
+            # determine if raft uses TLS
+            raft_tls = False
+            if self.quorum_info.has_brokers and not self.quorum_info.has_controllers:
+                # Raft-based broker only
+                raft_tls = self.controller_quorum.controller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS
+            if self.quorum_info.has_controllers:
+                # remote or co-located raft controller
+                raft_tls = self.controller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS \
+                           or self.intercontroller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS
+            # clear irrelevant security protocols of SASL/TLS implications for remote controller quorum case
+            if self.quorum_info.has_controllers and not self.quorum_info.has_brokers:
+                security_protocol_to_use=SecurityConfig.PLAINTEXT
+                interbroker_security_protocol_to_use=SecurityConfig.PLAINTEXT
+
+            self._security_config = SecurityConfig(self.context, security_protocol_to_use, interbroker_security_protocol_to_use,
                                                    zk_sasl=self.zk.zk_sasl if self.quorum_info.using_zk else False, zk_tls=self.zk_client_secure,
-                                                   client_sasl_mechanism=client_sasl_mechanism_to_use,
-                                                   interbroker_sasl_mechanism=interbroker_sasl_mechanism_to_use,
+                                                   client_sasl_mechanism=self.client_sasl_mechanism,
+                                                   interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
                                                    listener_security_config=self.listener_security_config,
-                                                   tls_version=self.tls_version)
+                                                   tls_version=self.tls_version,
+                                                   serves_controller_sasl_mechanism=serves_controller_sasl_mechanism,
+                                                   serves_intercontroller_sasl_mechanism=serves_intercontroller_sasl_mechanism,
+                                                   uses_controller_sasl_mechanism=uses_controller_sasl_mechanism,
+                                                   raft_tls=raft_tls)
+        # Ensure we have the right inter-broker security protocol because it may have been mutated
+        # since we cached our security config (ignore if this is a remote raft controller quorum case; the
+        # inter-broker security protocol is not used there).
+        if (self.quorum_info.using_zk or self.quorum_info.has_brokers) and \
+                self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
+            self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
+            self._security_config.calc_has_sasl()
+            self._security_config.calc_has_ssl()
         for port in self.port_mappings.values():
             if port.open:
                 self._security_config.enable_security_protocol(port.security_protocol)
@@ -469,9 +509,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.port_mappings[listener_name].open = False
 
     def start_minikdc_if_necessary(self, add_principals=""):
-        has_sasl = self.security_config.has_sasl if self.quorum_info.using_zk else \
-            self.security_config.has_sasl or self.controller_quorum.security_config.has_sasl if self.quorum_info.has_brokers else \
-                self.security_config.has_sasl or self.remote_kafka.security_config.has_sasl
+        has_sasl = self.security_config.has_sasl
         if has_sasl:
             if self.minikdc is None:
                 other_service = self.remote_kafka if self.remote_kafka else self.controller_quorum if self.quorum_info.using_raft else None
@@ -496,7 +534,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         if self.quorum_info.has_brokers_and_controllers and (
                 self.controller_security_protocol != self.intercontroller_security_protocol or
-                self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
+                self.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS and self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
+            # This is not supported because both the broker and the controller take the first entry from
+            # controller.listener.names and the value from sasl.mechanism.controller.protocol;
+            # they share a single config, so they must both see/use identical values.
             raise Exception("Co-located Raft-based Brokers (%s/%s) and Controllers (%s/%s) cannot talk to Controllers via different security protocols" %
                             (self.controller_security_protocol, self.controller_sasl_mechanism,
                              self.intercontroller_security_protocol, self.intercontroller_sasl_mechanism))
@@ -665,6 +706,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                       for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
             # define controller.listener.names
             self.controller_listener_names = ','.join(self.controller_listener_name_list())
+            # define sasl.mechanism.controller.protocol to match remote quorum if one exists
+            if self.remote_controller_quorum:
+                self.controller_sasl_mechanism = self.remote_controller_quorum.controller_sasl_mechanism
 
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
@@ -899,8 +943,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return True
 
     def all_nodes_support_topic_ids(self):
+        if self.quorum_info.using_raft: return True
         for node in self.nodes:
-            if not self.node_inter_broker_protocol_version(node).supports_topic_ids():
+            if not self.node_inter_broker_protocol_version(node).supports_topic_ids_when_using_zk():
                 return False
         return True
 
@@ -1074,8 +1119,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
-        PartitionCount:2\tReplicationFactor:2\tConfigs:
-            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+        Topic: test_topic\tTopicId: <topic_id>\tPartitionCount: 2\tReplicationFactor: 2\tConfigs:
+            Topic: test_topic\tPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
             Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
         into a dictionary structure appropriate for use with reassign-partitions tool:
         {
@@ -1341,23 +1386,37 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise
 
     def topic_id(self, topic):
-        if self.quorum_info.using_raft:
-            raise Exception("Not yet implemented: Cannot obtain topic ID information when using Raft instead of ZooKeeper")
-        self.logger.debug(
-            "Querying zookeeper to find assigned topic ID for topic %s." % topic)
-        zk_path = "/brokers/topics/%s" % topic
-        topic_info_json = self.zk.query(zk_path, chroot=self.zk_chroot)
-
-        if topic_info_json is None:
-            raise Exception("Error finding state for topic %s." % topic)
-
-        topic_info = json.loads(topic_info_json)
-        self.logger.info(topic_info)
-
         if self.all_nodes_support_topic_ids():
-            topic_id = topic_info["topic_id"]
-            self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
-            return topic_id
+            node = self.nodes[0]
+
+            force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
+
+            cmd = fix_opts_for_new_jvm(node)
+            cmd += "%s --topic %s --describe" % \
+               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
+
+            self.logger.debug(
+                "Querying topic ID by using describe topic command ...\n%s" % cmd
+            )
+            output = ""
+            for line in node.account.ssh_capture(cmd):
+                output += line
+
+            lines = map(lambda x: x.strip(), output.split("\n"))
+            for line in lines:
+                m = re.match(".*TopicId:.*", line)
+                if m is None:
+                   continue
+
+                fields = line.split("\t")
+                # [Topic: test_topic, TopicId: <topic_id>, PartitionCount: 2, ReplicationFactor: 2, ...]
+                # -> [test_topic, <topic_id>, 2, 2, ...]
+                # -> <topic_id>
+                topic_id = list(map(lambda x: x.split(" ")[1], fields))[1]
+                self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
+
+                return topic_id
+            raise Exception("Error finding topic ID for topic %s." % topic)
         else:
             self.logger.info("No topic ID assigned for topic %s" % topic)
             return None

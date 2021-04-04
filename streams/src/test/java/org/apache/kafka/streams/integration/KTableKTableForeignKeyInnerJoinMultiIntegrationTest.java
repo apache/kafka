@@ -43,9 +43,9 @@ import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -64,7 +64,6 @@ import static org.junit.Assert.assertEquals;
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static int NUM_BROKERS = 1;
 
-    @ClassRule
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final static MockTime MOCK_TIME = CLUSTER.time;
     private final static String TABLE_1 = "table1";
@@ -84,7 +83,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeClass
-    public static void beforeTest() throws Exception {
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
         //Use multiple partitions to ensure distribution of keys.
 
         CLUSTER.createTopic(TABLE_1, 3, 1);
@@ -106,7 +106,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         PRODUCER_CONFIG_3.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-
 
         final List<KeyValue<Integer, Float>> table1 = asList(
             new KeyValue<>(1, 1.33f),
@@ -131,7 +130,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
         final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
-            new KeyValue<>(10, "waffle")
+                new KeyValue<>(10, "waffle")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
@@ -142,6 +141,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
         CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Before

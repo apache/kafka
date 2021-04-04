@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
@@ -41,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
 
 public interface Controller extends AutoCloseable {
     /**
-     * Change the in-sync replica sets for some partitions.
+     * Change partition ISRs.
      *
      * @param request       The AlterIsrRequest data.
      *
@@ -68,6 +69,31 @@ public interface Controller extends AutoCloseable {
      *                      unregistered.
      */
     CompletableFuture<Void> unregisterBroker(int brokerId);
+
+    /**
+     * Find the ids for topic names.
+     *
+     * @param topicNames    The topic names to resolve.
+     * @return              A future yielding a map from topic name to id.
+     */
+    CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(Collection<String> topicNames);
+
+    /**
+     * Find the names for topic ids.
+     *
+     * @param topicIds      The topic ids to resolve.
+     * @return              A future yielding a map from topic id to name.
+     */
+    CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(Collection<Uuid> topicIds);
+
+    /**
+     * Delete a batch of topics.
+     *
+     * @param topicIds      The IDs of the topics to delete.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> topicIds);
 
     /**
      * Describe the current configuration of various resources.
@@ -103,7 +129,7 @@ public interface Controller extends AutoCloseable {
      * @param configChanges The changes.
      * @param validateOnly  True if we should validate the changes but not apply them.
      *
-     * @return              A future yielding a map from partitions to error results.
+     * @return              A future yielding a map from config resources to error results.
      */
     CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         Map<ConfigResource, Map<String, Map.Entry<AlterConfigOp.OpType, String>>> configChanges,
@@ -115,7 +141,7 @@ public interface Controller extends AutoCloseable {
      * @param newConfigs    The new configuration maps to apply.
      * @param validateOnly  True if we should validate the changes but not apply them.
      *
-     * @return              A future yielding a map from partitions to error results.
+     * @return              A future yielding a map from config resources to error results.
      */
     CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly);
@@ -125,7 +151,7 @@ public interface Controller extends AutoCloseable {
      *
      * @param request      The broker heartbeat request.
      *
-     * @return              A future yielding a heartbeat reply.
+     * @return             A future yielding the broker heartbeat reply.
      */
     CompletableFuture<BrokerHeartbeatReply> processBrokerHeartbeat(
         BrokerHeartbeatRequestData request);
@@ -135,7 +161,7 @@ public interface Controller extends AutoCloseable {
      *
      * @param request      The registration request.
      *
-     * @return              A future yielding a registration reply.
+     * @return             A future yielding the broker registration reply.
      */
     CompletableFuture<BrokerRegistrationReply> registerBroker(
         BrokerRegistrationRequestData request);
@@ -172,6 +198,13 @@ public interface Controller extends AutoCloseable {
      * Otherwise, this is -1.
      */
     long curClaimEpoch();
+
+    /**
+     * Returns true if this controller is currently active.
+     */
+    default boolean isActive() {
+        return curClaimEpoch() != -1;
+    }
 
     /**
      * Blocks until we have shut down and freed all resources.

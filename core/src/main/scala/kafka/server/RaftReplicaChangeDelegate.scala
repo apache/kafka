@@ -22,7 +22,7 @@ import kafka.log.Log
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.{MetadataBrokers, MetadataPartition}
 import kafka.utils.Implicits.MapExtensionMethods
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors.KafkaStorageException
 
 import scala.collection.{Map, Set, mutable}
@@ -35,6 +35,7 @@ trait RaftReplicaChangeDelegateHelper {
   def getLogDir(topicPartition: TopicPartition): Option[String]
   def error(msg: => String, e: => Throwable): Unit
   def markOffline(topicPartition: TopicPartition): Unit
+  def markOnline(partition: Partition): Unit
   def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit
   def isShuttingDown: Boolean
   def initialFetchOffset(log: Log): Long
@@ -71,7 +72,8 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
   def makeLeaders(prevPartitionsAlreadyExisting: Set[MetadataPartition],
                   partitionStates: Map[Partition, MetadataPartition],
                   highWatermarkCheckpoints: OffsetCheckpoints,
-                  metadataOffset: Option[Long]): Set[Partition] = {
+                  metadataOffset: Option[Long],
+                  topicIds: String => Option[Uuid]): Set[Partition] = {
     val partitionsMadeLeaders = mutable.Set[Partition]()
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
     val deferredBatches = metadataOffset.isEmpty
@@ -93,7 +95,7 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
         try {
           val isrState = state.toLeaderAndIsrPartitionState(
             !prevPartitionsAlreadyExisting(state))
-          if (partition.makeLeader(isrState, highWatermarkCheckpoints)) {
+          if (partition.makeLeader(isrState, highWatermarkCheckpoints, topicIds(partition.topic))) {
             partitionsMadeLeaders += partition
             if (traceLoggingEnabled) {
               helper.stateChangeLogger.trace(s"$partitionLogMsgPrefix: completed the become-leader state change.")
@@ -124,7 +126,8 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
                     currentBrokers: MetadataBrokers,
                     partitionStates: Map[Partition, MetadataPartition],
                     highWatermarkCheckpoints: OffsetCheckpoints,
-                    metadataOffset: Option[Long]): Set[Partition] = {
+                    metadataOffset: Option[Long],
+                    topicIds: String => Option[Uuid]): Set[Partition] = {
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
     val deferredBatches = metadataOffset.isEmpty
     val topLevelLogPrefix = if (deferredBatches)
@@ -163,10 +166,10 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
               s"since the new leader ${state.leaderId} is unavailable.")
             // Create the local replica even if the leader is unavailable. This is required to ensure that we include
             // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-            partition.createLogIfNotExists(isNew, isFutureReplica = false, highWatermarkCheckpoints)
+            partition.createLogIfNotExists(isNew, isFutureReplica = false, highWatermarkCheckpoints, topicIds(partition.topic))
           } else {
             val isrState = state.toLeaderAndIsrPartitionState(isNew)
-            if (partition.makeFollower(isrState, highWatermarkCheckpoints)) {
+            if (partition.makeFollower(isrState, highWatermarkCheckpoints, topicIds(partition.topic))) {
               partitionsMadeFollower += partition
               if (traceLoggingEnabled) {
                 helper.stateChangeLogger.trace(s"$partitionLogMsgPrefix: completed the " +
@@ -216,6 +219,9 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
             val leader = allBrokersByIdMap(partition.leaderReplicaIdOpt.get).brokerEndPoint(helper.config.interBrokerListenerName)
             val log = partition.localLogOrException
             val fetchOffset = helper.initialFetchOffset(log)
+            if (deferredBatches) {
+              helper.markOnline(partition)
+            }
             partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
           }.toMap
 

@@ -16,11 +16,15 @@
  */
 package kafka.server
 
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.VersionRange
+
+import scala.jdk.CollectionConverters._
 
 trait Server {
   def startup(): Unit
@@ -29,7 +33,6 @@ trait Server {
 }
 
 object Server {
-
   val MetricsPrefix: String = "kafka.server"
   val ClusterIdLabel: String = "kafka.cluster.id"
   val BrokerIdLabel: String = "kafka.broker.id"
@@ -91,4 +94,12 @@ object Server {
     reporters
   }
 
+  sealed trait ProcessStatus
+  case object SHUTDOWN extends ProcessStatus
+  case object STARTING extends ProcessStatus
+  case object STARTED extends ProcessStatus
+  case object SHUTTING_DOWN extends ProcessStatus
+
+  val SUPPORTED_FEATURES = Collections.
+    unmodifiableMap[String, VersionRange](Map[String, VersionRange]().asJava)
 }

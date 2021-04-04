@@ -15,6 +15,7 @@
 
 import time
 from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -66,6 +67,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                            throughput=1000,
                                            acks=1)
 
+    @cluster(num_nodes=8)
     @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_versions)
     def test_upgrade_to_cooperative_rebalance(self, upgrade_from_version):
         self.zookeeper.start()

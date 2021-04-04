@@ -31,13 +31,16 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.metalog.MetaLogManager
 
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 trait ControllerNodeProvider {
   def get(): Option[Node]
   def listenerName: ListenerName
   def securityProtocol: SecurityProtocol
+  def saslMechanism: String
 }
 
 object MetadataCacheControllerNodeProvider {
@@ -54,7 +57,8 @@ object MetadataCacheControllerNodeProvider {
     new MetadataCacheControllerNodeProvider(
       metadataCache,
       listenerName,
-      securityProtocol
+      securityProtocol,
+      config.saslMechanismInterBrokerProtocol
     )
   }
 }
@@ -62,12 +66,55 @@ object MetadataCacheControllerNodeProvider {
 class MetadataCacheControllerNodeProvider(
   val metadataCache: kafka.server.MetadataCache,
   val listenerName: ListenerName,
-  val securityProtocol: SecurityProtocol
+  val securityProtocol: SecurityProtocol,
+  val saslMechanism: String
 ) extends ControllerNodeProvider {
   override def get(): Option[Node] = {
     metadataCache.getControllerId
       .flatMap(metadataCache.getAliveBroker)
       .map(_.endpoints(listenerName.value))
+  }
+}
+
+object RaftControllerNodeProvider {
+  def apply(metaLogManager: MetaLogManager,
+            config: KafkaConfig,
+            controllerQuorumVoterNodes: Seq[Node]): RaftControllerNodeProvider = {
+
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
+    val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerSaslMechanism = config.saslMechanismControllerProtocol
+    new RaftControllerNodeProvider(
+      metaLogManager,
+      controllerQuorumVoterNodes,
+      controllerListenerName,
+      controllerSecurityProtocol,
+      controllerSaslMechanism
+    )
+  }
+}
+
+/**
+ * Finds the controller node by checking the metadata log manager.
+ * This provider is used when we are using a Raft-based metadata quorum.
+ */
+class RaftControllerNodeProvider(val metaLogManager: MetaLogManager,
+                                 controllerQuorumVoterNodes: Seq[Node],
+                                 val listenerName: ListenerName,
+                                 val securityProtocol: SecurityProtocol,
+                                 val saslMechanism: String
+                                ) extends ControllerNodeProvider with Logging {
+  val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+
+  override def get(): Option[Node] = {
+    val leader = metaLogManager.leader()
+    if (leader == null) {
+      None
+    } else if (leader.nodeId() < 0) {
+      None
+    } else {
+      idToNode.get(leader.nodeId())
+    }
   }
 }
 
@@ -121,7 +168,7 @@ class BrokerToControllerChannelManagerImpl(
   threadNamePrefix: Option[String],
   retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
+  private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val currentNodeApiVersions = NodeApiVersions.create()
@@ -143,7 +190,7 @@ class BrokerToControllerChannelManagerImpl(
         JaasContext.Type.SERVER,
         config,
         controllerNodeProvider.listenerName,
-        config.saslMechanismInterBrokerProtocol,
+        controllerNodeProvider.saslMechanism,
         time,
         config.saslInterBrokerHandshakeRequestEnable,
         logContext
@@ -171,7 +218,6 @@ class BrokerToControllerChannelManagerImpl(
         config.requestTimeoutMs,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         apiVersions,
@@ -179,8 +225,8 @@ class BrokerToControllerChannelManagerImpl(
       )
     }
     val threadName = threadNamePrefix match {
-      case None => s"broker-${config.brokerId}-to-controller-send-thread"
-      case Some(name) => s"$name:broker-${config.brokerId}-to-controller-send-thread"
+      case None => s"BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
+      case Some(name) => s"$name:BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName"
     }
 
     new BrokerToControllerRequestThread(
@@ -248,6 +294,10 @@ class BrokerToControllerRequestThread(
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
 
+  // Used for testing
+  @volatile
+  private[server] var started = false
+
   def activeControllerAddress(): Option[Node] = {
     Option(activeController.get())
   }
@@ -257,6 +307,9 @@ class BrokerToControllerRequestThread(
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
+    if (!started) {
+      throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
+    }
     requestQueue.add(request)
     if (activeControllerAddress().isDefined) {
       wakeup()
@@ -291,10 +344,18 @@ class BrokerToControllerRequestThread(
     None
   }
 
-  private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected()) {
+  private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+    if (response.authenticationException != null) {
+      error(s"Request ${queueItem.request} failed due to authentication error with controller",
+        response.authenticationException)
+      queueItem.callback.onComplete(response)
+    } else if (response.versionMismatch != null) {
+      error(s"Request ${queueItem.request} failed due to unsupported version error",
+        response.versionMismatch)
+      queueItem.callback.onComplete(response)
+    } else if (response.wasDisconnected()) {
       updateControllerAddress(null)
-      requestQueue.putFirst(request)
+      requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress => {
@@ -302,9 +363,9 @@ class BrokerToControllerRequestThread(
         updateControllerAddress(null)
       }}
 
-      requestQueue.putFirst(request)
+      requestQueue.putFirst(queueItem)
     } else {
-      request.callback.onComplete(response)
+      queueItem.callback.onComplete(response)
     }
   }
 
@@ -324,5 +385,10 @@ class BrokerToControllerRequestThread(
           super.pollOnce(maxTimeoutMs = 100)
       }
     }
+  }
+
+  override def start(): Unit = {
+    super.start()
+    started = true
   }
 }

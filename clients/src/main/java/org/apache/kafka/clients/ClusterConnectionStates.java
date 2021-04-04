@@ -140,9 +140,8 @@ final class ClusterConnectionStates {
      * @param id the id of the connection
      * @param now the current time in ms
      * @param host the host of the connection, to be resolved internally if needed
-     * @param clientDnsLookup the mode of DNS lookup to use when resolving the {@code host}
      */
-    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) {
+    public void connecting(String id, long now, String host) {
         NodeConnectionState connectionState = nodeState.get(id);
         if (connectionState != null && connectionState.host().equals(host)) {
             connectionState.lastConnectAttemptMs = now;
@@ -158,8 +157,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host,
-                clientDnsLookup, hostResolver));
+                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver));
         connectingNodes.add(id);
     }
 
@@ -477,12 +475,10 @@ final class ClusterConnectionStates {
         private List<InetAddress> addresses;
         private int addressIndex;
         private final String host;
-        private final ClientDnsLookup clientDnsLookup;
         private final HostResolver hostResolver;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
-                long connectionSetupTimeoutMs, String host, ClientDnsLookup clientDnsLookup,
-                HostResolver hostResolver) {
+                long connectionSetupTimeoutMs, String host, HostResolver hostResolver) {
             this.state = state;
             this.addresses = Collections.emptyList();
             this.addressIndex = -1;
@@ -493,7 +489,6 @@ final class ClusterConnectionStates {
             this.connectionSetupTimeoutMs = connectionSetupTimeoutMs;
             this.throttleUntilTimeMs = 0;
             this.host = host;
-            this.clientDnsLookup = clientDnsLookup;
             this.hostResolver = hostResolver;
         }
 
@@ -509,7 +504,7 @@ final class ClusterConnectionStates {
         private InetAddress currentAddress() throws UnknownHostException {
             if (addresses.isEmpty()) {
                 // (Re-)initialize list
-                addresses = ClientUtils.resolve(host, clientDnsLookup, hostResolver);
+                addresses = ClientUtils.resolve(host, hostResolver);
                 addressIndex = 0;
             }
 
