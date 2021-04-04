@@ -190,7 +190,7 @@ pipeline {
         // the `when` clause.
         
         stage('JDK 8 and Scala 2.13') {
-          when { !changeRequest() }
+          when { not { changeRequest() } }
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_1.8_latest'
@@ -212,7 +212,7 @@ pipeline {
         }
 
         stage('JDK 11 and Scala 2.12') {
-          when { !changeRequest() }
+          when { not { changeRequest() } }
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_11_latest'
@@ -233,7 +233,7 @@ pipeline {
         }
 
         stage('JDK 15 and Scala 2.12') {
-          when { !changeRequest() }
+          when { not { changeRequest() } }
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_15_latest'
