@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
@@ -1690,6 +1691,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
       } else {
+        request.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+          apiVersionRequest.data.clientSoftwareName,
+          apiVersionRequest.data.clientSoftwareVersion))
+
         apiVersionManager.apiVersionResponse(requestThrottleMs)
       }
     }

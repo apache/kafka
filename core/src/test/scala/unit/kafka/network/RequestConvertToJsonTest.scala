@@ -19,12 +19,12 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
 import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
 import org.junit.jupiter.api.Test
 import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, ObjectSerializationCache}
@@ -179,7 +179,8 @@ class RequestConvertToJsonTest {
       startTimeNanos = 0,
       createNiceMock(classOf[MemoryPool]),
       buffer,
-      createNiceMock(classOf[RequestChannel.Metrics])
+      createNiceMock(classOf[RequestChannel.Metrics]),
+      new DefaultChannelMetadataRegistry
     )
   }
 

@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataE
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ClientInformation;
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -207,7 +208,8 @@ public class MetadataRequestBenchmark {
         RequestContext context = new RequestContext(header, "1", null, principal,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, bodyBuffer, requestChannelMetrics, Option.empty());
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, bodyBuffer,
+            requestChannelMetrics, new DefaultChannelMetadataRegistry(), Option.empty());
     }
 
     @Benchmark

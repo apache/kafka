@@ -25,9 +25,9 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
-
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
+
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
@@ -39,13 +39,13 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network.{ClientInformation, _}
+import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, MockTime, Time, Utils}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
@@ -215,12 +215,6 @@ class SocketServerTest {
     Utils.toArray(RequestTestUtils.serializeRequestWithHeader(emptyHeader, emptyRequest))
   }
 
-  private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
-    val request = new ApiVersionsRequest.Builder().build(version)
-    val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    Utils.toArray(RequestTestUtils.serializeRequestWithHeader(header, request))
-  }
-
   @Test
   def simpleRequest(): Unit = {
     val plainSocket = connect()
@@ -231,56 +225,6 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
     verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = false)
-  }
-
-
-  private def testClientInformation(version: Short, expectedClientSoftwareName: String,
-                                    expectedClientSoftwareVersion: String): Unit = {
-    val plainSocket = connect()
-    val address = plainSocket.getLocalAddress
-    val clientId = "clientId"
-
-    // Send ApiVersionsRequest - unknown expected
-    sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
-    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
-
-    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
-
-    // Send ProduceRequest - client info expected
-    sendRequest(plainSocket, producerRequestBytes())
-    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-
-    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
-    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
-
-    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
-
-    // Close the socket
-    plainSocket.setSoLinger(true, 0)
-    plainSocket.close()
-
-    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
-  }
-
-  @Test
-  def testClientInformationWithLatestApiVersionsRequest(): Unit = {
-    testClientInformation(
-      ApiKeys.API_VERSIONS.latestVersion,
-      "apache-kafka-java",
-      AppInfoParser.getVersion
-    )
-  }
-
-  @Test
-  def testClientInformationWithOldestApiVersionsRequest(): Unit = {
-    testClientInformation(
-      ApiKeys.API_VERSIONS.oldestVersion,
-      ClientInformation.UNKNOWN_NAME_OR_VERSION,
-      ClientInformation.UNKNOWN_NAME_OR_VERSION
-    )
   }
 
   @Test
