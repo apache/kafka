@@ -33,17 +33,21 @@ def doValidation() {
   """
 }
 
-def retryFlagsString(jobConfig) {
-    if (jobConfig.isPrJob) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
+def isChangeRequest(env) {
+  if (env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty())
+}
+
+def retryFlagsString(env) {
+    if (isChangeRequest(env)) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
     else ""
 }
 
-def doTest(target = "unitTest integrationTest") {
+def doTest(env, target = "unitTest integrationTest") {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
         -PignoreFailures=true -PmaxParallelForks=2
-  """ + retryFlagsString(config)
+  """ + retryFlagsString(env)
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -125,7 +129,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             tryStreamsArchetype()
           }
         }
@@ -145,7 +149,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -165,7 +169,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
@@ -183,7 +187,7 @@ pipeline {
             setupGradle()
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest('unitTest')
+              doTest(env, 'unitTest')
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }
@@ -214,7 +218,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             tryStreamsArchetype()
           }
         }
@@ -238,7 +242,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -262,7 +266,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
@@ -273,7 +277,7 @@ pipeline {
   post {
     always {
       script {
-        if (!config.isPrJob) {
+        if (!isChangeRequest(env) {
           step([$class: 'Mailer',
                notifyEveryUnstableBuild: true,
                recipients: "dev@kafka.apache.org",
