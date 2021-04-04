@@ -26,11 +26,11 @@ def setupGradle() {
 }
 
 def doValidation() {
-  sh '''
+  sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
-  '''
+  """
 }
 
 def retryFlagsString(jobConfig) {
