@@ -184,69 +184,72 @@ pipeline {
           }
         }
         
-        // To avoid excessive Jenkins resource usage, we run a subset of builds
-        // at the PR stage. The rest are executed after changes are pushed to
-        // trunk and/or release branches.
-        if (!jobConfig.isPrJob) {
-          stage('JDK 8 and Scala 2.13') {
-            agent { label 'ubuntu' }
-            tools {
-              jdk 'jdk_1.8_latest'
-              maven 'maven_3_latest'
-            }
-            options {
-              timeout(time: 8, unit: 'HOURS') 
-              timestamps()
-            }
-            environment {
-              SCALA_VERSION=2.13
-            }
-            steps {
-              setupGradle()
-              doValidation()
-              doTest()
-              tryStreamsArchetype()
-            }
+        // To avoid excessive Jenkins resource usage, we only run the stages
+        // above at the PR stage. The ones below are executed after changes
+        // are pushed to trunk and/or release branches. We achieve this via
+        // the `when` clause.
+        
+        stage('JDK 8 and Scala 2.13') {
+          when { !changeRequest() }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
           }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            doTest()
+            tryStreamsArchetype()
+          }
+        }
 
-          stage('JDK 11 and Scala 2.12') {
-            agent { label 'ubuntu' }
-            tools {
-              jdk 'jdk_11_latest'
-            }
-            options {
-              timeout(time: 8, unit: 'HOURS') 
-              timestamps()
-            }
-            environment {
-              SCALA_VERSION=2.12
-            }
-            steps {
-              setupGradle()
-              doValidation()
-              doTest()
-              echo 'Skipping Kafka Streams archetype test for Java 11'
-            }
+        stage('JDK 11 and Scala 2.12') {
+          when { !changeRequest() }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
           }
-          
-          stage('JDK 15 and Scala 2.12') {
-            agent { label 'ubuntu' }
-            tools {
-              jdk 'jdk_15_latest'
-            }
-            options {
-              timeout(time: 8, unit: 'HOURS') 
-              timestamps()
-            }
-            environment {
-              SCALA_VERSION=2.12
-            }
-            steps {
-              setupGradle()
-              doValidation()
-              doTest()
-              echo 'Skipping Kafka Streams archetype test for Java 15'
-            }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            doTest()
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
+
+        stage('JDK 15 and Scala 2.12') {
+          when { !changeRequest() }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_15_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            doTest()
+            echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
       }
