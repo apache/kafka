@@ -3796,12 +3796,14 @@ class GroupCoordinatorTest {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedArgument.getValue.apply(
+      EasyMock.anyObject(),
+      EasyMock.anyObject()
+    )).andAnswer(new IAnswer[Unit] {
+      override def answer: Unit = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(appendRecordError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-        )
-      )})
+      ))
+    })
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 

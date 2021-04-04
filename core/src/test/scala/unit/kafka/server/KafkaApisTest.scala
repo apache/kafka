@@ -311,7 +311,7 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       adminManager, controller)
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, BufferSupplier.create)
+    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, RequestLocal(BufferSupplier.create))
 
     assertEquals(Some(request), capturedRequest.getValue.envelope)
     val innerResponse = capturedResponse.getValue.asInstanceOf[AlterConfigsResponse]
@@ -337,7 +337,7 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
-    createKafkaApis(enableForwarding = true).handle(request, BufferSupplier.create)
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal(BufferSupplier.create))
 
     val response = capturedResponse.getValue.asInstanceOf[EnvelopeResponse]
     assertEquals(Errors.INVALID_REQUEST, response.error())
@@ -405,7 +405,7 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       adminManager, controller)
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, BufferSupplier.create)
+    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, RequestLocal(BufferSupplier.create))
 
     if (!shouldCloseConnection) {
       val response = capturedResponse.getValue.asInstanceOf[EnvelopeResponse]
@@ -480,7 +480,7 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)
 
-    createKafkaApis(enableForwarding = true).handle(request, BufferSupplier.create)
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal(BufferSupplier.create))
 
     EasyMock.verify(controller, forwardingManager)
   }
@@ -1448,6 +1448,7 @@ class KafkaApisTest {
         EasyMock.eq(AppendOrigin.Client),
         EasyMock.anyObject(),
         EasyMock.capture(responseCallback),
+        EasyMock.anyObject(),
         EasyMock.anyObject(),
         EasyMock.anyObject())
       ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
@@ -2722,7 +2723,7 @@ class KafkaApisTest {
 
     replay(replicaManager, fetchManager, clientQuotaManager, requestChannel, replicaQuotaManager, partition)
 
-    createKafkaApis().handle(fetchFromFollower, BufferSupplier.create)
+    createKafkaApis().handle(fetchFromFollower, RequestLocal(BufferSupplier.create))
 
     if (isReassigning)
       assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
@@ -3811,7 +3812,7 @@ class KafkaApisTest {
   @Test
   def testRaftShouldNeverHandleEnvelope(): Unit = {
     metadataCache = MetadataCache.raftMetadataCache(brokerId)
-    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleEnvelope(_, BufferSupplier.create))
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleEnvelope(_, RequestLocal(BufferSupplier.create)))
   }
 
   @Test
