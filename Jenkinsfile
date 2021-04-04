@@ -100,9 +100,11 @@ def tryStreamsArchetype() {
 
 pipeline {
   agent none
+  
   options {
     disableConcurrentBuilds()
   }
+  
   stages {
     stage('Build') {
       parallel {
@@ -256,6 +258,16 @@ pipeline {
           }
         }
       }
+    }
+  }
+  
+  post {
+    when { not { changeRequest() } }
+    always {
+      step([$class: 'Mailer',
+           notifyEveryUnstableBuild: true,
+           recipients: "dev@kafka.apache.org",
+           sendToIndividuals: false])
     }
   }
 }
