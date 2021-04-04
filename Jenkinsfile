@@ -43,11 +43,9 @@ def retryFlagsString(env) {
 }
 
 def doTest(env, target = "unitTest integrationTest") {
-  sh """
-    ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-        --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-        -PignoreFailures=true -PmaxParallelForks=2
-  """ + retryFlagsString(env)
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+      --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
+      -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
