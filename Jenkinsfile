@@ -271,12 +271,15 @@ pipeline {
   }
   
   post {
-    when { not { changeRequest() } }
     always {
-      step([$class: 'Mailer',
-           notifyEveryUnstableBuild: true,
-           recipients: "dev@kafka.apache.org",
-           sendToIndividuals: false])
+      script {
+        if (!config.isPrJob) {
+          step([$class: 'Mailer',
+               notifyEveryUnstableBuild: true,
+               recipients: "dev@kafka.apache.org",
+               sendToIndividuals: false])
+        }
+      }
     }
   }
 }
