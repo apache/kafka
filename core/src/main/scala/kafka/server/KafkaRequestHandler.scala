@@ -31,7 +31,7 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
-  def handle(request: RequestChannel.Request, bufferSupplier: BufferSupplier): Unit
+  def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
 }
 
 /**
@@ -44,9 +44,9 @@ class KafkaRequestHandler(id: Int,
                           val requestChannel: RequestChannel,
                           apis: ApiRequestHandler,
                           time: Time) extends Runnable with Logging {
-  this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
+  this.logIdent = s"[Kafka Request Handler $id on Broker $brokerId], "
   private val shutdownComplete = new CountDownLatch(1)
-  private val bufferSupplier = BufferSupplier.create
+  private val requestLocal = RequestLocal(BufferSupplier.create)
   @volatile private var stopped = false
 
   def run(): Unit = {
@@ -72,7 +72,7 @@ class KafkaRequestHandler(id: Int,
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
-            apis.handle(request, bufferSupplier)
+            apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>
               shutdownComplete.countDown()
@@ -89,7 +89,7 @@ class KafkaRequestHandler(id: Int,
   }
 
   private def completeShutdown(): Unit = {
-    bufferSupplier.close()
+    requestLocal.close()
     shutdownComplete.countDown()
   }
 

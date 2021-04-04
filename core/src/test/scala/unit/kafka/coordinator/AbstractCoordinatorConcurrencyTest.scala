@@ -160,8 +160,10 @@ object AbstractCoordinatorConcurrencyTest {
   class TestReplicaManager extends ReplicaManager(
     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null, null) {
 
+    @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
+
     def createDelayedProducePurgatory(timer: MockTimer): Unit = {
       producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
@@ -177,7 +179,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                               bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
+                               requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -205,20 +207,24 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
+
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)
     }
-    @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
+
     def getOrCreateLogs(): mutable.Map[TopicPartition, (Log, Long)] = {
       if (logs == null)
         logs = mutable.Map[TopicPartition, (Log, Long)]()
       logs
     }
+
     def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit = {
       getOrCreateLogs().put(topicPartition, (log, endOffset))
     }
+
     override def getLog(topicPartition: TopicPartition): Option[Log] =
       getOrCreateLogs().get(topicPartition).map(l => l._1)
+
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
       getOrCreateLogs().get(topicPartition).map(l => l._2)
   }

@@ -23,7 +23,7 @@ import kafka.common.{LongRef, RecordValidationException}
 import kafka.log.LogValidator.ValidationAndOffsetAssignResult
 import kafka.message._
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
@@ -128,7 +128,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       KAFKA_2_3_IV1,
       brokerTopicStats,
-      BufferSupplier.create)
+      RequestLocal(BufferSupplier.create))
   }
 
   @Test
@@ -160,7 +160,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size, "message set size should not change")
     validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
@@ -200,7 +200,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size,
@@ -249,7 +249,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size,
@@ -312,7 +312,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
   }
 
   @Test
@@ -357,7 +357,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -430,7 +430,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -487,7 +487,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -533,7 +533,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -591,7 +591,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val validatedRecords = validatedResults.validatedRecords
 
     var i = 0
@@ -645,7 +645,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -669,7 +669,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -693,7 +693,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -717,7 +717,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -740,7 +740,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -763,7 +763,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -787,7 +787,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -812,7 +812,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -838,7 +838,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -864,7 +864,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -888,7 +888,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -914,7 +914,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -940,7 +940,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -966,7 +966,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -992,7 +992,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -1015,7 +1015,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Coordinator,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create)
+      requestLocal = RequestLocal(BufferSupplier.create))
     val batches = TestUtils.toList(result.validatedRecords.batches)
     assertEquals(1, batches.size)
     val batch = batches.get(0)
@@ -1043,7 +1043,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1067,7 +1067,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1090,7 +1090,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1113,7 +1113,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1137,7 +1137,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1161,7 +1161,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1187,7 +1187,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -1213,7 +1213,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -1237,7 +1237,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1261,7 +1261,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create).validatedRecords, offset)
+      requestLocal = RequestLocal(BufferSupplier.create)).validatedRecords, offset)
   }
 
   @Test
@@ -1283,7 +1283,7 @@ class LogValidatorTest {
         origin = AppendOrigin.Client,
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         brokerTopicStats = brokerTopicStats,
-        bufferSupplier = BufferSupplier.create)
+        requestLocal = RequestLocal(BufferSupplier.create))
     )
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
@@ -1314,7 +1314,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = KAFKA_2_0_IV1,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   @Test
@@ -1349,7 +1349,7 @@ class LogValidatorTest {
         origin = AppendOrigin.Client,
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         brokerTopicStats = brokerTopicStats,
-        bufferSupplier = BufferSupplier.create)
+        requestLocal = RequestLocal(BufferSupplier.create))
     )
 
     assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
@@ -1428,7 +1428,7 @@ class LogValidatorTest {
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       brokerTopicStats = brokerTopicStats,
-      bufferSupplier = BufferSupplier.create))
+      requestLocal = RequestLocal(BufferSupplier.create)))
   }
 
   private def createRecords(magicValue: Byte,

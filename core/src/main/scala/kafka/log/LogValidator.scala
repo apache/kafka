@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
@@ -28,7 +28,7 @@ import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -96,7 +96,7 @@ private[log] object LogValidator extends Logging {
                                                     origin: AppendOrigin,
                                                     interBrokerProtocolVersion: ApiVersion,
                                                     brokerTopicStats: BrokerTopicStats,
-                                                    bufferSupplier: BufferSupplier): ValidationAndOffsetAssignResult = {
+                                                    requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
@@ -109,7 +109,7 @@ private[log] object LogValidator extends Logging {
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec,
         targetCodec, compactedTopic, magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin,
-        interBrokerProtocolVersion, brokerTopicStats, bufferSupplier)
+        interBrokerProtocolVersion, brokerTopicStats, requestLocal)
     }
   }
 
@@ -367,7 +367,7 @@ private[log] object LogValidator extends Logging {
                                                  origin: AppendOrigin,
                                                  interBrokerProtocolVersion: ApiVersion,
                                                  brokerTopicStats: BrokerTopicStats,
-                                                 bufferSupplier: BufferSupplier): ValidationAndOffsetAssignResult = {
+                                                 requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
     if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
@@ -411,9 +411,9 @@ private[log] object LogValidator extends Logging {
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
       // then we can optimize the iterator to skip key / value / headers since they would not be used at all
       val recordsIterator = if (inPlaceAssignment && firstBatch.magic >= RecordBatch.MAGIC_VALUE_V2)
-        batch.skipKeyValueIterator(bufferSupplier)
+        batch.skipKeyValueIterator(requestLocal.bufferSupplier)
       else
-        batch.streamingIterator(bufferSupplier)
+        batch.streamingIterator(requestLocal.bufferSupplier)
 
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)

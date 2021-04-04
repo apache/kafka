@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.UncompressedCodec
-import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
+import kafka.server.{Defaults, FetchLogEnd, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
@@ -209,7 +209,7 @@ class TransactionStateManager(brokerId: Int,
           origin = AppendOrigin.Coordinator,
           recordsPerPartition,
           removeFromCacheCallback,
-          bufferSupplier = BufferSupplier.NO_CACHING)
+          requestLocal = RequestLocal(BufferSupplier.NO_CACHING))
       }
 
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
@@ -527,7 +527,7 @@ class TransactionStateManager(brokerId: Int,
                              newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit,
                              retryOnError: Errors => Boolean = _ => false,
-                             bufferSupplier: BufferSupplier): Unit = {
+                             requestLocal: RequestLocal): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -681,7 +681,7 @@ class TransactionStateManager(brokerId: Int,
                 origin = AppendOrigin.Coordinator,
                 recordsPerPartition,
                 updateCacheCallback,
-                bufferSupplier = bufferSupplier)
+                requestLocal = requestLocal)
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }

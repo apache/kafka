@@ -135,7 +135,7 @@ class ControllerApisTest {
       java.util.Collections.singletonList(AuthorizationResult.DENIED)
     )
 
-    createControllerApis(Some(authorizer), mock(classOf[Controller])).handle(request, BufferSupplier.create)
+    createControllerApis(Some(authorizer), mock(classOf[Controller])).handle(request, RequestLocal(BufferSupplier.create))
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),

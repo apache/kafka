@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
+import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -104,7 +104,7 @@ class TransactionCoordinator(brokerId: Int,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
-                           bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
+                           requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
@@ -168,7 +168,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               sendRetriableErrorCallback,
-              bufferSupplier)
+              requestLocal)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
@@ -183,7 +183,7 @@ class TransactionCoordinator(brokerId: Int,
             }
 
             txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-              sendPidResponseCallback, bufferSupplier = bufferSupplier)
+              sendPidResponseCallback, requestLocal = requestLocal)
           }
       }
     }
@@ -318,7 +318,7 @@ class TransactionCoordinator(brokerId: Int,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
-                                       bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
+                                       requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -359,7 +359,7 @@ class TransactionCoordinator(brokerId: Int,
 
         case Right((coordinatorEpoch, newMetadata)) =>
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-            responseCallback, bufferSupplier = bufferSupplier)
+            responseCallback, requestLocal = requestLocal)
       }
     }
   }
@@ -413,14 +413,14 @@ class TransactionCoordinator(brokerId: Int,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback,
-                           bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
+                           requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
       txnMarkerResult,
       isFromClient = true,
       responseCallback,
-      bufferSupplier)
+      requestLocal)
   }
 
   private def endTransaction(transactionalId: String,
@@ -429,7 +429,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback,
-                             bufferSupplier: BufferSupplier): Unit = {
+                             requestLocal: RequestLocal): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -589,7 +589,7 @@ class TransactionCoordinator(brokerId: Int,
           }
 
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
-            sendTxnMarkersCallback, bufferSupplier = bufferSupplier)
+            sendTxnMarkersCallback, requestLocal = requestLocal)
       }
     }
   }
@@ -647,7 +647,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              BufferSupplier.NO_CACHING)
+              RequestLocal(BufferSupplier.NO_CACHING))
           }
       }
     }
