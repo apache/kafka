@@ -579,23 +579,24 @@ activation-1.1.1
 
 ---------------------------------------
 MIT License
-see: licences/MIT
 
-argparse4j-0.7.0
-jopt-simple-5.0.4
-slf4j-api-1.7.30
-slf4j-log4j12-1.7.30
+argparse4j-0.7.0, see: licenses/argparse-MIT
+jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
+slf4j-api-1.7.30, see: licenses/slf4j-MIT
+slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
 
 ---------------------------------------
 BSD 2-Clause
-see: licenses/BSD-2-clause
 
-netty-common-4.1.59.Final
-reflections-0.9.12
-zstd-jni-1.4.9-1
+zstd-jni-1.4.9-1, see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
-see: licenses/BSD-3-clause
 
-paranamer-2.8
+paranamer-2.8, see: licenses/paranamer-BSD-3-clause
+
+---------------------------------------
+Do What The F*ck You Want To Public License
+see: licenses/DWTFYWTPL
+
+reflections-0.9.12
