@@ -310,6 +310,14 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnEmptyPattern() {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
+            consumer.subscribe(Pattern.compile(""));
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
     public void testSubscriptionWithEmptyPartitionAssignment() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
