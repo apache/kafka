@@ -92,7 +92,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.candidateStateOrThrow().recordGrantedVote(1);
-        state.transitionToLeader(2L);
+        state.transitionToLeader(2L, null);
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());

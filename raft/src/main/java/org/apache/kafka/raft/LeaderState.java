@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ import java.util.stream.Collectors;
  * More specifically, the set of unacknowledged voters are targets for BeginQuorumEpoch requests from the leader until
  * they acknowledge the leader.
  */
-public class LeaderState implements EpochState {
+public class LeaderState<T> implements EpochState {
     static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
 
     private final int localId;
@@ -48,13 +49,16 @@ public class LeaderState implements EpochState {
     private final Set<Integer> grantingVoters = new HashSet<>();
     private final Logger log;
 
+    private final BatchAccumulator<T> accumulator;
+
     protected LeaderState(
         int localId,
         int epoch,
         long epochStartOffset,
         Set<Integer> voters,
         Set<Integer> grantingVoters,
-        LogContext logContext
+        LogContext logContext,
+        BatchAccumulator<T> accumulator
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -67,6 +71,11 @@ public class LeaderState implements EpochState {
         }
         this.grantingVoters.addAll(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
+        this.accumulator = accumulator;
+    }
+
+    public BatchAccumulator<T> accumulator() {
+        return this.accumulator;
     }
 
     @Override
@@ -331,6 +340,10 @@ public class LeaderState implements EpochState {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+        if (accumulator != null) {
+            accumulator.close();
+        }
+    }
 
 }
