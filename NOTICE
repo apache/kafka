@@ -6,3 +6,7 @@ The Apache Software Foundation (https://www.apache.org/).
 
 This distribution has a binary dependency on jersey, which is available under the CDDL
 License. The source code of jersey can be found at https://github.com/jersey/jersey/.
+
+The streams-scala (streams/streams-scala) module was donated by Lightbend and the original code was copyrighted by them:
+Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
+Copyright (C) 2017-2018 Alexis Seigneurin.

@@ -46,6 +46,7 @@ spotless {
   scala {
     target 'streams/**/*.scala'
     scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
+    licenseHeaderFile 'checkstyle/java.header', 'package'
   }
 }
 
