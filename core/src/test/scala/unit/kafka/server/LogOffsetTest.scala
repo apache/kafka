@@ -161,7 +161,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -190,7 +190,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()

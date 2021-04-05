@@ -297,7 +297,7 @@ public abstract class TopologyTestDriverTest {
 
         /**
          * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )}.
-         * @return true if the the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
+         * @return true if the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
          */
         public boolean isCheckSupplierCall() {
             return Arrays.stream(Thread.currentThread().getStackTrace())

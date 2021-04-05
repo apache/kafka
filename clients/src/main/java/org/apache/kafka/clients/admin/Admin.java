@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -972,46 +971,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type and default options.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
-        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
-    }
-
-    /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @param options    The options to use when electing the preferred leaders.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
-                                                              ElectPreferredLeadersOptions options) {
-        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
-        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
-
-        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
-    }
-
-    /**
      * Elect a replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -1526,6 +1485,28 @@ public interface Admin extends AutoCloseable {
      */
     @InterfaceStability.Unstable
     UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
+
+    /**
+     * Describe producer state on a set of topic partitions. See
+     * {@link #describeProducers(Collection, DescribeProducersOptions)} for more details.
+     *
+     * @param partitions The set of partitions to query
+     * @return The result
+     */
+    default DescribeProducersResult describeProducers(Collection<TopicPartition> partitions) {
+        return describeProducers(partitions, new DescribeProducersOptions());
+    }
+
+    /**
+     * Describe active producer state on a set of topic partitions. Unless a specific broker
+     * is requested through {@link DescribeProducersOptions#brokerId(int)}, this will
+     * query the partition leader to find the producer state.
+     *
+     * @param partitions The set of partitions to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

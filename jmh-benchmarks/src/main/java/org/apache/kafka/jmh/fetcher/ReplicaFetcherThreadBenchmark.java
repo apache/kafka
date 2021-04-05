@@ -118,6 +118,7 @@ public class ReplicaFetcherThreadBenchmark {
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
+    private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -176,7 +177,7 @@ public class ReplicaFetcherThreadBenchmark {
                     0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
-            partition.makeFollower(partitionState, offsetCheckpoints);
+            partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
             initialFetchStates.put(tp, new InitialFetchState(new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {

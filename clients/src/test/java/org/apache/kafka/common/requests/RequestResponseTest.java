@@ -2767,7 +2767,7 @@ public class RequestResponseTest {
     private BrokerRegistrationRequest createBrokerRegistrationRequest(short v) {
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
                 .setBrokerId(1)
-                .setClusterId(Uuid.randomUuid())
+                .setClusterId(Uuid.randomUuid().toString())
                 .setRack("1")
                 .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
                         new BrokerRegistrationRequestData.Feature()).iterator()))

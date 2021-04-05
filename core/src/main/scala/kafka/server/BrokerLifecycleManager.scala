@@ -148,7 +148,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The cluster ID, or null if this manager has not been started yet.  This variable can
    * only be read or written from the event queue thread.
    */
-  private var _clusterId: Uuid = _
+  private var _clusterId: String = _
 
   /**
    * The listeners which this broker advertises.  This variable can only be read or
@@ -182,7 +182,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    */
   def start(highestMetadataOffsetProvider: () => Long,
             channelManager: BrokerToControllerChannelManager,
-            clusterId: Uuid,
+            clusterId: String,
             advertisedListeners: ListenerCollection,
             supportedFeatures: util.Map[String, VersionRange]): Unit = {
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
@@ -245,7 +245,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
 
   private class StartupEvent(highestMetadataOffsetProvider: () => Long,
                      channelManager: BrokerToControllerChannelManager,
-                     clusterId: Uuid,
+                     clusterId: String,
                      advertisedListeners: ListenerCollection,
                      supportedFeatures: util.Map[String, VersionRange]) extends EventQueue.Event {
     override def run(): Unit = {

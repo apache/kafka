@@ -283,7 +283,6 @@ public class Fetcher<K, V> implements Closeable {
                 public void onSuccess(ClientResponse resp) {
                     synchronized (Fetcher.this) {
                         try {
-                            @SuppressWarnings("unchecked")
                             FetchResponse response = (FetchResponse) resp.responseBody();
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                             if (handler == null) {
