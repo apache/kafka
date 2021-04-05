@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,7 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-node.id=0
-listeners=PLAINTEXT://localhost:9092
-controller.quorum.voters=0@localhost:9092
-log.dirs=/tmp/raft-logs
+base_dir=$(dirname $0)
+
+if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
+    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/kraft-log4j.properties"
+fi
+
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
+fi
+
+EXTRA_ARGS=${EXTRA_ARGS-'-name kafkaServer -loggc'}
+
+COMMAND=$1
+case $COMMAND in
+  -daemon)
+    EXTRA_ARGS="-daemon "$EXTRA_ARGS
+    shift
+    ;;
+  *)
+    ;;
+esac
+
+exec $base_dir/../../bin/kafka-run-class.sh $EXTRA_ARGS kafka.tools.TestRaftServer "$@"

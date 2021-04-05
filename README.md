@@ -77,14 +77,14 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-### Running a Kafka broker with ZooKeeper
+### Running a Kafka broker in ZooKeeper mode
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
 
-### Running a Kafka broker in self-managed mode
+### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
 
-See [config/self-managed/README.md](https://github.com/apache/kafka/blob/trunk/config/self-managed/README.md).
+See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
