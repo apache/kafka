@@ -144,7 +144,9 @@ public class ClientQuotaControlManager {
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.getOrDefault(entity, Collections.emptyMap());
-        newQuotaConfigs.forEach((key, newValue) -> {
+        for (Map.Entry<String, Double> entry : newQuotaConfigs.entrySet()) {
+            String key = entry.getKey();
+            Double newValue = entry.getValue();
             if (newValue == null) {
                 if (currentQuotas.containsKey(key)) {
                     // Null value indicates removal
@@ -157,6 +159,7 @@ public class ClientQuotaControlManager {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
                 if (validationError.isFailure()) {
                     outputResults.put(entity, validationError);
+                    return;
                 } else {
                     final Double currentValue = currentQuotas.get(key);
                     if (!Objects.equals(currentValue, newValue)) {
@@ -168,12 +171,10 @@ public class ClientQuotaControlManager {
                     }
                 }
             }
-        });
-
-        // Only add the records to outputRecords if there were no errors
-        if (outputResults.putIfAbsent(entity, ApiError.NONE) == null) {
-            outputRecords.addAll(newRecords);
         }
+
+        outputRecords.addAll(newRecords);
+        outputResults.put(entity, ApiError.NONE);
     }
 
     private ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {

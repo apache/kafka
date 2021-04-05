@@ -300,12 +300,12 @@ class RaftClusterTest {
         filter = ClientQuotaFilter.contains(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
-        val (describeResult2, ok) = TestUtils.computeUntilTrue(admin.describeClientQuotas(filter).entities().get()) {
-          results => results.size() == 2
+        TestUtils.tryUntilNoAssertionError(){
+          val results = admin.describeClientQuotas(filter).entities().get()
+          assertEquals(2, results.size(), "Broker did not see two client quotas")
+          assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
+          assertEquals(9998.0, results.get(entity2).get("producer_byte_rate"), 1e-6)
         }
-        assertTrue(ok, "Broker never saw two client quotas")
-        assertEquals(9999.0, describeResult2.get(entity).get("producer_byte_rate"), 1e-6)
-        assertEquals(9998.0, describeResult2.get(entity2).get("producer_byte_rate"), 1e-6)
       } finally {
         admin.close()
       }
