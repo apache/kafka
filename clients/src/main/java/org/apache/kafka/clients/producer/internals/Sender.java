@@ -717,7 +717,13 @@ public class Sender implements Runnable {
                     errorMessage = response.error.message();
                 }
 
-                recordErrorMap.put(recordError.batchIndex, new InvalidRecordException(errorMessage));
+                // If the batch contained only a single record error, then we can unambiguously
+                // use the exception type corresponding to the partition-level error code.
+                if (response.recordErrors.size() == 1) {
+                    recordErrorMap.put(recordError.batchIndex, response.error.exception(errorMessage));
+                } else {
+                    recordErrorMap.put(recordError.batchIndex, new InvalidRecordException(errorMessage));
+                }
             }
 
             Function<Integer, RuntimeException> recordExceptions = batchIndex -> {
