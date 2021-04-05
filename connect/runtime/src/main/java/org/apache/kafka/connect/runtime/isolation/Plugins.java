@@ -61,9 +61,21 @@ public class Plugins {
         delegatingLoader.initLoaders();
     }
 
+    public Plugins(Map<String, String> props, ClassLoader parent) {
+        List<String> pluginLocations = WorkerConfig.pluginLocations(props);
+        delegatingLoader = newDelegatingClassLoader(pluginLocations, parent);
+        delegatingLoader.initLoaders();
+    }
+
     private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
         return AccessController.doPrivileged(
                 (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths)
+        );
+    }
+
+    private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths, ClassLoader parent) {
+        return AccessController.doPrivileged(
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths, parent)
         );
     }
 

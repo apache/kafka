@@ -98,6 +98,10 @@ public class TestPlugins {
      * to load internal classes, and samples information about their initialization.
      */
     public static final String SERVICE_LOADER = "test.plugins.ServiceLoaderPlugin";
+    /**
+     * Class name of a plugin which reads a version string from resource.
+     */
+    public static final String READ_VERSION_FROM_RESOURCE = "test.plugins.ReadVersionFromResource";
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
     private static final Map<String, File> PLUGIN_JARS;
@@ -114,6 +118,9 @@ public class TestPlugins {
             pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
             pluginJars.put(SAMPLING_CONFIG_PROVIDER, createPluginJar("sampling-config-provider"));
             pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
+            // Create two versions of the same plugin reading version string from a resource
+            pluginJars.put(READ_VERSION_FROM_RESOURCE + ".v1", createPluginJar("read-version-from-resource-v1"));
+            pluginJars.put(READ_VERSION_FROM_RESOURCE + ".v2", createPluginJar("read-version-from-resource-v2"));
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
