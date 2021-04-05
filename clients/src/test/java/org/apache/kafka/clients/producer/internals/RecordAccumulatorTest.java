@@ -754,7 +754,7 @@ public class RecordAccumulatorTest {
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertFalse(drained.isEmpty());
         assertFalse(drained.get(node1.id()).isEmpty());
-        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        drained.get(node1.id()).get(0).complete(acked.get(), 100L);
         assertEquals(1, acked.get(), "The first message should have been acked.");
         assertTrue(future1.isDone());
         assertEquals(0, future1.get().offset());
@@ -762,7 +762,7 @@ public class RecordAccumulatorTest {
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertFalse(drained.isEmpty());
         assertFalse(drained.get(node1.id()).isEmpty());
-        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        drained.get(node1.id()).get(0).complete(acked.get(), 100L);
         assertEquals(2, acked.get(), "Both message should have been acked.");
         assertTrue(future2.isDone());
         assertEquals(1, future2.get().offset());
@@ -1010,7 +1010,7 @@ public class RecordAccumulatorTest {
                         // release the resource of the original big batch.
                         numSplit++;
                     } else {
-                        batch.done(0L, 0L, null);
+                        batch.complete(0L, 0L);
                     }
                     accum.deallocate(batch);
                 }

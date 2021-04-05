@@ -527,7 +527,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
 
         public void complete(RuntimeException e) {
-            result.set(e == null ? offset : -1L, RecordBatch.NO_TIMESTAMP, e);
+            if (e == null) {
+                result.set(offset, RecordBatch.NO_TIMESTAMP, null);
+            } else {
+                result.set(-1, RecordBatch.NO_TIMESTAMP, index -> e);
+            }
+
             if (callback != null) {
                 if (e == null)
                     callback.onCompletion(metadata, null);

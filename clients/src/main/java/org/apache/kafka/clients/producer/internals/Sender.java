@@ -24,6 +24,8 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -60,9 +62,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -380,7 +381,7 @@ public class Sender implements Runnable {
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
-            failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
+            failBatch(expiredBatch, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
                 transactionManager.markSequenceUnresolved(expiredBatch);
@@ -635,17 +636,10 @@ public class Sender implements Runnable {
                 // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
                 completeBatch(batch, response);
             } else {
-                final RuntimeException exception;
-                if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
-                    exception = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
-                else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
-                    exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
-                else
-                    exception = error.exception(response.errorMessage);
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, exception, batch.attempts() < this.retries);
+                failBatch(batch, response, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
@@ -689,30 +683,87 @@ public class Sender implements Runnable {
             transactionManager.handleCompletedBatch(batch, response);
         }
 
-        if (batch.done(response.baseOffset, response.logAppendTime, null)) {
+        if (batch.complete(response.baseOffset, response.logAppendTime)) {
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
 
     private void failBatch(ProducerBatch batch,
                            ProduceResponse.PartitionResponse response,
-                           RuntimeException exception,
                            boolean adjustSequenceNumbers) {
-        failBatch(batch, response.baseOffset, response.logAppendTime, exception, adjustSequenceNumbers);
+        final RuntimeException topLevelException;
+        if (response.error == Errors.TOPIC_AUTHORIZATION_FAILED)
+            topLevelException = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
+        else if (response.error == Errors.CLUSTER_AUTHORIZATION_FAILED)
+            topLevelException = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
+        else
+            topLevelException = response.error.exception(response.errorMessage);
+
+        if (response.recordErrors == null || response.recordErrors.isEmpty()) {
+            failBatch(batch, topLevelException, adjustSequenceNumbers);
+        } else {
+            Map<Integer, RuntimeException> recordErrorMap = new HashMap<>(response.recordErrors.size());
+            for (ProduceResponse.RecordError recordError : response.recordErrors) {
+                // The API leaves us with some awkwardness interpreting the errors in the response.
+                // We cannot differentiate between different error cases (such as INVALID_TIMESTAMP)
+                // from the single error code at the partition level, so instead we use INVALID_RECORD
+                // for all failed records and rely on the message to distinguish the cases.
+                final String errorMessage;
+                if (recordError.message != null) {
+                    errorMessage = recordError.message;
+                } else if (response.errorMessage != null) {
+                    errorMessage = response.errorMessage;
+                } else {
+                    errorMessage = response.error.message();
+                }
+
+                // If the batch contained only a single record error, then we can unambiguously
+                // use the exception type corresponding to the partition-level error code.
+                if (response.recordErrors.size() == 1) {
+                    recordErrorMap.put(recordError.batchIndex, response.error.exception(errorMessage));
+                } else {
+                    recordErrorMap.put(recordError.batchIndex, new InvalidRecordException(errorMessage));
+                }
+            }
+
+            Function<Integer, RuntimeException> recordExceptions = batchIndex -> {
+                RuntimeException exception = recordErrorMap.get(batchIndex);
+                if (exception != null) {
+                    return exception;
+                } else {
+                    // If the response contains record errors, then the records which failed validation
+                    // will be present in the response. To avoid confusion for the remaining records, we
+                    // return a generic exception.
+                    return new KafkaException("Failed to append record because it was part of a batch " +
+                        "which had one more more invalid records");
+                }
+            };
+
+            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers);
+        }
     }
 
-    private void failBatch(ProducerBatch batch,
-                           long baseOffset,
-                           long logAppendTime,
-                           RuntimeException exception,
-                           boolean adjustSequenceNumbers) {
+    private void failBatch(
+        ProducerBatch batch,
+        RuntimeException topLevelException,
+        boolean adjustSequenceNumbers
+    ) {
+        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers);
+    }
+
+    private void failBatch(
+        ProducerBatch batch,
+        RuntimeException topLevelException,
+        Function<Integer, RuntimeException> recordExceptions,
+        boolean adjustSequenceNumbers
+    ) {
         if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumbers);
+            transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
-        if (batch.done(baseOffset, logAppendTime, exception)) {
+        if (batch.completeExceptionally(topLevelException, recordExceptions)) {
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
