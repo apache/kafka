@@ -305,6 +305,13 @@ public class LeaderState implements EpochState {
     }
 
     @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we are already leader in epoch {}",
+            candidateId, epoch);
+        return false;
+    }
+
+    @Override
     public String toString() {
         return "Leader(" +
             "localId=" + localId +
