@@ -25,6 +25,7 @@ import org.apache.kafka.metadata.UsableBroker;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -272,6 +273,11 @@ public class BrokerHeartbeatManager {
         return unfenced;
     }
 
+    // VisibleForTesting
+    Collection<BrokerHeartbeatState> brokers() {
+        return brokers.values();
+    }
+
     /**
      * Mark a broker as fenced.
      *
@@ -439,7 +445,7 @@ public class BrokerHeartbeatManager {
      * @param numPartitions     The number of partitions to place.
      * @param numReplicas       The number of replicas for each partition.
      * @param idToRack          A function mapping broker id to broker rack.
-     * @param policy            The replica placement policy to use.
+     * @param placer            The replica placer to use.
      *
      * @return                  A list of replica lists.
      *
@@ -449,12 +455,10 @@ public class BrokerHeartbeatManager {
                                       int numPartitions,
                                       short numReplicas,
                                       Function<Integer, Optional<String>> idToRack,
-                                      ReplicaPlacementPolicy policy) {
-        // TODO: support using fenced brokers here if necessary to get to the desired
-        // number of replicas. We probably need to add a fenced boolean in UsableBroker.
+                                      ReplicaPlacer placer) {
         Iterator<UsableBroker> iterator = new UsableBrokerIterator(
-            unfenced.iterator(), idToRack);
-        return policy.createPlacement(startPartition, numPartitions, numReplicas, iterator);
+            brokers.values().iterator(), idToRack);
+        return placer.place(startPartition, numPartitions, numReplicas, iterator);
     }
 
     static class UsableBrokerIterator implements Iterator<UsableBroker> {
@@ -482,7 +486,7 @@ public class BrokerHeartbeatManager {
                 result = iterator.next();
             } while (result.shuttingDown());
             Optional<String> rack = idToRack.apply(result.id());
-            next = new UsableBroker(result.id(), rack);
+            next = new UsableBroker(result.id(), rack, result.fenced());
             return true;
         }
 

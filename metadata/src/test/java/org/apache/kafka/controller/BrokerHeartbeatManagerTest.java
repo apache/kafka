@@ -174,7 +174,7 @@ public class BrokerHeartbeatManagerTest {
     private static Set<UsableBroker> usableBrokersToSet(BrokerHeartbeatManager manager) {
         Set<UsableBroker> brokers = new HashSet<>();
         for (Iterator<UsableBroker> iterator = new UsableBrokerIterator(
-            manager.unfenced().iterator(),
+            manager.brokers().iterator(),
             id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"));
              iterator.hasNext(); ) {
             brokers.add(iterator.next());
@@ -193,10 +193,11 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(4, true, 100);
         assertEquals(98L, manager.lowestActiveOffset());
         Set<UsableBroker> expected = new HashSet<>();
-        expected.add(new UsableBroker(0, Optional.of("rack1")));
-        expected.add(new UsableBroker(1, Optional.of("rack2")));
-        expected.add(new UsableBroker(2, Optional.of("rack1")));
-        expected.add(new UsableBroker(3, Optional.of("rack2")));
+        expected.add(new UsableBroker(0, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(1, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(2, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(3, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
         manager.updateControlledShutdownOffset(2, 0);
         assertEquals(100L, manager.lowestActiveOffset());
@@ -204,7 +205,8 @@ public class BrokerHeartbeatManagerTest {
             () -> manager.updateControlledShutdownOffset(4, 0));
         manager.touch(4, false, 100);
         manager.updateControlledShutdownOffset(4, 0);
-        expected.remove(new UsableBroker(2, Optional.of("rack1")));
+        expected.remove(new UsableBroker(2, Optional.of("rack1"), false));
+        expected.remove(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
     }
 

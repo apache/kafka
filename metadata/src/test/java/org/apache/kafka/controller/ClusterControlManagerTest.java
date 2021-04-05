@@ -57,7 +57,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), time, snapshotRegistry, 1000,
-                new SimpleReplicaPlacementPolicy(new Random()));
+                new StripedReplicaPlacer(new Random()));
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
 
@@ -98,7 +98,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), new MockTime(0, 0, 0), snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(new Random()));
+            new StripedReplicaPlacer(new Random()));
         clusterControl.activate();
         clusterControl.replay(brokerRecord);
         assertEquals(new BrokerRegistration(1, 100,
@@ -121,7 +121,7 @@ public class ClusterControlManagerTest {
         MockRandom random = new MockRandom();
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), time, snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(random));
+            new StripedReplicaPlacer(random));
         clusterControl.activate();
         for (int i = 0; i < numUsableBrokers; i++) {
             RegisterBrokerRecord brokerRecord =
@@ -158,7 +158,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), time, snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(new Random()));
+            new StripedReplicaPlacer(new Random()));
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
         for (int i = 0; i < 3; i++) {
