@@ -1509,6 +1509,27 @@ public interface Admin extends AutoCloseable {
     DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
     /**
+     * Describe the state of a set of transactionalIds. See
+     * {@link #describeTransactions(Collection, DescribeTransactionsOptions)} for more details.
+     *
+     * @param transactionalIds The set of transactionalIds to query
+     * @return The result
+     */
+    default DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds) {
+        return describeTransactions(transactionalIds, new DescribeTransactionsOptions());
+    }
+
+    /**
+     * Describe the state of a set of transactionalIds from the respective transaction coordinators,
+     * which are dynamically discovered.
+     *
+     * @param transactionalIds The set of transactionalIds to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
