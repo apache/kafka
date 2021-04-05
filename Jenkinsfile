@@ -273,6 +273,7 @@ pipeline {
   }
   
   post {
+    agent { label 'ubuntu' }
     always {
       script {
         if (!isChangeRequest(env)) {
