@@ -462,7 +462,7 @@ public class StoreQueryIntegrationTest {
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         return config;
     }
 }
