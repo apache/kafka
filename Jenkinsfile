@@ -273,9 +273,8 @@ pipeline {
   }
   
   post {
-    agent { label 'ubuntu' }
     always {
-      script {
+      node('ubuntu') {
         step([$class: 'Mailer',
              notifyEveryUnstableBuild: true,
              recipients: "dev@kafka.apache.org",
