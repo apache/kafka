@@ -247,6 +247,13 @@ class AutoTopicCreationManagerTest {
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
 
     assertTrue(serializeIsCalled.get())
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    Mockito.verify(brokerToController).sendRequest(
+      argumentCaptor.capture(),
+      any(classOf[ControllerRequestCompletionHandler]))
+    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
+    assertEquals(userPrincipal, SecurityUtils.parseKafkaPrincipal(Utils.utf8(capturedRequest.requestPrincipal)))
   }
 
   @Test
