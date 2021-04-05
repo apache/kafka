@@ -276,12 +276,10 @@ pipeline {
     agent { label 'ubuntu' }
     always {
       script {
-        if (!isChangeRequest(env)) {
-          step([$class: 'Mailer',
-               notifyEveryUnstableBuild: true,
-               recipients: "dev@kafka.apache.org",
-               sendToIndividuals: false])
-        }
+        step([$class: 'Mailer',
+             notifyEveryUnstableBuild: true,
+             recipients: "dev@kafka.apache.org",
+             sendToIndividuals: false])
       }
     }
   }
