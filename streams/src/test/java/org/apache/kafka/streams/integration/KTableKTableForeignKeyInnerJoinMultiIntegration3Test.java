@@ -160,6 +160,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration3Test {
 
     @After
     public void after() throws IOException {
+        System.err.println("closing");
         if (streams != null) {
             streams.close();
             streams = null;
