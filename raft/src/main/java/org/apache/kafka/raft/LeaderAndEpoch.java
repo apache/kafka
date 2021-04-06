@@ -28,6 +28,10 @@ public class LeaderAndEpoch {
         this.epoch = epoch;
     }
 
+    public boolean isLeader(int nodeId) {
+        return leaderId.isPresent() && leaderId.getAsInt() == nodeId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -40,5 +44,13 @@ public class LeaderAndEpoch {
     @Override
     public int hashCode() {
         return Objects.hash(leaderId, epoch);
+    }
+
+    @Override
+    public String toString() {
+        return "LeaderAndEpoch(" +
+            "leaderId=" + leaderId +
+            ", epoch=" + epoch +
+            ')';
     }
 }

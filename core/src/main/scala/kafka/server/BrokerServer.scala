@@ -18,9 +18,9 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
@@ -28,6 +28,7 @@ import kafka.coordinator.transaction.{ProducerIdGenerator, TransactionCoordinato
 import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
+import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
@@ -41,8 +42,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
-import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.metalog.MetaLogManager
+import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerState, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
@@ -54,16 +54,16 @@ import scala.jdk.CollectionConverters._
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-                    val config: KafkaConfig,
-                    val metaProps: MetaProperties,
-                    val metaLogManager: MetaLogManager,
-                    val time: Time,
-                    val metrics: Metrics,
-                    val threadNamePrefix: Option[String],
-                    val initialOfflineDirs: Seq[String],
-                    val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-                    val supportedFeatures: util.Map[String, VersionRange]
-                  ) extends KafkaBroker {
+  val config: KafkaConfig,
+  val metaProps: MetaProperties,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val time: Time,
+  val metrics: Metrics,
+  val threadNamePrefix: Option[String],
+  val initialOfflineDirs: Seq[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val supportedFeatures: util.Map[String, VersionRange]
+) extends KafkaBroker {
 
   import kafka.server.Server._
 
@@ -179,7 +179,7 @@ class BrokerServer(
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
+      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
@@ -282,7 +282,7 @@ class BrokerServer(
         metaProps.clusterId, networkListeners, supportedFeatures)
 
       // Register a listener with the Raft layer to receive metadata event notifications
-      metaLogManager.register(brokerMetadataListener)
+      raftManager.register(brokerMetadataListener)
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null

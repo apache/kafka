@@ -1050,6 +1050,7 @@ project(':metadata') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':raft')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
@@ -1248,7 +1249,6 @@ project(':raft') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.metadata;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.raft.RecordSerde;
 
 public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {

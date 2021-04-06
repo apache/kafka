@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.internals.MemoryBatchReader;
+
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -110,6 +113,11 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
         public int hashCode() {
             return Objects.hash(baseOffset, epoch, records);
         }
+    }
+
+    static <T> BatchReader<T> singleton(Batch<T> batch) {
+        return new MemoryBatchReader<>(Collections.singletonList(batch), reader -> {
+        });
     }
 
 }

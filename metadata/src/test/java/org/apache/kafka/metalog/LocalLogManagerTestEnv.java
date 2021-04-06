@@ -20,6 +20,7 @@ package org.apache.kafka.metalog;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +60,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
-                logManager.register(new MockMetaLogManagerListener());
+                logManager.register(new MockMetaLogManagerListener(logManager.nodeId));
             }
         } catch (Exception e) {
             testEnv.close();
@@ -100,16 +101,16 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return dir;
     }
 
-    MetaLogLeader waitForLeader() throws InterruptedException {
-        AtomicReference<MetaLogLeader> value = new AtomicReference<>(null);
+    LeaderAndEpoch waitForLeader() throws InterruptedException {
+        AtomicReference<LeaderAndEpoch> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
-            MetaLogLeader result = null;
+            LeaderAndEpoch result = null;
             for (LocalLogManager logManager : logManagers) {
-                MetaLogLeader leader = logManager.leader();
-                if (leader.nodeId() == logManager.nodeId()) {
+                LeaderAndEpoch leader = logManager.leaderAndEpoch();
+                if (leader.isLeader(logManager.nodeId)) {
                     if (result != null) {
-                        throw new RuntimeException("node " + leader.nodeId() +
-                            " thinks it's the leader, but so does " + result.nodeId());
+                        throw new RuntimeException("node " + logManager.nodeId +
+                            " thinks it's the leader, but so does " + result.leaderId);
                     }
                     result = leader;
                 }

@@ -21,6 +21,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> extends Closeable {
@@ -45,24 +46,14 @@ public interface RaftClient<T> extends Closeable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Invoked after this node has become a leader. This is only called after
-         * all commits up to the start of the leader's epoch have been sent to
-         * {@link #handleCommit(BatchReader)}.
+         * Called on any change to leadership. This includes both when a leader is elected and
+         * when a leader steps down or fails.
          *
-         * After becoming a leader, the client is eligible to write to the log
-         * using {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}.
-         *
-         * @param epoch the claimed leader epoch
+         * @param leader the current leader and epoch
          */
-        default void handleClaim(int epoch) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
 
-        /**
-         * Invoked after a leader has stepped down. This callback may or may not
-         * fire before the next leader has been elected.
-         *
-         * @param epoch the epoch that the leader is resigning from
-         */
-        default void handleResign(int epoch) {}
+        default void beginShutdown() {}
     }
 
     /**
@@ -85,6 +76,14 @@ public interface RaftClient<T> extends Closeable {
      * @return the current {@link LeaderAndEpoch}
      */
     LeaderAndEpoch leaderAndEpoch();
+
+    /**
+     * Get local nodeId if one is defined. This may be absent when the client is used
+     * as an anonymous observer, as in the case of the metadata shell.
+     *
+     * @return optional node id
+     */
+    OptionalInt nodeId();
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -146,6 +145,16 @@ public interface RaftClient<T> extends Closeable {
      * @return A future which is completed when shutdown completes successfully or the timeout expires.
      */
     CompletableFuture<Void> shutdown(int timeoutMs);
+
+    /**
+     * Resign the leadership. The leader will give up its leadership in the current epoch,
+     * and a new election will be held. Note that nothing prevents this leader from getting
+     * reelected.
+     *
+     * @param epoch the epoch to resign from. If this does not match the current epoch, this
+     *              call will be ignored.
+     */
+    void resign(int epoch);
 
     /**
      * Create a writable snapshot file for a given offset and epoch.

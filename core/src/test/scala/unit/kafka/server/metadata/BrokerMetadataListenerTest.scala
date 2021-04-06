@@ -25,9 +25,9 @@ import kafka.server.RaftReplicaManager
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers._
@@ -83,8 +83,8 @@ class BrokerMetadataListenerTest {
     val deleteRecord = new RemoveTopicRecord()
       .setTopicId(topicId)
     lastMetadataOffset += 1
-    listener.execCommits(lastOffset = lastMetadataOffset, List[ApiMessage](
-      deleteRecord,
+    listener.execCommits(lastOffset = lastMetadataOffset, List[ApiMessageAndVersion](
+      new ApiMessageAndVersion(deleteRecord, 0.toShort),
     ).asJava)
 
     assertFalse(metadataCache.contains(topic))
@@ -115,11 +115,10 @@ class BrokerMetadataListenerTest {
     numPartitions: Int,
     numBrokers: Int
   ): Set[TopicPartition] = {
-    val records = new java.util.ArrayList[ApiMessage]
-    records.add(new TopicRecord()
+    val records = new java.util.ArrayList[ApiMessageAndVersion]
+    records.add(new ApiMessageAndVersion(new TopicRecord()
       .setName(topic)
-      .setTopicId(topicId)
-    )
+      .setTopicId(topicId), 0))
 
     val localTopicPartitions = mutable.Set.empty[TopicPartition]
     (0 until numPartitions).map { partitionId =>
@@ -134,24 +133,22 @@ class BrokerMetadataListenerTest {
         localTopicPartitions.add(new TopicPartition(topic, partitionId))
       }
 
-      records.add(new PartitionRecord()
+      records.add(new ApiMessageAndVersion(new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(partitionId)
         .setLeader(preferredLeaderId)
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
         .setReplicas(replicas)
-        .setIsr(replicas)
-      )
+        .setIsr(replicas), 0))
     }
 
     topicConfig.forKeyValue { (key, value) =>
-      records.add(new ConfigRecord()
+      records.add(new ApiMessageAndVersion(new ConfigRecord()
         .setResourceName(topic)
         .setResourceType(ConfigResource.Type.TOPIC.id())
         .setName(key)
-        .setValue(value)
-      )
+        .setValue(value), 0))
     }
 
     lastMetadataOffset += records.size()

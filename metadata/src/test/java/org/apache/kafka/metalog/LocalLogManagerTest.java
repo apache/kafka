@@ -19,14 +19,14 @@ package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
@@ -37,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class LocalLogManagerTest {
-    private static final Logger log = LoggerFactory.getLogger(LocalLogManagerTest.class);
 
     /**
      * Test creating a LocalLogManager and closing it.
@@ -58,7 +57,7 @@ public class LocalLogManagerTest {
     public void testClaimsLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(1)) {
-            assertEquals(new MetaLogLeader(0, 0), env.waitForLeader());
+            assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
             assertEquals(null, env.firstError.get());
         }
@@ -71,20 +70,24 @@ public class LocalLogManagerTest {
     public void testPassLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(3)) {
-            MetaLogLeader first = env.waitForLeader();
-            MetaLogLeader cur = first;
+            LeaderAndEpoch first = env.waitForLeader();
+            LeaderAndEpoch cur = first;
             do {
-                env.logManagers().get(cur.nodeId()).renounce(cur.epoch());
-                MetaLogLeader next = env.waitForLeader();
-                while (next.epoch() == cur.epoch()) {
+                int currentLeaderId = cur.leaderId.orElseThrow(() ->
+                    new AssertionError("Current leader is undefined")
+                );
+                env.logManagers().get(currentLeaderId).resign(cur.epoch);
+
+                LeaderAndEpoch next = env.waitForLeader();
+                while (next.epoch == cur.epoch) {
                     Thread.sleep(1);
                     next = env.waitForLeader();
                 }
-                long expectedNextEpoch = cur.epoch() + 2;
-                assertEquals(expectedNextEpoch, next.epoch(), "Expected next epoch to be " + expectedNextEpoch +
+                long expectedNextEpoch = cur.epoch + 2;
+                assertEquals(expectedNextEpoch, next.epoch, "Expected next epoch to be " + expectedNextEpoch +
                     ", but found  " + next);
                 cur = next;
-            } while (cur.nodeId() == first.nodeId());
+            } while (cur.leaderId.equals(first.leaderId));
             env.close();
             assertEquals(null, env.firstError.get());
         }
@@ -121,14 +124,18 @@ public class LocalLogManagerTest {
     public void testCommits() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(3)) {
-            MetaLogLeader leaderInfo = env.waitForLeader();
-            LocalLogManager activeLogManager = env.logManagers().get(leaderInfo.nodeId());
-            long epoch = activeLogManager.leader().epoch();
+            LeaderAndEpoch leaderInfo = env.waitForLeader();
+            int leaderId = leaderInfo.leaderId.orElseThrow(() ->
+                new AssertionError("Current leader is undefined")
+            );
+
+            LocalLogManager activeLogManager = env.logManagers().get(leaderId);
+            int epoch = activeLogManager.leaderAndEpoch().epoch;
             List<ApiMessageAndVersion> messages = Arrays.asList(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));
-            assertEquals(3, activeLogManager.scheduleWrite(epoch, messages));
+            assertEquals(3, activeLogManager.scheduleAppend(epoch, messages));
             for (LocalLogManager logManager : env.logManagers()) {
                 waitForLastCommittedOffset(3, logManager);
             }

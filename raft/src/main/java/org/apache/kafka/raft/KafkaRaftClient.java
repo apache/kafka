@@ -40,8 +40,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -53,10 +51,12 @@ import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -340,17 +340,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private void maybeFireHandleClaim(LeaderState state) {
-        int leaderEpoch = state.epoch();
-        long epochStartOffset = state.epochStartOffset();
+    private void maybeFireLeaderChange(LeaderState state) {
         for (ListenerContext listenerContext : listenerContexts) {
-            listenerContext.maybeFireHandleClaim(leaderEpoch, epochStartOffset);
+            listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch(), state.epochStartOffset());
         }
     }
 
-    private void fireHandleResign(int epoch) {
+    private void maybeFireLeaderChange() {
         for (ListenerContext listenerContext : listenerContexts) {
-            listenerContext.fireHandleResign(epoch);
+            listenerContext.maybeFireLeaderChange(quorum.leaderAndEpoch());
         }
     }
 
@@ -387,6 +385,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return quorum.leaderAndEpoch();
     }
 
+    @Override
+    public OptionalInt nodeId() {
+        return quorum.localId();
+    }
+
     private OffsetAndEpoch endOffset() {
         return new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch());
     }
@@ -395,9 +398,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         requestManager.resetAll();
     }
 
-    private void onBecomeLeader(long currentTimeMs) {
-        LeaderState state = quorum.leaderStateOrThrow();
-
+    private void onBecomeLeader(LeaderState state, long currentTimeMs) {
         log.initializeLeaderEpoch(quorum.epoch());
 
         // The high watermark can only be advanced once we have written a record
@@ -461,7 +462,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (state.isVoteGranted()) {
             long endOffset = log.endOffset().offset;
             quorum.transitionToLeader(endOffset);
-            onBecomeLeader(currentTimeMs);
+
+            LeaderState leaderState = quorum.leaderStateOrThrow();
+            maybeFireLeaderChange(leaderState);
+            onBecomeLeader(leaderState, currentTimeMs);
             return true;
         } else {
             return false;
@@ -477,10 +481,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeResignLeadership() {
-        if (quorum.isLeader()) {
-            fireHandleResign(quorum.epoch());
-        }
-
         if (accumulator != null) {
             accumulator.close();
             accumulator = null;
@@ -490,24 +490,28 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void transitionToCandidate(long currentTimeMs) throws IOException {
         maybeResignLeadership();
         quorum.transitionToCandidate();
+        maybeFireLeaderChange();
         onBecomeCandidate(currentTimeMs);
     }
 
     private void transitionToUnattached(int epoch) throws IOException {
         maybeResignLeadership();
         quorum.transitionToUnattached(epoch);
+        maybeFireLeaderChange();
         resetConnections();
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
         fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
         quorum.transitionToResigned(preferredSuccessors);
+        maybeFireLeaderChange();
         resetConnections();
     }
 
     private void transitionToVoted(int candidateId, int epoch) throws IOException {
         maybeResignLeadership();
         quorum.transitionToVoted(epoch, candidateId);
+        maybeFireLeaderChange();
         resetConnections();
     }
 
@@ -533,6 +537,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         maybeResignLeadership();
         quorum.transitionToFollower(epoch, leaderId);
+        maybeFireLeaderChange();
         onBecomeFollower(currentTimeMs);
     }
 
@@ -1926,7 +1931,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long pollLeader(long currentTimeMs) {
         LeaderState state = quorum.leaderStateOrThrow();
-        maybeFireHandleClaim(state);
+        maybeFireLeaderChange(state);
 
         GracefulShutdown shutdown = this.shutdown.get();
         if (shutdown != null) {
@@ -2257,6 +2262,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
+    public void resign(int epoch) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
         return new SnapshotWriter<>(
             log.createSnapshot(snapshotId),
@@ -2324,7 +2334,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
-        private int claimedEpoch = 0;
+        private LeaderAndEpoch lastFiredLeaderChange = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this `ListenerContext` instance
@@ -2408,19 +2418,32 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             listener.handleCommit(reader);
         }
 
-        void maybeFireHandleClaim(int epoch, long epochStartOffset) {
-            // We can fire `handleClaim` as soon as the listener has caught
-            // up to the start of the leader epoch. This guarantees that the
-            // state machine has seen the full committed state before it becomes
-            // leader and begins writing to the log.
-            if (epoch > claimedEpoch && nextOffset() >= epochStartOffset) {
-                claimedEpoch = epoch;
-                listener.handleClaim(epoch);
+        void maybeFireLeaderChange(LeaderAndEpoch leaderAndEpoch) {
+            if (shouldFireLeaderChange(leaderAndEpoch)) {
+                lastFiredLeaderChange = leaderAndEpoch;
+                listener.handleLeaderChange(leaderAndEpoch);
             }
         }
 
-        void fireHandleResign(int epoch) {
-            listener.handleResign(epoch);
+        private boolean shouldFireLeaderChange(LeaderAndEpoch leaderAndEpoch) {
+            if (leaderAndEpoch.equals(lastFiredLeaderChange)) {
+                return false;
+            } else if (leaderAndEpoch.epoch > lastFiredLeaderChange.epoch) {
+                return true;
+            } else {
+                return leaderAndEpoch.leaderId.isPresent() && !lastFiredLeaderChange.leaderId.isPresent();
+            }
+        }
+
+        void maybeFireLeaderChange(LeaderAndEpoch leaderAndEpoch, long epochStartOffset) {
+            // If this node is becoming the leader, then we can fire `handleClaim` as soon
+            // as the listener has caught up to the start of the leader epoch. This guarantees
+            // that the state machine has seen the full committed state before it becomes
+            // leader and begins writing to the log.
+            if (shouldFireLeaderChange(leaderAndEpoch) && nextOffset() >= epochStartOffset) {
+                lastFiredLeaderChange = leaderAndEpoch;
+                listener.handleLeaderChange(leaderAndEpoch);
+            }
         }
 
         public synchronized void onClose(BatchReader<T> reader) {

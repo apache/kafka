@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordT
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.raft.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.MetadataRecordSerde
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

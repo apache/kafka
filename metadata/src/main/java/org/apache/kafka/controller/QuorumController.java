@@ -17,18 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
@@ -68,14 +56,28 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metalog.MetaLogLeader;
-import org.apache.kafka.metalog.MetaLogListener;
-import org.apache.kafka.metalog.MetaLogManager;
-import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
+import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -107,7 +109,7 @@ public final class QuorumController implements Controller {
         private String threadNamePrefix = null;
         private LogContext logContext = null;
         private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
-        private MetaLogManager logManager = null;
+        private RaftClient<ApiMessageAndVersion> raftClient = null;
         private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
@@ -140,8 +142,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setLogManager(MetaLogManager logManager) {
-            this.logManager = logManager;
+        public Builder setRaftClient(RaftClient<ApiMessageAndVersion> logManager) {
+            this.raftClient = logManager;
             return this;
         }
 
@@ -176,7 +178,7 @@ public final class QuorumController implements Controller {
         }
 
         public QuorumController build() throws Exception {
-            if (logManager == null) {
+            if (raftClient == null) {
                 throw new RuntimeException("You must set a metadata log manager.");
             }
             if (threadNamePrefix == null) {
@@ -193,9 +195,9 @@ public final class QuorumController implements Controller {
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
-                        logManager, supportedFeatures, defaultReplicationFactor,
-                        defaultNumPartitions, replicaPlacementPolicy, sessionTimeoutNs,
-                        controllerMetrics);
+                    raftClient, supportedFeatures, defaultReplicationFactor,
+                    defaultNumPartitions, replicaPlacementPolicy, sessionTimeoutNs,
+                    controllerMetrics);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -207,12 +209,12 @@ public final class QuorumController implements Controller {
         "The active controller appears to be node ";
 
     private NotControllerException newNotControllerException() {
-        int latestController = logManager.leader().nodeId();
-        if (latestController < 0) {
-            return new NotControllerException("No controller appears to be active.");
-        } else {
+        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId;
+        if (latestController.isPresent()) {
             return new NotControllerException(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX +
-                latestController);
+                latestController.getAsInt());
+        } else {
+            return new NotControllerException("No controller appears to be active.");
         }
     }
 
@@ -410,7 +412,7 @@ public final class QuorumController implements Controller {
         public void run() throws Exception {
             long now = time.nanoseconds();
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            long controllerEpoch = curClaimEpoch;
+            int controllerEpoch = curClaimEpoch;
             if (controllerEpoch == -1) {
                 throw newNotControllerException();
             }
@@ -443,9 +445,9 @@ public final class QuorumController implements Controller {
                 // out asynchronously.
                 final long offset;
                 if (result.isAtomic()) {
-                    offset = logManager.scheduleAtomicWrite(controllerEpoch, result.records());
+                    offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
                 } else {
-                    offset = logManager.scheduleWrite(controllerEpoch, result.records());
+                    offset = raftClient.scheduleAppend(controllerEpoch, result.records());
                 }
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;
@@ -498,9 +500,12 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
-    class QuorumMetaLogListener implements MetaLogListener {
-        @Override
-        public void handleCommits(long offset, List<ApiMessage> messages) {
+    class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
+
+        private void handleCommittedBatch(BatchReader.Batch<ApiMessageAndVersion> batch) {
+            long offset = batch.lastOffset();
+            List<ApiMessageAndVersion> messages = batch.records();
+
             appendControlEvent("handleCommits[" + offset + "]", () -> {
                 if (curClaimEpoch == -1) {
                     // If the controller is a standby, replay the records that were
@@ -508,15 +513,16 @@ public final class QuorumController implements Controller {
                     if (log.isDebugEnabled()) {
                         if (log.isTraceEnabled()) {
                             log.trace("Replaying commits from the active node up to " +
-                                "offset {}: {}.", offset, messages.stream().
-                                map(m -> m.toString()).collect(Collectors.joining(", ")));
+                                "offset {}: {}.", offset, messages.stream()
+                                .map(ApiMessageAndVersion::toString)
+                                .collect(Collectors.joining(", ")));
                         } else {
                             log.debug("Replaying commits from the active node up to " +
                                 "offset {}.", offset);
                         }
                     }
-                    for (ApiMessage message : messages) {
-                        replay(message, offset);
+                    for (ApiMessageAndVersion messageAndVersion : messages) {
+                        replay(messageAndVersion.message(), offset);
                     }
                 } else {
                     // If the controller is active, the records were already replayed,
@@ -535,11 +541,23 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleNewLeader(MetaLogLeader newLeader) {
-            if (newLeader.nodeId() == nodeId) {
-                final long newEpoch = newLeader.epoch();
+        public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
+            try {
+                while (reader.hasNext()) {
+                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    handleCommittedBatch(batch);
+                }
+            } finally {
+                reader.close();
+            }
+        }
+
+        @Override
+        public void handleLeaderChange(LeaderAndEpoch newLeader) {
+            if (newLeader.isLeader(nodeId)) {
+                final int newEpoch = newLeader.epoch;
                 appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
-                    long curEpoch = curClaimEpoch;
+                    int curEpoch = curClaimEpoch;
                     if (curEpoch != -1) {
                         throw new RuntimeException("Tried to claim controller epoch " +
                             newEpoch + ", but we never renounced controller epoch " +
@@ -551,19 +569,14 @@ public final class QuorumController implements Controller {
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
                 });
-            }
-        }
-
-        @Override
-        public void handleRenounce(long oldEpoch) {
-            appendControlEvent("handleRenounce[" + oldEpoch + "]", () -> {
-                if (curClaimEpoch == oldEpoch) {
+            } else if (curClaimEpoch != -1) {
+                appendControlEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
                     log.info("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
                     renounce();
-                }
-            });
+                });
+            }
         }
 
         @Override
@@ -738,7 +751,7 @@ public final class QuorumController implements Controller {
     /**
      * The interface that we use to mutate the Raft log.
      */
-    private final MetaLogManager logManager;
+    private final RaftClient<ApiMessageAndVersion> raftClient;
 
     /**
      * The interface that receives callbacks from the Raft log.  These callbacks are
@@ -751,7 +764,7 @@ public final class QuorumController implements Controller {
      * Otherwise, this is -1.  This variable must be modified only from the controller
      * thread, but it can be read from other threads.
      */
-    private volatile long curClaimEpoch;
+    private volatile int curClaimEpoch;
 
     /**
      * The last offset we have committed, or -1 if we have not committed any offsets.
@@ -768,13 +781,13 @@ public final class QuorumController implements Controller {
                              KafkaEventQueue queue,
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
-                             MetaLogManager logManager,
+                             RaftClient<ApiMessageAndVersion> raftClient,
                              Map<String, VersionRange> supportedFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacementPolicy replicaPlacementPolicy,
                              long sessionTimeoutNs,
-                             ControllerMetrics controllerMetrics) throws Exception {
+                             ControllerMetrics controllerMetrics) {
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
@@ -792,12 +805,12 @@ public final class QuorumController implements Controller {
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl);
-        this.logManager = logManager;
+        this.raftClient = raftClient;
         this.metaLogListener = new QuorumMetaLogListener();
-        this.curClaimEpoch = -1L;
+        this.curClaimEpoch = -1;
         this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
-        this.logManager.register(metaLogListener);
+        this.raftClient.register(metaLogListener);
     }
 
     @Override

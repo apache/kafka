@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
+
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -36,7 +37,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, RaftClient, RaftConfig, RecordSerde}
+import org.apache.kafka.raft.{BatchReader, LeaderAndEpoch, RaftClient, RaftConfig, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
@@ -160,12 +161,12 @@ class TestRaftServer(
 
     raftManager.register(this)
 
-    override def handleClaim(epoch: Int): Unit = {
-      eventQueue.offer(HandleClaim(epoch))
-    }
-
-    override def handleResign(epoch: Int): Unit = {
-      eventQueue.offer(HandleResign)
+    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
+      if (newLeaderAndEpoch.isLeader(config.nodeId)) {
+        eventQueue.offer(HandleClaim(newLeaderAndEpoch.epoch))
+      } else if (claimedEpoch.isDefined) {
+        eventQueue.offer(HandleResign)
+      }
     }
 
     override def handleCommit(reader: BatchReader[Array[Byte]]): Unit = {

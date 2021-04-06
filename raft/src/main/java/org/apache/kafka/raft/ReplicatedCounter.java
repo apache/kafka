@@ -88,18 +88,17 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleClaim(int epoch) {
-        log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
-            committed, epoch);
-        this.uncommitted = committed;
-        this.claimedEpoch = Optional.of(epoch);
-    }
-
-    @Override
-    public synchronized void handleResign(int epoch) {
-        log.debug("Counter uncommitted value reset after resigning leadership");
-        this.uncommitted = -1;
-        this.claimedEpoch = Optional.empty();
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeader) {
+        if (newLeader.isLeader(nodeId)) {
+            log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
+                committed, newLeader);
+            this.uncommitted = committed;
+            this.claimedEpoch = Optional.of(newLeader.epoch);
+        } else {
+            log.debug("Counter uncommitted value reset after resigning leadership");
+            this.uncommitted = -1;
+            this.claimedEpoch = Optional.empty();
+        }
     }
 
 }

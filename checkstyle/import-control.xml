@@ -219,7 +219,7 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />
-    <allow pkg="org.apache.kafka.metalog" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
@@ -231,15 +231,7 @@
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
-    <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
-  <subpackage name="metalog">
-    <allow pkg="org.apache.kafka.common.metadata" />
-    <allow pkg="org.apache.kafka.common.protocol" />
-    <allow pkg="org.apache.kafka.metadata" />
-    <allow pkg="org.apache.kafka.metalog" />
-    <allow pkg="org.apache.kafka.queue" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
@@ -277,7 +269,6 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
-    <allow pkg="org.apache.kafka.metalog"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.shell"/>
@@ -401,7 +392,6 @@
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.common.protocol" />
-    <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
