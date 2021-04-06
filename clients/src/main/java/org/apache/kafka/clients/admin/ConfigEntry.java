@@ -170,7 +170,7 @@ public class ConfigEntry {
         result = prime * result + source.hashCode();
         result = prime * result + synonyms.hashCode();
         result = prime * result + type.hashCode();
-        result = prime * result + documentation.hashCode();
+        result = prime * result + ((documentation == null) ? 0 : documentation.hashCode());
         return result;
     }
 
