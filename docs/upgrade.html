@@ -27,18 +27,31 @@
         or updating the application not to use internal classes.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
-    <li>The deprecated Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
-        and <code>AclAuthorizer</code> instead.</li>
-    <li>The deprecated <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
-    <li>Deprecated security classes were removed: <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code>.
-        Furthermore, deprecated constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>,
-        <code>AclBinding</code> and <code>AclBindingFilter</code>.</li>
-    <li>The deprecated <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
-    <li>The deprecated <code>kafka-preferred-replica-election</code> command line tool was removed. Please use <code>kafka-leader-election</code> instead.</li>
-    <li>The deprecated <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
-        Please use the remaining public constructor instead.</li>
-    <li>The deprecated config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely
-        event that you set this config explicitly, we recommend leaving the config unset (<code>use_all_dns_ips</code> is used by default).</li>
+    <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>core</code> and <code>tools</code> modules:</li>
+    <ul>
+        <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
+            and <code>AclAuthorizer</code> instead.</li>
+        <li>The <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
+        <li>The <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code> classes were removed.
+        <li>Various constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>, <code>AclBinding</code> and
+            <code>AclBindingFilter</code>.</li>
+        <li>The <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
+        <li>The <code>kafka-preferred-replica-election</code> command line tool was removed. Please use <code>kafka-leader-election</code> instead.</li>
+        <li>The <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
+            Please use the remaining public constructor instead.</li>
+        <li>The config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely
+            event that you set this config explicitly, we recommend leaving the config unset (<code>use_all_dns_ips</code> is used by default).</li>
+        <li>The <code>ExtendedDeserializer</code> and <code>ExtendedSerializer</code> classes have been removed. Please use <code>Deserializer</code>
+            and <code>Serializer</code> instead.</li>
+        <li>The <code>close(long, TimeUnit)</code> method was removed from the producer, consumer and admin client. Please use
+            <code>close(Duration)</code>.</li>
+        <li>The <code>ConsumerConfig.addDeserializerToConfig</code> and <code>ProducerConfig.addSerializerToConfig</code> methods
+            were removed. These methods were not intended to be public API and there is no replacement.</li>
+        <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
+            instead.</li>
+        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Plese use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
+        <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
+    </ul>
 </ul>
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
