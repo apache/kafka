@@ -27,7 +27,7 @@
         or updating the application not to use internal classes.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
-    <li>A number of deprecated classes and methods have been removed in the clients, core and tools modules:</li>
+    <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
             and <code>AclAuthorizer</code> instead.</li>
@@ -49,7 +49,8 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
-        <li>The <code>MessageFormatter.init(Properties)</code> was removed. Please use <code>configure(Map)</code> instead.</li>
+        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Plese use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
+        <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
     </ul>
 </ul>
 
