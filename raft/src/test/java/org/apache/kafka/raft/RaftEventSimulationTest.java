@@ -61,7 +61,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-
 /**
  * The simulation testing framework provides a way to verify quorum behavior under
  * different conditions. It is similar to system testing in that the test involves
@@ -83,19 +82,11 @@ import static org.junit.jupiter.api.Assertions.fail;
  * period, followed by some cluster event (such as a node failure), and then some
  * logic to validate behavior after recovery.
  *
- * If any of the tests fail on a particular seed, the easiest way to reproduce
- * the failure is to change the `@Property` annotation to specify the failing seed.
- * For example:
- *
- * <pre>
- * {@code
- * @Property(tries = 1, seed = "-590031835267299290", shrinking = ShrinkingMode.OFF)
- * }
- * </pre>
- *
- * (Note that we disable parameter shrinking since it is not too useful for simulation
- * failures and this allows us to isolate a single execution, which makes the logging
- * more useful if enabled.)
+ * If any of the tests fail, the output will indicate the arguments that failed.
+ * The easiest way to reproduce the failure for debugging is to create a separate
+ * `@Test` case which invokes the `@Property` method with those arguments directly.
+ * This ensures that logging output will only include output from a single
+ * simulation execution.
  */
 @Tag("integration")
 public class RaftEventSimulationTest {
@@ -110,10 +101,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectInitialLeader(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -128,11 +120,12 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectNewLeaderAfterOldLeaderFailure(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers,
         @ForAll boolean isGracefulShutdown
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -167,10 +160,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canRecoverAfterAllNodesKilled(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -199,10 +193,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectNewLeaderAfterOldLeaderPartitionedAway(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -230,10 +225,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canMakeProgressIfMajorityIsReachable(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
     ) {
         int numVoters = 5;
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -274,10 +270,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canMakeProgressAfterBackToBackLeaderFailures(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -306,13 +303,14 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canRecoverFromSingleNodeCommittedDataLoss(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 2) int numObservers
     ) {
         // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
         // invariants since the loss of committed data on one node can violate them.
 
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
         scheduler.addInvariant(new MonotonicHighWatermark(cluster));

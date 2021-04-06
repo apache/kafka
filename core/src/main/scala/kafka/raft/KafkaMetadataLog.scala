@@ -300,7 +300,7 @@ final class KafkaMetadataLog private (
       val path = Snapshots.snapshotPath(log.dir.toPath, snapshotId)
       val destination = Snapshots.deleteRename(path, snapshotId)
       try {
-        Utils.atomicMoveWithFallback(path, destination)
+        Utils.atomicMoveWithFallback(path, destination, false)
       } catch {
         case e: IOException =>
           error(s"Error renaming snapshot file: $path to $destination", e)
@@ -346,6 +346,7 @@ object KafkaMetadataLog {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
+      topicId = None,
       keepPartitionMetadataFile = false
     )
 

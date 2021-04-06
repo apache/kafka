@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -34,19 +36,22 @@ public class UnattachedState implements EpochState {
     private final long electionTimeoutMs;
     private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
+    private final Logger log;
 
     public UnattachedState(
         Time time,
         int epoch,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        long electionTimeoutMs
+        long electionTimeoutMs,
+        LogContext logContext
     ) {
         this.epoch = epoch;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
+        this.log = logContext.logger(UnattachedState.class);
     }
 
     @Override
@@ -86,6 +91,15 @@ public class UnattachedState implements EpochState {
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
         return highWatermark;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        if (!isLogUpToDate) {
+            log.debug("Rejecting vote request from candidate {} since candidate epoch/offset is not up to date with us",
+                candidateId);
+        }
+        return isLogUpToDate;
     }
 
     @Override

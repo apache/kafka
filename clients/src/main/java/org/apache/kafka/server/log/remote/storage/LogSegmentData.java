@@ -18,8 +18,8 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.io.File;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.Objects;
 
 /**
@@ -30,28 +30,27 @@ import java.util.Objects;
 @InterfaceStability.Evolving
 public class LogSegmentData {
 
-    private final File logSegment;
-    private final File offsetIndex;
-    private final File timeIndex;
-    private final File txnIndex;
-    private final File producerSnapshotIndex;
+    private final Path logSegment;
+    private final Path offsetIndex;
+    private final Path timeIndex;
+    private final Path txnIndex;
+    private final Path producerSnapshotIndex;
     private final ByteBuffer leaderEpochIndex;
 
     /**
      * Creates a LogSegmentData instance with data and indexes.
-     *
-     * @param logSegment            actual log segment file
+     *  @param logSegment            actual log segment file
      * @param offsetIndex           offset index file
      * @param timeIndex             time index file
      * @param txnIndex              transaction index file
      * @param producerSnapshotIndex producer snapshot until this segment
      * @param leaderEpochIndex      leader-epoch-index until this segment
      */
-    public LogSegmentData(File logSegment,
-                          File offsetIndex,
-                          File timeIndex,
-                          File txnIndex,
-                          File producerSnapshotIndex,
+    public LogSegmentData(Path logSegment,
+                          Path offsetIndex,
+                          Path timeIndex,
+                          Path txnIndex,
+                          Path producerSnapshotIndex,
                           ByteBuffer leaderEpochIndex) {
         this.logSegment = Objects.requireNonNull(logSegment, "logSegment can not be null");
         this.offsetIndex = Objects.requireNonNull(offsetIndex, "offsetIndex can not be null");
@@ -64,35 +63,35 @@ public class LogSegmentData {
     /**
      * @return Log segment file of this segment.
      */
-    public File logSegment() {
+    public Path logSegment() {
         return logSegment;
     }
 
     /**
      * @return Offset index file.
      */
-    public File offsetIndex() {
+    public Path offsetIndex() {
         return offsetIndex;
     }
 
     /**
      * @return Time index file of this segment.
      */
-    public File timeIndex() {
+    public Path timeIndex() {
         return timeIndex;
     }
 
     /**
      * @return Transaction index file of this segment.
      */
-    public File txnIndex() {
+    public Path txnIndex() {
         return txnIndex;
     }
 
     /**
      * @return Producer snapshot file until this segment.
      */
-    public File producerSnapshotIndex() {
+    public Path producerSnapshotIndex() {
         return producerSnapshotIndex;
     }
 
@@ -112,12 +111,12 @@ public class LogSegmentData {
             return false;
         }
         LogSegmentData that = (LogSegmentData) o;
-        return Objects.equals(logSegment, that.logSegment) && Objects
-                .equals(offsetIndex, that.offsetIndex) && Objects
-                       .equals(timeIndex, that.timeIndex) && Objects
-                       .equals(txnIndex, that.txnIndex) && Objects
-                       .equals(producerSnapshotIndex, that.producerSnapshotIndex) && Objects
-                       .equals(leaderEpochIndex, that.leaderEpochIndex);
+        return Objects.equals(logSegment, that.logSegment) &&
+               Objects.equals(offsetIndex, that.offsetIndex) &&
+               Objects.equals(timeIndex, that.timeIndex) &&
+               Objects.equals(txnIndex, that.txnIndex) &&
+               Objects.equals(producerSnapshotIndex, that.producerSnapshotIndex) &&
+               Objects.equals(leaderEpochIndex, that.leaderEpochIndex);
     }
 
     @Override

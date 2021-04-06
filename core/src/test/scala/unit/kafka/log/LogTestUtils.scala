@@ -22,7 +22,7 @@ import java.io.File
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Time
 
-object LogUtils {
+object LogTestUtils {
   /**
     *  Create a segment with the given base offset
     */

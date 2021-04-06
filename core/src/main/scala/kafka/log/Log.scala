@@ -241,12 +241,16 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
  *                         clean shutdown whereas false means a crash.
+ * @param topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
+ *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
+ *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
  * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
- *                                  log directory. A partition.metadata file is only created when the controller's
- *                                  inter-broker protocol version is at least 2.8. This file will persist the topic ID on
- *                                  the broker. If inter-broker protocol is downgraded below 2.8, a topic ID may be lost
- *                                  and a new ID generated upon re-upgrade. If the inter-broker protocol version is below
- *                                  2.8, partition.metadata will be deleted to avoid ID conflicts upon re-upgrade.
+ *                                  log directory. A partition.metadata file is only created when the raft controller is used
+ *                                  or the ZK controller's inter-broker protocol version is at least 2.8.
+ *                                  This file will persist the topic ID on the broker. If inter-broker protocol for a ZK controller
+ *                                  is downgraded below 2.8, a topic ID may be lost and a new ID generated upon re-upgrade.
+ *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
+ *                                  will be deleted to avoid ID conflicts upon re-upgrade.
  */
 @threadsafe
 class Log(@volatile private var _dir: File,
@@ -262,7 +266,8 @@ class Log(@volatile private var _dir: File,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
           private val hadCleanShutdown: Boolean = true,
-          val keepPartitionMetadataFile: Boolean = true) extends Logging with KafkaMetricsGroup {
+          @volatile var topicId: Option[Uuid],
+          val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -282,10 +287,6 @@ class Log(@volatile private var _dir: File,
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
-
-  // Log dir failure is handled asynchronously we need to prevent threads
-  // from reading inconsistent state caused by a failure in another thread
-  @volatile private var logDirOffline = false
 
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
@@ -314,8 +315,6 @@ class Log(@volatile private var _dir: File,
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
   @volatile var partitionMetadataFile : PartitionMetadataFile = null
-
-  @volatile var topicId : Uuid = Uuid.ZERO_UUID
 
   locally {
     // create the log directory if it doesn't exist
@@ -349,11 +348,21 @@ class Log(@volatile private var _dir: File,
 
     // Delete partition metadata file if the version does not support topic IDs.
     // Recover topic ID if present and topic IDs are supported
+    // If we were provided a topic ID when creating the log, partition metadata files are supported, and one does not yet exist
+    // write to the partition metadata file.
+    // Ensure we do not try to assign a provided topicId that is inconsistent with the ID on file.
     if (partitionMetadataFile.exists()) {
         if (!keepPartitionMetadataFile)
           partitionMetadataFile.delete()
-        else
-          topicId = partitionMetadataFile.read().topicId
+        else {
+          val fileTopicId = partitionMetadataFile.read().topicId
+          if (topicId.isDefined && !topicId.contains(fileTopicId))
+            throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+              s"but log already contained topic ID $fileTopicId")
+          topicId = Some(fileTopicId)
+        }
+    } else if (keepPartitionMetadataFile) {
+      topicId.foreach(partitionMetadataFile.write)
     }
   }
 
@@ -576,6 +585,12 @@ class Log(@volatile private var _dir: File,
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
+  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
+  def assignTopicId(topicId: Uuid): Unit = {
+    partitionMetadataFile.write(topicId)
+    this.topicId = Some(topicId)
+  }
+
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
@@ -693,7 +708,8 @@ class Log(@volatile private var _dir: File,
           baseOffset = baseOffset,
           config,
           time = time,
-          fileAlreadyExists = true)
+          fileAlreadyExists = true,
+          needsRecovery = !hadCleanShutdown)
 
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
@@ -1329,12 +1345,6 @@ class Log(@volatile private var _dir: File,
           appendInfo
         }
       }
-    }
-  }
-
-  private def checkForLogDirFailure(): Unit = {
-    if (logDirOffline) {
-      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.")
     }
   }
 
@@ -2316,7 +2326,7 @@ class Log(@volatile private var _dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
-    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix, false))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segment files ${segments.mkString(",")}")
@@ -2379,7 +2389,7 @@ class Log(@volatile private var _dir: File,
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix, false))
       sortedNewSegments.reverse.foreach(addSegment(_))
       val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
@@ -2428,13 +2438,14 @@ class Log(@volatile private var _dir: File,
   private[log] def addSegment(segment: LogSegment): LogSegment = this.segments.add(segment)
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
+    if (logDirFailureChannel.hasOfflineLogDir(parentDir)) {
+      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.")
+    }
     try {
-      checkForLogDirFailure()
       fun
     } catch {
       case e: IOException =>
-        logDirOffline = true
-        logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)
+        logDirFailureChannel.maybeAddOfflineLogDir(parentDir, msg, e)
         throw new KafkaStorageException(msg, e)
     }
   }
@@ -2574,11 +2585,12 @@ object Log {
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
-            keepPartitionMetadataFile: Boolean = true): Log = {
+            topicId: Option[Uuid],
+            keepPartitionMetadataFile: Boolean): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, keepPartitionMetadataFile)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, topicId, keepPartitionMetadataFile)
   }
 
   /**
