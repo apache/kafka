@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataCache;
+import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataCacheTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

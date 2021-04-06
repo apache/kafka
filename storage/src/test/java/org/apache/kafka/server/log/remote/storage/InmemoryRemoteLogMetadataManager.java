@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
