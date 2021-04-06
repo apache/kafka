@@ -91,6 +91,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("integration")
 public class RaftEventSimulationTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("@metadata", 0);
+    private static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
     private static final int FETCH_TIMEOUT_MS = 3000;
@@ -492,7 +493,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final MockLog log = new MockLog(METADATA_PARTITION);
+        final MockLog log = new MockLog(METADATA_PARTITION, METADATA_TOPIC_ID);
     }
 
     private static class Cluster {

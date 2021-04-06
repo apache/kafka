@@ -113,6 +113,7 @@ public final class RaftClientTestContext {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
         private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
+        private static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
         private static final int ELECTION_BACKOFF_MAX_MS = 100;
         private static final int FETCH_MAX_WAIT_MS = 0;
         // fetch timeout is usually larger than election timeout
@@ -125,7 +126,7 @@ public final class RaftClientTestContext {
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
-        private final MockLog log = new MockLog(METADATA_PARTITION);
+        private final MockLog log = new MockLog(METADATA_PARTITION, METADATA_TOPIC_ID);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
