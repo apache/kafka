@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{BufferSupplier, LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 
 object TransactionCoordinator {
 
@@ -104,7 +104,7 @@ class TransactionCoordinator(brokerId: Int,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
-                           requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
@@ -318,7 +318,7 @@ class TransactionCoordinator(brokerId: Int,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
-                                       requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -413,7 +413,7 @@ class TransactionCoordinator(brokerId: Int,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback,
-                           requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
@@ -647,7 +647,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              RequestLocal(BufferSupplier.NO_CACHING))
+              RequestLocal.NoCaching)
           }
       }
     }

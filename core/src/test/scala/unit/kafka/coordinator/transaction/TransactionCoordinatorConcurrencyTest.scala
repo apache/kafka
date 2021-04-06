@@ -30,7 +30,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{BufferSupplier, LogContext, MockTime, ProducerIdAndEpoch}
+import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
@@ -509,7 +509,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
       transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback,
-        RequestLocal(BufferSupplier.create))
+        RequestLocal.withThreadConfinedCaching)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
@@ -527,7 +527,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerEpoch,
             partitions,
             resultCallback,
-            RequestLocal(BufferSupplier.create))
+            RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }
     }
@@ -546,7 +546,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerEpoch,
           transactionResult(txn),
           resultCallback,
-          RequestLocal(BufferSupplier.create))
+          RequestLocal.withThreadConfinedCaching)
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {

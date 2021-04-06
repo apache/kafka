@@ -25,7 +25,7 @@ import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGener
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
@@ -75,7 +75,7 @@ final class KafkaMetadataLog private (
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
         origin = AppendOrigin.RaftLeader,
-        requestLocal = RequestLocal(BufferSupplier.NO_CACHING)
+        requestLocal = RequestLocal.NoCaching
       )
     )
   }

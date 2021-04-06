@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.BufferSupplier
 import org.easymock.EasyMock
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
@@ -179,7 +178,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                               requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

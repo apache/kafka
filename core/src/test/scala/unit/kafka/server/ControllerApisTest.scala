@@ -38,7 +38,6 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerRegistrationRequest, BrokerRegistrationResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.controller.Controller
 import org.apache.kafka.metadata.ApiMessageAndVersion
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
@@ -135,7 +134,7 @@ class ControllerApisTest {
       java.util.Collections.singletonList(AuthorizationResult.DENIED)
     )
 
-    createControllerApis(Some(authorizer), mock(classOf[Controller])).handle(request, RequestLocal(BufferSupplier.create))
+    createControllerApis(Some(authorizer), mock(classOf[Controller])).handle(request, RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),

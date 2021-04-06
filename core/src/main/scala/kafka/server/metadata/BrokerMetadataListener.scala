@@ -26,7 +26,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.MetadataRecordType._
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.protocol.ApiMessage
-import org.apache.kafka.common.utils.{BufferSupplier, LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.metalog.{MetaLogLeader, MetaLogListener}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 
@@ -223,7 +223,7 @@ class BrokerMetadataListener(brokerId: Int,
       case Some(topicName) =>
         info(s"Processing deletion of topic $topicName with id ${record.topicId}")
         val removedPartitions = imageBuilder.partitionsBuilder().removeTopicById(record.topicId())
-        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq, RequestLocal(BufferSupplier.NO_CACHING))
+        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq, RequestLocal.NoCaching)
         configRepository.remove(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
     }
   }

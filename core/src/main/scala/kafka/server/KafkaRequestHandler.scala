@@ -25,7 +25,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{BufferSupplier, KafkaThread, Time}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -46,7 +46,7 @@ class KafkaRequestHandler(id: Int,
                           time: Time) extends Runnable with Logging {
   this.logIdent = s"[Kafka Request Handler $id on Broker $brokerId], "
   private val shutdownComplete = new CountDownLatch(1)
-  private val requestLocal = RequestLocal(BufferSupplier.create)
+  private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
 
   def run(): Unit = {

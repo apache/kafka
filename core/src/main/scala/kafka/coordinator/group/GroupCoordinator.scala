@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
@@ -163,7 +163,7 @@ class GroupCoordinator(val brokerId: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback,
-                      requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                      requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
       return
@@ -479,7 +479,7 @@ class GroupCoordinator(val brokerId: Int,
                       groupInstanceId: Option[String],
                       groupAssignment: Map[String, Array[Byte]],
                       responseCallback: SyncCallback,
-                      requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                      requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.SYNC_GROUP) match {
       case Some(error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS =>
         // The coordinator is loading, which means we've lost the state of the active rebalance and the
@@ -676,7 +676,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDeleteGroups(groupIds: Set[String],
-                         requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Map[String, Errors] = {
+                         requestLocal: RequestLocal = RequestLocal.NoCaching): Map[String, Errors] = {
     val groupErrors = mutable.Map.empty[String, Errors]
     val groupsEligibleForDeletion = mutable.ArrayBuffer[GroupMetadata]()
 
@@ -864,7 +864,7 @@ class GroupCoordinator(val brokerId: Int,
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                             requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -882,7 +882,7 @@ class GroupCoordinator(val brokerId: Int,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
-                          requestLocal: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)): Unit = {
+                          requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -1427,7 +1427,7 @@ class GroupCoordinator(val brokerId: Int,
               // This should be safe since there are no active members in an empty generation, so we just warn.
               warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
-          }, RequestLocal(BufferSupplier.NO_CACHING))
+          }, RequestLocal.NoCaching)
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
             s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")

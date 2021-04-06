@@ -32,7 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.{BufferSupplier, LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 
 import scala.collection.{concurrent, immutable}
@@ -330,7 +330,7 @@ class TransactionMarkerChannelManager(
       }
 
     txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch,
-      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal(BufferSupplier.NO_CACHING))
+      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NoCaching)
   }
 
   def addTxnMarkersToBrokerQueue(transactionalId: String,

@@ -39,7 +39,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.utils.BufferSupplier
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -3422,7 +3421,7 @@ class GroupCoordinatorTest {
   def testDeleteOffsetOfNonExistingGroup(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3434,7 +3433,7 @@ class GroupCoordinatorTest {
     dynamicJoinGroup(groupId, memberId, "My Protocol", protocols)
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NON_EMPTY_GROUP, groupError)
     assertTrue(topics.isEmpty)
@@ -3479,7 +3478,7 @@ class GroupCoordinatorTest {
     EasyMock.replay(replicaManager, partition)
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3509,7 +3508,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, validOffsetCommitResult(tp))
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3524,7 +3523,7 @@ class GroupCoordinatorTest {
 
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3568,7 +3567,7 @@ class GroupCoordinatorTest {
     EasyMock.replay(replicaManager, partition)
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3616,7 +3615,7 @@ class GroupCoordinatorTest {
     EasyMock.replay(replicaManager, partition)
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0),
-      RequestLocal(BufferSupplier.NO_CACHING))
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(2, topics.size)

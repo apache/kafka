@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.jdk.CollectionConverters._
@@ -209,7 +209,7 @@ class TransactionStateManager(brokerId: Int,
           origin = AppendOrigin.Coordinator,
           recordsPerPartition,
           removeFromCacheCallback,
-          requestLocal = RequestLocal(BufferSupplier.NO_CACHING))
+          requestLocal = RequestLocal.NoCaching)
       }
 
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
