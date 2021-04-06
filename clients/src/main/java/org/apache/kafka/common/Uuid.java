@@ -27,6 +27,10 @@ import java.util.Base64;
  */
 public class Uuid implements Comparable<Uuid> {
 
+    /**
+     * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
+     */
+    public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
     private static final java.util.UUID SENTINEL_ID_INTERNAL = new java.util.UUID(0L, 1L);
 
     /**

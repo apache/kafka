@@ -134,7 +134,7 @@ class KafkaRaftServer(
 object KafkaRaftServer {
   val MetadataTopic = "@metadata"
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
-  val MetadataTopicId = new Uuid(0L, 1L)
+  val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole

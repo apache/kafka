@@ -52,7 +52,7 @@ class TestRaftServer(
   import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
-  private val topicId = new Uuid(0L, 1L)
+  private val topicId = Uuid.METADATA_TOPIC_ID
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
