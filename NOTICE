@@ -14,3 +14,10 @@ https://github.com/jlink/jqwik.
 The streams-scala (streams/streams-scala) module was donated by Lightbend and the original code was copyrighted by them:
 Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
 Copyright (C) 2017-2018 Alexis Seigneurin.
+
+This project contains the following code copied from Apache Hadoop:
+clients/src/main/java/org/apache/kafka/common/utils/PureJavaCrc32C.java
+Some portions of this file Copyright (c) 2004-2006 Intel Corporation and licensed under the BSD license.
+
+This project contains the following code copied from Apache Hive:
+streams/src/main/java/org/apache/kafka/streams/state/internals/Murmur3.java
