@@ -120,14 +120,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
-            skipDefaultCheckout(true)
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.12
           }
           steps {
-            cleanWs()
-            checkout scm
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
@@ -143,14 +143,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
-            skipDefaultCheckout(true)
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
-            cleanWs()
-            checkout scm
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
@@ -166,14 +166,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
-            skipDefaultCheckout(true)
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
-            cleanWs()
-            checkout scm
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
@@ -186,11 +186,14 @@ pipeline {
           options {
             timeout(time: 2, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.12
           }
           steps {
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
@@ -218,11 +221,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
@@ -242,11 +248,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.12
           }
           steps {
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
@@ -266,11 +275,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true) // skip default checkout and checkout manually after workspace was cleaned
           }
           environment {
             SCALA_VERSION=2.12
           }
           steps {
+            cleanWs() // clean workspace
+            checkout scm // checkout explicitely
             setupGradle()
             doValidation()
             doTest(env)
