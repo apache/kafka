@@ -1029,9 +1029,13 @@ project(':core') {
   }
 
   sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/generated/java", "src/main/java", "src/main/scala"]
       }
     }
     test {
