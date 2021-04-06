@@ -57,7 +57,6 @@ public class JoinGroupRequestTest {
             }
         }
     }
-    
     @Test
     public void testRequestVersionCompatibilityFailBuild() {
         assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(
