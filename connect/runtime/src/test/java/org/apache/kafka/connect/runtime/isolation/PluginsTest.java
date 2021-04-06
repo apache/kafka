@@ -17,8 +17,14 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.Collections;
 import java.util.Map.Entry;
+
+import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -344,43 +350,56 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResource() {
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() throws Exception {
         TestPlugins.assertAvailable();
 
+        assertClassLoaderReadsVersionFromResource("aliased-static-field",
+                "read-version-from-resource-v1",
+                TestPlugins.READ_VERSION_FROM_RESOURCE,
+                "1.0.0");
+    }
+
+    @Test
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() throws Exception {
+        TestPlugins.assertAvailable();
+
+        assertClassLoaderReadsVersionFromResource("read-version-from-resource-v1",
+                "aliased-static-field",
+                TestPlugins.READ_VERSION_FROM_RESOURCE,
+                "1.0.0");
+    }
+
+    @Test
+    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() throws Exception {
+        TestPlugins.assertAvailable();
+
+        assertClassLoaderReadsVersionFromResource("read-version-from-resource-v1",
+                "read-version-from-resource-v2",
+                TestPlugins.READ_VERSION_FROM_RESOURCE,
+                "2.0.0");
+    }
+
+    private void assertClassLoaderReadsVersionFromResource(
+            String parentResource, String pluginResource, String pluginClass, String expectedVersion) throws MalformedURLException {
+        String pluginPath = TestPlugins.pluginPath(parentResource);
+        URLClassLoader parent = new URLClassLoader(
+                new URL[]{new File(pluginPath).toURI().toURL()});
+
+
+        // Initialize Plugins object with parent class loader in the class loader tree. This is
+        // to simulate the situation where jars exist on both system classpath and plugin path.
         Map<String, String> pluginProps = new HashMap<>();
         pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG,
-                TestPlugins.pluginPath().stream()
-                        .filter(s -> s.contains("read-version-from-resource-v1"))
-                        .collect(Collectors.joining()));
-        plugins = new Plugins(pluginProps);
+                TestPlugins.pluginPath(pluginResource));
+        plugins = new Plugins(pluginProps, parent);
 
         Converter converter = plugins.newPlugin(
-                TestPlugins.READ_VERSION_FROM_RESOURCE,
-                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
-                Converter.class
-        );
-        assertEquals("1.0.0",
-                new String(converter.fromConnectData(null, null, null)));
-        PluginClassLoader pluginClassLoader = plugins.delegatingLoader()
-                .pluginClassLoader(TestPlugins.READ_VERSION_FROM_RESOURCE);
-        assertNotNull(pluginClassLoader);
-
-
-        // Re-initialize Plugins object with plugin class loader in the class loader tree. This is
-        // to simulate the situation where jars exist on both system classpath and plugin path.
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG,
-                TestPlugins.pluginPath().stream()
-                        .filter(s -> s.contains("read-version-from-resource-v2"))
-                        .collect(Collectors.joining()));
-        plugins = new Plugins(pluginProps, pluginClassLoader);
-
-        converter = plugins.newPlugin(
-                TestPlugins.READ_VERSION_FROM_RESOURCE,
+                pluginClass,
                 new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
                 Converter.class
         );
         // Verify the version was read from the correct resource
-        assertEquals("2.0.0",
+        assertEquals(expectedVersion,
                 new String(converter.fromConnectData(null, null, null)));
     }
 

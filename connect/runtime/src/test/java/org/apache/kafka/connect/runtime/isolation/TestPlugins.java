@@ -104,23 +104,50 @@ public class TestPlugins {
     public static final String READ_VERSION_FROM_RESOURCE = "test.plugins.ReadVersionFromResource";
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS;
+    private static final Map<String, PluginJar> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
+
+    private static final class PluginJar {
+        String className;
+        File jarFile;
+
+        public PluginJar(String className, File jarFile) {
+            this.className = className;
+            this.jarFile = jarFile;
+        }
+
+        public String getClassName() {
+            return className;
+        }
+
+        public File getJarFile() {
+            return jarFile;
+        }
+    }
 
     static {
         Throwable err = null;
-        HashMap<String, File> pluginJars = new HashMap<>();
+        Map<String, PluginJar> pluginJars = new HashMap<>();
         try {
-            pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
-            pluginJars.put(ALIASED_STATIC_FIELD, createPluginJar("aliased-static-field"));
-            pluginJars.put(SAMPLING_CONVERTER, createPluginJar("sampling-converter"));
-            pluginJars.put(SAMPLING_CONFIGURABLE, createPluginJar("sampling-configurable"));
-            pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
-            pluginJars.put(SAMPLING_CONFIG_PROVIDER, createPluginJar("sampling-config-provider"));
-            pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
+            pluginJars.put("always-throw-exception",
+                    new PluginJar(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception")));
+            pluginJars.put("aliased-static-field",
+                    new PluginJar(ALIASED_STATIC_FIELD, createPluginJar("aliased-static-field")));
+            pluginJars.put("sampling-converter",
+                    new PluginJar(SAMPLING_CONVERTER, createPluginJar("sampling-converter")));
+            pluginJars.put("sampling-configurable",
+                    new PluginJar(SAMPLING_CONFIGURABLE, createPluginJar("sampling-configurable")));
+            pluginJars.put("sampling-header-converter",
+                    new PluginJar(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter")));
+            pluginJars.put("sampling-config-provider",
+                    new PluginJar(SAMPLING_CONFIG_PROVIDER, createPluginJar("sampling-config-provider")));
+            pluginJars.put("service-loader",
+                    new PluginJar(SERVICE_LOADER, createPluginJar("service-loader")));
             // Create two versions of the same plugin reading version string from a resource
-            pluginJars.put(READ_VERSION_FROM_RESOURCE + ".v1", createPluginJar("read-version-from-resource-v1"));
-            pluginJars.put(READ_VERSION_FROM_RESOURCE + ".v2", createPluginJar("read-version-from-resource-v2"));
+            pluginJars.put("read-version-from-resource-v1",
+                    new PluginJar(READ_VERSION_FROM_RESOURCE, createPluginJar("read-version-from-resource-v1")));
+            pluginJars.put("read-version-from-resource-v2",
+                    new PluginJar(READ_VERSION_FROM_RESOURCE, createPluginJar("read-version-from-resource-v2")));
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
@@ -150,8 +177,23 @@ public class TestPlugins {
     public static List<String> pluginPath() {
         return PLUGIN_JARS.values()
             .stream()
+            .map(PluginJar::getJarFile)
             .map(File::getPath)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Gets the path to a single jar containing the test plugin given its resource directory.
+     * @param resourceDir the unique resource directory of the plugin
+     * @return a string representing the plugin jar filename, or null if a plugin for the
+     *   resourceDir could not be found.
+     */
+    public static String pluginPath(String resourceDir) {
+        PluginJar pluginJar = PLUGIN_JARS.get(resourceDir);
+        if (pluginJar == null) {
+            return null;
+        }
+        return pluginJar.getJarFile().getPath();
     }
 
     /**
@@ -159,7 +201,11 @@ public class TestPlugins {
      * @return A list of plugin class names
      */
     public static List<String> pluginClasses() {
-        return new ArrayList<>(PLUGIN_JARS.keySet());
+        return PLUGIN_JARS.values()
+                .stream()
+                .map(PluginJar::getClassName)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     private static File createPluginJar(String resourceDir) throws IOException {
