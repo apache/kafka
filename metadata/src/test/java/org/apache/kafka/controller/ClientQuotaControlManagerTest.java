@@ -19,16 +19,19 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.metadata.QuotaRecord;
+import org.apache.kafka.common.metadata.QuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -151,7 +154,7 @@ public class ClientQuotaControlManagerTest {
     }
 
     @Test
-    public void testEntityTypes() {
+    public void testEntityTypes() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
 
@@ -179,10 +182,51 @@ public class ClientQuotaControlManagerTest {
         quotasToTest.put(clientEntity("client-id-2"),
                 quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 60.60));
 
-
         List<ClientQuotaAlteration> alters = new ArrayList<>();
         quotasToTest.forEach((entity, quota) -> entityQuotaToAlterations(entity, quota, alters::add));
         alterQuotas(alters, manager);
+
+        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(50.5).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-2"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(51.51).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
+                    setKey("request_percentage").setValue(52.52).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName(null),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(53.53).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"),
+                new EntityData().setEntityType("client-id").setEntityName(null))).
+                    setKey("request_percentage").setValue(54.54).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"),
+                new EntityData().setEntityType("client-id").setEntityName(null))).
+                    setKey("request_percentage").setValue(55.55).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"))).
+                    setKey("request_percentage").setValue(56.56).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-2"))).
+                    setKey("request_percentage").setValue(57.57).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"))).
+                    setKey("request_percentage").setValue(58.58).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName(null))).
+                    setKey("request_percentage").setValue(59.59).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new QuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
+                    setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0))),
+            manager.iterator(Long.MAX_VALUE));
     }
 
     static void entityQuotaToAlterations(ClientQuotaEntity entity, Map<String, Double> quota,

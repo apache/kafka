@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.metadata.QuotaRecord;
+import org.apache.kafka.common.metadata.QuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -35,18 +36,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 
 public class ClientQuotaControlManager {
-
     private final SnapshotRegistry snapshotRegistry;
 
-    final TimelineHashMap<ClientQuotaEntity, Map<String, Double>> clientQuotaData;
+    final TimelineHashMap<ClientQuotaEntity, TimelineHashMap<String, Double>> clientQuotaData;
 
     ClientQuotaControlManager(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
@@ -98,7 +101,7 @@ public class ClientQuotaControlManager {
         Map<String, String> entityMap = new HashMap<>(2);
         record.entity().forEach(entityData -> entityMap.put(entityData.entityType(), entityData.entityName()));
         ClientQuotaEntity entity = new ClientQuotaEntity(entityMap);
-        Map<String, Double> quotas = clientQuotaData.get(entity);
+        TimelineHashMap<String, Double> quotas = clientQuotaData.get(entity);
         if (quotas == null) {
             quotas = new TimelineHashMap<>(snapshotRegistry, 0);
             clientQuotaData.put(entity, quotas);
@@ -136,14 +139,15 @@ public class ClientQuotaControlManager {
         }
 
         // Don't share objects between different records
-        Supplier<List<QuotaRecord.EntityData>> recordEntitySupplier = () ->
-                validatedEntityMap.entrySet().stream().map(mapEntry -> new QuotaRecord.EntityData()
+        Supplier<List<EntityData>> recordEntitySupplier = () ->
+                validatedEntityMap.entrySet().stream().map(mapEntry -> new EntityData()
                         .setEntityType(mapEntry.getKey())
                         .setEntityName(mapEntry.getValue()))
                         .collect(Collectors.toList());
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
-        Map<String, Double> currentQuotas = clientQuotaData.getOrDefault(entity, Collections.emptyMap());
+        Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?
+            clientQuotaData.get(entity) : Collections.emptyMap();
         newQuotaConfigs.forEach((key, newValue) -> {
             if (newValue == null) {
                 if (currentQuotas.containsKey(key)) {
@@ -249,7 +253,7 @@ public class ClientQuotaControlManager {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }
 
-        for (Map.Entry<String, String> entityEntry : entity.entries().entrySet()) {
+        for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
             String entityType = entityEntry.getKey();
             String entityName = entityEntry.getValue();
             if (validatedEntityMap.containsKey(entityType)) {
@@ -271,5 +275,45 @@ public class ClientQuotaControlManager {
         }
 
         return ApiError.NONE;
+    }
+
+    class ClientQuotaControlIterator implements Iterator<List<ApiMessageAndVersion>> {
+        private final long epoch;
+        private final Iterator<Entry<ClientQuotaEntity, TimelineHashMap<String, Double>>> iterator;
+
+        ClientQuotaControlIterator(long epoch) {
+            this.epoch = epoch;
+            this.iterator = clientQuotaData.entrySet(epoch).iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public List<ApiMessageAndVersion> next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            Entry<ClientQuotaEntity, TimelineHashMap<String, Double>> entry = iterator.next();
+            ClientQuotaEntity entity = entry.getKey();
+            List<ApiMessageAndVersion> records = new ArrayList<>();
+            for (Entry<String, Double> quotaEntry : entry.getValue().entrySet(epoch)) {
+                QuotaRecord record = new QuotaRecord();
+                for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
+                    record.entity().add(new EntityData().
+                        setEntityType(entityEntry.getKey()).
+                        setEntityName(entityEntry.getValue()));
+                }
+                record.setKey(quotaEntry.getKey());
+                record.setValue(quotaEntry.getValue());
+                record.setRemove(false);
+                records.add(new ApiMessageAndVersion(record, (short) 0));
+            }
+            return records;
+        }
+    }
+
+    ClientQuotaControlIterator iterator(long epoch) {
+        return new ClientQuotaControlIterator(epoch);
     }
 }

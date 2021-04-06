@@ -188,6 +188,14 @@ public interface Controller extends AutoCloseable {
     );
 
     /**
+     * Begin writing a controller snapshot.  If there was already an ongoing snapshot, it
+     * simply returns information about that snapshot rather than starting a new one.
+     *
+     * @return              A future yielding the epoch of the snapshot.
+     */
+    CompletableFuture<Long> beginWritingSnapshot();
+
+    /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
      * resources.
      */

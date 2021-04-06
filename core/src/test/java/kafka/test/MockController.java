@@ -202,6 +202,11 @@ public class MockController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Long> beginWritingSnapshot() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void beginShutdown() {
         this.active = false;
     }

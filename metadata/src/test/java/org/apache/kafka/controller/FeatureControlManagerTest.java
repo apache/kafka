@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -88,7 +89,7 @@ public class FeatureControlManagerTest {
         snapshotRegistry.createSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 2), snapshotRegistry);
-        manager.replay(record, 123);
+        manager.replay(record);
         snapshotRegistry.createSnapshot(123);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(rangeMap("foo", 1, 2)), 123),
             manager.finalizedFeatures(123));
@@ -121,7 +122,7 @@ public class FeatureControlManagerTest {
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
             rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
         assertEquals(Collections.singletonMap("foo", ApiError.NONE), result.response());
-        manager.replay((FeatureLevelRecord) result.records().get(0).message(), 3);
+        manager.replay((FeatureLevelRecord) result.records().get(0).message());
         snapshotRegistry.createSnapshot(3);
 
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
@@ -150,5 +151,26 @@ public class FeatureControlManagerTest {
                 Collections.emptyMap()
             )
         );
+    }
+
+    @Test
+    public void testFeatureControlIterator() throws Exception {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager manager = new FeatureControlManager(
+            rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
+        ControllerResult<Map<String, ApiError>> result = manager.
+            updateFeatures(rangeMap("foo", 1, 5, "bar", 1, 1),
+                Collections.emptySet(), Collections.emptyMap());
+        ControllerTestUtils.replayAll(manager, result.records());
+        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName("foo").
+                setMinFeatureLevel((short) 1).
+                setMaxFeatureLevel((short) 5), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName("bar").
+                setMinFeatureLevel((short) 1).
+                setMaxFeatureLevel((short) 1), (short) 0))),
+            manager.iterator(Long.MAX_VALUE));
     }
 }

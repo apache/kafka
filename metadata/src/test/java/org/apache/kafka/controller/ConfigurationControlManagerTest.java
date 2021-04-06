@@ -81,7 +81,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testReplay() {
+    public void testReplay() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
@@ -103,6 +103,14 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
+        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue("x,y,z"), (short) 0),
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("def").setValue("blah"), (short) 0))),
+            manager.iterator(Long.MAX_VALUE));
     }
 
     @Test
