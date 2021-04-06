@@ -29,10 +29,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A sink connector that is used in Apache Kafka integration tests to verify the behavior of the
@@ -91,12 +89,10 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         private String connectorName;
         private String taskId;
         TaskHandle taskHandle;
-        Set<TopicPartition> assignments;
-        Map<TopicPartition, Long> committedOffsets;
+        Map<TopicPartition, Integer> committedOffsets;
         Map<String, Map<Integer, TopicPartition>> cachedTopicPartitions;
 
         public MonitorableSinkTask() {
-            this.assignments = new HashSet<>();
             this.committedOffsets = new HashMap<>();
             this.cachedTopicPartitions = new HashMap<>();
         }
@@ -117,9 +113,15 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         @Override
         public void open(Collection<TopicPartition> partitions) {
-            log.debug("Opening {} partitions", partitions.size());
-            assignments.addAll(partitions);
-            taskHandle.partitionsAssigned(partitions.size());
+            log.debug("Opening partitions {}", partitions);
+            taskHandle.partitionsAssigned(partitions);
+        }
+
+        @Override
+        public void close(Collection<TopicPartition> partitions) {
+            log.debug("Closing partitions {}", partitions);
+            taskHandle.partitionsRevoked(partitions);
+            partitions.forEach(committedOffsets::remove);
         }
 
         @Override
@@ -129,26 +131,22 @@ public class MonitorableSinkConnector extends TestSinkConnector {
                 TopicPartition tp = cachedTopicPartitions
                         .computeIfAbsent(rec.topic(), v -> new HashMap<>())
                         .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
-                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0L) + 1);
+                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0) + 1);
                 log.trace("Task {} obtained record (key='{}' value='{}')", taskId, rec.key(), rec.value());
             }
         }
 
         @Override
         public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
-            for (TopicPartition tp : assignments) {
-                Long recordsSinceLastCommit = committedOffsets.get(tp);
-                if (recordsSinceLastCommit == null) {
-                    log.warn("preCommit was called with topic-partition {} that is not included "
-                            + "in the assignments of this task {}", tp, assignments);
-                } else {
-                    taskHandle.commit(recordsSinceLastCommit.intValue());
-                    log.error("Forwarding to framework request to commit additional {} for {}",
-                            recordsSinceLastCommit, tp);
-                    taskHandle.commit((int) (long) recordsSinceLastCommit);
-                    committedOffsets.put(tp, 0L);
+            taskHandle.partitionsCommitted(offsets.keySet());
+            offsets.forEach((tp, offset) -> {
+                int recordsSinceLastCommit = committedOffsets.getOrDefault(tp, 0);
+                if (recordsSinceLastCommit != 0) {
+                    taskHandle.commit(recordsSinceLastCommit);
+                    log.debug("Forwarding to framework request to commit {} records for {}", recordsSinceLastCommit, tp);
+                    committedOffsets.put(tp, 0);
                 }
-            }
+            });
             return offsets;
         }
 
