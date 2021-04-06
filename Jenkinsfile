@@ -120,11 +120,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true)
           }
           environment {
             SCALA_VERSION=2.12
           }
           steps {
+            cleanWs()
+            checkout scm
             setupGradle()
             doValidation()
             doTest(env)
@@ -140,11 +143,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true)
           }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
+            cleanWs()
+            checkout scm
             setupGradle()
             doValidation()
             doTest(env)
@@ -160,11 +166,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
+            skipDefaultCheckout(true)
           }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
+            cleanWs()
+            checkout scm
             setupGradle()
             doValidation()
             doTest(env)
