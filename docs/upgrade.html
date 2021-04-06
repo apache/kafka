@@ -49,11 +49,14 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
-        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Plese use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
+        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
         <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
             format v2, which has been the default since 0.11, moved the checksum from the record to the record batch. As such, these methods
             don't make sense and no replacements exist.</li>
+        <li>The <code>ChecksumMessageFormatter</code> class was removed. It is not part of the public API, but it may have been used
+            with <code>kafka-console-consumer.sh</code>. It reported the checksum of each record, which has not been supported
+            since message format v2.</li>
     </ul>
 </ul>
 
