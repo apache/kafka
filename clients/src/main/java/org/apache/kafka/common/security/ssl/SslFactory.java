@@ -137,8 +137,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             try {
                 sslEngineFactory = new DefaultSslEngineFactory();
             } catch (IOException e) {
-                log.error("Failed to instantiate new ssl factory due to IOException", e);
-                return null;
+                throw new KafkaException("Failed to instantiate new ssl factory due to IOException", e);
             }
         } else {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);

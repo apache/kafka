@@ -248,12 +248,7 @@ public abstract class SslFactoryTest {
         Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        try {
-            sslFactory.validateReconfiguration(sslConfig2);
-            fail("Truststore configured dynamically for listener without previous truststore");
-        } catch (ConfigException e) {
-            // Expected exception
-        }
+        assertThrows(ConfigException.class, () -> sslFactory.validateReconfiguration(sslConfig2));
     }
 
     @Test

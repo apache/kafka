@@ -761,12 +761,14 @@ class KafkaConfigTest {
         case KafkaConfig.SslKeystoreTypeProp => // ignore string
         case KafkaConfig.SslKeystoreLocationProp => // ignore string
         case KafkaConfig.SslKeystorePasswordProp => // ignore string
+        case KafkaConfig.SslKeystoreLocationRefreshIntervalMsProp => // ignore string
         case KafkaConfig.SslKeyPasswordProp => // ignore string
         case KafkaConfig.SslKeystoreCertificateChainProp => // ignore string
         case KafkaConfig.SslKeystoreKeyProp => // ignore string
         case KafkaConfig.SslTruststoreTypeProp => // ignore string
-        case KafkaConfig.SslTruststorePasswordProp => // ignore string
         case KafkaConfig.SslTruststoreLocationProp => // ignore string
+        case KafkaConfig.SslTruststorePasswordProp => // ignore string
+        case KafkaConfig.SslTruststoreLocationRefreshIntervalMsProp => // ignore string
         case KafkaConfig.SslTruststoreCertificatesProp => // ignore string
         case KafkaConfig.SslKeyManagerAlgorithmProp =>
         case KafkaConfig.SslTrustManagerAlgorithmProp =>
