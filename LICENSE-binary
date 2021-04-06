@@ -200,3 +200,121 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+-------------------------------------------------------------------------------
+This project bundles some components that are also licensed under the Apache
+License Version 2.0:
+
+audience-annotations-0.5.0
+commons-cli-1.4
+commons-lang3-3.8.1
+jackson-annotations-2.10.5
+jackson-core-2.10.5
+jackson-databind-2.10.5.1
+jackson-dataformat-csv-2.10.5
+jackson-datatype-jdk8-2.10.5
+jackson-jaxrs-base-2.10.5
+jackson-jaxrs-json-provider-2.10.5
+jackson-module-jaxb-annotations-2.10.5
+jackson-module-paranamer-2.10.5
+jackson-module-scala_2.13-2.10.5
+jakarta.validation-api-2.0.2
+javassist-3.27.0-GA
+jetty-client-9.4.38.v20210224
+jetty-continuation-9.4.38.v20210224
+jetty-http-9.4.38.v20210224
+jetty-io-9.4.38.v20210224
+jetty-security-9.4.38.v20210224
+jetty-server-9.4.38.v20210224
+jetty-servlet-9.4.38.v20210224
+jetty-servlets-9.4.38.v20210224
+jetty-util-9.4.38.v20210224
+jetty-util-ajax-9.4.38.v20210224
+jersey-common-2.31
+jersey-server-2.31
+log4j-1.2.17
+lz4-java-1.7.1
+maven-artifact-3.6.3
+metrics-core-2.2.0
+netty-buffer-4.1.59.Final
+netty-codec-4.1.59.Final
+netty-common-4.1.59.Final
+netty-handler-4.1.59.Final
+netty-resolver-4.1.59.Final
+netty-transport-4.1.59.Final
+netty-transport-native-epoll-4.1.59.Final
+netty-transport-native-epoll-4.1.59.Final
+netty-transport-native-unix-common-4.1.59.Final
+plexus-utils-3.2.1
+rocksdbjni-5.18.4
+scala-collection-compat_2.13-2.3.0
+scala-library-2.13.5
+scala-logging_2.13-3.9.2
+scala-reflect-2.13.5
+scala-java8-compat_2.13-0.9.1
+snappy-java-1.1.8.1
+zookeeper-3.5.9
+zookeeper-jute-3.5.9
+
+===============================================================================
+This product bundles various third-party components under other open source
+licenses. This section summarizes those components and their licenses.
+See licenses/ for text of these licenses.
+
+---------------------------------------
+Eclipse Distribution License - v 1.0
+see: licenses/eclipse-distribution-license-1.0
+
+jakarta.activation-api-1.2.1
+jakarta.xml.bind-api-2.3.2
+
+---------------------------------------
+Eclipse Public License - v 2.0
+see: licenses/eclipse-public-license-2.0
+
+jakarta.annotation-api-1.3.5
+jakarta.ws.rs-api-2.1.6
+javax.ws.rs-api-2.1.1
+hk2-api-2.6.1
+hk2-locator-2.6.1
+hk2-utils-2.6.1
+osgi-resource-locator-1.0.3
+aopalliance-repackaged-2.6.1
+jakarta.inject-2.6.1
+jersey-container-servlet-2.31
+jersey-container-servlet-core-2.31
+jersey-client-2.31
+jersey-hk2-2.31
+jersey-media-jaxb-2.31
+
+---------------------------------------
+CDDL 1.1 + GPLv2 with classpath exception
+see: licenses/CDDL+GPL-1.1
+
+javax.servlet-api-3.1.0
+jaxb-api-2.3.0
+activation-1.1.1
+
+---------------------------------------
+MIT License
+
+argparse4j-0.7.0, see: licenses/argparse-MIT
+jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
+slf4j-api-1.7.30, see: licenses/slf4j-MIT
+slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
+
+---------------------------------------
+BSD 2-Clause
+
+zstd-jni-1.4.9-1, see: licenses/zstd-jni-BSD-2-clause
+
+---------------------------------------
+BSD 3-Clause
+
+paranamer-2.8, see: licenses/paranamer-BSD-3-clause
+
+---------------------------------------
+Do What The F*ck You Want To Public License
+see: licenses/DWTFYWTPL
+
+reflections-0.9.12
