@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
@@ -147,28 +146,11 @@ public interface Admin extends AutoCloseable {
     /**
      * Close the Admin and release all associated resources.
      * <p>
-     * See {@link #close(long, TimeUnit)}
+     * See {@link #close(Duration)}
      */
     @Override
     default void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Close the Admin and release all associated resources.
-     * <p>
-     * The close operation has a grace period during which current operations will be allowed to
-     * complete, specified by the given duration and time unit.
-     * New operations will not be accepted during the grace period. Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
-     *
-     * @param duration The duration to use for the wait time.
-     * @param unit     The time unit to use for the wait time.
-     * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
-     */
-    @Deprecated
-    default void close(long duration, TimeUnit unit) {
-        close(Duration.ofMillis(unit.toMillis(duration)));
+        close(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**

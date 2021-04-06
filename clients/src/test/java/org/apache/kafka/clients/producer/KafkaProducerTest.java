@@ -641,13 +641,6 @@ public class KafkaProducerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    @Deprecated
-    public void testHeadersWithExtendedClasses() {
-        doTestHeaders(org.apache.kafka.common.serialization.ExtendedSerializer.class);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void testHeaders() {
         doTestHeaders(Serializer.class);
     }

@@ -578,41 +578,15 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
-                                                              Deserializer<?> keyDeserializer,
-                                                              Deserializer<?> valueDeserializer) {
-        return appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
-    }
-
-    static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-            Deserializer<?> keyDeserializer,
-            Deserializer<?> valueDeserializer) {
+    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                    Deserializer<?> keyDeserializer,
+                                                                    Deserializer<?> valueDeserializer) {
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         if (valueDeserializer != null)
             newConfigs.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
         return newConfigs;
-    }
-
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Properties addDeserializerToConfig(Properties properties,
-                                                     Deserializer<?> keyDeserializer,
-                                                     Deserializer<?> valueDeserializer) {
-        Properties newProperties = new Properties();
-        newProperties.putAll(properties);
-        if (keyDeserializer != null)
-            newProperties.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
-        if (valueDeserializer != null)
-            newProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
-        return newProperties;
     }
 
     boolean maybeOverrideEnableAutoCommit() {
