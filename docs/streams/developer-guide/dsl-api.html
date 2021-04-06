@@ -3658,15 +3658,10 @@ groupedTable
                         <p>Another variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to dynamically choose which topic to send to for each record via a <code class="docutils literal"><span class="pre">TopicNameExtractor</span></code>
                             instance.</p>
                         <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
-
 
 <span class="c1">// Write the stream to the output topic, using the configured default key</span>
 <span class="c1">// and value serdes.</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">);</span>
-
-<span class="c1">// Same for table</span>
-<span class="n">table</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-table-output-topic&quot;</span><span class="o">);</span>
 
 <span class="c1">// Write the stream to the output topic, using explicit key and value serdes,</span>
 <span class="c1">// (thus overriding the defaults in the config properties).</span>
