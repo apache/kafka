@@ -44,7 +44,6 @@ public class LogAndSkipOnInvalidTimestampTest extends TimestampExtractorTest {
                 TimestampType.NO_TIMESTAMP_TYPE,
                 0,
                 0,
-                0,
                 null,
                 null),
             0

@@ -210,7 +210,6 @@ object DefaultMessageFormatterTest {
       offset,
       timestamp,
       timestampType,
-      0L,
       0,
       0,
       if (key == null) null else key.getBytes(StandardCharsets.UTF_8),

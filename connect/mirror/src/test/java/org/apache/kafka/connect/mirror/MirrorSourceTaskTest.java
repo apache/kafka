@@ -49,7 +49,7 @@ public class MirrorSourceTaskTest {
         headers.add("header1", new byte[]{'l', 'm', 'n', 'o'});
         headers.add("header2", new byte[]{'p', 'q', 'r', 's', 't'});
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
-            TimestampType.CREATE_TIME, 0L, 5, 6, key, value, headers);
+            TimestampType.CREATE_TIME, 5, 6, key, value, headers);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
                 new DefaultReplicationPolicy(), 50);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
@@ -111,9 +111,9 @@ public class MirrorSourceTaskTest {
             new RecordHeader(headerKey, "value".getBytes()),
         });
         consumerRecordsList.add(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
-                TimestampType.CREATE_TIME, 0L, key1.length, value1.length, key1, value1, headers));
+                TimestampType.CREATE_TIME, key1.length, value1.length, key1, value1, headers));
         consumerRecordsList.add(new ConsumerRecord<>(topicName, 1, 1, System.currentTimeMillis(),
-                TimestampType.CREATE_TIME, 0L, key2.length, value2.length, key2, value2, headers));
+                TimestampType.CREATE_TIME, key2.length, value2.length, key2, value2, headers));
         ConsumerRecords<byte[], byte[]> consumerRecords =
                 new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(topicName, 0), consumerRecordsList));
 

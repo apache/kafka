@@ -37,8 +37,8 @@ public class ConsumerRecordsTest {
 
         String topic = "topic";
         records.put(new TopicPartition(topic, 0), new ArrayList<ConsumerRecord<Integer, String>>());
-        ConsumerRecord<Integer, String> record1 = new ConsumerRecord<>(topic, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, "value1");
-        ConsumerRecord<Integer, String> record2 = new ConsumerRecord<>(topic, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 2, "value2");
+        ConsumerRecord<Integer, String> record1 = new ConsumerRecord<>(topic, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, 1, "value1");
+        ConsumerRecord<Integer, String> record2 = new ConsumerRecord<>(topic, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, 2, "value2");
         records.put(new TopicPartition(topic, 1), Arrays.asList(record1, record2));
         records.put(new TopicPartition(topic, 2), new ArrayList<ConsumerRecord<Integer, String>>());
 

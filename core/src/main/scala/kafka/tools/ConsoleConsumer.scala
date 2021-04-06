@@ -35,7 +35,6 @@ import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -113,7 +112,7 @@ object ConsoleConsumer extends Logging {
       messageCount += 1
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+                                             msg.timestampType, 0, 0, msg.key, msg.value, msg.headers), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -614,18 +613,3 @@ class NoOpMessageFormatter extends MessageFormatter {
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
 
-class ChecksumMessageFormatter extends MessageFormatter {
-  private var topicStr: String = _
-
-  override def configure(configs: Map[String, _]): Unit = {
-    topicStr = if (configs.containsKey("topic"))
-      configs.get("topic").toString + ":"
-    else
-      ""
-  }
-
-  @nowarn("cat=deprecation")
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-    output.println(topicStr + "checksum:" + consumerRecord.checksum)
-  }
-}

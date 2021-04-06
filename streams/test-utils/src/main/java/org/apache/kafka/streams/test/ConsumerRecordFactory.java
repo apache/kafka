@@ -190,7 +190,6 @@ public class ConsumerRecordFactory<K, V> {
             -1L,
             timestampMs,
             TimestampType.CREATE_TIME,
-            (long) ConsumerRecord.NULL_CHECKSUM,
             serializedKey == null ? 0 : serializedKey.length,
             serializedValue == null ? 0 : serializedValue.length,
             serializedKey,

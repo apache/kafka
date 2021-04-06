@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -65,7 +64,6 @@ public class ProducerBatchTest {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(future);
-        assertNull(future.checksumOrNull());
     }
 
     @Test
@@ -136,23 +134,6 @@ public class ProducerBatchTest {
         RecordMetadata recordMetadata = future.get();
         assertEquals(500L, recordMetadata.offset());
         assertEquals(10L, recordMetadata.timestamp());
-    }
-
-    @Test
-    public void testAppendedChecksumMagicV0AndV1() {
-        for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1)) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128), magic,
-                    CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-            ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
-            byte[] key = "hi".getBytes();
-            byte[] value = "there".getBytes();
-
-            FutureRecordMetadata future = batch.tryAppend(now, key, value, Record.EMPTY_HEADERS, null, now);
-            assertNotNull(future);
-            byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
-            long expectedChecksum = LegacyRecord.computeChecksum(magic, attributes, now, key, value);
-            assertEquals(expectedChecksum, future.checksumOrNull().longValue());
-        }
     }
 
     @Test

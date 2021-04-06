@@ -2539,7 +2539,6 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             recordKey,
@@ -2555,7 +2554,6 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             recordKey,
@@ -2570,7 +2568,6 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             new IntegerSerializer().serialize(topic1, key),

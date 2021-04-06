@@ -498,7 +498,7 @@ class ConsoleConsumerTest {
     assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
 
     out = new ByteArrayOutputStream()
-    val record2 = new ConsumerRecord("topic", 0, 123, 123L, TimestampType.CREATE_TIME, 321L, -1, -1, "key".getBytes, "value".getBytes)
+    val record2 = new ConsumerRecord("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes, "value".getBytes)
     formatter.writeTo(record2, new PrintStream(out))
     assertEquals("CreateTime:123\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
     formatter.close()
@@ -513,24 +513,6 @@ class ConsoleConsumerTest {
     val out = new ByteArrayOutputStream()
     formatter.writeTo(record, new PrintStream(out))
     assertEquals("", out.toString)
-  }
-
-  @Test
-  def testChecksumMessageFormatter(): Unit = {
-    val record = new ConsumerRecord("topic", 0, 123, "key".getBytes, "value".getBytes)
-    val formatter = new ChecksumMessageFormatter()
-    val configs: JMap[String, String] = new HashMap()
-
-    formatter.configure(configs)
-    var out = new ByteArrayOutputStream()
-    formatter.writeTo(record, new PrintStream(out))
-    assertEquals("checksum:-1\n", out.toString)
-
-    configs.put("topic", "topic1")
-    formatter.configure(configs)
-    out = new ByteArrayOutputStream()
-    formatter.writeTo(record, new PrintStream(out))
-    assertEquals("topic1:checksum:-1\n", out.toString)
   }
 
 }

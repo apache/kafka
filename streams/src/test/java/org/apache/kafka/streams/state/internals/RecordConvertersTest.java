@@ -41,7 +41,7 @@ public class RecordConvertersTest {
         final long timestamp = 10L;
         final byte[] value = new byte[1];
         final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
-                "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, new byte[0], value);
+                "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0, 0, new byte[0], value);
         final byte[] expectedValue = ByteBuffer.allocate(9).putLong(timestamp).put(value).array();
         final byte[] actualValue = timestampedValueConverter.convert(inputRecord).value();
         assertArrayEquals(expectedValue, actualValue);

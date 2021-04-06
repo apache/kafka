@@ -36,7 +36,6 @@ public final class ConsumerRecordUtil {
             offset,
             0L,
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             key,

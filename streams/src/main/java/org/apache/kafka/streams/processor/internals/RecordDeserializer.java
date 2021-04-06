@@ -59,7 +59,6 @@ class RecordDeserializer {
                 rawRecord.offset(),
                 rawRecord.timestamp(),
                 TimestampType.CREATE_TIME,
-                rawRecord.checksum(),
                 rawRecord.serializedKeySize(),
                 rawRecord.serializedValueSize(),
                 sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),

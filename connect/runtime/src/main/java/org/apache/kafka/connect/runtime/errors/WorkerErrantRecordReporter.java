@@ -95,7 +95,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             int valLength = value != null ? value.length : -1;
 
             consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
-                record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, keyLength,
+                record.kafkaOffset(), record.timestamp(), record.timestampType(), keyLength,
                 valLength, key, value, headers);
         }
 

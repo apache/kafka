@@ -153,7 +153,7 @@ public class TestRecordTest {
     public void testConsumerRecord() {
         final String topicName = "topic";
         final ConsumerRecord<String, Integer> consumerRecord =
-            new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0L, 0, 0, key, value, headers);
+            new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0, 0, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(consumerRecord);
         final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
         assertEquals(expectedRecord, testRecord);

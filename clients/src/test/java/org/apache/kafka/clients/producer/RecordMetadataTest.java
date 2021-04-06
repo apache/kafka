@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.DefaultRecord;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,27 +25,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class RecordMetadataTest {
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testConstructionWithMissingRelativeOffset() {
         TopicPartition tp = new TopicPartition("foo", 0);
         long timestamp = 2340234L;
         int keySize = 3;
         int valueSize = 5;
-        Long checksum = 908923L;
 
-        RecordMetadata metadata = new RecordMetadata(tp, -1L, -1L, timestamp, checksum, keySize, valueSize);
+        RecordMetadata metadata = new RecordMetadata(tp, -1L, -1L, timestamp, keySize, valueSize);
         assertEquals(tp.topic(), metadata.topic());
         assertEquals(tp.partition(), metadata.partition());
         assertEquals(timestamp, metadata.timestamp());
         assertFalse(metadata.hasOffset());
         assertEquals(-1L, metadata.offset());
-        assertEquals(checksum.longValue(), metadata.checksum());
         assertEquals(keySize, metadata.serializedKeySize());
         assertEquals(valueSize, metadata.serializedValueSize());
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testConstructionWithRelativeOffset() {
         TopicPartition tp = new TopicPartition("foo", 0);
         long timestamp = 2340234L;
@@ -54,28 +49,24 @@ public class RecordMetadataTest {
         int valueSize = 5;
         long baseOffset = 15L;
         long relativeOffset = 3L;
-        Long checksum = 908923L;
 
-        RecordMetadata metadata = new RecordMetadata(tp, baseOffset, relativeOffset, timestamp, checksum,
-                keySize, valueSize);
+        RecordMetadata metadata = new RecordMetadata(tp, baseOffset, relativeOffset, timestamp, keySize, valueSize);
         assertEquals(tp.topic(), metadata.topic());
         assertEquals(tp.partition(), metadata.partition());
         assertEquals(timestamp, metadata.timestamp());
         assertEquals(baseOffset + relativeOffset, metadata.offset());
-        assertEquals(checksum.longValue(), metadata.checksum());
         assertEquals(keySize, metadata.serializedKeySize());
         assertEquals(valueSize, metadata.serializedValueSize());
     }
 
     @Test
     @SuppressWarnings("deprecation")
-    public void testNullChecksum() {
+    public void testNullChecksumDoesNotThrow() {
         long timestamp = 2340234L;
         int keySize = 3;
         int valueSize = 5;
-        RecordMetadata metadata = new RecordMetadata(new TopicPartition("foo", 0), 15L, 3L, timestamp, null,
+        new RecordMetadata(new TopicPartition("foo", 0), 15L, 3L, timestamp, null,
                 keySize, valueSize);
-        assertEquals(DefaultRecord.computePartialChecksum(timestamp, keySize, valueSize), metadata.checksum());
     }
 
 }

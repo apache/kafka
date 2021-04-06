@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -32,7 +31,6 @@ import java.util.Optional;
 public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
-    public static final int NULL_CHECKSUM = -1;
 
     private final String topic;
     private final int partition;
@@ -45,8 +43,6 @@ public class ConsumerRecord<K, V> {
     private final K key;
     private final V value;
     private final Optional<Integer> leaderEpoch;
-
-    private volatile Long checksum;
 
     /**
      * Creates a record to be received from a specified topic and partition (provided for
@@ -65,7 +61,7 @@ public class ConsumerRecord<K, V> {
                           K key,
                           V value) {
         this(topic, partition, offset, NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
-                NULL_CHECKSUM, NULL_SIZE, NULL_SIZE, key, value);
+                NULL_SIZE, NULL_SIZE, key, value);
     }
 
     /**
@@ -77,7 +73,6 @@ public class ConsumerRecord<K, V> {
      * @param offset The offset of this record in the corresponding Kafka partition
      * @param timestamp The timestamp of the record.
      * @param timestampType The timestamp type
-     * @param checksum The checksum (CRC32) of the full record
      * @param serializedKeySize The length of the serialized key
      * @param serializedValueSize The length of the serialized value
      * @param key The key of the record, if one exists (null is allowed)
@@ -88,12 +83,11 @@ public class ConsumerRecord<K, V> {
                           long offset,
                           long timestamp,
                           TimestampType timestampType,
-                          long checksum,
                           int serializedKeySize,
                           int serializedValueSize,
                           K key,
                           V value) {
-        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize,
+        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize,
                 key, value, new RecordHeaders());
     }
 
@@ -105,7 +99,6 @@ public class ConsumerRecord<K, V> {
      * @param offset The offset of this record in the corresponding Kafka partition
      * @param timestamp The timestamp of the record.
      * @param timestampType The timestamp type
-     * @param checksum The checksum (CRC32) of the full record
      * @param serializedKeySize The length of the serialized key
      * @param serializedValueSize The length of the serialized value
      * @param key The key of the record, if one exists (null is allowed)
@@ -117,13 +110,12 @@ public class ConsumerRecord<K, V> {
                           long offset,
                           long timestamp,
                           TimestampType timestampType,
-                          Long checksum,
                           int serializedKeySize,
                           int serializedValueSize,
                           K key,
                           V value,
                           Headers headers) {
-        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize,
+        this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize,
                 key, value, headers, Optional.empty());
     }
 
@@ -135,7 +127,6 @@ public class ConsumerRecord<K, V> {
      * @param offset The offset of this record in the corresponding Kafka partition
      * @param timestamp The timestamp of the record.
      * @param timestampType The timestamp type
-     * @param checksum The checksum (CRC32) of the full record
      * @param serializedKeySize The length of the serialized key
      * @param serializedValueSize The length of the serialized value
      * @param key The key of the record, if one exists (null is allowed)
@@ -148,7 +139,6 @@ public class ConsumerRecord<K, V> {
                           long offset,
                           long timestamp,
                           TimestampType timestampType,
-                          Long checksum,
                           int serializedKeySize,
                           int serializedValueSize,
                           K key,
@@ -165,7 +155,6 @@ public class ConsumerRecord<K, V> {
         this.offset = offset;
         this.timestamp = timestamp;
         this.timestampType = timestampType;
-        this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
         this.key = key;
@@ -228,24 +217,6 @@ public class ConsumerRecord<K, V> {
      */
     public TimestampType timestampType() {
         return timestampType;
-    }
-
-    /**
-     * The checksum (CRC32) of the record.
-     *
-     * @deprecated As of Kafka 0.11.0. Because of the potential for message format conversion on the broker, the
-     *             checksum returned by the broker may not match what was computed by the producer.
-     *             It is therefore unsafe to depend on this checksum for end-to-end delivery guarantees. Additionally,
-     *             message format v2 does not include a record-level checksum (for performance, the record checksum
-     *             was replaced with a batch checksum). To maintain compatibility, a partial checksum computed from
-     *             the record timestamp, serialized key size, and serialized value size is returned instead, but
-     *             this should not be depended on for end-to-end reliability.
-     */
-    @Deprecated
-    public long checksum() {
-        if (checksum == null)
-            this.checksum = DefaultRecord.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
-        return this.checksum;
     }
 
     /**
