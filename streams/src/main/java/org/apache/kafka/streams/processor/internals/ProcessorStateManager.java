@@ -186,7 +186,7 @@ public class ProcessorStateManager implements StateManager {
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
 
-        this.baseDir = stateDirectory.directoryForTask(taskId);
+        this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);

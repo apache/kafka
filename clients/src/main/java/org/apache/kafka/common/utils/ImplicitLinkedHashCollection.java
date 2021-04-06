@@ -20,6 +20,8 @@ package org.apache.kafka.common.utils;
 import java.util.AbstractCollection;
 import java.util.AbstractSequentialList;
 import java.util.AbstractSet;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -675,5 +677,19 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     public Set<E> valuesSet() {
         return new ImplicitLinkedHashCollectionSetView();
+    }
+
+    public void sort(Comparator<E> comparator) {
+        ArrayList<E> array = new ArrayList<>(size);
+        Iterator<E> iterator = iterator();
+        while (iterator.hasNext()) {
+            E e = iterator.next();
+            iterator.remove();
+            array.add(e);
+        }
+        array.sort(comparator);
+        for (E e : array) {
+            add(e);
+        }
     }
 }

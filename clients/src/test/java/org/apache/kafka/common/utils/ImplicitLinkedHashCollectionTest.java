@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -612,5 +613,58 @@ public class ImplicitLinkedHashCollectionTest {
         for (int i = 50; i < 100; i++) {
             assertEquals(new TestElement(i, i), coll.find(elements.get(i)));
         }
+    }
+
+    static class TestElementComparator implements Comparator<TestElement> {
+        static final TestElementComparator INSTANCE = new TestElementComparator();
+
+        @Override
+        public int compare(TestElement a, TestElement b) {
+            if (a.key < b.key) {
+                return -1;
+            } else if (a.key > b.key) {
+                return 1;
+            } else if (a.val < b.val) {
+                return -1;
+            } else if (a.val > b.val) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    static class ReverseTestElementComparator implements Comparator<TestElement> {
+        static final ReverseTestElementComparator INSTANCE = new ReverseTestElementComparator();
+
+        @Override
+        public int compare(TestElement a, TestElement b) {
+            return TestElementComparator.INSTANCE.compare(b, a);
+        }
+    }
+
+    @Test
+    public void testSort() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(3, 3));
+        coll.add(new TestElement(1, 1));
+        coll.add(new TestElement(10, 10));
+        coll.add(new TestElement(9, 9));
+        coll.add(new TestElement(2, 2));
+        coll.add(new TestElement(4, 4));
+        coll.add(new TestElement(0, 0));
+        coll.add(new TestElement(30, 30));
+        coll.add(new TestElement(20, 20));
+        coll.add(new TestElement(11, 11));
+        coll.add(new TestElement(15, 15));
+        coll.add(new TestElement(5, 5));
+
+        expectTraversal(coll.iterator(), 3, 1, 10, 9, 2, 4, 0, 30, 20, 11, 15, 5);
+        coll.sort(TestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5, 9, 10, 11, 15, 20, 30);
+        coll.sort(TestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5, 9, 10, 11, 15, 20, 30);
+        coll.sort(ReverseTestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 30, 20, 15, 11, 10, 9, 5, 4, 3, 2, 1, 0);
     }
 }
