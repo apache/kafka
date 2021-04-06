@@ -1840,6 +1840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteTopicsRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
+
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseData = new DeleteTopicsResponseData()
