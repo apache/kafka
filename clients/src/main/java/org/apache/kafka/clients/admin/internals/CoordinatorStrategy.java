@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 import java.util.Objects;
 import java.util.Set;
 
-public class CoordinatorStrategy<V> implements AdminApiLookupStrategy<CoordinatorKey> {
+public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKey> {
     private final Logger log;
 
     public CoordinatorStrategy(
@@ -68,7 +68,6 @@ public class CoordinatorStrategy<V> implements AdminApiLookupStrategy<Coordinato
             case NONE:
                 return LookupResult.mapped(key, response.data().nodeId());
 
-            case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
             case COORDINATOR_LOAD_IN_PROGRESS:
                 log.debug("FindCoordinator request for key {} returned topic-level error {}. Will retry",

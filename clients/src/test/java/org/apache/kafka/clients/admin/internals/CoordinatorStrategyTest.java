@@ -39,7 +39,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildLookupRequest() {
-        CoordinatorStrategy<Object> strategy = new CoordinatorStrategy<>(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
         FindCoordinatorRequest.Builder request = strategy.buildRequest(singleton(
             new CoordinatorKey("foo", CoordinatorType.GROUP)));
         assertEquals("foo", request.data().key());
@@ -48,7 +48,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testBuildLookupRequestRequiresOneKey() {
-        CoordinatorStrategy<Object> strategy = new CoordinatorStrategy<>(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
 
         CoordinatorKey group1 = new CoordinatorKey("foo", CoordinatorType.GROUP);
@@ -75,7 +75,6 @@ public class CoordinatorStrategyTest {
     public void testRetriableCoordinatorLookup() {
         testRetriableCoordinatorLookup(Errors.COORDINATOR_LOAD_IN_PROGRESS);
         testRetriableCoordinatorLookup(Errors.COORDINATOR_NOT_AVAILABLE);
-        testRetriableCoordinatorLookup(Errors.NOT_COORDINATOR);
     }
 
     public void testRetriableCoordinatorLookup(Errors error) {
@@ -118,7 +117,7 @@ public class CoordinatorStrategyTest {
         CoordinatorKey key,
         FindCoordinatorResponseData responseData
     ) {
-        CoordinatorStrategy<Object> strategy = new CoordinatorStrategy<>(new LogContext());
+        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
         FindCoordinatorResponse response = new FindCoordinatorResponse(responseData);
         return strategy.handleResponse(singleton(key), response);
     }

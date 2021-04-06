@@ -68,7 +68,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
     @Override
     public Keys<CoordinatorKey> initializeKeys() {
-        return Keys.dynamicMapped(keys, new CoordinatorStrategy<>(logContext));
+        return Keys.dynamicMapped(keys, new CoordinatorStrategy(logContext));
     }
 
     @Override
