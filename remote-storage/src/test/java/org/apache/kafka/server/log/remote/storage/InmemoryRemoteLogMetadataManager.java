@@ -118,6 +118,8 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     @Override
     public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException {
+        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
+
         return getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegments();
     }
 

@@ -44,19 +44,19 @@ import java.util.concurrent.ConcurrentMap;
  * <li>
  * {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}:
  * <br>
- * Segment in this state indicate it is not yet copied successfully. So, these segments will not be
+ * Segment in this state indicates it is not yet copied successfully. So, these segments will not be
  * accessible for reads but these are considered for cleanups when a partition is deleted.
  * </li>
  * <li>
  * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED}:
  * <br>
- * Segment in this state indicate it is successfully copied and it is available for reads. So, these segments
+ * Segment in this state indicates it is successfully copied and it is available for reads. So, these segments
  * will be accessible for reads. But this should be available for any cleanup activity like deleting segments by the
  * caller of this class.
  * </li>
  * <li>
  * {@link RemoteLogSegmentState#DELETE_SEGMENT_STARTED}:
- * Segment in this state indicate it is getting deleted. That means, it is not available for reads. But it should be
+ * Segment in this state indicates it is getting deleted. That means, it is not available for reads. But it should be
  * available for any cleanup activity like deleting segments by the caller of this class.
  * </li>
  * <li>
@@ -67,40 +67,20 @@ import java.util.concurrent.ConcurrentMap;
  * </ul>
  *
  * <p>
- * <table border="4">
- * <thead border="4">
- * <tr>
- * <th></th>
- * <th>COPY_SEGMENT_STARTED</th>
- * <th>COPY_SEGMENT_FINISHED</th>
- * <th>DELETE_SEGMENT_STARTED</th>
- * <th>DELETE_SEGMENT_FINISHED</th>
- * </tr>
- * </thead>
- * <tbody>
- * <tr>
- * <td>remoteLogSegmentMetadata<br>(int leaderEpoch, long offset)</td>
- * <td>No</td>
- * <td>Yes</td>
- * <td>No</td>
- * <td>No</td>
- * </tr>
- * <tr>
- * <td>listRemoteLogSegments <br>(int leaderEpoch)</td>
- * <td>Yes</td>
- * <td>Yes</td>
- * <td>Yes</td>
- * <td>No</td>
- * </tr>
- * <tr>
- * <td>listAllRemoteLogSegments()</td>
- * <td>Yes</td>
- * <td>Yes</td>
- * <td>Yes</td>
- * <td>No</td>
- * </tr>
- * </tbody>
- * </table>
+ * <pre>
+ * +---------------------------------+----------------------+------------------------+-------------------------+-------------------------+
+ * |                                 | COPY_SEGMENT_STARTED | COPY_SEGMENT_FINISHED  | DELETE_SEGMENT_STARTED  | DELETE_SEGMENT_STARTED  |
+ * |---------------------------------+----------------------+------------------------+-------------------------+-------------------------|
+ * | remoteLogSegmentMetadata        |        No            |           Yes          |          No             |           No            |
+ * | (int leaderEpoch, long offset)  |                      |                        |                         |                         |
+ * |---------------------------------+----------------------+------------------------+-------------------------+-------------------------|
+ * | listRemoteLogSegments           |        Yes           |           Yes          |          Yes            |           No            |
+ * | (int leaderEpoch)               |                      |                        |                         |                         |
+ * |---------------------------------+----------------------+------------------------+-------------------------+-------------------------|
+ * | listAllRemoteLogSegments()      |        Yes           |           Yes          |          Yes            |           No            |
+ * |                                 |                      |                        |                         |                         |
+ * +---------------------------------+----------------------+------------------------+-------------------------+-------------------------+
+ * </pre>
  * </p>
  * <p></p>
  */
@@ -145,11 +125,8 @@ public class RemoteLogMetadataCache {
         Map.Entry<Integer, Long> nextEntry = metadata.segmentLeaderEpochs().higherEntry(leaderEpoch);
         long epochEndOffset = (nextEntry != null) ? nextEntry.getValue() - 1 : metadata.endOffset();
 
-        // Return empty when target offset > epoch's end offset or segment is not in COPY_SEGMENT_FINISHED state.
-        // This segment will not be available in offsetToId when it reaches the DELETE_SEGMENT_FINISHED state. So, no
-        // need to add for that state here.
-        return (offset > epochEndOffset || metadata.state() != RemoteLogSegmentState.COPY_SEGMENT_FINISHED)
-               ? Optional.empty() : Optional.of(metadata);
+        // Return empty when target offset > epoch's end offset.
+        return offset > epochEndOffset ? Optional.empty() : Optional.of(metadata);
     }
 
     public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
@@ -172,7 +149,7 @@ public class RemoteLogMetadataCache {
             case COPY_SEGMENT_STARTED:
                 // Callers should use addCopyInProgressSegment to add RemoteLogSegmentMetadata with state as
                 // RemoteLogSegmentState.COPY_SEGMENT_STARTED.
-                throw new IllegalArgumentException("Metadata with " + RemoteLogSegmentState.COPY_SEGMENT_STARTED +
+                throw new IllegalArgumentException("metadataUpdate: " + metadataUpdate + " with state " + RemoteLogSegmentState.COPY_SEGMENT_STARTED +
                                                    " can not be updated");
             case COPY_SEGMENT_FINISHED:
                 handleSegmentWithCopySegmentFinishedState(metadataUpdate, existingMetadata);
@@ -246,13 +223,10 @@ public class RemoteLogMetadataCache {
     }
 
     private long highestOffsetForEpoch(Integer leaderEpoch, RemoteLogSegmentMetadata segmentMetadata) {
-        //compute the highest offset for the leader epoch with in the segment
+        // Compute the highest offset for the leader epoch with in the segment
         NavigableMap<Integer, Long> epochToOffset = segmentMetadata.segmentLeaderEpochs();
         Map.Entry<Integer, Long> nextEntry = epochToOffset.higherEntry(leaderEpoch);
 
-        // Update with the given metadata for leader epoch
-        //  - If there is no highest entry  OR
-        //  - If the existing entry's endOffset is lower than the given metadata's endOffset.
         return nextEntry != null ? nextEntry.getValue() - 1 : segmentMetadata.endOffset();
     }
 
@@ -307,7 +281,7 @@ public class RemoteLogMetadataCache {
         // but not to update the existing remote log segment metadata.
         if (remoteLogSegmentMetadata.state() != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
             throw new IllegalArgumentException(
-                    "Given remoteLogSegmentMetadata should have state as " + RemoteLogSegmentState.COPY_SEGMENT_STARTED
+                    "Given remoteLogSegmentMetadata:" + remoteLogSegmentMetadata + " should have state as " + RemoteLogSegmentState.COPY_SEGMENT_STARTED
                     + " but it contains state as: " + remoteLogSegmentMetadata.state());
         }
 

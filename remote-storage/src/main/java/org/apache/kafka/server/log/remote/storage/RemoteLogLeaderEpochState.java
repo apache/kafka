@@ -94,7 +94,7 @@ class RemoteLogLeaderEpochState {
         }
 
         // Update the highest offset entry for this leader epoch as we added a new mapping.
-        updateHighestLogOffset(leaderEpochEndOffset);
+        maybeUpdateHighestLogOffset(leaderEpochEndOffset);
     }
 
     void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
@@ -108,7 +108,7 @@ class RemoteLogLeaderEpochState {
 
         // Update the highest offset entry for this leader epoch. This needs to be done as a segment can reach this
         // state without going through COPY_SEGMENT_FINISHED state.
-        updateHighestLogOffset(leaderEpochEndOffset);
+        maybeUpdateHighestLogOffset(leaderEpochEndOffset);
     }
 
     void handleSegmentWithDeleteSegmentFinishedState(long startOffset, RemoteLogSegmentId remoteLogSegmentId,
@@ -129,7 +129,7 @@ class RemoteLogLeaderEpochState {
         return highestLogOffset;
     }
 
-    private void updateHighestLogOffset(long offset) {
+    private void maybeUpdateHighestLogOffset(long offset) {
         if (highestLogOffset == null || offset > highestLogOffset) {
             highestLogOffset = offset;
         }
