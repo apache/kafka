@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -57,8 +58,8 @@ public class LeaderState<T> implements EpochState {
         long epochStartOffset,
         Set<Integer> voters,
         Set<Integer> grantingVoters,
-        LogContext logContext,
-        BatchAccumulator<T> accumulator
+        BatchAccumulator<T> accumulator,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -71,7 +72,7 @@ public class LeaderState<T> implements EpochState {
         }
         this.grantingVoters.addAll(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
-        this.accumulator = accumulator;
+        this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
     }
 
     public BatchAccumulator<T> accumulator() {
@@ -341,9 +342,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public void close() {
-        if (accumulator != null) {
-            accumulator.close();
-        }
+        accumulator.close();
     }
 
 }

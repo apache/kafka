@@ -452,8 +452,8 @@ public class QuorumState {
             epochStartOffset,
             voters,
             candidateState.grantingVoters(),
-            logContext,
-            accumulator
+            accumulator,
+            logContext
         );
         transitionTo(state);
         return state;

@@ -2221,7 +2221,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private Long append(int epoch, List<T> records, boolean isAtomic) {
         BatchAccumulator<T> accumulator;
         try {
-            accumulator =  (BatchAccumulator<T>) quorum.leaderStateOrThrow().accumulator();
+            accumulator = quorum.<T>leaderStateOrThrow().accumulator();
         } catch (IllegalStateException ise) {
             return Long.MAX_VALUE;
         }

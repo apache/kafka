@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.mockito.Mockito;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
@@ -44,6 +47,9 @@ public class LeaderStateTest<T> {
     private final int epoch = 5;
     private final LogContext logContext = new LogContext();
 
+    @SuppressWarnings("unchecked")
+    private final BatchAccumulator<T> accumulator = (BatchAccumulator<T>) Mockito.mock(BatchAccumulator.class);
+
     private LeaderState<T> newLeaderState(
         Set<Integer> voters,
         long epochStartOffset
@@ -54,9 +60,22 @@ public class LeaderStateTest<T> {
             epochStartOffset,
             voters,
             voters,
-            logContext,
-            null
+            accumulator,
+            logContext
         );
+    }
+
+    @Test
+    public void testRequireNonNullAccumulator() {
+        assertThrows(NullPointerException.class, () -> new LeaderState<>(
+            localId,
+            epoch,
+            0,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            logContext
+        ));
     }
 
     @Test
@@ -273,7 +292,7 @@ public class LeaderStateTest<T> {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        LeaderState state = newLeaderState(Utils.mkSet(1, 2, 3), 1);
+        LeaderState<T> state = newLeaderState(Utils.mkSet(1, 2, 3), 1);
 
         assertFalse(state.canGrantVote(1, isLogUpToDate));
         assertFalse(state.canGrantVote(2, isLogUpToDate));
