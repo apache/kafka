@@ -65,16 +65,4 @@ class OrderedBytes {
                 .array()
         );
     }
-
-    static Bytes range(final byte[] prefix, final Bytes key) {
-        final byte[] bytes = key.get();
-        final ByteBuffer rangeStart = ByteBuffer.allocate(prefix.length + bytes.length);
-
-        return Bytes.wrap(
-            rangeStart
-                .put(prefix)
-                .put(bytes)
-                .array()
-        );
-    }
 }

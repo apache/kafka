@@ -38,7 +38,6 @@ import static org.junit.Assert.assertEquals;
 
 public class TimeOrderedKeySchemaTest {
     final private String key = "key";
-    final private String topic = "topic";
     final private long startTime = 50L;
     final private long endTime = 100L;
     final private Serde<String> serde = Serdes.String();

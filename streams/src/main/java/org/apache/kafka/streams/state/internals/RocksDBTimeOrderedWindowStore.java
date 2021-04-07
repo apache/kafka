@@ -29,6 +29,13 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
  * A persistent (time-key)-value store based on RocksDB.
+ *
+ * The store uses the {@link TimeOrderedKeySchema} to serialize the record key bytes to generate the
+ * combined (time-key) store key. This key schema is efficient when doing time range queries in
+ * the store (i.e. fetchAll(from, to) ).
+ *
+ * For key range queries, like fetch(key, fromTime, toTime), use the {@link RocksDBWindowStore}
+ * which uses the {@link WindowKeySchema} to serialize the record bytes for efficient key queries.
  */
 public class RocksDBTimeOrderedWindowStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>

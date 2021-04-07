@@ -40,48 +40,73 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     private static final int SEQNUM_SIZE = 4;
     private static final int PREFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
 
+    /**
+     * {@inheritdoc}
+     *
+     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
+     * range queries may be slower. If better performance on key range queries are necessary, then
+     * use the {@link WindowKeySchema}.
+     */
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        final byte[] maxPrefix = ByteBuffer.allocate(PREFIX_SIZE)
-            .putLong(to)
-            .putInt(Integer.MAX_VALUE)
-            .array();
-
-        return OrderedBytes.range(maxPrefix, key);
+        return toStoreKeyBinary(key.get(), to, Integer.MAX_VALUE);
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
+     * range queries may be slower. If better performance on key range queries are necessary, then
+     * use the {@link WindowKeySchema}.
+     */
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        final byte[] minPrefix = ByteBuffer.allocate(PREFIX_SIZE)
-            .putLong(from)
-            .putInt(0)
-            .array();
-
-        return OrderedBytes.range(minPrefix, key);
+        return toStoreKeyBinary(key.get(), from, 0);
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
+     * range queries may be slower. If better performance on key range queries are necessary, then
+     * use the {@link WindowKeySchema}.
+     */
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        return TimeOrderedKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
+        return toStoreKeyBinary(key, to, Integer.MAX_VALUE);
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
+     * range queries may be slower. If better performance on key range queries are necessary, then
+     * use the {@link WindowKeySchema}.
+     */
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        return TimeOrderedKeySchema.toStoreKeyBinary(key, Math.max(0, from), 0);
+        return toStoreKeyBinary(key, Math.max(0, from), 0);
     }
 
     @Override
     public long segmentTimestamp(final Bytes key) {
-        return TimeOrderedKeySchema.extractStoreTimestamp(key.get());
+        return extractStoreTimestamp(key.get());
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
+     * range queries may be slower. If better performance on key range queries are necessary, then
+     * use the {@link WindowKeySchema}.
+     */
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
         return iterator -> {
             while (iterator.hasNext()) {
                 final Bytes bytes = iterator.peekNextKey();
-                final Bytes keyBytes = Bytes.wrap(TimeOrderedKeySchema.extractStoreKeyBytes(bytes.get()));
-                final long time = TimeOrderedKeySchema.extractStoreTimestamp(bytes.get());
+                final Bytes keyBytes = Bytes.wrap(extractStoreKeyBytes(bytes.get()));
+                final long time = extractStoreTimestamp(bytes.get());
                 if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
                     && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
                     && time >= from
