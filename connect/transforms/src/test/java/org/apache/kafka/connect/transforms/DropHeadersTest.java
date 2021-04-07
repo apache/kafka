@@ -20,14 +20,15 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DropHeadersTest {
 
@@ -80,9 +81,9 @@ public class DropHeadersTest {
         assertEquals(expected, xformed.headers());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void configRejectsEmptyList() {
-        xform.configure(config());
+        assertThrows(ConfigException.class, () -> xform.configure(config()));
     }
 
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {

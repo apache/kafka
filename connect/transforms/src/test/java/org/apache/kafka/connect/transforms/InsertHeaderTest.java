@@ -21,13 +21,14 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertHeaderTest {
 
@@ -79,14 +80,14 @@ public class InsertHeaderTest {
         assertEquals(expect, xformed.headers());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void configRejectsNullHeaderKey() {
-        xform.configure(config(null, "1"));
+        assertThrows(ConfigException.class, () -> xform.configure(config(null, "1")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void configRejectsNullHeaderValue() {
-        xform.configure(config("inserted", null));
+        assertThrows(ConfigException.class, () -> xform.configure(config("inserted", null)));
     }
 
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {

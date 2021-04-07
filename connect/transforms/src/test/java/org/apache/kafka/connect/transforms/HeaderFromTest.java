@@ -25,12 +25,12 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,12 +40,10 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.data.Schema.STRING_SCHEMA;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@RunWith(Parameterized.class)
 public class HeaderFromTest {
-
-    private final boolean keyTransform;
 
     static class RecordBuilder {
         private final List<String> fields = new ArrayList<>(2);
@@ -137,16 +135,13 @@ public class HeaderFromTest {
         }
     }
 
-    @Parameterized.Parameters(name = "{0}: testKey={1}, xformFields={3}, xformHeaders={4}, operation={5}")
-    public static Collection<Object[]> data() {
+    public static List<Arguments> data() {
 
-        List<Object[]> result = new ArrayList<>();
-
-
+        List<Arguments> result = new ArrayList<>();
 
         for (Boolean testKeyTransform : asList(true, false)) {
             result.add(
-                new Object[]{
+                Arguments.of(
                     "basic copy",
                     testKeyTransform,
                     new RecordBuilder()
@@ -159,9 +154,9 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "basic move",
                     testKeyTransform,
                     new RecordBuilder()
@@ -174,9 +169,9 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "copy with preexisting header",
                     testKeyTransform,
                     new RecordBuilder()
@@ -189,9 +184,9 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("inserted1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "move with preexisting header",
                     testKeyTransform,
                     new RecordBuilder()
@@ -204,11 +199,11 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("inserted1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                });
+                ));
             Schema schema = new SchemaBuilder(Schema.Type.STRUCT).field("foo", STRING_SCHEMA).build();
             Struct struct = new Struct(schema).put("foo", "foo-value");
             result.add(
-                new Object[]{
+                Arguments.of(
                     "copy with struct value",
                     testKeyTransform,
                     new RecordBuilder()
@@ -221,9 +216,9 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", schema, struct)
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "move with struct value",
                     testKeyTransform,
                     new RecordBuilder()
@@ -236,9 +231,9 @@ public class HeaderFromTest {
                         .withField("field2", STRING_SCHEMA, "field2-value")
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", schema, struct)
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "two headers from same field",
                     testKeyTransform,
                     new RecordBuilder()
@@ -253,9 +248,9 @@ public class HeaderFromTest {
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
                         .addHeader("inserted2", STRING_SCHEMA, "field1-value")
-                });
+                ));
             result.add(
-                new Object[]{
+                Arguments.of(
                     "two fields to same header",
                     testKeyTransform,
                     new RecordBuilder()
@@ -269,34 +264,12 @@ public class HeaderFromTest {
                         .addHeader("header1", STRING_SCHEMA, "existing-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field1-value")
                         .addHeader("inserted1", STRING_SCHEMA, "field2-value")
-                });
+                ));
         }
         return result;
     }
 
-    private final HeaderFrom<SourceRecord> xform;
-
-    private final RecordBuilder originalRecordBuilder;
-    private final RecordBuilder expectedRecordBuilder;
-    private final List<String> transformFields;
-    private final List<String> headers;
-    private final HeaderFrom.Operation operation;
-
-    public HeaderFromTest(String description,
-                          boolean keyTransform,
-                          RecordBuilder originalBuilder,
-                          List<String> transformFields, List<String> headers, HeaderFrom.Operation operation,
-                          RecordBuilder expectedBuilder) {
-        this.keyTransform = keyTransform;
-        this.xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
-        this.originalRecordBuilder = originalBuilder;
-        this.expectedRecordBuilder = expectedBuilder;
-        this.transformFields = transformFields;
-        this.headers = headers;
-        this.operation = operation;
-    }
-
-    private Map<String, Object> config() {
+    private Map<String, Object> config(List<String> headers, List<String> transformFields, HeaderFrom.Operation operation) {
         Map<String, Object> result = new HashMap<>();
         result.put(HeaderFrom.HEADERS_FIELD, headers);
         result.put(HeaderFrom.FIELDS_FIELD, transformFields);
@@ -304,58 +277,69 @@ public class HeaderFromTest {
         return result;
     }
 
-    @Test
-    public void schemaless() {
-        xform.configure(config());
+    @ParameterizedTest
+    @MethodSource("data")
+    public void schemaless(String description,
+                           boolean keyTransform,
+                           RecordBuilder originalBuilder,
+                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation,
+                           RecordBuilder expectedBuilder) {
+        HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
+
+        xform.configure(config(headers1, transformFields, operation));
         ConnectHeaders headers = new ConnectHeaders();
         headers.addString("existing", "existing-value");
 
-        SourceRecord originalRecord = originalRecordBuilder.schemaless(keyTransform);
-        SourceRecord expectedRecord = expectedRecordBuilder.schemaless(keyTransform);
+        SourceRecord originalRecord = originalBuilder.schemaless(keyTransform);
+        SourceRecord expectedRecord = expectedBuilder.schemaless(keyTransform);
         SourceRecord xformed = xform.apply(originalRecord);
         assertSameRecord(expectedRecord, xformed);
     }
 
-    @Test
-    public void withSchema() {
-        xform.configure(config());
+    @ParameterizedTest
+    @MethodSource("data")
+    public void withSchema(String description,
+                           boolean keyTransform,
+                           RecordBuilder originalBuilder,
+                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation,
+                           RecordBuilder expectedBuilder) {
+        HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
+        xform.configure(config(headers1, transformFields, operation));
         ConnectHeaders headers = new ConnectHeaders();
         headers.addString("existing", "existing-value");
         Headers expect = headers.duplicate();
-        for (int i = 0; i < this.headers.size(); i++) {
-            expect.add(this.headers.get(i), originalRecordBuilder.fieldValues.get(i), originalRecordBuilder.fieldSchemas.get(i));
+        for (int i = 0; i < headers1.size(); i++) {
+            expect.add(headers1.get(i), originalBuilder.fieldValues.get(i), originalBuilder.fieldSchemas.get(i));
         }
 
-        SourceRecord originalRecord = originalRecordBuilder.withSchema(keyTransform);
-        SourceRecord expectedRecord = expectedRecordBuilder.withSchema(keyTransform);
+        SourceRecord originalRecord = originalBuilder.withSchema(keyTransform);
+        SourceRecord expectedRecord = expectedBuilder.withSchema(keyTransform);
         SourceRecord xformed = xform.apply(originalRecord);
         assertSameRecord(expectedRecord, xformed);
     }
 
-    @Test(expected = ConfigException.class)
-    public void invalidConfigExtraHeaderConfig() {
-        Map<String, Object> config = config();
-        List<String> headers = new ArrayList<>(this.headers);
-        headers.add("unexpected");
-        config.put(HeaderFrom.HEADERS_FIELD, headers);
-        xform.configure(config);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void invalidConfigExtraHeaderConfig(boolean keyTransform) {
+        Map<String, Object> config = config(singletonList("foo"), asList("foo", "bar"), HeaderFrom.Operation.COPY);
+        HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
+        assertThrows(ConfigException.class, () -> xform.configure(config));
     }
 
-    @Test(expected = ConfigException.class)
-    public void invalidConfigExtraFieldConfig() {
-        Map<String, Object> config = config();
-        List<String> fields = new ArrayList<>(this.transformFields);
-        fields.add("unexpected");
-        config.put(HeaderFrom.FIELDS_FIELD, fields);
-        xform.configure(config);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void invalidConfigExtraFieldConfig(boolean keyTransform) {
+        Map<String, Object> config = config(asList("foo", "bar"), singletonList("foo"), HeaderFrom.Operation.COPY);
+        HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
+        assertThrows(ConfigException.class, () -> xform.configure(config));
     }
 
-    @Test(expected = ConfigException.class)
-    public void invalidConfigEmptyHeadersAndFieldsConfig() {
-        Map<String, Object> config = config();
-        config.put(HeaderFrom.HEADERS_FIELD, emptyList());
-        config.put(HeaderFrom.FIELDS_FIELD, emptyList());
-        xform.configure(config);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void invalidConfigEmptyHeadersAndFieldsConfig(boolean keyTransform) {
+        Map<String, Object> config = config(emptyList(), emptyList(), HeaderFrom.Operation.COPY);
+        HeaderFrom<?> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
+        assertThrows(ConfigException.class, () -> xform.configure(config));
     }
 
     private static void assertSameRecord(SourceRecord expected, SourceRecord xformed) {
