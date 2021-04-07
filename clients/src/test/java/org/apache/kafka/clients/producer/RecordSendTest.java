@@ -39,7 +39,7 @@ public class RecordSendTest {
 
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private final long baseOffset = 45;
-    private final long relOffset = 5;
+    private final int relOffset = 5;
 
     /**
      * Test that waiting on a request that never completes times out
@@ -89,7 +89,12 @@ public class RecordSendTest {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
+                    if (error == null) {
+                        request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
+                    } else {
+                        request.set(-1L, RecordBatch.NO_TIMESTAMP, index -> error);
+                    }
+
                     request.done();
                 } catch (InterruptedException e) { }
             }

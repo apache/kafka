@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -26,11 +27,14 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -58,7 +62,7 @@ public class ClusterControlManagerTest {
         assertFalse(clusterControl.unfenced(0));
 
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(1);
-        brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
+        brokerRecord.endPoints().add(new BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092).
             setName("PLAINTEXT").
@@ -86,7 +90,7 @@ public class ClusterControlManagerTest {
             setBrokerEpoch(100).
             setIncarnationId(Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w")).
             setRack("arack");
-        brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
+        brokerRecord.endPoints().add(new BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092).
             setName("PLAINTEXT").
@@ -122,7 +126,7 @@ public class ClusterControlManagerTest {
         for (int i = 0; i < numUsableBrokers; i++) {
             RegisterBrokerRecord brokerRecord =
                 new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
-            brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
+            brokerRecord.endPoints().add(new BrokerEndpoint().
                 setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                 setPort((short) 9092).
                 setName("PLAINTEXT").
@@ -146,5 +150,58 @@ public class ClusterControlManagerTest {
                 assertTrue(seen.add(result));
             }
         }
+    }
+
+    @Test
+    public void testIterator() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClusterControlManager clusterControl = new ClusterControlManager(
+            new LogContext(), time, snapshotRegistry, 1000,
+            new SimpleReplicaPlacementPolicy(new Random()));
+        clusterControl.activate();
+        assertFalse(clusterControl.unfenced(0));
+        for (int i = 0; i < 3; i++) {
+            RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
+                setBrokerEpoch(100).setBrokerId(i).setRack(null);
+            brokerRecord.endPoints().add(new BrokerEndpoint().
+                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+                setPort((short) 9092 + i).
+                setName("PLAINTEXT").
+                setHost("example.com"));
+            clusterControl.replay(brokerRecord);
+        }
+        for (int i = 0; i < 2; i++) {
+            UnfenceBrokerRecord unfenceBrokerRecord =
+                new UnfenceBrokerRecord().setId(i).setEpoch(100);
+            clusterControl.replay(unfenceBrokerRecord);
+        }
+        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerEpoch(100).setBrokerId(0).setRack(null).
+                setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+                    new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+                        setPort((short) 9092).
+                        setName("PLAINTEXT").
+                        setHost("example.com")).iterator())), (short) 0),
+                new ApiMessageAndVersion(new UnfenceBrokerRecord().
+                    setId(0).setEpoch(100), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerEpoch(100).setBrokerId(1).setRack(null).
+                setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+                    new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+                        setPort((short) 9093).
+                        setName("PLAINTEXT").
+                        setHost("example.com")).iterator())), (short) 0),
+                new ApiMessageAndVersion(new UnfenceBrokerRecord().
+                    setId(1).setEpoch(100), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerEpoch(100).setBrokerId(2).setRack(null).
+                setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+                    new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+                        setPort((short) 9094).
+                        setName("PLAINTEXT").
+                        setHost("example.com")).iterator())), (short) 0))),
+                clusterControl.iterator(Long.MAX_VALUE));
     }
 }
