@@ -18,10 +18,9 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
-import kafka.security.authorizer.AclEntry
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -144,7 +143,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
+    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -155,10 +154,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       classOf[PrincipalBuilder].getName)
   }
 
-  @nowarn("cat=deprecation")
   val requestKeyToError = (topicNames: Map[Uuid, String]) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
-    ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => {
+      Errors.forCode(
+        resp.data
+          .responses.find(topic)
+          .partitionResponses.asScala.find(_.index == part).get
+          .errorCode
+      )      
+    }),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData.asScala.find(_._1 == tp).get._2.errorCode)),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(

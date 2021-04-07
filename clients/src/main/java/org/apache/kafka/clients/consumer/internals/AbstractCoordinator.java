@@ -455,31 +455,27 @@ public abstract class AbstractCoordinator implements Closeable {
                     resetJoinGroupFuture();
                     needsJoinPrepare = true;
                 } else {
-                    log.info("Generation data was cleared by heartbeat thread to {} and state is now {} before " +
-                         "the rebalance callback is triggered, marking this rebalance as failed and retry",
-                         generationSnapshot, stateSnapshot);
-                    resetStateAndRejoin();
+                    final String reason = String.format("rebalance failed since the generation/state was " +
+                            "modified by heartbeat thread to %s/%s before the rebalance callback triggered",
+                            generationSnapshot, stateSnapshot);
+
+                    resetStateAndRejoin(reason);
                     resetJoinGroupFuture();
                 }
             } else {
                 final RuntimeException exception = future.exception();
 
-                // we do not need to log error for memberId required,
-                // since it is not really an error and is transient
-                if (!(exception instanceof MemberIdRequiredException)) {
-                    log.info("Rebalance failed.", exception);
-                }
-
                 resetJoinGroupFuture();
+
                 if (exception instanceof UnknownMemberIdException ||
-                    exception instanceof RebalanceInProgressException ||
                     exception instanceof IllegalGenerationException ||
+                    exception instanceof RebalanceInProgressException ||
                     exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
 
-                resetStateAndRejoin();
+                resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
@@ -655,6 +651,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
+                requestRejoin("need to re-join with the given member-id");
+
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 log.info("JoinGroup failed due to non-fatal error: REBALANCE_IN_PROGRESS, " +
@@ -775,8 +773,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     }
                 }
             } else {
-                requestRejoin();
-
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
@@ -860,7 +856,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
-            log.debug("FindCoordinator request failed due to {}", e);
+            log.debug("FindCoordinator request failed due to {}", e.toString());
 
             if (!(e instanceof RetriableException)) {
                 // Remember the exception if fatal so we can ensure it gets thrown by the main thread
@@ -961,29 +957,29 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation.memberId;
     }
 
-    private synchronized void resetState() {
+    private synchronized void resetStateAndGeneration(final String reason) {
+        log.info("Resetting generation due to: {}", reason);
+
         state = MemberState.UNJOINED;
         generation = Generation.NO_GENERATION;
     }
 
-    private synchronized void resetStateAndRejoin() {
-        resetState();
-        rejoinNeeded = true;
+    private synchronized void resetStateAndRejoin(final String reason) {
+        resetStateAndGeneration(reason);
+        requestRejoin(reason);
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
-        log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
-
-        resetStateAndRejoin();
+        final String reason = String.format("encountered %s from %s response", error, api);
+        resetStateAndRejoin(reason);
     }
 
     synchronized void resetGenerationOnLeaveGroup() {
-        log.debug("Resetting generation due to consumer pro-actively leaving the group");
-
-        resetStateAndRejoin();
+        resetStateAndRejoin("consumer pro-actively leaving the group");
     }
 
-    public synchronized void requestRejoin() {
+    public synchronized void requestRejoin(final String reason) {
+        log.info("Request joining group due to: {}", reason);
         this.rejoinNeeded = true;
     }
 
@@ -1120,8 +1116,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // since we may be sending the request during rebalance, we should check
                 // this case and ignore the REBALANCE_IN_PROGRESS error
                 if (state == MemberState.STABLE) {
-                    log.info("Attempt to heartbeat failed since group is rebalancing");
-                    requestRejoin();
+                    requestRejoin("group is already rebalancing");
                     future.raise(error);
                 } else {
                     log.debug("Ignoring heartbeat response with error {} during {} state", error, state);

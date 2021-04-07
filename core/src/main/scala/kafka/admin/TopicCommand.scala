@@ -91,13 +91,13 @@ object TopicCommand extends Logging {
   }
 
   class CommandTopicPartition(opts: TopicCommandOptions) {
-    val name: String = opts.topic.get
-    val partitions: Option[Integer] = opts.partitions
-    val replicationFactor: Option[Integer] = opts.replicationFactor
-    val replicaAssignment: Option[Map[Int, List[Int]]] = opts.replicaAssignment
-    val configsToAdd: Properties = parseTopicConfigsToBeAdded(opts)
-    val configsToDelete: Seq[String] = parseTopicConfigsToBeDeleted(opts)
-    val rackAwareMode: RackAwareMode = opts.rackAwareMode
+    val name = opts.topic.get
+    val partitions = opts.partitions
+    val replicationFactor = opts.replicationFactor
+    val replicaAssignment = opts.replicaAssignment
+    val configsToAdd = parseTopicConfigsToBeAdded(opts)
+    val configsToDelete = parseTopicConfigsToBeDeleted(opts)
+    val rackAwareMode = opts.rackAwareMode
 
     def hasReplicaAssignment: Boolean = replicaAssignment.isDefined
     def hasPartitions: Boolean = partitions.isDefined
@@ -170,12 +170,12 @@ object TopicCommand extends Logging {
   }
 
   class DescribeOptions(opts: TopicCommandOptions, liveBrokers: Set[Int]) {
-    val describeConfigs: Boolean =
+    val describeConfigs =
       !opts.reportUnavailablePartitions &&
       !opts.reportUnderReplicatedPartitions &&
       !opts.reportUnderMinIsrPartitions &&
       !opts.reportAtMinIsrPartitions
-    val describePartitions: Boolean = !opts.reportOverriddenConfigs
+    val describePartitions = !opts.reportOverriddenConfigs
 
     private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription): Boolean = {
       opts.reportUnderReplicatedPartitions && partitionDescription.isUnderReplicated
@@ -692,7 +692,7 @@ object TopicCommand extends Logging {
 
     private val allTopicLevelOpts = immutable.Set[OptionSpec[_]](alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
-    private val allReplicationReportOpts: Set[OptionSpec[_]] = Set(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt)
+    private val allReplicationReportOpts = Set(reportUnderReplicatedPartitionsOpt, reportUnderMinIsrPartitionsOpt, reportAtMinIsrPartitionsOpt, reportUnavailablePartitionsOpt)
 
     def has(builder: OptionSpec[_]): Boolean = options.has(builder)
     def valueAsOption[A](option: OptionSpec[A], defaultValue: Option[A] = None): Option[A] = if (has(option)) Some(options.valueOf(option)) else defaultValue

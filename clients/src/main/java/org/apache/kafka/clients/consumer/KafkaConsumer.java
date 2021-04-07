@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -755,7 +754,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                     time,
                     true,
                     apiVersions,
@@ -2289,7 +2287,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin();
+            coordinator.requestRejoin("rebalance enforced by user");
         } finally {
             release();
         }
@@ -2308,29 +2306,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void close() {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
-    }
-
-    /**
-     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and leave the group.
-     * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
-     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
-     * used to interrupt close.
-     *
-     * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
-     *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     * @param timeUnit The time unit for the {@code timeout}
-     * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws InterruptException If the thread is interrupted before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException for any other error during close
-     *
-     * @deprecated Since 2.0. Use {@link #close(Duration)} or {@link #close()}.
-     */
-    @Deprecated
-    @Override
-    public void close(long timeout, TimeUnit timeUnit) {
-        close(Duration.ofMillis(timeUnit.toMillis(timeout)));
     }
 
     /**

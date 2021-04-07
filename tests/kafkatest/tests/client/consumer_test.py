@@ -93,6 +93,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
         partition = TopicPartition(self.TOPIC, 0)
 
         producer = self.setup_producer(self.TOPIC)
+        # The consumers' session timeouts must exceed the time it takes for a broker to roll.  Consumers are likely
+        # to see cluster metadata consisting of just a single alive broker in the case where the cluster has just 2
+        # brokers and the cluster is rolling (which is what is happening here).  When the consumer sees a single alive
+        # broker, and then that broker rolls, the consumer will be unable to connect to the cluster until that broker
+        # completes its roll.  In the meantime, the consumer group will move to the group coordinator on the other
+        # broker, and that coordinator will fail the consumer and trigger a group rebalance if its session times out.
+        # This test is asserting that no rebalances occur, so we increase the session timeout for this to be the case.
+        self.session_timeout_sec = 30
         consumer = self.setup_consumer(self.TOPIC)
 
         producer.start()

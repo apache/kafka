@@ -137,7 +137,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation)Test.java"/>
+              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation|WorkerSourceTask)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
@@ -268,6 +268,8 @@
               files="(ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(QuorumController|ReplicationControlManager).java"/>
+    <suppress checks="ParameterNumber"
+              files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"

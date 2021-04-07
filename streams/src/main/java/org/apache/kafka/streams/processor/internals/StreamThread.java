@@ -303,8 +303,10 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
+    private AtomicLong cacheResizeSize;
     private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
+
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -420,8 +422,6 @@ public class StreamThread extends Thread {
             cache::resize
         );
 
-        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
-
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
@@ -490,6 +490,7 @@ public class StreamThread extends Thread {
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
         this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
         this.assignmentErrorCode = assignmentErrorCode;
+        this.cacheResizeSize = new AtomicLong(-1L);
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
@@ -529,10 +530,10 @@ public class StreamThread extends Thread {
         this.numIterations = 1;
     }
 
-    @SuppressWarnings("deprecation")
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
-            super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
+            super(ConsumerConfig.appendDeserializerToConfig(props, new ByteArrayDeserializer(),
+                    new ByteArrayDeserializer()), false);
         }
     }
 
@@ -552,6 +553,9 @@ public class StreamThread extends Thread {
         boolean cleanRun = false;
         try {
             cleanRun = runLoop();
+        } catch (final Throwable e) {
+            failedStreamThreadSensor.record();
+            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -570,10 +574,10 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
-                if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
-                    log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
-                    mainConsumer.enforceRebalance();
+                maybeSendShutdown();
+                final Long size = cacheResizeSize.getAndSet(-1L);
+                if (size != -1L) {
+                    cacheResizer.accept(size);
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -583,7 +587,7 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
-                        "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                         "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
                     taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
@@ -594,24 +598,16 @@ public class StreamThread extends Thread {
             } catch (final UnsupportedVersionException e) {
                 final String errorMessage = e.getMessage();
                 if (errorMessage != null &&
-                        errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                                    "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                            StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                            EXACTLY_ONCE_BETA);
+                              "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                          StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                          EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    return false;
-                }
-            } catch (final Throwable e) {
-                failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(e);
-                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
-                    return false;
-                }
+                return false;
             }
         }
         return true;
@@ -624,6 +620,14 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void maybeSendShutdown() {
+        if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.warn("Detected that shutdown was requested. " +
+                    "All clients in this app will now begin to shutdown");
+            mainConsumer.enforceRebalance();
+        }
     }
 
     public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
@@ -686,7 +690,7 @@ public class StreamThread extends Thread {
     }
 
     public void resizeCache(final long size) {
-        cacheResizer.accept(size);
+        cacheResizeSize.set(size);
     }
 
     /**
@@ -719,7 +723,7 @@ public class StreamThread extends Thread {
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
-            log.debug("Thread state is already {}, skipping the run once call after poll request", state);
+            log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
@@ -841,7 +845,7 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration(now)) {
+            if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
                     taskManager.tasks().keySet());

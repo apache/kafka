@@ -19,7 +19,7 @@
   "name": "TopicRecord",
   "validVersions": "0",
   "fields": [
-    { "name": "Name", "type": "string", "versions": "0+",
+    { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
       "about": "The topic name." },
     { "name": "TopicId", "type": "uuid", "versions": "0+",
       "about": "The unique ID of this topic." }

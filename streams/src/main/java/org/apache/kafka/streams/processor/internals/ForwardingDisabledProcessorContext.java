@@ -116,18 +116,6 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new StreamsException(EXPLANATION);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new StreamsException(EXPLANATION);
-    }
-
-    @Override
     public void commit() {
         delegate.commit();
     }
@@ -165,5 +153,15 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return delegate.currentSystemTimeMs();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        return delegate.currentStreamTimeMs();
     }
 }

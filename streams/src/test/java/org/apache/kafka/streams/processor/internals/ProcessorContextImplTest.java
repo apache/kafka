@@ -71,13 +71,14 @@ public class ProcessorContextImplTest {
 
     private final StreamsConfig streamsConfig = streamsConfigMock();
 
-    private RecordCollector recordCollector = mock(RecordCollector.class);
+    private final RecordCollector recordCollector = mock(RecordCollector.class);
 
     private static final String KEY = "key";
     private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
     private static final long VALUE = 42L;
     private static final byte[] VALUE_BYTES = String.valueOf(VALUE).getBytes();
     private static final long TIMESTAMP = 21L;
+    private static final long STREAM_TIME = 50L;
     private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = ValueAndTimestamp.make(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
     private static final String REGISTERED_STORE_NAME = "registered-store";
@@ -147,8 +148,10 @@ public class ProcessorContextImplTest {
         );
 
         final StreamTask task = mock(StreamTask.class);
-        ((InternalProcessorContext) context).transitionToActive(task, null, null);
+        expect(task.streamTime()).andReturn(STREAM_TIME);
         EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
+        replay(task);
+        ((InternalProcessorContext) context).transitionToActive(task, null, null);
 
         context.setCurrentNode(
             new ProcessorNode<>(
@@ -436,26 +439,6 @@ public class ProcessorContextImplTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildIndex() {
-        context = getStandbyContext();
-        assertThrows(
-            UnsupportedOperationException.class,
-            () -> context.forward("key", "value", 0)
-        );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildName() {
-        context = getStandbyContext();
-        assertThrows(
-            UnsupportedOperationException.class,
-            () -> context.forward("key", "value", "child-name")
-        );
-    }
-
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
         context = getStandbyContext();
@@ -553,6 +536,11 @@ public class ProcessorContextImplTest {
             UnsupportedOperationException.class,
             () -> context.recordContext()
         );
+    }
+
+    @Test
+    public void shouldMatchStreamTime() {
+        assertEquals(STREAM_TIME, context.currentStreamTimeMs());
     }
 
     @SuppressWarnings("unchecked")
@@ -741,11 +729,10 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor processor = new Processor<String, Long>() {
+        final Processor<String, Long> processor = new Processor<String, Long>() {
             @Override
-            @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
-                final T store = (T) context.getStateStore(name);
+                final T store = context.getStateStore(name);
                 checker.accept(store);
             }
 

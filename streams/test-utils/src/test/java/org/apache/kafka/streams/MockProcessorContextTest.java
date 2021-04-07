@@ -159,48 +159,6 @@ public class MockProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, 0);
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
-    public void shouldThrowIfForwardedWithDeprecatedChildName() {
-        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override
-            public void process(final String key, final Long value) {
-                context().forward(key, value, "child1");
-            }
-        };
-
-        final MockProcessorContext context = new MockProcessorContext();
-
-        processor.init(context);
-
-        try {
-            processor.process("foo", 5L);
-            fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException expected) {
-            // expected
-        }
-    }
-
-    @Test
     public void shouldCaptureCommitsAndAllowReset() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
@@ -314,7 +272,9 @@ public class MockProcessorContextTest {
 
         // record metadata should be "sticky"
         context.setOffset(1L);
-        context.setTimestamp(10L);
+        context.setRecordTimestamp(10L);
+        context.setCurrentSystemTimeMs(20L);
+        context.setCurrentStreamTimeMs(30L);
 
         {
             processor.process("bar", 50L);
@@ -327,6 +287,8 @@ public class MockProcessorContextTest {
             assertEquals(new KeyValue<>("timestamp", 10L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("key", "bar"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("value", 50L), forwarded.next().keyValue());
+            assertEquals(20L, context.currentSystemTimeMs());
+            assertEquals(30L, context.currentStreamTimeMs());
         }
 
         context.resetForwards();

@@ -74,7 +74,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
 
-  /** KIP-500 Configuration */
+  /** KRaft mode configs */
   val EmptyNodeId: Int = -1
 
   /************* Authorizer Configuration ***********/
@@ -370,7 +370,7 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
 
-  /** KIP-500 Configuration */
+  /** KRaft mode configs */
   val ProcessRolesProp = "process.roles"
   val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
   val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
@@ -663,25 +663,23 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
 
-  /** KIP-500 Config Documentation */
+  /** KRaft mode configs */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-    "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
-    "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
+    "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for Zookeeper clusters."
   val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
-  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KIP-500 mode."
-  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KIP-500 mode."
+  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KRaft mode."
+  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode."
   val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
-    "This is required configuration when the self-managed quorum is enabled."
-  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters upgraded to " +
-    "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
-  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
-    "if this process is a KIP-500 controller. The ZK-based controller will not use this configuration."
+    "This is required configuration when running in KRaft mode."
+  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+    "If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
+    "if running in KRaft mode. The ZK-based controller will not use this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
-  " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +
-  " kafka.security.auth.Authorizer trait which was previously used for authorization."
+  " interface, which is used by the broker for authorization."
   /** ********* Socket Server Configuration ***********/
   val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
   "Use <code>listeners</code> instead. \n" +
@@ -1073,8 +1071,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
 
       /*
-       * KIP-500 Configuration. Note that these configs are defined as internal. We will make
-       * them public once we are ready to enable KIP-500 in a release.
+       * KRaft mode configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
@@ -1892,8 +1889,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
+  // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
   def usesTopicId: Boolean =
-    interBrokerProtocolVersion >= KAFKA_2_8_IV0
+    usesSelfManagedQuorum || interBrokerProtocolVersion >= KAFKA_2_8_IV0
 
   validateValues()
 
@@ -1908,10 +1906,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         require(brokerId >= 0, "broker.id must be greater than or equal to 0")
       }
     } else {
-      // Raft-based metadata quorum
+      // KRaft-based metadata quorum
       if (nodeId < 0) {
         throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
-          s"when `process.roles` is defined (i.e. when using the self-managed quorum).")
+          s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")

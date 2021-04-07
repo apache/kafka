@@ -115,7 +115,7 @@ public class CreateTopicsResult {
         private final int replicationFactor;
         private final Config config;
 
-        TopicMetadataAndConfig(Uuid topicId, int numPartitions, int replicationFactor, Config config) {
+        public TopicMetadataAndConfig(Uuid topicId, int numPartitions, int replicationFactor, Config config) {
             this.exception = null;
             this.topicId = topicId;
             this.numPartitions = numPartitions;
@@ -123,7 +123,7 @@ public class CreateTopicsResult {
             this.config = config;
         }
 
-        TopicMetadataAndConfig(ApiException exception) {
+        public TopicMetadataAndConfig(ApiException exception) {
             this.exception = exception;
             this.topicId = Uuid.ZERO_UUID;
             this.numPartitions = UNKNOWN;
