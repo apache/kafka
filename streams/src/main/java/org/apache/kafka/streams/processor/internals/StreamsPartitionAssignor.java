@@ -173,7 +173,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
-    @SuppressWarnings("deprecation")
     private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
