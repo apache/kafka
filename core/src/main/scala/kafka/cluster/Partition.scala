@@ -308,27 +308,27 @@ class Partition(val topicPartition: TopicPartition,
                 s"different from the requested log dir $logDir")
             false
           case None =>
-            createLogIfNotExists(isNew = false, isFutureReplica = true, highWatermarkCheckpoints)
+            createLogIfNotExists(isNew = false, isFutureReplica = true, highWatermarkCheckpoints, topicId)
             true
         }
       }
     }
   }
 
-  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Unit = {
+  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
     isFutureReplica match {
       case true if futureLog.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints)
+        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
         this.futureLog = Option(log)
       case false if log.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints)
+        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
         this.log = Option(log)
       case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
     }
   }
 
   // Visible for testing
-  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
     def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -341,7 +341,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[Log] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
@@ -425,41 +425,11 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
-   * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
-   *
-   * @param requestTopicId the topic ID from the request
-   * @return true if the request topic id is consistent, false otherwise
+   * @return the topic ID for the log or None if the log or the topic ID does not exist.
    */
-  def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
-    // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
-    // The topic ID was not inconsistent, so return true.
-    // If the log is empty, then we can not say that topic ID is inconsistent, so return true.
-    if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID)
-      true
-    else {
-      log match {
-        case None => true
-        case Some(log) => {
-          // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-          // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-          // Topic ID is consistent since we are just setting it here.
-          if (log.topicId == Uuid.ZERO_UUID) {
-            log.partitionMetadataFile.write(requestTopicId)
-            log.topicId = requestTopicId
-            true
-          } else if (log.topicId != requestTopicId) {
-            stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
-              s" match the topic Id for partition $topicPartition provided in the request: " +
-              s"$requestTopicId.")
-            false
-          } else {
-            // topic ID in log exists and matches request topic ID
-            true
-          }
-        }
-      }
-    }
+  def topicId: Option[Uuid] = {
+    val log = this.log.orElse(logManager.getLog(topicPartition))
+    log.flatMap(_.topicId)
   }
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
@@ -540,7 +510,8 @@ class Partition(val topicPartition: TopicPartition,
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
   def makeLeader(partitionState: LeaderAndIsrPartitionState,
-                 highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+                 highWatermarkCheckpoints: OffsetCheckpoints,
+                 topicId: Option[Uuid]): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
@@ -557,7 +528,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = removingReplicas
       )
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
@@ -624,7 +595,8 @@ class Partition(val topicPartition: TopicPartition,
    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(partitionState: LeaderAndIsrPartitionState,
-                   highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
+                   highWatermarkCheckpoints: OffsetCheckpoints,
+                   topicId: Option[Uuid]): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val newLeaderBrokerId = partitionState.leader
       val oldLeaderEpoch = leaderEpoch
@@ -639,7 +611,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +

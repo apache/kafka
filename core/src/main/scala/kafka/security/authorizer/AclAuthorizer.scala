@@ -21,7 +21,6 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -118,9 +117,16 @@ object AclAuthorizer {
       zkClientConfig
     }
   }
+
+  private def validateAclBinding(aclBinding: AclBinding): Unit = {
+    if (aclBinding.isUnknown)
+      throw new IllegalArgumentException("ACL binding contains unknown elements")
+  }
 }
 
 class AclAuthorizer extends Authorizer with Logging {
+  import kafka.security.authorizer.AclAuthorizer._
+
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
@@ -200,7 +206,7 @@ class AclAuthorizer extends Authorizer with Logging {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
             s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
         }
-        AuthorizerUtils.validateAclBinding(aclBinding)
+        validateAclBinding(aclBinding)
         true
       } catch {
         case e: Throwable =>
@@ -225,7 +231,7 @@ class AclAuthorizer extends Authorizer with Logging {
         }
       }
     }
-    results.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
+    results.toBuffer.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
   /**
