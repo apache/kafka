@@ -125,6 +125,26 @@ public class RequestContext implements AuthorizableRequestContext {
         return body.serializeWithHeader(header.toResponseHeader(), apiVersion());
     }
 
+    /**
+     * Serialize a request into a {@link ByteBuffer}. This is used when the request
+     * will be encapsulated in an {@link EnvelopeRequest}. The buffer will contain
+     * both the serialized {@link RequestHeader} as well as the bytes from the request.
+     * There is no `size` prefix unlike the output from {@link AbstractRequest#toSend(RequestHeader)}}.
+     *
+     * Note that envelope requests are only used when we want to forward a client request
+     * to the controller on behalf of the client.
+     */
+    public ByteBuffer buildRequestEnvelopePayload(AbstractRequest body) {
+        // Borrow client information such as client id and correlation id from the original request,
+        // in order to correlate the envelop request with the original client request.
+        RequestHeader requestHeader = new RequestHeader(
+            body.apiKey(),
+            body.version(),
+            clientId(),
+            correlationId());
+        return body.serializeWithHeader(requestHeader);
+    }
+
     private boolean isUnsupportedApiVersionsRequest() {
         return header.apiKey() == API_VERSIONS && !API_VERSIONS.isVersionSupported(header.apiVersion());
     }
