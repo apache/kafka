@@ -149,11 +149,11 @@ public class ConfigEntry {
 
         ConfigEntry that = (ConfigEntry) o;
 
-        return this.name.equals(that.name) &&
-                this.value != null ? this.value.equals(that.value) : that.value == null &&
+        return Objects.equals(this.name, that.name) &&
+                Objects.equals(this.value, that.value) &&
                 this.isSensitive == that.isSensitive &&
                 this.isReadOnly == that.isReadOnly &&
-                this.source == that.source &&
+                Objects.equals(this.source, that.source) &&
                 Objects.equals(this.synonyms, that.synonyms) &&
                 Objects.equals(this.type, that.type) &&
                 Objects.equals(this.documentation, that.documentation);
@@ -163,14 +163,14 @@ public class ConfigEntry {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + name.hashCode();
-        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        result = prime * result + Objects.hashCode(name);
+        result = prime * result + Objects.hashCode(value);
         result = prime * result + (isSensitive ? 1 : 0);
         result = prime * result + (isReadOnly ? 1 : 0);
-        result = prime * result + source.hashCode();
-        result = prime * result + synonyms.hashCode();
-        result = prime * result + ((type == null) ? 0 : type.hashCode());
-        result = prime * result + ((documentation == null) ? 0 : documentation.hashCode());
+        result = prime * result + Objects.hashCode(source);
+        result = prime * result + Objects.hashCode(synonyms);
+        result = prime * result + Objects.hashCode(type);
+        result = prime * result + Objects.hashCode(documentation);
         return result;
     }
 

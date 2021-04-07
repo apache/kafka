@@ -82,4 +82,12 @@ public class ConfigTest {
                                              boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
         return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms, ConfigType.UNKNOWN, null);
     }
+
+    @Test
+    public void testHashCodeAndEqualsWithNull() {
+        ConfigEntry ce0 = new ConfigEntry("abc", null, null, false, false, null, null, null);
+        ConfigEntry ce1 = new ConfigEntry("abc", null, null, false, false, null, null, null);
+        assertEquals(ce0, ce1);
+        assertEquals(ce0.hashCode(), ce1.hashCode());
+    }
 }
