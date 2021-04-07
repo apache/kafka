@@ -257,17 +257,18 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        val brokerToControllerManager = BrokerToControllerChannelManager(
+          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          time = time,
+          metrics = metrics,
+          config = config,
+          channelName = "forwarding",
+          threadNamePrefix = threadNamePrefix,
+          retryTimeoutMs = config.requestTimeoutMs.longValue)
+        brokerToControllerManager.start()
+
         /* start forwarding manager */
         if (enableForwarding) {
-          val brokerToControllerManager = BrokerToControllerChannelManager(
-            controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
-            time = time,
-            metrics = metrics,
-            config = config,
-            channelName = "forwarding",
-            threadNamePrefix = threadNamePrefix,
-            retryTimeoutMs = config.requestTimeoutMs.longValue)
-          brokerToControllerManager.start()
           this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
           clientToControllerChannelManager = Some(brokerToControllerManager)
         }
@@ -333,7 +334,8 @@ class KafkaServer(
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
-          () => new ProducerIdManager(config.brokerId, zkClient), metrics, metadataCache, Time.SYSTEM)
+          () => new ProducerIdManager(config.brokerId, brokerEpochSupplier = () => kafkaController.brokerEpoch, brokerToControllerManager),
+          metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 

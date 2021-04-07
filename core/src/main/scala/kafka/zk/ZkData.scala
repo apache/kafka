@@ -19,13 +19,13 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
-
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.coordinator.transaction.ProducerIdBlock
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
@@ -766,7 +766,33 @@ object BrokerSequenceIdZNode {
 }
 
 object ProducerIdBlockZNode {
+  val CurrentVersion: Long = 1L
+
   def path = "/latest_producer_id_block"
+
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> CurrentVersion,
+      "broker" -> producerIdBlock.brokerId,
+      "block_start" -> producerIdBlock.blockStartId.toString,
+      "block_end" -> producerIdBlock.blockEndId.toString).asJava
+    )
+  }
+
+  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdBlock = {
+    val jsonDataAsString = jsonData.map(_.toChar).mkString
+    try {
+      Json.parseBytes(jsonData).map(_.asJsonObject).flatMap { js =>
+        val brokerId = js("broker").to[Int]
+        val blockStart = js("block_start").to[String].toLong
+        val blockEnd = js("block_end").to[String].toLong
+        Some(ProducerIdBlock(brokerId, blockStart, blockEnd))
+      }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonDataAsString"))
+    } catch {
+      case e: java.lang.NumberFormatException =>
+        // this should never happen: the written data has exceeded long type limit
+        throw new KafkaException(s"Read jason data $jsonDataAsString contains producerIds that have exceeded long type limit", e)
+    }
+  }
 }
 
 object DelegationTokenAuthZNode {
@@ -936,6 +962,9 @@ object FeatureZNode {
     }
   }
 }
+
+
+
 
 object ZkData {
 

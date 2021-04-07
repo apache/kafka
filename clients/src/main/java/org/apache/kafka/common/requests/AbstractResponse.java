@@ -245,6 +245,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DescribeTransactionsResponse.parse(responseBuffer, version);
             case LIST_TRANSACTIONS:
                 return ListTransactionsResponse.parse(responseBuffer, version);
+            case ALLOCATE_PRODUCER_IDS:
+                return AllocateProducerIdsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

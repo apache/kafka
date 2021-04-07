@@ -192,5 +192,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 }
             }
         }
+
+        @Override
+        public void rollingBrokerRestart() {
+            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
+        }
     }
 }

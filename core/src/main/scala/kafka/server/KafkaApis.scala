@@ -222,6 +222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3347,6 +3348,21 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new ListTransactionsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleAllocateProducerIdsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val allocateProducerIdsRequest = request.body[AllocateProducerIdsRequest]
+
+    if (!zkSupport.controller.isActive)
+      requestHelper.sendResponseExemptThrottle(request, allocateProducerIdsRequest.getErrorResponse(
+        AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
+    else
+      zkSupport.controller.allocateProducerIds(allocateProducerIdsRequest.data, producerIdsResponse =>
+        requestHelper.sendResponseExemptThrottle(request, new AllocateProducerIdsResponse(producerIdsResponse))
+      )
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

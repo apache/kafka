@@ -18,13 +18,13 @@ package kafka.controller
 
 import java.util
 import java.util.concurrent.TimeUnit
-
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
+import kafka.coordinator.transaction.{ProducerIdBlock, ProducerIdManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -37,9 +37,8 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
+import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
-import org.apache.kafka.common.message.UpdateFeaturesRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
@@ -2376,6 +2375,84 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  def allocateProducerIds(allocateProducerIdsRequest: AllocateProducerIdsRequestData,
+                          callback: AllocateProducerIdsResponseData => Unit): Unit = {
+
+    def eventManagerCallback(results: Either[Errors, (Long, Long)]): Unit = {
+      results match {
+        case Left(error) => callback.apply(new AllocateProducerIdsResponseData().setErrorCode(error.code))
+        case Right((start, end)) => callback.apply(
+          new AllocateProducerIdsResponseData()
+            .setProducerIdStart(start)
+            .setProducerIdLen(Math.toIntExact(end - start + 1))) // ends are inclusive
+      }
+    }
+    eventManager.put(AllocateProducerIds(allocateProducerIdsRequest.brokerId,
+      allocateProducerIdsRequest.brokerEpoch, eventManagerCallback))
+  }
+
+  def processAllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, (Long, Long)] => Unit): Unit = {
+    // Handle a few short-circuits
+    if (!isActive) {
+      callback.apply(Left(Errors.NOT_CONTROLLER))
+      return
+    }
+
+    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
+    if (brokerEpochOpt.isEmpty) {
+      warn(s"Ignoring AllocateProducerIds due to unknown broker $brokerId")
+      callback.apply(Left(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
+    if (!brokerEpochOpt.contains(brokerEpoch)) {
+      warn(s"Ignoring AllocateProducerIds due to stale broker epoch $brokerEpoch for broker $brokerId")
+      callback.apply(Left(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
+    // Get or create the existing PID block from ZK and attempt to update it. We retry in a loop here since other
+    // brokers may be generating PID blocks during a rolling upgrade
+    val maxAttempts = 1000
+    for (_ <- 1 to maxAttempts) {
+      // refresh current producerId block from zookeeper again
+      val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+
+      // generate the new producerId block
+      val newProducerIdBlock = dataOpt match {
+        case Some(data) =>
+          val currProducerIdBlock = ProducerIdBlockZNode.parseProducerIdBlockData(data)
+          debug(s"Read current producerId block $currProducerIdBlock, Zk path version $zkVersion")
+
+          if (currProducerIdBlock.blockEndId > Long.MaxValue - ProducerIdManager.PidBlockSize) {
+            // we have exhausted all producerIds (wow!), treat it as a fatal error
+            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.blockEndId})")
+            callback.apply(Left(Errors.UNKNOWN_SERVER_ERROR))
+            return
+          }
+
+          ProducerIdBlock(brokerId, currProducerIdBlock.blockEndId + 1L, currProducerIdBlock.blockEndId + ProducerIdManager.PidBlockSize)
+        case None =>
+          debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
+          ProducerIdBlock(brokerId, 0L, ProducerIdManager.PidBlockSize - 1)
+      }
+
+      val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(newProducerIdBlock)
+
+      // try to write the new producerId block into zookeeper
+      val (succeeded, version) = zkClient.conditionalUpdatePath(ProducerIdBlockZNode.path, newProducerIdBlockData, zkVersion, None)
+
+      if (succeeded) {
+        debug(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
+        callback.apply(Right((newProducerIdBlock.blockStartId, newProducerIdBlock.blockEndId)))
+        return
+      }
+    }
+
+    debug(s"Failed to allocate new producerId block after $maxAttempts attempts.")
+    callback.apply(Left(Errors.UNKNOWN_SERVER_ERROR))
+  }
+
   private def processControllerChange(): Unit = {
     maybeResign()
   }
@@ -2454,6 +2531,8 @@ class KafkaController(val config: KafkaConfig,
           processIsrChangeNotification()
         case AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback) =>
           processAlterIsr(brokerId, brokerEpoch, isrsToAlter, callback)
+        case AllocateProducerIds(brokerId, brokerEpoch, callback) =>
+          processAllocateProducerIds(brokerId, brokerEpoch, callback)
         case Startup =>
           processStartup()
       }
@@ -2744,6 +2823,11 @@ case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]]
 case class UpdateFeatures(request: UpdateFeaturesRequest,
                           callback: UpdateFeaturesCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.UpdateFeatures
+  override def preempt(): Unit = {}
+}
+
+case class AllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, (Long, Long)] => Unit) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.Idle
   override def preempt(): Unit = {}
 }
 
