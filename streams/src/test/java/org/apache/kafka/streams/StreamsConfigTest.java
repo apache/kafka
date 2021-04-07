@@ -909,26 +909,6 @@ public class StreamsConfigTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldLogWarningWhenPartitionGrouperIsUsed() {
-        props.put(
-            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.DefaultPartitionGrouper.class
-        );
-
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            new StreamsConfig(props);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG +
-                    "` is deprecated and will be removed in 3.0.0 release.")
-            );
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
     public void shouldLogWarningWhenRetriesIsUsed() {
         props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
