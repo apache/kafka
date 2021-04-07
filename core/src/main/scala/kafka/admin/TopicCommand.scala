@@ -445,7 +445,6 @@ object TopicCommand extends Logging {
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
-      .required()
 
     private val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
       "This is used only with --bootstrap-server option for describing and altering broker configs.")
@@ -564,6 +563,8 @@ object TopicCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
       // check required args
+      if (!has(bootstrapServerOpt))
+        throw new IllegalArgumentException("--bootstrap-server must be specified")
       if (has(describeOpt) && has(ifExistsOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (!has(listOpt) && !has(describeOpt))
