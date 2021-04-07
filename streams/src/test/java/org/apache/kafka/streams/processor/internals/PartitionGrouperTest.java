@@ -34,11 +34,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-<<<<<<< HEAD:streams/src/test/java/org/apache/kafka/streams/processor/internals/DefaultPartitionGrouperTest.java
-public class DefaultPartitionGrouperTest {
-=======
 public class PartitionGrouperTest {
->>>>>>> 00ec646c5a1762bdce28ed9878cfa46961de37b6:streams/src/test/java/org/apache/kafka/streams/processor/internals/PartitionGrouperTest.java
 
     private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
@@ -57,11 +53,7 @@ public class PartitionGrouperTest {
 
     @Test
     public void shouldComputeGroupingForTwoGroups() {
-<<<<<<< HEAD:streams/src/test/java/org/apache/kafka/streams/processor/internals/DefaultPartitionGrouperTest.java
-        final DefaultPartitionGrouper grouper = new DefaultPartitionGrouper();
-=======
         final PartitionGrouper grouper = new PartitionGrouper();
->>>>>>> 00ec646c5a1762bdce28ed9878cfa46961de37b6:streams/src/test/java/org/apache/kafka/streams/processor/internals/PartitionGrouperTest.java
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
@@ -81,11 +73,7 @@ public class PartitionGrouperTest {
 
     @Test
     public void shouldComputeGroupingForSingleGroupWithMultipleTopics() {
-<<<<<<< HEAD:streams/src/test/java/org/apache/kafka/streams/processor/internals/DefaultPartitionGrouperTest.java
-        final DefaultPartitionGrouper grouper = new DefaultPartitionGrouper();
-=======
         final PartitionGrouper grouper = new PartitionGrouper();
->>>>>>> 00ec646c5a1762bdce28ed9878cfa46961de37b6:streams/src/test/java/org/apache/kafka/streams/processor/internals/PartitionGrouperTest.java
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
@@ -107,11 +95,7 @@ public class PartitionGrouperTest {
 
     @Test
     public void shouldNotCreateAnyTasksBecauseOneTopicHasUnknownPartitions() {
-<<<<<<< HEAD:streams/src/test/java/org/apache/kafka/streams/processor/internals/DefaultPartitionGrouperTest.java
-        final DefaultPartitionGrouper grouper = new DefaultPartitionGrouper();
-=======
         final PartitionGrouper grouper = new PartitionGrouper();
->>>>>>> 00ec646c5a1762bdce28ed9878cfa46961de37b6:streams/src/test/java/org/apache/kafka/streams/processor/internals/PartitionGrouperTest.java
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
     
         final int topicGroupId = 0;
