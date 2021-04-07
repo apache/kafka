@@ -121,8 +121,7 @@ class ControllerApisTest {
     request: AbstractRequest,
     listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
   ): RequestChannel.Request = {
-    val buffer = RequestTestUtils.serializeRequestWithHeader(
-      new RequestHeader(request.apiKey, request.version, clientID, 0), request)
+    val buffer = request.serializeWithHeader(new RequestHeader(request.apiKey, request.version, clientID, 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
