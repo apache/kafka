@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class Topic {
 
@@ -34,15 +35,21 @@ public class Topic {
     private static final int MAX_NAME_LENGTH = 249;
 
     public static void validate(String topic) {
-        if (topic.isEmpty())
-            throw new InvalidTopicException("Topic name is illegal, it can't be empty");
-        if (topic.equals(".") || topic.equals(".."))
-            throw new InvalidTopicException("Topic name cannot be \".\" or \"..\"");
-        if (topic.length() > MAX_NAME_LENGTH)
-            throw new InvalidTopicException("Topic name is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, topic name: " + topic);
-        if (!containsValidPattern(topic))
-            throw new InvalidTopicException("Topic name \"" + topic + "\" is illegal, it contains a character other than " +
+        validate(topic, "Topic name", message -> {
+            throw new InvalidTopicException(message);
+        });
+    }
+
+    public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
+        if (name.isEmpty())
+            throwableConsumer.accept(logPrefix + " is illegal, it can't be empty");
+        if (".".equals(name) || "..".equals(name))
+            throwableConsumer.accept(logPrefix + " cannot be \".\" or \"..\"");
+        if (name.length() > MAX_NAME_LENGTH)
+            throwableConsumer.accept(logPrefix + " is illegal, it can't be longer than " + MAX_NAME_LENGTH +
+                    " characters, " + logPrefix + ": " + name);
+        if (!containsValidPattern(name))
+            throwableConsumer.accept(logPrefix + " \"" + name + "\" is illegal, it contains a character other than " +
                     "ASCII alphanumerics, '.', '_' and '-'");
     }
 
