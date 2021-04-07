@@ -41,11 +41,10 @@ public final class RecordMetadata {
     private final int serializedValueSize;
     private final TopicPartition topicPartition;
 
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, int batchIndex, long timestamp,
                           int serializedKeySize, int serializedValueSize) {
-        // ignore the relativeOffset if the base offset is -1,
-        // since this indicates the offset is unknown
-        this.offset = baseOffset == -1 ? baseOffset : baseOffset + relativeOffset;
+        // ignore the batchIndex if the base offset is -1, since this indicates the offset is unknown
+        this.offset = baseOffset == -1 ? baseOffset : baseOffset + batchIndex;
         this.timestamp = timestamp;
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
@@ -56,9 +55,15 @@ public final class RecordMetadata {
      * @deprecated use constructor without `checksum` parameter.
      */
     @Deprecated
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long batchIndex, long timestamp,
                           Long checksum, int serializedKeySize, int serializedValueSize) {
-        this(topicPartition, baseOffset, relativeOffset, timestamp, serializedKeySize, serializedValueSize);
+        this(topicPartition, baseOffset, batchIndexToInt(batchIndex), timestamp, serializedKeySize, serializedValueSize);
+    }
+
+    private static int batchIndexToInt(long batchIndex) {
+        if (batchIndex > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("batchIndex is larger than Integer.MAX_VALUE: " + batchIndex);
+        return (int) batchIndex;
     }
 
     /**

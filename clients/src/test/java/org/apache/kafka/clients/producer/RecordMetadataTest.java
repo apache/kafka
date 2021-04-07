@@ -25,13 +25,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class RecordMetadataTest {
 
     @Test
-    public void testConstructionWithMissingRelativeOffset() {
+    public void testConstructionWithMissingBatchIndex() {
         TopicPartition tp = new TopicPartition("foo", 0);
         long timestamp = 2340234L;
         int keySize = 3;
         int valueSize = 5;
 
-        RecordMetadata metadata = new RecordMetadata(tp, -1L, -1L, timestamp, keySize, valueSize);
+        RecordMetadata metadata = new RecordMetadata(tp, -1L, -1, timestamp, keySize, valueSize);
         assertEquals(tp.topic(), metadata.topic());
         assertEquals(tp.partition(), metadata.partition());
         assertEquals(timestamp, metadata.timestamp());
@@ -48,13 +48,13 @@ public class RecordMetadataTest {
         int keySize = 3;
         int valueSize = 5;
         long baseOffset = 15L;
-        long relativeOffset = 3L;
+        int batchIndex = 3;
 
-        RecordMetadata metadata = new RecordMetadata(tp, baseOffset, relativeOffset, timestamp, keySize, valueSize);
+        RecordMetadata metadata = new RecordMetadata(tp, baseOffset, batchIndex, timestamp, keySize, valueSize);
         assertEquals(tp.topic(), metadata.topic());
         assertEquals(tp.partition(), metadata.partition());
         assertEquals(timestamp, metadata.timestamp());
-        assertEquals(baseOffset + relativeOffset, metadata.offset());
+        assertEquals(baseOffset + batchIndex, metadata.offset());
         assertEquals(keySize, metadata.serializedKeySize());
         assertEquals(valueSize, metadata.serializedValueSize());
     }

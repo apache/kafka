@@ -313,7 +313,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
                 0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
+        long baseOffset = Math.max(0, offset - Integer.MAX_VALUE);
+        int batchIndex = (int) Math.min(Integer.MAX_VALUE, offset);
+        Completion completion = new Completion(offset, new RecordMetadata(topicPartition, baseOffset, batchIndex,
                 RecordBatch.NO_TIMESTAMP, 0, 0), result, callback, topicPartition);
 
         if (!this.transactionInFlight)
