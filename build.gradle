@@ -756,6 +756,7 @@ project(':core') {
     compile project(':clients')
     compile project(':metadata')
     compile project(':raft')
+    implementation project(':storage')
     compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
@@ -975,6 +976,10 @@ project(':core') {
     from(project(':connect:mirror').configurations.runtime) { into("libs/") }
     from(project(':connect:mirror-client').jar) { into("libs/") }
     from(project(':connect:mirror-client').configurations.runtime) { into("libs/") }
+    from(project(':storage').jar) { into("libs/") }
+    from(project(':storage').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':storage:api').jar) { into("libs/") }
+    from(project(':storage:api').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:streams-scala').jar) { into("libs/") }
@@ -1233,7 +1238,6 @@ project(':clients') {
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
-    include "**/org/apache/kafka/server/log/remote/storage/*"
   }
 }
 
@@ -1300,6 +1304,128 @@ project(':raft') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':storage:api') {
+  archivesBaseName = "kafka-storage-api"
+
+  dependencies {
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/server/log/remote/storage/*"
+  }
+}
+
+project(':storage') {
+  archivesBaseName = "kafka-storage"
+
+  dependencies {
+    implementation project(':storage:api')
+    implementation project(':clients')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
     }
   }
 
