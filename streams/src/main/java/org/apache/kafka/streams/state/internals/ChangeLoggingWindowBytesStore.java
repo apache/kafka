@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
@@ -36,14 +37,21 @@ class ChangeLoggingWindowBytesStore
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]> {
 
+    interface ChangeLoggingKeySerializer {
+        Bytes serialize(final Bytes key, final long timestamp, final int seqnum);
+    }
+
     private final boolean retainDuplicates;
     InternalProcessorContext context;
     private int seqnum = 0;
+    private final ChangeLoggingKeySerializer keySerializer;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
-                                  final boolean retainDuplicates) {
+                                  final boolean retainDuplicates,
+                                  final ChangeLoggingKeySerializer keySerializer) {
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
+        this.keySerializer = requireNonNull(keySerializer, "keySerializer");
     }
 
     @Deprecated
@@ -138,7 +146,7 @@ class ChangeLoggingWindowBytesStore
                     final byte[] value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
-        log(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
+        log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     void log(final Bytes key,

@@ -93,7 +93,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     @Parameters(name = "{0}")
     public static Object[] getKeySchemas() {
-        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
+        return new Object[] {new SessionKeySchema(), new WindowKeySchema(), new TimeOrderedKeySchema()};
     }
 
     @Before
@@ -109,7 +109,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             // expire it.
             nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
         }
-        if (schema instanceof WindowKeySchema) {
+        if (schema instanceof WindowKeySchema || schema instanceof TimeOrderedKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
@@ -482,6 +482,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
             return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+        } else if (schema instanceof TimeOrderedKeySchema) {
+            return TimeOrderedKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         } else {
             return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         }
@@ -499,6 +501,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             if (schema instanceof WindowKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                     WindowKeySchema.fromStoreKey(
+                        next.key.get(),
+                        windowSizeForTimeWindow,
+                        stateSerdes.keyDeserializer(),
+                        stateSerdes.topic()
+                    ),
+                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                );
+                results.add(deserialized);
+            } else if (schema instanceof TimeOrderedKeySchema) {
+                final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
+                    TimeOrderedKeySchema.fromStoreKey(
                         next.key.get(),
                         windowSizeForTimeWindow,
                         stateSerdes.keyDeserializer(),

@@ -242,7 +242,7 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void shouldExtractEndTimeFromBinary() {
+    public void shouldExtractSequenceFromBinary() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
         assertEquals(0, WindowKeySchema.extractStoreSequence(serialized.get()));
     }
