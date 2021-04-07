@@ -96,9 +96,8 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     /**
      * {@inheritdoc}
      *
-     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
-     * range queries may be slower. If better performance on key range queries are necessary, then
-     * use the {@link WindowKeySchema}.
+     * This method is not optimized for {@link TimeOrderedKeySchema}. The method may do unnecessary
+     * checks to find the next record.
      */
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
