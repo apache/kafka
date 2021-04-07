@@ -32,11 +32,10 @@ import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_A
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsRequestData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
@@ -48,7 +47,6 @@ import org.apache.kafka.controller.Controller
 import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
 
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 
@@ -309,52 +307,57 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
-    val createTopicRequest = request.body[CreateTopicsRequest]
-    val (authorizedCreateRequest, unauthorizedTopics) =
-      if (authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME)) {
-        (createTopicRequest.data, Seq.empty)
-      } else {
-        val duplicate = createTopicRequest.data.duplicate
-        val authorizedTopics = new CreatableTopicCollection()
-        val unauthorizedTopics = mutable.Buffer.empty[String]
+    val responseData = createTopics(request.body[CreateTopicsRequest].data(),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
+    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      responseData.setThrottleTimeMs(throttleTimeMs)
+      new CreateTopicsResponse(responseData)
+    })
+  }
 
-        createTopicRequest.data.topics.forEach { topicData =>
-          if (authHelper.authorize(request.context, CREATE, TOPIC, topicData.name)) {
-            authorizedTopics.add(topicData)
-          } else {
-            unauthorizedTopics += topicData.name
-          }
+  def createTopics(request: CreateTopicsRequestData,
+                   hasClusterAuth: Boolean,
+                   getCreatableTopics: Iterable[String] => Set[String]): CreateTopicsResponseData = {
+    val topicNames = new util.HashSet[String]()
+    val duplicateTopicNames = new util.HashSet[String]()
+    request.topics().forEach { topicData =>
+      if (!duplicateTopicNames.contains(topicData.name())) {
+        if (!topicNames.add(topicData.name())) {
+          topicNames.remove(topicData.name())
+          duplicateTopicNames.add(topicData.name())
         }
-        (duplicate.setTopics(authorizedTopics), unauthorizedTopics)
       }
-
-    def sendResponse(response: CreateTopicsResponseData): Unit = {
-      unauthorizedTopics.foreach { topic =>
-        val result = new CreatableTopicResult()
-          .setName(topic)
-          .setErrorCode(TOPIC_AUTHORIZATION_FAILED.code)
-        response.topics.add(result)
-      }
-
-      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
-        response.setThrottleTimeMs(throttleTimeMs)
-        new CreateTopicsResponse(response)
-      })
     }
-
-    if (authorizedCreateRequest.topics.isEmpty) {
-      sendResponse(new CreateTopicsResponseData())
+    val authorizedTopicNames = if (hasClusterAuth) {
+      topicNames.asScala
     } else {
-      val future = controller.createTopics(authorizedCreateRequest)
-      future.whenComplete((responseData, exception) => {
-        val response = if (exception != null) {
-          createTopicRequest.getErrorResponse(exception).asInstanceOf[CreateTopicsResponse].data
-        } else {
-          responseData
-        }
-        sendResponse(response)
-      })
+      getCreatableTopics.apply(topicNames.asScala)
     }
+    val effectiveRequest = request.duplicate()
+    val iterator = effectiveRequest.topics().iterator()
+    while (iterator.hasNext) {
+      val creatableTopic = iterator.next()
+      if (duplicateTopicNames.contains(creatableTopic.name()) ||
+          !authorizedTopicNames.contains(creatableTopic.name())) {
+        iterator.remove()
+      }
+    }
+    val response = controller.createTopics(effectiveRequest).get()
+    duplicateTopicNames.forEach { name =>
+      response.topics().add(new CreatableTopicResult().
+        setName(name).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Found multiple entries for this topic."))
+    }
+    topicNames.forEach { name =>
+      if (!authorizedTopicNames.contains(name)) {
+        response.topics().add(new CreatableTopicResult().
+          setName(name).
+          setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
+      }
+    }
+    response
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): Unit = {
