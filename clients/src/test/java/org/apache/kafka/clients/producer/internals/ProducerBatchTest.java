@@ -60,13 +60,6 @@ public class ProducerBatchTest {
             CompressionType.NONE, TimestampType.CREATE_TIME, 128);
 
     @Test
-    public void testChecksumNullForMagicV2() {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
-        assertNotNull(future);
-    }
-
-    @Test
     public void testBatchAbort() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         MockCallback callback = new MockCallback();

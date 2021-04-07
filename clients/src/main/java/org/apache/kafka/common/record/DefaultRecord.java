@@ -632,13 +632,4 @@ public class DefaultRecord implements Record {
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
     }
-
-
-    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
-        Checksum checksum = Crc32C.create();
-        Checksums.updateLong(checksum, timestamp);
-        Checksums.updateInt(checksum, serializedKeySize);
-        Checksums.updateInt(checksum, serializedValueSize);
-        return checksum.getValue();
-    }
 }
