@@ -29,11 +29,11 @@ import java.util.function.Supplier;
  */
 public class KafkaCompletableFuture<T> extends CompletableFuture<T> {
 
-    public boolean kafkaComplete(T value) {
+    boolean kafkaComplete(T value) {
         return super.complete(value);
     }
 
-    public boolean kafkaCompleteExceptionally(Throwable throwable) {
+    boolean kafkaCompleteExceptionally(Throwable throwable) {
         return super.completeExceptionally(throwable);
     }
 

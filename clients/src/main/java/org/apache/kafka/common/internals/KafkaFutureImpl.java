@@ -17,6 +17,7 @@
 package org.apache.kafka.common.internals;
 
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
@@ -58,7 +59,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
-        return new KafkaFutureImpl<>(true, (KafkaCompletableFuture<R>) completableFuture.thenApply(value -> {
+        CompletableFuture<R> completableFuture = this.completableFuture.thenApply((java.util.function.Function<? super T, ? extends R>) value -> {
             try {
                 return function.apply(value);
             } catch (Throwable t) {
@@ -68,7 +69,26 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                     throw t;
                 }
             }
-        }));
+        });
+        return new KafkaFutureImpl<>(true, toKafkaCompletableFuture(completableFuture));
+    }
+
+    private <U> KafkaCompletableFuture<U> toKafkaCompletableFuture(CompletableFuture<U> tCompletableFuture) {
+        KafkaCompletableFuture<U> res;
+        if (tCompletableFuture instanceof KafkaCompletableFuture) {
+            res = (KafkaCompletableFuture<U>) tCompletableFuture;
+        } else {
+            KafkaCompletableFuture<U> result = new KafkaCompletableFuture<>();
+            tCompletableFuture.whenComplete((x, y) -> {
+                if (y != null) {
+                    result.kafkaCompleteExceptionally(y);
+                } else {
+                    result.kafkaComplete(x);
+                }
+            });
+            res = result;
+        }
+        return res;
     }
 
     /**
@@ -83,7 +103,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
 
     @Override
     public KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
-        return new KafkaFutureImpl<>(true, (KafkaCompletableFuture<T>) completableFuture.whenComplete((a, b) -> {
+        CompletableFuture<T> tCompletableFuture = completableFuture.whenComplete((java.util.function.BiConsumer<? super T, ? super Throwable>) (a, b) -> {
             try {
                 biConsumer.accept(a, b);
             } catch (Throwable t) {
@@ -93,8 +113,10 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                     throw t;
                 }
             }
-        }));
+        });
+        return new KafkaFutureImpl<>(true, toKafkaCompletableFuture(tCompletableFuture));
     }
+
 
     @Override
     public synchronized boolean complete(T newValue) {
