@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+
+import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -37,7 +40,9 @@ class TimestampExtractorTest {
                 0,
                 0,
                 null,
-                null),
+                null,
+                new RecordHeaders(),
+                Optional.empty()),
             0
         );
 

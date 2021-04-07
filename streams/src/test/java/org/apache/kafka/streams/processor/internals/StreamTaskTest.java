@@ -26,6 +26,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -81,6 +82,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -2542,7 +2544,9 @@ public class StreamTaskTest {
             0,
             0,
             recordKey,
-            intSerializer.serialize(null, value)
+            intSerializer.serialize(null, value),
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 
@@ -2557,7 +2561,9 @@ public class StreamTaskTest {
             0,
             0,
             recordKey,
-            recordValue
+            recordValue,
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 
@@ -2571,7 +2577,9 @@ public class StreamTaskTest {
             0,
             0,
             new IntegerSerializer().serialize(topic1, key),
-            recordValue
+            recordValue,
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 

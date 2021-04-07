@@ -47,6 +47,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -388,7 +389,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 hexStringToByteArray(toDeleteBinaryValue)),
+                                 hexStringToByteArray(toDeleteBinaryValue),
+                                 new RecordHeaders(),
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  1,
@@ -397,7 +400,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "asdf".getBytes(UTF_8),
-                                 hexStringToByteArray(asdfBinaryValue)),
+                                 hexStringToByteArray(asdfBinaryValue),
+                                 new RecordHeaders(),
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -406,7 +411,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "zxcv".getBytes(UTF_8),
-                                 hexStringToByteArray(zxcvBinaryValue1)),
+                                 hexStringToByteArray(zxcvBinaryValue1),
+                                 new RecordHeaders(),
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  3,
@@ -415,7 +422,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "zxcv".getBytes(UTF_8),
-                                 hexStringToByteArray(zxcvBinaryValue2))
+                                 hexStringToByteArray(zxcvBinaryValue2),
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -431,7 +440,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 null)
+                                 null,
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -500,7 +511,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "todelete".getBytes(UTF_8),
                                  hexStringToByteArray(toDeleteBinary),
-                                 v1FlagHeaders),
+                                 v1FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  1,
@@ -510,7 +522,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "asdf".getBytes(UTF_8),
                                  hexStringToByteArray(asdfBinary),
-                                 v1FlagHeaders),
+                                 v1FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -520,7 +533,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary1),
-                                 v1FlagHeaders),
+                                 v1FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  3,
@@ -530,7 +544,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary2),
-                                 v1FlagHeaders)
+                                 v1FlagHeaders,
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -546,7 +561,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 null)
+                                 null,
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -616,7 +633,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "todelete".getBytes(UTF_8),
                                  hexStringToByteArray(toDeleteBinary),
-                                 v2FlagHeaders),
+                                 v2FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  1,
@@ -626,7 +644,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "asdf".getBytes(UTF_8),
                                  hexStringToByteArray(asdfBinary),
-                                 v2FlagHeaders),
+                                 v2FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -636,7 +655,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary1),
-                                 v2FlagHeaders),
+                                 v2FlagHeaders,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -646,7 +666,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary2),
-                                 v2FlagHeaders)
+                                 v2FlagHeaders,
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -662,7 +683,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 null)
+                                 null,
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -734,7 +757,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "todelete".getBytes(UTF_8),
                                  hexStringToByteArray(toDeleteBinary),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  1,
@@ -744,7 +768,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "asdf".getBytes(UTF_8),
                                  hexStringToByteArray(asdfBinary),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -754,7 +779,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary1),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -764,7 +790,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary2),
-                                 headers)
+                                 headers,
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -780,7 +807,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 null)
+                                 null,
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -849,7 +878,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "todelete".getBytes(UTF_8),
                                  hexStringToByteArray(toDeleteBinary),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  1,
@@ -859,7 +889,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "asdf".getBytes(UTF_8),
                                  hexStringToByteArray(asdfBinary),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -869,7 +900,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary1),
-                                 headers),
+                                 headers,
+                                 Optional.empty()),
             new ConsumerRecord<>("changelog-topic",
                                  0,
                                  2,
@@ -879,7 +911,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  "zxcv".getBytes(UTF_8),
                                  hexStringToByteArray(zxcvBinary2),
-                                 headers)
+                                 headers,
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -895,7 +928,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 null)
+                                 null,
+                                 new RecordHeaders(),
+                                 Optional.empty())
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -958,7 +993,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                      -1,
                                      "todelete".getBytes(UTF_8),
                                      ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                                     unknownFlagHeaders)
+                                     unknownFlagHeaders,
+                                     Optional.empty())
             ));
             fail("expected an exception");
         } catch (final IllegalArgumentException expected) {

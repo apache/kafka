@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.processor.internals.testutil;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+
+import java.util.Optional;
 
 public final class ConsumerRecordUtil {
     private ConsumerRecordUtil() {}
@@ -39,7 +42,9 @@ public final class ConsumerRecordUtil {
             0,
             0,
             key,
-            value
+            value,
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 }

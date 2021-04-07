@@ -26,6 +26,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.Test;
 
+import java.util.Optional;
+
 import static org.junit.Assert.assertEquals;
 
 public class RecordDeserializerTest {
@@ -40,7 +42,8 @@ public class RecordDeserializerTest {
         5,
         new byte[0],
         new byte[0],
-        headers);
+        headers,
+        Optional.empty());
 
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
