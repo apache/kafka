@@ -75,7 +75,7 @@ class KafkaRequestHandler(id: Int,
             apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>
-              shutdownComplete.countDown()
+              completeShutdown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {

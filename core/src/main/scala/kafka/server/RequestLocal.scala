@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.utils.BufferSupplier
 
 object RequestLocal {
-  val NoCaching: RequestLocal = RequestLocal(BufferSupplier.create())
+  val NoCaching: RequestLocal = RequestLocal(BufferSupplier.NO_CACHING)
 
   /** The returned instance should be confined to a single thread. */
   def withThreadConfinedCaching: RequestLocal = RequestLocal(BufferSupplier.create())
