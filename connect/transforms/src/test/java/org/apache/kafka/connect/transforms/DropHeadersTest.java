@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -77,6 +78,11 @@ public class DropHeadersTest {
         SourceRecord xformed = xform.apply(original);
         assertNonHeaders(original, xformed);
         assertEquals(expected, xformed.headers());
+    }
+
+    @Test(expected = ConfigException.class)
+    public void configRejectsEmptyList() {
+        xform.configure(config());
     }
 
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {

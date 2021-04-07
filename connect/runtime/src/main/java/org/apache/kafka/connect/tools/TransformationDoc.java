@@ -23,7 +23,6 @@ import org.apache.kafka.connect.transforms.ExtractField;
 import org.apache.kafka.connect.transforms.Filter;
 import org.apache.kafka.connect.transforms.Flatten;
 import org.apache.kafka.connect.transforms.HeaderFrom;
-import org.apache.kafka.connect.transforms.HeaderTo;
 import org.apache.kafka.connect.transforms.HoistField;
 import org.apache.kafka.connect.transforms.InsertField;
 import org.apache.kafka.connect.transforms.InsertHeader;

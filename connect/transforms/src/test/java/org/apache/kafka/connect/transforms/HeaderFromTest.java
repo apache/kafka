@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.data.Schema.STRING_SCHEMA;
@@ -332,11 +333,28 @@ public class HeaderFromTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void invalidConfig() {
+    public void invalidConfigExtraHeaderConfig() {
         Map<String, Object> config = config();
         List<String> headers = new ArrayList<>(this.headers);
         headers.add("unexpected");
         config.put(HeaderFrom.HEADERS_FIELD, headers);
+        xform.configure(config);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void invalidConfigExtraFieldConfig() {
+        Map<String, Object> config = config();
+        List<String> fields = new ArrayList<>(this.transformFields);
+        fields.add("unexpected");
+        config.put(HeaderFrom.FIELDS_FIELD, fields);
+        xform.configure(config);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void invalidConfigEmptyHeadersAndFieldsConfig() {
+        Map<String, Object> config = config();
+        config.put(HeaderFrom.HEADERS_FIELD, emptyList());
+        config.put(HeaderFrom.FIELDS_FIELD, emptyList());
         xform.configure(config);
     }
 

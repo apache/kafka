@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -56,12 +57,16 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     "key (<code>" + Key.class.getName() + "</code>) or value (<code>" + Value.class.getName() + "</code>).";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_FIELD, ConfigDef.Type.LIST, ConfigDef.Importance.HIGH,
+            .define(FIELDS_FIELD, ConfigDef.Type.LIST,
+                    NO_DEFAULT_VALUE, new NonEmptyListValidator(),
+                    ConfigDef.Importance.HIGH,
                     "Field names in the record whose values are to be copied or moved to headers.")
-            .define(HEADERS_FIELD, ConfigDef.Type.LIST, ConfigDef.Importance.HIGH,
+            .define(HEADERS_FIELD, ConfigDef.Type.LIST,
+                    NO_DEFAULT_VALUE, new NonEmptyListValidator(),
+                    ConfigDef.Importance.HIGH,
                     "Header names, in the same order as the field names listed in the fields configuration property.")
             .define(OPERATION_FIELD, ConfigDef.Type.STRING, NO_DEFAULT_VALUE,
-                    ConfigDef.ValidString.in("move", "copy"), ConfigDef.Importance.HIGH,
+                    ConfigDef.ValidString.in(MOVE_OPERATION, COPY_OPERATION), ConfigDef.Importance.HIGH,
                     "Either <code>move</code> if the fields are to be moved to the headers (removed from the key/value), " +
                             "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).");
 

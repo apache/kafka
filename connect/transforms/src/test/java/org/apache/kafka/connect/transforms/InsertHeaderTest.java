@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -76,6 +77,16 @@ public class InsertHeaderTest {
         SourceRecord xformed = xform.apply(original);
         assertNonHeaders(original, xformed);
         assertEquals(expect, xformed.headers());
+    }
+
+    @Test(expected = ConfigException.class)
+    public void configRejectsNullHeaderKey() {
+        xform.configure(config(null, "1"));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void configRejectsNullHeaderValue() {
+        xform.configure(config("inserted", null));
     }
 
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {
