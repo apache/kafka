@@ -616,56 +616,54 @@ public final class QuorumController implements Controller {
 
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
-        private void handleCommittedBatch(BatchReader.Batch<ApiMessageAndVersion> batch) {
-            long offset = batch.lastOffset();
-            List<ApiMessageAndVersion> messages = batch.records();
-
-            appendControlEvent("handleCommits[" + offset + "]", () -> {
-                if (curClaimEpoch == -1) {
-                    // If the controller is a standby, replay the records that were
-                    // created by the active controller.
-                    if (log.isDebugEnabled()) {
-                        if (log.isTraceEnabled()) {
-                            log.trace("Replaying commits from the active node up to " +
-                                "offset {}: {}.", offset, messages.stream()
-                                .map(ApiMessageAndVersion::toString)
-                                .collect(Collectors.joining(", ")));
-                        } else {
-                            log.debug("Replaying commits from the active node up to " +
-                                "offset {}.", offset);
-                        }
-                    }
-                    for (ApiMessageAndVersion messageAndVersion : messages) {
-                        replay(messageAndVersion.message(), -1, offset);
-                    }
-                } else {
-                    // If the controller is active, the records were already replayed,
-                    // so we don't need to do it here.
-                    log.debug("Completing purgatory items up to offset {}.", offset);
-
-                    // Complete any events in the purgatory that were waiting for this offset.
-                    purgatory.completeUpTo(offset);
-
-                    // Delete all the in-memory snapshots that we no longer need.
-                    // If we are writing a new snapshot, then we need to keep that around;
-                    // otherwise, we should delete up to the current committed offset.
-                    snapshotRegistry.deleteSnapshotsUpTo(
-                        Math.min(offset, snapshotGeneratorManager.snapshotEpoch()));
-                }
-                lastCommittedOffset = offset;
-            });
-        }
-
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
-            try {
-                while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
-                    handleCommittedBatch(batch);
+            appendControlEvent("handleCommits[baseOffset=" + reader.baseOffset() + "]", () -> {
+                try {
+                    boolean isActiveController = curClaimEpoch != -1;
+                    while (reader.hasNext()) {
+                        BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                        long offset = batch.lastOffset();
+                        List<ApiMessageAndVersion> messages = batch.records();
+
+                        if (isActiveController) {
+                            // If the controller is active, the records were already replayed,
+                            // so we don't need to do it here.
+                            log.debug("Completing purgatory items up to offset {}.", offset);
+
+                            // Complete any events in the purgatory that were waiting for this offset.
+                            purgatory.completeUpTo(offset);
+
+                            // Delete all the in-memory snapshots that we no longer need.
+                            // If we are writing a new snapshot, then we need to keep that around;
+                            // otherwise, we should delete up to the current committed offset.
+                            snapshotRegistry.deleteSnapshotsUpTo(
+                                Math.min(offset, snapshotGeneratorManager.snapshotEpoch()));
+
+                        } else {
+                            // If the controller is a standby, replay the records that were
+                            // created by the active controller.
+                            if (log.isDebugEnabled()) {
+                                if (log.isTraceEnabled()) {
+                                    log.trace("Replaying commits from the active node up to " +
+                                        "offset {}: {}.", offset, messages.stream()
+                                        .map(ApiMessageAndVersion::toString)
+                                        .collect(Collectors.joining(", ")));
+                                } else {
+                                    log.debug("Replaying commits from the active node up to " +
+                                        "offset {}.", offset);
+                                }
+                            }
+                            for (ApiMessageAndVersion messageAndVersion : messages) {
+                                replay(messageAndVersion.message(), -1, offset);
+                            }
+                        }
+                        lastCommittedOffset = offset;
+                    }
+                } finally {
+                    reader.close();
                 }
-            } finally {
-                reader.close();
-            }
+            });
         }
 
         @Override

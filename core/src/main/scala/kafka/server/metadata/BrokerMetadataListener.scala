@@ -16,7 +16,6 @@
  */
 package kafka.server.metadata
 
-import java.util
 import java.util.concurrent.TimeUnit
 
 import kafka.coordinator.group.GroupCoordinator
@@ -78,28 +77,32 @@ class BrokerMetadataListener(
    * Handle new metadata records.
    */
   override def handleCommit(reader: BatchReader[ApiMessageAndVersion]): Unit = {
-    try {
-      while (reader.hasNext) {
-        val batch = reader.next()
-        eventQueue.append(new HandleCommitsEvent(batch.lastOffset, batch.records ))
+    eventQueue.append(new HandleCommitsEvent(reader))
+  }
+
+  // Visible for testing. It's useful to execute events synchronously in order
+  // to make tests deterministic
+  private[metadata] def execCommits(batch: BatchReader.Batch[ApiMessageAndVersion]): Unit = {
+    new HandleCommitsEvent(BatchReader.singleton(batch)).run()
+  }
+
+  class HandleCommitsEvent(
+    reader: BatchReader[ApiMessageAndVersion]
+  ) extends EventQueue.FailureLoggingEvent(log) {
+    override def run(): Unit = {
+      try {
+        apply(reader.next())
+      } finally {
+        reader.close()
       }
-    } finally {
-      reader.close()
     }
 
-  }
+    private def apply(batch: BatchReader.Batch[ApiMessageAndVersion]): Unit = {
+      val records = batch.records
+      val lastOffset = batch.lastOffset
 
-  // Visible for testing. It's useful to execute events synchronously
-  private[metadata] def execCommits(lastOffset: Long, records: util.List[ApiMessageAndVersion]): Unit = {
-    new HandleCommitsEvent(lastOffset, records).run()
-  }
-
-  class HandleCommitsEvent(lastOffset: Long,
-                           records: util.List[ApiMessageAndVersion])
-      extends EventQueue.FailureLoggingEvent(log) {
-    override def run(): Unit = {
       if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: handling ${records.size()} record(s).")
+        debug(s"Metadata batch $lastOffset: handling ${records.size()} record(s).")
       }
       val imageBuilder =
         MetadataImageBuilder(brokerId, log, metadataCache.currentImage())
@@ -114,35 +117,35 @@ class BrokerMetadataListener(
           }
           handleMessage(imageBuilder, record.message, lastOffset)
         } catch {
-          case e: Exception => error(s"Unable to handle record ${index} in batch " +
-            s"ending at offset ${lastOffset}", e)
+          case e: Exception => error(s"Unable to handle record $index in batch " +
+            s"ending at offset $lastOffset", e)
         }
         index = index + 1
       }
       if (imageBuilder.hasChanges) {
         val newImage = imageBuilder.build()
         if (isTraceEnabled) {
-          trace(s"Metadata batch ${lastOffset}: creating new metadata image ${newImage}")
+          trace(s"Metadata batch $lastOffset: creating new metadata image ${newImage}")
         } else if (isDebugEnabled) {
-          debug(s"Metadata batch ${lastOffset}: creating new metadata image")
+          debug(s"Metadata batch $lastOffset: creating new metadata image")
         }
         metadataCache.image(newImage)
       } else if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: no new metadata image required.")
+        debug(s"Metadata batch $lastOffset: no new metadata image required.")
       }
       if (imageBuilder.hasPartitionChanges) {
         if (isDebugEnabled) {
-          debug(s"Metadata batch ${lastOffset}: applying partition changes")
+          debug(s"Metadata batch $lastOffset: applying partition changes")
         }
         replicaManager.handleMetadataRecords(imageBuilder, lastOffset,
           RequestHandlerHelper.onLeadershipChange(groupCoordinator, txnCoordinator, _, _))
       } else if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: no partition changes found.")
+        debug(s"Metadata batch $lastOffset: no partition changes found.")
       }
       _highestMetadataOffset = lastOffset
       val endNs = time.nanoseconds()
       val deltaUs = TimeUnit.MICROSECONDS.convert(endNs - startNs, TimeUnit.NANOSECONDS)
-      debug(s"Metadata batch ${lastOffset}: advanced highest metadata offset in ${deltaUs} " +
+      debug(s"Metadata batch $lastOffset: advanced highest metadata offset in ${deltaUs} " +
         "microseconds.")
       batchProcessingTimeHist.update(deltaUs)
     }

@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTo
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.raft.BatchReader
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers._
@@ -39,6 +40,7 @@ import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
 
+  private val leaderEpoch = 5
   private val brokerId = 1
   private val time = new MockTime()
   private val configRepository = new CachedConfigRepository
@@ -82,11 +84,10 @@ class BrokerMetadataListenerTest {
   ): Unit = {
     val deleteRecord = new RemoveTopicRecord()
       .setTopicId(topicId)
-    lastMetadataOffset += 1
-    listener.execCommits(lastOffset = lastMetadataOffset, List[ApiMessageAndVersion](
-      new ApiMessageAndVersion(deleteRecord, 0.toShort),
-    ).asJava)
 
+    applyBatch(List[ApiMessageAndVersion](
+      new ApiMessageAndVersion(deleteRecord, 0.toShort),
+    ))
     assertFalse(metadataCache.contains(topic))
     assertEquals(new Properties, configRepository.topicConfig(topic))
 
@@ -108,6 +109,18 @@ class BrokerMetadataListenerTest {
     assertEquals(localPartitions, localRemoved.map(_.toTopicPartition).toSet)
   }
 
+  private def applyBatch(
+    records: List[ApiMessageAndVersion]
+  ): Unit = {
+    val baseOffset = lastMetadataOffset + 1
+    lastMetadataOffset += records.size
+    listener.execCommits(new BatchReader.Batch(
+      baseOffset,
+      leaderEpoch,
+      records.asJava
+    ))
+  }
+
   private def createAndAssert(
     topicId: Uuid,
     topic: String,
@@ -115,10 +128,10 @@ class BrokerMetadataListenerTest {
     numPartitions: Int,
     numBrokers: Int
   ): Set[TopicPartition] = {
-    val records = new java.util.ArrayList[ApiMessageAndVersion]
-    records.add(new ApiMessageAndVersion(new TopicRecord()
+    val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
+    records += new ApiMessageAndVersion(new TopicRecord()
       .setName(topic)
-      .setTopicId(topicId), 0))
+      .setTopicId(topicId), 0)
 
     val localTopicPartitions = mutable.Set.empty[TopicPartition]
     (0 until numPartitions).map { partitionId =>
@@ -133,26 +146,25 @@ class BrokerMetadataListenerTest {
         localTopicPartitions.add(new TopicPartition(topic, partitionId))
       }
 
-      records.add(new ApiMessageAndVersion(new PartitionRecord()
+      records += new ApiMessageAndVersion(new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(partitionId)
         .setLeader(preferredLeaderId)
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
         .setReplicas(replicas)
-        .setIsr(replicas), 0))
+        .setIsr(replicas), 0)
     }
 
     topicConfig.forKeyValue { (key, value) =>
-      records.add(new ApiMessageAndVersion(new ConfigRecord()
+      records += new ApiMessageAndVersion(new ConfigRecord()
         .setResourceName(topic)
         .setResourceType(ConfigResource.Type.TOPIC.id())
         .setName(key)
-        .setValue(value), 0))
+        .setValue(value), 0)
     }
 
-    lastMetadataOffset += records.size()
-    listener.execCommits(lastOffset = lastMetadataOffset, records)
+    applyBatch(records.toList)
     assertTrue(metadataCache.contains(topic))
     assertEquals(Some(numPartitions), metadataCache.numPartitions(topic))
     assertEquals(topicConfig, configRepository.topicConfig(topic).asScala)
