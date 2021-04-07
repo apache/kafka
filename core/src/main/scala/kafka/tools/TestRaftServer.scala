@@ -51,8 +51,8 @@ class TestRaftServer(
 ) extends Logging {
   import kafka.tools.TestRaftServer._
 
-  private val partition = new TopicPartition("__cluster_metadata", 0)
-  private val topicId = Uuid.METADATA_TOPIC_ID
+  private val partition = new TopicPartition("__raft_performance_test", 0)
+  private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
