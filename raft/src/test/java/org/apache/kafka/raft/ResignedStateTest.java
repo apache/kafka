@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,23 +34,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ResignedStateTest {
 
     private final MockTime time = new MockTime();
+    private final LogContext logContext = new LogContext();
+    int electionTimeoutMs = 5000;
+    int localId = 0;
+    int epoch = 5;
 
-    @Test
-    public void testResignedState() {
-        int electionTimeoutMs = 5000;
-        int localId = 0;
-        int remoteId = 1;
-        int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(localId, remoteId);
-
-        ResignedState state = new ResignedState(
+    private ResignedState newResignedState(
+        Set<Integer> voters,
+        List<Integer> preferredSuccessors
+    ) {
+        return new ResignedState(
             time,
             localId,
             epoch,
             voters,
             electionTimeoutMs,
-            Collections.emptyList()
+            preferredSuccessors,
+            logContext
         );
+    }
+
+    @Test
+    public void testResignedState() {
+        int remoteId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId);
+
+        ResignedState state = newResignedState(voters, Collections.emptyList());
 
         assertEquals(ElectionState.withElectedLeader(epoch, localId, voters), state.election());
         assertEquals(epoch, state.epoch());
@@ -65,4 +78,16 @@ class ResignedStateTest {
         assertTrue(state.hasElectionTimeoutExpired(time.milliseconds()));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGrantVote(boolean isLogUpToDate) {
+        ResignedState state = newResignedState(
+            Utils.mkSet(1, 2, 3),
+            Collections.emptyList()
+        );
+
+        assertFalse(state.canGrantVote(1, isLogUpToDate));
+        assertFalse(state.canGrantVote(2, isLogUpToDate));
+        assertFalse(state.canGrantVote(3, isLogUpToDate));
+    }
 }

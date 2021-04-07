@@ -29,7 +29,6 @@ import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.KafkaBroker.metricsPrefix
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.internals.Topic
@@ -52,7 +51,7 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A self-managed Kafka broker.
+ * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
                     val config: KafkaConfig,
@@ -124,7 +123,7 @@ class BrokerServer(
 
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
-  val clusterId: String = metaProps.clusterId.toString
+  val clusterId: String = metaProps.clusterId
 
   val configRepository = new CachedConfigRepository()
 
@@ -471,7 +470,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
 
-      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(metricsPrefix, config.nodeId.toString, metrics), this)
+      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")
     } catch {
       case e: Throwable =>

@@ -173,7 +173,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
-    private DefaultPartitionGrouper partitionGrouper;
+    private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
     private Time time;
@@ -204,7 +204,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
 
         final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
-        partitionGrouper = new DefaultPartitionGrouper();
         mainConsumerSupplier = () -> Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
         adminClient = Objects.requireNonNull(referenceContainer.adminClient, "Admin client was not specified");
         taskManager = Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
@@ -213,6 +212,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
+        partitionGrouper = new PartitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();

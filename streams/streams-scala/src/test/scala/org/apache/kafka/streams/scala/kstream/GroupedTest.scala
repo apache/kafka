@@ -17,31 +17,30 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.GroupedInternal
-import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.serialization.Serdes
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class GroupedTest extends FlatSpec with Matchers {
+class GroupedTest {
 
-  "Create a Grouped" should "create a Grouped with Serdes" in {
+  @Test
+  def testCreateGrouped(): Unit = {
     val grouped: Grouped[String, Long] = Grouped.`with`[String, Long]
 
     val internalGrouped = new GroupedInternal[String, Long](grouped)
-    internalGrouped.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalGrouped.valueSerde.getClass shouldBe Serdes.longSerde.getClass
+    assertEquals(Serdes.stringSerde.getClass, internalGrouped.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalGrouped.valueSerde.getClass)
   }
 
-  "Create a Grouped with repartition topic name" should "create a Grouped with Serdes, and repartition topic name" in {
+  @Test
+  def testCreateGroupedWithRepartitionTopicName(): Unit = {
     val repartitionTopicName = "repartition-topic"
     val grouped: Grouped[String, Long] = Grouped.`with`(repartitionTopicName)
 
     val internalGrouped = new GroupedInternal[String, Long](grouped)
-    internalGrouped.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalGrouped.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    internalGrouped.name() shouldBe repartitionTopicName
+    assertEquals(Serdes.stringSerde.getClass, internalGrouped.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalGrouped.valueSerde.getClass)
+    assertEquals(repartitionTopicName, internalGrouped.name())
   }
-
 }

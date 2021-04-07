@@ -109,18 +109,6 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
         throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
-    @Deprecated
-    @Override
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException("StateStores can't access forward.");
-    }
-
-    @Deprecated
-    @Override
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new UnsupportedOperationException("StateStores can't access forward.");
-    }
-
     @Override
     public void commit() {
         throw new UnsupportedOperationException("StateStores can't access commit.");

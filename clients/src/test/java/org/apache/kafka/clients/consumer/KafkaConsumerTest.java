@@ -142,11 +142,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doCallRealMethod;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 public class KafkaConsumerTest {
     private final String topic = "test";
@@ -2439,15 +2434,6 @@ public class KafkaConsumerTest {
             this.offset = offset;
             this.count = count;
         }
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void testCloseWithTimeUnit() {
-        KafkaConsumer consumer = mock(KafkaConsumer.class);
-        doCallRealMethod().when(consumer).close(anyLong(), any());
-        consumer.close(1, TimeUnit.SECONDS);
-        verify(consumer).close(Duration.ofSeconds(1));
     }
 
     @Test
