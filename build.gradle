@@ -158,6 +158,7 @@ if (file('.git').exists()) {
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
         'streams/streams-scala/logs/*',
+        'licenses/*',
         '**/generated/**'
     ])
   }
@@ -967,7 +968,8 @@ project(':core') {
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
     from(project.file("$rootDir/config")) { into "config/" }
-    from "$rootDir/LICENSE"
+    from(project.file("$rootDir/licenses")) { into "licenses/" }
+    from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
     from "$rootDir/NOTICE"
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
@@ -1029,9 +1031,13 @@ project(':core') {
   }
 
   sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/generated/java", "src/main/java", "src/main/scala"]
       }
     }
     test {
@@ -1424,18 +1430,9 @@ project(':streams') {
 
   dependencies {
     api project(':clients')
-
-    // use `api` dependency for `connect-json` for compatibility (e.g. users who use `JsonSerializer`/`JsonDeserializer`
-    // at compile-time without an explicit dependency on `connect-json`)
-    // this dependency should be removed after we unify data API
-    api(project(':connect:json')) {
-      // this transitive dependency is not used in Streams, and it breaks SBT builds
-      exclude module: 'javax.ws.rs-api'
-    }
-    
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
-    
+
     implementation libs.slf4jApi
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
@@ -1641,8 +1638,14 @@ project(':streams:examples') {
   archivesBaseName = "kafka-streams-examples"
 
   dependencies {
+    // this dependency should be removed after we unify data API
+    implementation(project(':connect:json')) {
+      // this transitive dependency is not used in Streams, and it breaks SBT builds
+      exclude module: 'javax.ws.rs-api'
+    }
+
     implementation project(':streams')
-    implementation project(':connect:json')  // this dependency should be removed after we unify data API
+
     implementation libs.slf4jlog4j
 
     testImplementation project(':streams:test-utils')
