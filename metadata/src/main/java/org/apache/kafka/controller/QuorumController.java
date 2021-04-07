@@ -208,8 +208,7 @@ public final class QuorumController implements Controller {
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
             if (snapshotWriterBuilder == null) {
-                snapshotWriterBuilder = (Function<Long, SnapshotWriter>) Class.forName(
-                    "org.apache.kafka.controller.NoOpSnapshotWriterBuilder").getConstructor().newInstance();
+                snapshotWriterBuilder = new NoOpSnapshotWriterBuilder();
             }
             if (snapshotReader == null) {
                 snapshotReader = new EmptySnapshotReader(-1);

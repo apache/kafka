@@ -22,6 +22,12 @@ import java.util.List;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 
 
+/**
+ * The no-op snapshot writer which does nothing.
+ *
+ * TODO: This will be moved to the test/ directory once we have the KRaft
+ * implementation of the snapshot writer.
+ */
 public final class NoOpSnapshotWriter implements SnapshotWriter {
     private final long epoch;
 
