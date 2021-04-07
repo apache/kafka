@@ -652,41 +652,6 @@ public class StreamsPartitionAssignorTest {
         assertEquals(expectedInfo11TaskIds, info11.activeTasks());
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testAssignWithPartialTopology() {
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
-        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-        builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor2", new MockApiProcessorSupplier<>(), "source2");
-        builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor2");
-        final List<String> topics = asList("topic1", "topic2");
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-        createDefaultMockTaskManager();
-        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3))
-        );
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class));
-
-        // will throw exception if it fails
-        subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode()
-                          ));
-        final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check assignment info
-        final AssignmentInfo info10 = checkAssignment(mkSet("topic1"), assignments.get("consumer10"));
-        final Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks());
-
-        assertEquals(3, allActiveTasks.size());
-        assertEquals(allTasks, new HashSet<>(allActiveTasks));
-    }
-
     @Test
     public void testAssignEmptyMetadata() {
         builder.addSource(null, "source1", null, null, null, "topic1");

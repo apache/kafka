@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -33,8 +34,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-@SuppressWarnings("deprecation")
-public class DefaultPartitionGrouperTest {
+public class PartitionGrouperTest {
 
     private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
@@ -53,7 +53,7 @@ public class DefaultPartitionGrouperTest {
 
     @Test
     public void shouldComputeGroupingForTwoGroups() {
-        final PartitionGrouper grouper = new DefaultPartitionGrouper();
+        final PartitionGrouper grouper = new PartitionGrouper();
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
@@ -73,7 +73,7 @@ public class DefaultPartitionGrouperTest {
 
     @Test
     public void shouldComputeGroupingForSingleGroupWithMultipleTopics() {
-        final PartitionGrouper grouper = new DefaultPartitionGrouper();
+        final PartitionGrouper grouper = new PartitionGrouper();
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
 
@@ -95,7 +95,7 @@ public class DefaultPartitionGrouperTest {
 
     @Test
     public void shouldNotCreateAnyTasksBecauseOneTopicHasUnknownPartitions() {
-        final PartitionGrouper grouper = new DefaultPartitionGrouper();
+        final PartitionGrouper grouper = new PartitionGrouper();
         final Map<Integer, Set<String>> topicGroups = new HashMap<>();
     
         final int topicGroupId = 0;

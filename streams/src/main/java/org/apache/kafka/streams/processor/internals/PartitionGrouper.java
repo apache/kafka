@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,18 +32,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Default implementation of the {@link PartitionGrouper} interface that groups partitions by the partition id.
+ * Groups partitions by the partition id.
  *
  * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on
  * joined topics, and by using the serialization and Producer's default partitioner.
- *
- * @deprecated since 2.4 release; will be removed in 3.0.0 via KAFKA-7785
  */
-@Deprecated
-public class DefaultPartitionGrouper implements PartitionGrouper {
+public class PartitionGrouper {
 
-    private static final Logger log = LoggerFactory.getLogger(DefaultPartitionGrouper.class);
+    private static final Logger log = LoggerFactory.getLogger(PartitionGrouper.class);
     /**
      * Generate tasks with the assigned topic partitions.
      *
