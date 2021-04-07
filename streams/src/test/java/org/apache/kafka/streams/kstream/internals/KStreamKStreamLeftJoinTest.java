@@ -211,6 +211,54 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
+    public void testOrdering() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // push two items to the primary stream; the other window is empty; this should not produce any item yet
+            // w1 = {}
+            // w2 = {}
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // --> w2 = {}
+            inputTopic1.pipeInput(0, "A0", 0);
+            inputTopic1.pipeInput(1, "A1", 100);
+            processor.checkAndClearProcessResult();
+
+            // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
+            // the joined records
+            // by the time they were produced before
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // w2 = { }
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // --> w2 = { 0:a0 (ts: 100) }
+            inputTopic2.pipeInput(1, "a1", 110);
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 110),
+                new KeyValueTimestamp<>(1, "A1+a1", 110));
+        }
+    }
+
+    @Test
     public void testGracePeriod() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -272,10 +320,10 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101),
             //            0:dummy (ts: 211)}
-            time += 110L;
+            time += 1100L;
             inputTopic2.pipeInput(0, "dummy", time);
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 211),
-                new KeyValueTimestamp<>(1, "A1+null", 211));
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 1201),
+                new KeyValueTimestamp<>(1, "A1+null", 1201));
         }
     }
 

@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
@@ -52,8 +53,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
     private final Optional<String> outerJoinWindowName;
-    private final AtomicLong maxObservedStreamTime;
     private final boolean thisJoin;
+
+    // Observed time is AtomicLong because this time is shared between the left and side processor nodes. However,
+    // this time is not updated in parallel, so we can call get() several times without worry about getting different
+    // times.
+    private final AtomicLong maxObservedStreamTime;
 
     KStreamKStreamJoin(final boolean thisJoin,
                        final String otherWindowName,
@@ -82,6 +87,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
         private static final boolean DISABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX_DEFAULT = false;
+
+        private final Predicate<Windowed<KeyAndJoinSide<K>>> recordWindowHasClosed =
+            windowedKey -> windowedKey.window().start() + joinAfterMs + joinGraceMs < maxObservedStreamTime.get();
 
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
@@ -133,34 +141,37 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 return;
             }
 
-            // maxObservedStreamTime is updated and shared between left and right sides, so we can
-            // process a non-join record immediately if it is late
-            final long maxStreamTime = maxObservedStreamTime.updateAndGet(time -> Math.max(time, context().timestamp()));
-
             boolean needOuterJoin = outer;
+            boolean joinFound = false;
 
             final long inputRecordTimestamp = context().timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
+            // maxObservedStreamTime is updated and shared between left and right join sides
+            maxObservedStreamTime.updateAndGet(t -> Math.max(t, inputRecordTimestamp));
+
             try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
+                    joinFound = true;
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
+
+                    // Emit expired records before the joined record to keep time ordering
+                    emitExpiredNonJoinedOuterRecordsExcept(key, otherRecordTimestamp);
+
                     context().forward(
                         key,
                         joiner.apply(key, value, otherRecord.value),
                         To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
+                }
 
-                    outerJoinWindowStore.ifPresent(store -> {
-                        // Delete the other joined key from the outer non-joined store now to prevent
-                        // further processing
-                        final KeyAndJoinSide<K> otherJoinKey = KeyAndJoinSide.make(!thisJoin, key);
-                        if (store.fetch(otherJoinKey, otherRecordTimestamp) != null) {
-                            store.put(otherJoinKey, null, otherRecordTimestamp);
-                        }
-                    });
+                // Emit all expired records before adding a new non-joined record to the store. Otherwise,
+                // the put() call will advance the stream time, which causes records out of the retention
+                // period to be deleted, thus not being emitted later.
+                if (!joinFound && inputRecordTimestamp == maxObservedStreamTime.get()) {
+                    emitExpiredNonJoinedOuterRecords();
                 }
 
                 if (needOuterJoin) {
@@ -181,7 +192,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     //
                     // the condition below allows us to process the late record without the need
                     // to hold it in the temporary outer store
-                    if (internalOuterJoinFixDisabled || timeTo < maxStreamTime) {
+                    if (internalOuterJoinFixDisabled || timeTo < maxObservedStreamTime.get()) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
                         outerJoinWindowStore.ifPresent(store -> store.put(
@@ -190,14 +201,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                             inputRecordTimestamp));
                     }
                 }
-
-                outerJoinWindowStore.ifPresent(store -> {
-                    // only emit left/outer non-joined if the stream time has advanced (inputRecordTime = maxStreamTime)
-                    // if the current record is late, then there is no need to check for expired records
-                    if (inputRecordTimestamp == maxStreamTime) {
-                        maybeEmitOuterExpiryRecords(store, maxStreamTime);
-                    }
-                });
             }
         }
 
@@ -207,14 +210,40 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 : ValueOrOtherValue.makeOtherValue(value);
         }
 
+        private void emitExpiredNonJoinedOuterRecords() {
+            outerJoinWindowStore.ifPresent(store ->
+                emitExpiredNonJoinedOuterRecords(store, recordWindowHasClosed));
+        }
+
+        private void emitExpiredNonJoinedOuterRecordsExcept(final K key, final long timestamp) {
+            outerJoinWindowStore.ifPresent(store -> {
+                final KeyAndJoinSide<K> keyAndJoinSide = KeyAndJoinSide.make(!thisJoin, key);
+
+                // Emit all expired records except the just found non-joined key. We need
+                // to emit all expired records before calling put(), otherwise the internal
+                // stream time will advance and may cause records out of the retention period to
+                // be deleted.
+                emitExpiredNonJoinedOuterRecords(store,
+                    recordWindowHasClosed
+                        .and(k -> !k.key().equals(keyAndJoinSide))
+                        .and(k -> k.window().start() != timestamp));
+
+                if (store.fetch(keyAndJoinSide, timestamp) != null) {
+                    // Delete the record. The previous emit call may not have removed this record
+                    // if the record window has not closed.
+                    store.put(keyAndJoinSide, null, timestamp);
+                }
+            });
+        }
+
         @SuppressWarnings("unchecked")
-        private void maybeEmitOuterExpiryRecords(final WindowStore<KeyAndJoinSide<K>, ValueOrOtherValue> store, final long maxStreamTime) {
+        private void emitExpiredNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, ValueOrOtherValue> store, final Predicate<Windowed<KeyAndJoinSide<K>>> emitCondition) {
             try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, ValueOrOtherValue> it = store.all()) {
                 while (it.hasNext()) {
                     final KeyValue<Windowed<KeyAndJoinSide<K>>, ValueOrOtherValue> e = it.next();
 
-                    // Skip next records if the oldest record has not expired yet
-                    if (e.key.window().end() + joinGraceMs >= maxStreamTime) {
+                    // Skip next records if the emit condition is false
+                    if (!emitCondition.test(e.key)) {
                         break;
                     }
 
