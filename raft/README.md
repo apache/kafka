@@ -43,6 +43,6 @@ Open up 3 separate terminals, and run individual commands:
     bin/test-kraft-server-start.sh --config config/kraft-quorum-3.properties
 
 Once a leader is elected, it will begin writing to an internal
-`__cluster_metadata` topic with a steady workload of random data.
+`__raft_performance_test` topic with a steady workload of random data.
 You can control the workload using the `--throughput` and `--record-size`
 arguments passed to `test-kraft-server-start.sh`.

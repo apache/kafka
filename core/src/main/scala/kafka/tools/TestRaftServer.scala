@@ -42,7 +42,7 @@ import scala.jdk.CollectionConverters._
 
 /**
  * This is an experimental server which is intended for testing the performance
- * of the Raft implementation. It uses a hard-coded `__cluster_metadata` topic.
+ * of the Raft implementation. It uses a hard-coded `__raft_performance_test` topic.
  */
 class TestRaftServer(
   val config: KafkaConfig,
@@ -52,6 +52,7 @@ class TestRaftServer(
   import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__raft_performance_test", 0)
+  // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for @metadata.
   private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
