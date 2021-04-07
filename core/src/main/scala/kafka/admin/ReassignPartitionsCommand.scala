@@ -200,9 +200,10 @@ object ReassignPartitionsCommand extends Logging {
       new util.Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
-    val adminClient = Admin.create(props)
+    var adminClient: Admin = null
 
     try {
+      adminClient = Admin.create(props)
       handleAction(adminClient, opts)
       failed = false
     } catch {
@@ -212,9 +213,10 @@ object ReassignPartitionsCommand extends Logging {
         println("Error: " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
-      // Close the AdminClient, as appropriate.
       // It's good to do this after printing any error stack trace.
-      adminClient.close()
+      if (adminClient != null) {
+        adminClient.close()
+      }
     }
     // If the command failed, exit with a non-zero exit code.
     if (failed) {
@@ -1342,6 +1344,9 @@ object ReassignPartitionsCommand extends Logging {
     }
     val action = allActions(0)
 
+    if (!opts.options.has(opts.bootstrapServerOpt))
+      CommandLineUtils.printUsageAndDie(opts.parser, "Please specify --bootstrap-server")
+
     // Make sure that we have all the required arguments for our action.
     val requiredArgs = Map(
       opts.verifyOpt -> collection.immutable.Seq(
@@ -1442,7 +1447,6 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("Server(s) to use for bootstrapping")
                       .ofType(classOf[String])
-                      .required()
 
     val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
                       .withRequiredArg

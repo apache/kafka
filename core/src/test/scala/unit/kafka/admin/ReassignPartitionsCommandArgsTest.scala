@@ -23,7 +23,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 @Timeout(60)
 class ReassignPartitionsCommandArgsTest {
 
-  val missingBootstrapServerMsg = "Missing required option(s) [bootstrap-server]"
+  val missingBootstrapServerMsg = "Please specify --bootstrap-server"
 
   @BeforeEach
   def setUp(): Unit = {
@@ -107,12 +107,12 @@ class ReassignPartitionsCommandArgsTest {
   @Test
   def shouldFailIfNoArgs(): Unit = {
     val args: Array[String]= Array()
-    shouldFailWith(missingBootstrapServerMsg, args)
+    shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 
   @Test
   def shouldFailIfBlankArg(): Unit = {
-    val args = Array("--bootstrap-server", "localhost:1234")
+    val args = Array(" ")
     shouldFailWith("Command must include exactly one action", args)
   }
 
@@ -215,9 +215,7 @@ class ReassignPartitionsCommandArgsTest {
 
   @Test
   def shouldPrintHelpTextIfHelpArg(): Unit = {
-    val args: Array[String]= Array(
-      "--help",
-      "--bootstrap-server", "localhost:1234")
+    val args: Array[String]= Array("--help")
     shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 
