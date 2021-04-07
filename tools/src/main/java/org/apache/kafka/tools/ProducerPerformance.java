@@ -123,10 +123,14 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                if (recordSize != null) {
+                if (payloadFilePath != null) {
+                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+                } else if (recordSize != null) {
                     payload = new byte[recordSize];
                     for (int j = 0; j < payload.length; ++j)
                         payload[j] = (byte) (random.nextInt(26) + 65);
+                } else {
+                    throw new IllegalArgumentException("no payload File Path or record Size provided");
                 }
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
@@ -134,9 +138,6 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                }
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
