@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 
-import static org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier.WindowStoreTypes;
+import static org.apache.kafka.streams.state.WindowBytesStoreSupplier.WindowStoreTypes;
 
 public class RocksDBTimeOrderedWindowStoreTest extends RocksDBWindowStoreTest {
     private static final String STORE_NAME = "rocksDB window store";
