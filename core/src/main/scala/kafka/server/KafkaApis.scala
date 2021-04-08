@@ -3357,11 +3357,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val allocateProducerIdsRequest = request.body[AllocateProducerIdsRequest]
 
     if (!zkSupport.controller.isActive)
-      requestHelper.sendResponseExemptThrottle(request, allocateProducerIdsRequest.getErrorResponse(
-        AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
+      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
+        allocateProducerIdsRequest.getErrorResponse(throttleTimeMs, Errors.NOT_CONTROLLER.exception))
     else
       zkSupport.controller.allocateProducerIds(allocateProducerIdsRequest.data, producerIdsResponse =>
-        requestHelper.sendResponseExemptThrottle(request, new AllocateProducerIdsResponse(producerIdsResponse))
+        requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
+          new AllocateProducerIdsResponse(producerIdsResponse.setThrottleTimeMs(throttleTimeMs)))
       )
   }
 
