@@ -71,8 +71,28 @@ public class ClientQuotaControlManagerTest {
     }
 
     private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
+        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
+    }
+
+    @Test
+    public void testInvalidQuotaKeys() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
+
+        // Invalid + valid keys
+        assertInvalidQuota(manager, entity, quotas("not.a.quota.key", 0.0, QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9));
+
+        // Valid + invalid keys
+        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9, "not.a.quota.key", 0.0));
+
+        // Null key
+        assertInvalidQuota(manager, entity, quotas(null, 99.9));
+    }
+
+    private void assertInvalidQuota(ClientQuotaControlManager manager, ClientQuotaEntity entity, Map<String, Double> quota) {
         List<ClientQuotaAlteration> alters = new ArrayList<>();
-        entityQuotaToAlterations(entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
+        entityQuotaToAlterations(entity, quota, alters::add);
         ControllerResult<Map<ClientQuotaEntity, ApiError>> result = manager.alterClientQuotas(alters);
         assertEquals(Errors.INVALID_REQUEST, result.response().get(entity).error());
         assertEquals(0, result.records().size());

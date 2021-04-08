@@ -81,7 +81,7 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder setNumKip500BrokerNodes(int numBrokerNodes) {
+        public Builder setNumBrokerNodes(int numBrokerNodes) {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
