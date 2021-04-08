@@ -28,7 +28,7 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -108,6 +108,7 @@ class KafkaRaftManager[T](
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
+  topicId: Uuid,
   time: Time,
   metrics: Metrics,
   threadNamePrefixOpt: Option[String],
@@ -244,6 +245,7 @@ class KafkaRaftManager[T](
   private def buildMetadataLog(): KafkaMetadataLog = {
     KafkaMetadataLog(
       topicPartition,
+      topicId,
       dataDir,
       time,
       scheduler,

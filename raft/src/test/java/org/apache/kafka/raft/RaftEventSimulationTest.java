@@ -492,7 +492,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final MockLog log = new MockLog(METADATA_PARTITION);
+        final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID);
     }
 
     private static class Cluster {

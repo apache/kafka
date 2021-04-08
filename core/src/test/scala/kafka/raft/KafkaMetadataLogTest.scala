@@ -105,6 +105,13 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testTopicId(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(KafkaRaftServer.MetadataTopicId, log.topicId())
+  }
+
+  @Test
   def testReadMissingSnapshot(): Unit = {
     val log = buildMetadataLog(tempDir, mockTime)
 
@@ -680,6 +687,7 @@ object KafkaMetadataLogTest {
 
     val metadataLog = KafkaMetadataLog(
       KafkaRaftServer.MetadataPartition,
+      KafkaRaftServer.MetadataTopicId,
       logDir,
       time,
       time.scheduler,

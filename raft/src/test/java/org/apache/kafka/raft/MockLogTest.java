@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
@@ -52,10 +53,11 @@ public class MockLogTest {
 
     private MockLog log;
     private final TopicPartition topicPartition = new TopicPartition("mock-topic", 0);
+    private final Uuid topicId = Uuid.randomUuid();
 
     @BeforeEach
     public void setup() {
-        log = new MockLog(topicPartition);
+        log = new MockLog(topicPartition, topicId);
     }
 
     @AfterEach
@@ -66,6 +68,11 @@ public class MockLogTest {
     @Test
     public void testTopicPartition() {
         assertEquals(topicPartition, log.topicPartition());
+    }
+
+    @Test
+    public void testTopicId() {
+        assertEquals(topicId, log.topicId());
     }
 
     @Test
