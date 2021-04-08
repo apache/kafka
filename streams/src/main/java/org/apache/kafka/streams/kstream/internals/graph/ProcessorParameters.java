@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.KTableChangeProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
@@ -69,11 +68,6 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
             : !(oldProcessorSupplier instanceof KTableSource)
               ? null
               : (KTableSource<KIn, VIn>) oldProcessorSupplier;
-    }
-
-    <VR> KTableProcessorSupplier<KIn, VIn, VR> kTableProcessorSupplier() {
-        // This cast always works because KTableProcessorSupplier hasn't been converted yet.
-        return (KTableProcessorSupplier<KIn, VIn, VR>) oldProcessorSupplier;
     }
 
     <VR> KTableChangeProcessorSupplier<KIn, VIn, VR, KIn, VR> kTableChangeProcessorSupplier() {

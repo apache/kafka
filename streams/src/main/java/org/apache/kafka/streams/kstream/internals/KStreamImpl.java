@@ -1249,16 +1249,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
+        final KStreamKTableJoin<K, ? extends VR, ? super V, VO> processorSupplier = new KStreamKTableJoin<>(
+            ((KTableImpl<K, ?, VO>) table).valueAndTimestampGetterSupplier(),
             joiner,
             leftJoin);
 
-        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
+        final ProcessorParameters<K, ? super V, K, ? extends VR> processorParameters = new ProcessorParameters<>(
+            processorSupplier, name);
+        final StreamTableJoinNode<K, ? super V> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            ((KTableImpl<K, ?, VO>) table).valueAndTimestampGetterSupplier().storeNames(),
             this.name
         );
 

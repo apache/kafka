@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -35,7 +36,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      */
     public StatefulProcessorNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
                                  final Set<StoreBuilder<?>> preRegisteredStores,
-                                 final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
+                                 final Set<KTableValueAndTimestampGetterSupplier<?, ?>> valueGetterSuppliers) {
         super(processorParameters.processorName(), processorParameters);
         final Stream<String> registeredStoreNames = preRegisteredStores.stream().map(StoreBuilder::name);
         final Stream<String> valueGetterStoreNames = valueGetterSuppliers.stream().flatMap(s -> Arrays.stream(s.storeNames()));

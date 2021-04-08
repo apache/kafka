@@ -16,6 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtil.findAndVerifyWindowGrace;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -46,13 +56,13 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionRes
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionStoreReceiveProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
@@ -69,17 +79,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
-import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtil.findAndVerifyWindowGrace;
 
 /**
  * The implementation class of {@link KTable}.
@@ -754,8 +753,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
                 .withThisJoinSideNodeName(name)
                 .withOtherJoinSideNodeName(((KTableImpl<?, ?, ?>) other).name)
-                .withJoinThisStoreNames(valueGetterSupplier().storeNames())
-                .withJoinOtherStoreNames(((KTableImpl<?, ?, ?>) other).valueGetterSupplier().storeNames())
+                .withJoinThisStoreNames(valueAndTimestampGetterSupplier().storeNames())
+                .withJoinOtherStoreNames(
+                    ((KTableImpl<?, ?, ?>) other).valueAndTimestampGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
@@ -817,20 +817,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             return ((AggregationProcessorSupplier<?, K, S, V, ?>) processorSupplier).view();
         } else {
             return ((KTableChangeProcessorSupplier<K, S, V, ?, ?>) processorSupplier).view();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public KTableValueGetterSupplier<K, V> valueGetterSupplier() {
-        if (processorSupplier instanceof KTableSource) {
-            final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
-            // whenever a source ktable is required for getter, it should be materialized
-            source.materialize();
-            return new KTableSourceValueGetterSupplier<>(source.queryableName());
-        } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-            return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
-        } else {
-            return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
         }
     }
 
@@ -1080,12 +1066,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             new StatefulProcessorNode<>(
                 new ProcessorParameters<>(
                     new SubscriptionJoinForeignProcessorSupplier<>(
-                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier()
+                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueAndTimestampGetterSupplier()
                     ),
                     renamed.suffixWithOrElseGet("-subscription-join-foreign", builder, SUBSCRIPTION_PROCESSOR)
                 ),
                 Collections.emptySet(),
-                Collections.singleton(((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier())
+                Collections.singleton(
+                    ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueAndTimestampGetterSupplier())
             );
         builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinForeignNode);
 
@@ -1124,18 +1111,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         resultSourceNodes.add(foreignResponseSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(resultSourceNodes);
 
-        final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
-        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier = new SubscriptionResolverJoinProcessorSupplier<>(
-            primaryKeyValueGetter,
-            valueSerde == null ? null : valueSerde.serializer(),
-            valueHashSerdePseudoTopic,
-            joiner,
-            leftJoin
-        );
+        final KTableValueAndTimestampGetterSupplier<K, V> primaryKeyValueGetter = valueAndTimestampGetterSupplier();
+        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier =
+            new SubscriptionResolverJoinProcessorSupplier<>(
+                primaryKeyValueGetter,
+                valueSerde == null ? null : valueSerde.serializer(),
+                valueHashSerdePseudoTopic,
+                joiner,
+                leftJoin
+            );
         final StatefulProcessorNode<K, SubscriptionResponseWrapper<VO>> resolverNode = new StatefulProcessorNode<>(
             new ProcessorParameters<>(
                 resolverProcessorSupplier,
-                renamed.suffixWithOrElseGet("-subscription-response-resolver", builder, SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR)
+                renamed.suffixWithOrElseGet("-subscription-response-resolver", builder,
+                    SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR)
             ),
             Collections.emptySet(),
             Collections.singleton(primaryKeyValueGetter)
