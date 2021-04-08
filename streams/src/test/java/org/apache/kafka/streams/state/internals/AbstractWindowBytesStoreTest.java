@@ -279,6 +279,77 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldGetAllNonDeletedRecords() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        // Add some records
+        windowStore.put(0, "zero", startTime + 0);
+        windowStore.put(1, "one", startTime + 1);
+        windowStore.put(2, "two", startTime + 2);
+        windowStore.put(3, "three", startTime + 3);
+        windowStore.put(4, "four", startTime + 4);
+
+        // Delete some records
+        windowStore.put(1, null, startTime + 1);
+        windowStore.put(3, null, startTime + 3);
+
+        // Only non-deleted records should appear in the all() iterator
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+
+        assertEquals(
+            asList(zero, two, four),
+            toList(windowStore.all())
+        );
+    }
+
+    @Test
+    public void shouldGetAllReturnTimestampOrderedRecords() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        // Add some records in different order
+        windowStore.put(4, "four", startTime + 4);
+        windowStore.put(0, "zero", startTime + 0);
+        windowStore.put(2, "two", startTime + 2);
+        windowStore.put(3, "three", startTime + 3);
+        windowStore.put(1, "one", startTime + 1);
+
+        // Only non-deleted records should appear in the all() iterator
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> three = windowedPair(3, "three", startTime + 3);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+
+        assertEquals(
+            asList(zero, one, two, three, four),
+            toList(windowStore.all())
+        );
+    }
+
+    @Test
+    public void shouldEarlyClosedIteratorStillGetAllRecords() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        windowStore.put(0, "zero", startTime + 0);
+        windowStore.put(1, "one", startTime + 1);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+
+        final KeyValueIterator<Windowed<Integer>, String> it = windowStore.all();
+        assertEquals(zero, it.next());
+        it.close();
+
+        // A new all() iterator after a previous all() iterator was closed should return all elements.
+        assertEquals(
+            asList(zero, one),
+            toList(windowStore.all())
+        );
+    }
+
+    @Test
     public void shouldGetBackwardAll() {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
@@ -1173,14 +1244,23 @@ public abstract class AbstractWindowBytesStoreTest {
         store.put(2, "two+6");
     }
 
+    long extractStoreTimestamp(final byte[] binaryKey) {
+        return WindowKeySchema.extractStoreTimestamp(binaryKey);
+    }
+
+    <K> K extractStoreKey(final byte[] binaryKey,
+                          final StateSerdes<K, ?> serdes) {
+        return WindowKeySchema.extractStoreKey(binaryKey, serdes);
+    }
+
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,
                                                    @SuppressWarnings("SameParameterValue") final long startTime) {
         final HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (final KeyValue<byte[], byte[]> entry : changeLog) {
-            final long timestamp = WindowKeySchema.extractStoreTimestamp(entry.key);
+            final long timestamp = extractStoreTimestamp(entry.key);
 
-            final Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
+            final Integer key = extractStoreKey(entry.key, serdes);
             final String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             final Set<String> entries = entriesByKey.computeIfAbsent(key, k -> new HashSet<>());

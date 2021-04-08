@@ -16,10 +16,9 @@
  */
 package kafka.server
 
-import java.util.Optional
-
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
@@ -27,6 +26,7 @@ import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
@@ -124,17 +124,22 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
-  /**
-   * fetch offset and the leader epoch of the topic: "topic" and partition: 0
-   *
-   * @param  serverId    the target broker Id
-   * @param  timestamp   the starting timestamp of the fetching records
-   * @param  version     the api version for the request, "-1" indicates the "latest"
-   * @return offset and the leader epoch
-   */
-  private def fetchOffsetAndEpoch(serverId: Int,
-                                  timestamp: Long,
-                                  version: Short): (Long, Int) = {
+
+//  /**
+//   * fetch offset and the leader epoch of the topic: "topic" and partition: 0
+//   *
+//   * @param  serverId    the target broker Id
+//   * @param  timestamp   the starting timestamp of the fetching records
+//   * @param  version     the api version for the request, "-1" indicates the "latest"
+//   * @return offset and the leader epoch
+//   */
+//  private def fetchOffsetAndEpoch(serverId: Int,
+//                                  timestamp: Long,
+//                                  version: Short): (Long, Int) = {
+
+  private[this] def sendRequest(serverId: Int,
+                                timestamp: Long,
+                                version: Short): ListOffsetsPartitionResponse = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -147,9 +152,15 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     val request = if (version == -1) builder.build() else builder.build(version)
 
-    val response = sendRequest(serverId, request)
-    val partitionData = response.topics.asScala.find(_.name == topic).get
+    sendRequest(serverId, request).topics.asScala.find(_.name == topic).get
       .partitions.asScala.find(_.partitionIndex == partition.partition).get
+  }
+
+  // -1 indicate "latest"
+  private[this] def fetchOffsetAndEpoch(serverId: Int,
+                                        timestamp: Long,
+                                        version: Short): (Long, Int) = {
+    val partitionData = sendRequest(serverId, timestamp, version)
 
     if (version == 0) {
       if (partitionData.oldStyleOffsets().isEmpty)
@@ -456,6 +467,9 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
+    // make sure high watermark of new leader has caught up
+    TestUtils.waitUntilTrue(() => sendRequest(secondLeaderId, 0L, -1).errorCode() != Errors.OFFSET_NOT_AVAILABLE.code(),
+      "the second leader does not sync to follower")
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
     waitForOffsetAvailable(secondLeaderId, 0L)
 
