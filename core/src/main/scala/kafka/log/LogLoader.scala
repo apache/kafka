@@ -492,8 +492,7 @@ class LogLoader(dir: File,
    * This method deletes the given log segments and the associated producer snapshots, by doing the
    * following for each of them:
    *  - It removes the segment from the segment map so that it will no longer be used for reads.
-   *  - It can either schedule an asynchronous delete operation to occur in the future or perform
-   *    the deletion synchronously. Asynchronous deletion allows reads to happen concurrently without
+   *  - It schedules asynchronous deletion of the segments that allows reads to happen concurrently without
    *    synchronization and without the possibility of physically deleting a file while it is being
    *    read.
    *
