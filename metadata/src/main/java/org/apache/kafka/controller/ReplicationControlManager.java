@@ -317,6 +317,7 @@ public class ReplicationControlManager {
         if (prevPartInfo == null) {
             log.info("Created partition {}:{} with {}.", record.topicId(),
                 record.partitionId(), newPartInfo.toString());
+            System.err.println("Created partition:" + record.topicId() + "," + record.partitionId() + "," + newPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
@@ -433,6 +434,7 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
+        System.err.println("createTopics result:" + resultsBuilder.toString());
         return ControllerResult.atomicOf(records, data);
     }
 

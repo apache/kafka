@@ -15,20 +15,20 @@
  * limitations under the License.
  */
 
-package kafka.server
+package integration.kafka.server
+
+import java.util
+import java.util.Collections
 
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
-
-import java.util
-import java.util.Collections
+import org.junit.jupiter.api.{Test, Timeout}
 
 @Timeout(120000)
-class RaftClusterTest {
+class RaftCluster3Test {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
