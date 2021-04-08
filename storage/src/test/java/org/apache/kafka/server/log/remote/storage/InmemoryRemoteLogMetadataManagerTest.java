@@ -78,7 +78,7 @@ public class InmemoryRemoteLogMetadataManagerTest {
         // Create remote log segment metadata and add them to RLMM.
 
         // segment 0
-        // 0-100
+        // offsets: [0-100]
         // leader epochs (0,0), (1,20), (2,80)
         Map<Integer, Long> segmentLeaderEpochs = new HashMap<>();
         segmentLeaderEpochs.put(0, 0L);
@@ -95,11 +95,11 @@ public class InmemoryRemoteLogMetadataManagerTest {
 
         RemoteLogSegmentMetadata expectedSegMetadata = segmentMetadata.createWithUpdates(segmentMetadataUpdate);
 
-        // Check that the seg exists in RLMM
+        // Check that the segment exists in RLMM.
         Optional<RemoteLogSegmentMetadata> segMetadataForOffset30Epoch1 = rlmm.remoteLogSegmentMetadata(TP0, 1, 30L);
         Assertions.assertEquals(Optional.of(expectedSegMetadata), segMetadataForOffset30Epoch1);
 
-        // Mark the partition for deletion. RLMM should clear all its internal state for that partition.
+        // Mark the partition for deletion.
         rlmm.putRemotePartitionDeleteMetadata(
                 createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_MARKED));
 

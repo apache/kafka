@@ -58,7 +58,7 @@ public class RemoteLogMetadataCacheTest {
         // Create remote log segment metadata and add them to RemoteLogMetadataCache.
 
         // segment 0
-        // 0-100
+        // offsets: [0-100]
         // leader epochs (0,0), (1,20), (2,80)
         Map<Integer, Long> segment0LeaderEpochs = new HashMap<>();
         segment0LeaderEpochs.put(0, 0L);
@@ -79,7 +79,7 @@ public class RemoteLogMetadataCacheTest {
         RemoteLogSegmentMetadata expectedSegment0Metadata = segment0Metadata.createWithUpdates(segment0Update);
 
         // segment 1
-        // 101 - 200
+        // offsets: [101 - 200]
         // no changes in leadership with in this segment
         // leader epochs (2, 101)
         Map<Integer, Long> segment1LeaderEpochs = Collections.singletonMap(2, 101L);
@@ -87,7 +87,7 @@ public class RemoteLogMetadataCacheTest {
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // segment 2
-        // 201 - 300
+        // offsets: [201 - 300]
         // moved to epoch 3 in between
         // leader epochs (2, 201), (3, 240)
         Map<Integer, Long> segment2LeaderEpochs = new HashMap<>();
@@ -97,7 +97,7 @@ public class RemoteLogMetadataCacheTest {
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // segment 3
-        // 250 - 400
+        // offsets: [250 - 400]
         // leader epochs (3, 250), (4, 370)
         Map<Integer, Long> segment3LeaderEpochs = new HashMap<>();
         segment3LeaderEpochs.put(3, 250L);
@@ -131,7 +131,7 @@ public class RemoteLogMetadataCacheTest {
             EpochOffset epochOffset = entry.getKey();
             Optional<RemoteLogSegmentMetadata> segmentMetadata = cache.remoteLogSegmentMetadata(epochOffset.epoch, epochOffset.offset);
             RemoteLogSegmentMetadata expectedSegmentMetadata = entry.getValue();
-            log.info("Searching for {} , result: {}, expected: {} ", epochOffset, segmentMetadata,
+            log.debug("Searching for {} , result: {}, expected: {} ", epochOffset, segmentMetadata,
                     expectedSegmentMetadata);
             if (expectedSegmentMetadata != null) {
                 Assertions.assertEquals(Optional.of(expectedSegmentMetadata), segmentMetadata);
@@ -167,7 +167,7 @@ public class RemoteLogMetadataCacheTest {
             Integer epoch = entry.getKey();
             Long expectedOffset = entry.getValue();
             Optional<Long> offset = cache.highestOffsetForEpoch(epoch);
-            log.info("Fetching highest offset for epoch: {} , returned: {} , expected: {}", epoch, offset, expectedOffset);
+            log.debug("Fetching highest offset for epoch: {} , returned: {} , expected: {}", epoch, offset, expectedOffset);
             Assertions.assertEquals(Optional.of(expectedOffset), offset);
         }
 
@@ -289,14 +289,14 @@ public class RemoteLogMetadataCacheTest {
         Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(cache.listAllRemoteLogSegments(),
                 expectedSegmentsForEpoch0.iterator()));
 
-        // listRemoteLogSegments(0) should contain only segment2.
+        // listRemoteLogSegments(1) should contain only segment2.
         List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch1 = Collections.singletonList(segment2);
         Assertions.assertTrue(TestUtils.sameElementsWithOrder(cache.listRemoteLogSegments(1),
                 expectedSegmentsForEpoch1.iterator()));
     }
 
     @Test
-    public void testAPIsWithInvalidArgs() throws Exception {
+    public void testAPIsWithInvalidArgs() {
         RemoteLogMetadataCache cache = new RemoteLogMetadataCache();
 
         Assertions.assertThrows(NullPointerException.class, () -> cache.addCopyInProgressSegment(null));

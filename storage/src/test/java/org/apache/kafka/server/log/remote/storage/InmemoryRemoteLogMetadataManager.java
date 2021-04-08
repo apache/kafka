@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This class is an implementation of {@link RemoteLogMetadataManager} backed by in-memory store.
+ * This class is not completely thread safe.
  */
 public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteLogMetadataManager.class);
@@ -110,7 +111,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
         idToPartitionDeleteMetadata.put(topicIdPartition, remotePartitionDeleteMetadata);
 
         if (targetState == RemotePartitionDeleteState.DELETE_PARTITION_FINISHED) {
-            // remove the association for the partition.
+            // Remove the association for the partition.
             idToRemoteLogMetadataCache.remove(topicIdPartition);
             idToPartitionDeleteMetadata.remove(topicIdPartition);
         }

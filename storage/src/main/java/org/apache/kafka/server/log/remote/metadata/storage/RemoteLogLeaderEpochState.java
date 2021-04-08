@@ -57,7 +57,6 @@ class RemoteLogLeaderEpochState {
      *
      * @param idToSegmentMetadata mapping of id to segment metadata. This will be used to get RemoteLogSegmentMetadata
      *                            for an id to be used for sorting.
-     * @return
      */
     Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments(Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata) {
         // Return all the segments including unreferenced metadata.
@@ -81,6 +80,11 @@ class RemoteLogLeaderEpochState {
         }
 
         return metadataList.iterator();
+    }
+
+    void handleSegmentWithCopySegmentStartedState(RemoteLogSegmentId remoteLogSegmentId) {
+        // Add this to unreferenced set of segments for the respective leader epoch.
+        unreferencedSegmentIds.add(remoteLogSegmentId);
     }
 
     void handleSegmentWithCopySegmentFinishedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
@@ -123,11 +127,6 @@ class RemoteLogLeaderEpochState {
         // as part of the earlier state of DELETE_SEGMENT_STARTED.
     }
 
-    void handleSegmentWithCopySegmentStartedState(RemoteLogSegmentId remoteLogSegmentId) {
-        // Add this to unreferenced set of segments for the respective leader epoch.
-        unreferencedSegmentIds.add(remoteLogSegmentId);
-    }
-
     Long highestLogOffset() {
         return highestLogOffset;
     }
@@ -143,7 +142,6 @@ class RemoteLogLeaderEpochState {
      * the greatest offset less than or equal to the given offset, or null if there is no such mapping.
      *
      * @param offset offset
-     * @return
      */
     RemoteLogSegmentId floorEntry(long offset) {
         Map.Entry<Long, RemoteLogSegmentId> entry = offsetToId.floorEntry(offset);

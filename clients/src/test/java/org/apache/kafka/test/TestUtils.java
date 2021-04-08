@@ -543,7 +543,6 @@ public class TestUtils {
      * @param iterator1 first iterator.
      * @param iterator2 second iterator.
      * @param <T>       type of element in the iterators.
-     * @return
      */
     public static <T> boolean sameElementsWithOrder(Iterator<T> iterator1,
                                                     Iterator<T> iterator2) {
@@ -568,7 +567,6 @@ public class TestUtils {
      * @param iterator1 first iterator.
      * @param iterator2 second iterator.
      * @param <T>       type of element in the iterators.
-     * @return
      */
     public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
                                                        Iterator<T> iterator2) {

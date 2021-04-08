@@ -72,9 +72,10 @@ import java.util.concurrent.ConcurrentMap;
  * </ul>
  *
  * <p>
+ *  The below table summarizes whether the segment with the respective state are available for the given methods.
  * <pre>
  * +---------------------------------+----------------------+------------------------+-------------------------+-------------------------+
- * |                                 | COPY_SEGMENT_STARTED | COPY_SEGMENT_FINISHED  | DELETE_SEGMENT_STARTED  | DELETE_SEGMENT_STARTED  |
+ * |  Method / SegmentState          | COPY_SEGMENT_STARTED | COPY_SEGMENT_FINISHED  | DELETE_SEGMENT_STARTED  | DELETE_SEGMENT_STARTED  |
  * |---------------------------------+----------------------+------------------------+-------------------------+-------------------------|
  * | remoteLogSegmentMetadata        |        No            |           Yes          |          No             |           No            |
  * | (int leaderEpoch, long offset)  |                      |                        |                         |                         |
@@ -249,7 +250,6 @@ public class RemoteLogMetadataCache {
      * Returns all the segments mapped to the leader epoch that exist in this cache sorted by {@link RemoteLogSegmentMetadata#startOffset()}.
      *
      * @param leaderEpoch leader epoch.
-     * @return
      */
     public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch) {
         RemoteLogLeaderEpochState remoteLogLeaderEpochState = leaderEpochEntries.get(leaderEpoch);
@@ -265,7 +265,6 @@ public class RemoteLogMetadataCache {
      * that have reached the {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} or later states are considered here.
      *
      * @param leaderEpoch leader epoch
-     * @return
      */
     public Optional<Long> highestOffsetForEpoch(int leaderEpoch) {
         RemoteLogLeaderEpochState entry = leaderEpochEntries.get(leaderEpoch);
@@ -276,7 +275,7 @@ public class RemoteLogMetadataCache {
      * This method tracks the given remote segment as not yet available for reads. It does not add the segment
      * leader epoch offset mapping until this segment reaches COPY_SEGMENT_FINISHED state.
      *
-     * @param remoteLogSegmentMetadata
+     * @param remoteLogSegmentMetadata RemoteLogSegmentMetadata instance
      */
     public void addCopyInProgressSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Adding to in-progress state: [{}]", remoteLogSegmentMetadata);
