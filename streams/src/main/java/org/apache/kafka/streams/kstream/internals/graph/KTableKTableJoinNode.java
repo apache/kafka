@@ -208,7 +208,6 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public KTableKTableJoinNode<K, V1, V2, VR> build() {
             return new KTableKTableJoinNode<>(
                 nodeName,
@@ -216,8 +215,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 joinOtherProcessorParameters,
                 new ProcessorParameters<>(
                     KTableKTableJoinMerger.of(
-                        joinThisProcessorParameters.kTableProcessorSupplier(),
-                        joinOtherProcessorParameters.kTableProcessorSupplier(),
+                        joinThisProcessorParameters.kTableChangeProcessorSupplier(),
+                        joinOtherProcessorParameters.kTableChangeProcessorSupplier(),
                         queryableStoreName),
                     nodeName),
                 thisJoinSide,

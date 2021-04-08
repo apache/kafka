@@ -16,19 +16,22 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import static java.util.Objects.requireNonNull;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableChangeProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -36,16 +39,16 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
-import static java.util.Objects.requireNonNull;
+public class KTableSuppressProcessorSupplier<K, V> implements
+    KTableChangeProcessorSupplier<K, V, V, K, V> {
 
-public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final SuppressedInternal<K> suppress;
     private final String storeName;
     private final KTableImpl<K, ?, V> parentKTable;
 
     public KTableSuppressProcessorSupplier(final SuppressedInternal<K> suppress,
-                                           final String storeName,
-                                           final KTableImpl<K, ?, V> parentKTable) {
+        final String storeName,
+        final KTableImpl<K, ?, V> parentKTable) {
         this.suppress = suppress;
         this.storeName = storeName;
         this.parentKTable = parentKTable;
@@ -54,27 +57,26 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTableSuppressProcessor<>(suppress, storeName);
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view() {
-        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parentKTable.valueGetterSupplier();
-        return new KTableValueGetterSupplier<K, V>() {
+    public KTableValueAndTimestampGetterSupplier<K, V> view() {
+        final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier = parentKTable.valueAndTimestampGetterSupplier();
+        return new KTableValueAndTimestampGetterSupplier<K, V>() {
 
             @Override
-            public KTableValueGetter<K, V> get() {
-                final KTableValueGetter<K, V> parentGetter = parentValueGetterSupplier.get();
-                return new KTableValueGetter<K, V>() {
+            public KTableValueAndTimestampGetter<K, V> get() {
+                final KTableValueAndTimestampGetter<K, V> parentGetter = parentValueGetterSupplier.get();
+                return new KTableValueAndTimestampGetter<K, V>() {
                     private TimeOrderedKeyValueBuffer<K, V> buffer;
 
-                    @SuppressWarnings("unchecked")
                     @Override
-                    public void init(final ProcessorContext context) {
+                    public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
-                        buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
+                        buffer = requireNonNull(context.getStateStore(storeName));
                     }
 
                     @Override
@@ -112,7 +114,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         return parentKTable.enableSendingOldValues(forceMaterialization);
     }
 
-    private static final class KTableSuppressProcessor<K, V> extends AbstractProcessor<K, Change<V>> {
+    private static final class KTableSuppressProcessor<K, V> extends
+        ContextualProcessor<K, Change<V>, K, Change<V>> {
         private final long maxRecords;
         private final long maxBytes;
         private final long suppressDurationMillis;
@@ -122,7 +125,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private final String storeName;
 
         private TimeOrderedKeyValueBuffer<K, V> buffer;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<K, Change<V>> internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -139,9 +142,9 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.api.ProcessorContext<K, Change<V>> context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
+            internalProcessorContext = (InternalProcessorContext<K, Change<V>>) context;
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -149,15 +152,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                 internalProcessorContext.metrics()
             );
 
-            buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
+            buffer = requireNonNull(context.getStateStore(storeName));
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
-        }
-
-        @Override
-        public void process(final K key, final Change<V> value) {
-            observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
-            buffer(key, value);
-            enforceConstraints();
         }
 
         private void buffer(final K key, final Change<V> value) {
@@ -212,6 +208,13 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         private boolean shouldForward(final Change<V> value) {
             return value.newValue != null || !safeToDropTombstones;
+        }
+
+        @Override
+        public void process(Record<K, Change<V>> record) {
+            observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
+            buffer(record.key(), record.value());
+            enforceConstraints();
         }
     }
 }

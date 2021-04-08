@@ -445,7 +445,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(
+        final KTableChangeProcessorSupplier<K, V, VR, K, VR> processorSupplier = new KTableTransformValues<>(
             this,
             transformerSupplier,
             queryableStoreName);
@@ -526,7 +526,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
-        final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
+        final ProcessorSupplier<K, Change<V>, K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
             storeName,
             this
