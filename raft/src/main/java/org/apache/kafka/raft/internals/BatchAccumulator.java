@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
@@ -202,6 +203,25 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
+    public void addControlBatch(MemoryRecords records) {
+        appendLock.lock();
+        try {
+            drainStatus = DrainStatus.STARTED;
+            completed.add(new CompletedBatch<>(
+                nextOffset,
+                null,
+                records,
+                null,
+                null
+            ));
+            nextOffset += 1;
+            lingerTimer.reset(Long.MAX_VALUE);
+            drainStatus = DrainStatus.FINISHED;
+        } finally {
+            appendLock.unlock();
+        }
+    }
+
     private void maybeCompleteDrain() {
         if (drainStatus == DrainStatus.STARTED) {
             if (currentBatch != null && currentBatch.nonEmpty()) {
@@ -339,7 +359,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
-        public final List<T> records;
+        public final Optional<List<T>> records;
         public final MemoryRecords data;
         private final MemoryPool pool;
         // Buffer that was allocated by the MemoryPool (pool). This may not be the buffer used in
@@ -354,7 +374,7 @@ public class BatchAccumulator<T> implements Closeable {
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
-            this.records = records;
+            this.records = Optional.ofNullable(records);
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
@@ -365,7 +385,9 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public void release() {
-            pool.release(initialBuffer);
+            if (records.isPresent()) {
+                pool.release(initialBuffer);
+            }
         }
     }
 

@@ -32,8 +32,6 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -396,11 +394,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void onBecomeLeader(long currentTimeMs) throws IOException {
         long endOffset = log.endOffset().offset;
 
-        // Add 1 to the offset that the accumulator tracks since appendLeaderChangeMessage 
-        // will write a record from the new leader's epoch to advance the high watermark below
         BatchAccumulator<T> accumulator = new BatchAccumulator<>(
             quorum.epoch(),
-            endOffset + 1,
+            endOffset,
             raftConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
@@ -416,41 +412,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        appendLeaderChangeMessage(state, endOffset, currentTimeMs);
-        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
+        state.appendLeaderChangeMessage(quorum.epoch(), endOffset, currentTimeMs);
 
         resetConnections();
-
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
-    }
-
-    private static List<Voter> convertToVoters(Set<Integer> voterIds) {
-        return voterIds.stream()
-            .map(follower -> new Voter().setVoterId(follower))
-            .collect(Collectors.toList());
-    }
-
-    private void appendLeaderChangeMessage(LeaderState<T> state, long baseOffset, long currentTimeMs) {
-        List<Voter> voters = convertToVoters(state.followers());
-        List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
-
-        // Adding the leader to the voters as any voter always votes for itself.
-        voters.add(new Voter().setVoterId(state.election().leaderId()));
-
-        LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
-            .setLeaderId(state.election().leaderId())
-            .setVoters(voters)
-            .setGrantingVoters(grantingVoters);
-
-        MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
-            baseOffset,
-            currentTimeMs,
-            quorum.epoch(),
-            leaderChangeMessage
-        );
-
-        appendAsLeader(records);
-        flushLeaderLog(state, currentTimeMs);
     }
 
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
@@ -1854,7 +1819,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 offsetAndEpoch.offset + 1, Integer.MAX_VALUE);
 
             future.whenComplete((commitTimeMs, exception) -> {
-                int numRecords = batch.records.size();
+                int numRecords = batch.records.get().size();
                 if (exception != null) {
                     logger.debug("Failed to commit {} records at {}", numRecords, offsetAndEpoch, exception);
                 } else {
@@ -1862,7 +1827,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     double elapsedTimePerRecord = (double) elapsedTime / numRecords;
                     kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
                     logger.debug("Completed commit of {} records at {}", numRecords, offsetAndEpoch);
-                    maybeFireHandleCommit(batch.baseOffset, epoch, batch.records);
+                    maybeFireHandleCommit(batch.baseOffset, epoch, batch.records.get());
                 }
             });
         } finally {

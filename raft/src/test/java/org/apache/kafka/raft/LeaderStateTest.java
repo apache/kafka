@@ -148,20 +148,8 @@ public class LeaderStateTest<T> {
     public void testUpdateHighWatermarkQuorumSizeTwo() {
         int otherNodeId = 1;
         LeaderState<T> state = newLeaderState(mkSet(localId, otherNodeId), 10L);
-        assertFalse(state.updateLocalState(0, new LogOffsetMetadata(15L)));
-        assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(10L)));
-        assertEquals(emptySet(), state.nonAcknowledgingVoters());
-        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(15L)));
-        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-    }
-
-    @Test
-    public void testHighWatermarkUnknownUntilStartOfLeaderEpoch() {
-        int otherNodeId = 1;
-        LeaderState<T> state = newLeaderState(mkSet(localId, otherNodeId), 15L);
-        assertFalse(state.updateLocalState(0, new LogOffsetMetadata(20L)));
+        assertFalse(state.updateLocalState(0, new LogOffsetMetadata(13L)));
+        assertEquals(singleton(otherNodeId), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeId, 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());

@@ -202,7 +202,7 @@ class BatchAccumulatorTest {
             assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records);
+            assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
         });
     }
