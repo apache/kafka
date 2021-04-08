@@ -744,18 +744,32 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology  the topology specifying the computational logic
+     * @param config    configs for Kafka Streams
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
         this(topology, config, new DefaultKafkaClientSupplier());
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param config         configs for Kafka Streams
+     * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
+     *                       for the new {@code KafkaStreams} instance
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
@@ -763,9 +777,16 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, Time)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param config         configs for Kafka Streams
+     * @param time           {@code Time} implementation; cannot be null
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
