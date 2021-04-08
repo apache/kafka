@@ -137,7 +137,15 @@ public final class TaskManager {
         this.nodeManagers = new HashMap<>();
         this.nextWorkerId = firstWorkerId;
         for (Node node : platform.topology().nodes().values()) {
-            if (Node.Util.getTrogdorAgentPort(node) > 0) {
+            boolean agentIsSet;
+            if (node == platform.curNode()) {
+                // if the coordinator is running on this node, assume that no agent is configured on the
+                // same node without an explicit port configuration
+                agentIsSet = Node.Util.getTrogdorAgentPort(node, -1) > 0;
+            } else {
+                agentIsSet = Node.Util.getTrogdorAgentPort(node) > 0;
+            }
+            if (agentIsSet) {
                 this.nodeManagers.put(node.name(), new NodeManager(node, this));
             }
         }
