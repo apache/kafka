@@ -2413,8 +2413,8 @@ class KafkaController(val config: KafkaConfig,
 
     // Get or create the existing PID block from ZK and attempt to update it. We retry in a loop here since other
     // brokers may be generating PID blocks during a rolling upgrade
-    val maxAttempts = 1000
-    for (_ <- 1 to maxAttempts) {
+    var zkWriteComplete = false
+    while (!zkWriteComplete) {
       // refresh current producerId block from zookeeper again
       val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
 
@@ -2441,16 +2441,14 @@ class KafkaController(val config: KafkaConfig,
 
       // try to write the new producerId block into zookeeper
       val (succeeded, version) = zkClient.conditionalUpdatePath(ProducerIdBlockZNode.path, newProducerIdBlockData, zkVersion, None)
+      zkWriteComplete = succeeded
 
-      if (succeeded) {
-        debug(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
+      if (zkWriteComplete) {
+        info(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
         callback.apply(Right((newProducerIdBlock.blockStartId, newProducerIdBlock.blockEndId)))
         return
       }
     }
-
-    debug(s"Failed to allocate new producerId block after $maxAttempts attempts.")
-    callback.apply(Left(Errors.UNKNOWN_SERVER_ERROR))
   }
 
   private def processControllerChange(): Unit = {

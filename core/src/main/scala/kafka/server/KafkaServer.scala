@@ -333,9 +333,14 @@ class KafkaServer(
 
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
+        val producerIdManagerSupplier = () => new ProducerIdManager(
+          config.brokerId,
+          brokerEpochSupplier = () => kafkaController.brokerEpoch,
+          brokerToControllerManager,
+          config.requestTimeoutMs
+        )
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
-          () => new ProducerIdManager(config.brokerId, brokerEpochSupplier = () => kafkaController.brokerEpoch, brokerToControllerManager),
-          metrics, metadataCache, Time.SYSTEM)
+          producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 

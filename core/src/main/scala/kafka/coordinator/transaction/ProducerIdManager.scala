@@ -38,9 +38,6 @@ import scala.util.{Failure, Success, Try}
 object ProducerIdManager {
   val PidBlockSize = 1000L
 
-  // Max time to wait on the next PID to be available
-  val PidTimeoutMs = 60000
-
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
 }
@@ -64,7 +61,8 @@ trait ProducerIdGenerator {
 
 class ProducerIdManager(brokerId: Int,
                         brokerEpochSupplier: () => Long,
-                        controllerChannel: BrokerToControllerChannelManager) extends ProducerIdGenerator with Logging {
+                        controllerChannel: BrokerToControllerChannelManager,
+                        maxWaitMs: Int) extends ProducerIdGenerator with Logging {
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
@@ -78,7 +76,6 @@ class ProducerIdManager(brokerId: Int,
 
   override def generateProducerId(): Long = {
     this synchronized {
-      // Advance the ID
       nextProducerId += 1
 
       // Check if we need to fetch the next block
@@ -88,9 +85,9 @@ class ProducerIdManager(brokerId: Int,
 
       // If we've exhausted the current block, grab the next block (waiting if necessary)
       if (nextProducerId > currentProducerIdBlock.blockEndId) {
-        val block = nextProducerIdBlock.poll(ProducerIdManager.PidTimeoutMs, TimeUnit.MILLISECONDS)
+        val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
         if (block == null) {
-          throw new KafkaException(s"sTimed out waiting for next block of Producer IDs after ${ProducerIdManager.PidTimeoutMs}ms.")
+          throw Errors.REQUEST_TIMED_OUT.exception("Timed out waiting for next producer ID block")
         } else {
           block match {
             case Success(nextBlock) =>
@@ -124,11 +121,7 @@ class ProducerIdManager(brokerId: Int,
         handleAllocateProducerIdsResponse(message)
       }
 
-      override def onTimeout(): Unit = {
-        warn("Encountered unexpected timeout when requesting AllocateProducerIds from the controller, trying again.")
-        requestInFlight.set(false)
-        maybeRequestNextBlock()
-      }
+      override def onTimeout(): Unit = handleTimeout()
     })
   }
 
@@ -155,5 +148,12 @@ class ProducerIdManager(brokerId: Int,
         warn("Had an unknown error from the controller, giving up.")
         nextProducerIdBlock.put(Failure(e.exception()))
     }
+  }
+
+  private[transaction] def handleTimeout(): Unit = {
+    warn("Timed out when requesting AllocateProducerIds from the controller.")
+    requestInFlight.set(false)
+    nextProducerIdBlock.put(Failure(Errors.REQUEST_TIMED_OUT.exception))
+    maybeRequestNextBlock()
   }
 }

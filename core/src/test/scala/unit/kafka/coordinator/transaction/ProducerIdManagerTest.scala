@@ -35,7 +35,7 @@ class ProducerIdManagerTest {
 
   // Mutable test implementation that lets us easily set the idStart and error
   class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE)
-    extends ProducerIdManager(brokerId, () => 1, brokerToController) {
+    extends ProducerIdManager(brokerId, () => 1, brokerToController, 100) {
 
     override private[transaction] def sendRequest(): Unit = {
       if (error == Errors.NONE) {
