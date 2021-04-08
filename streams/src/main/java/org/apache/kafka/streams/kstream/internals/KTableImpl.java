@@ -782,16 +782,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
-    @Deprecated
-    public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
-                                                  final org.apache.kafka.streams.kstream.Serialized<K1, V1> serialized) {
-        Objects.requireNonNull(selector, "selector can't be null");
-        Objects.requireNonNull(serialized, "serialized can't be null");
-        final SerializedInternal<K1, V1> serializedInternal = new SerializedInternal<>(serialized);
-        return groupBy(selector, Grouped.with(serializedInternal.keySerde(), serializedInternal.valueSerde()));
-    }
-
-    @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
                                                   final Grouped<K1, V1> grouped) {
         Objects.requireNonNull(selector, "selector can't be null");
