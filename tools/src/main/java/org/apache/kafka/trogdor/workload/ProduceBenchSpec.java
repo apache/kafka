@@ -33,6 +33,10 @@ import java.util.Optional;
  * To configure a transactional producer, a #{@link TransactionGenerator} must be passed in.
  * Said generator works in lockstep with the producer by instructing it what action to take next in regards to a transaction.
  *
+ * You can also have the test refresh the partition list of the active topics at an interval by setting the
+ * `partitionRefreshRateMs` parameter to a positive number.  This way the producer will produce to all partitions following
+ * a refresh, even if you are adding partitions to the topics.
+ *
  * An example JSON representation which will result in a producer that creates three topics (foo1, foo2, foo3)
  * with three partitions each and produces to them:
  * #{@code
@@ -63,6 +67,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final long maxMessages;
+    private final long partitionRefreshRateMs;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Optional<TransactionGenerator> transactionGenerator;
@@ -90,7 +95,8 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
                          @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
                          @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner, 
-                         @JsonProperty("skipFlush") boolean skipFlush) {
+                         @JsonProperty("skipFlush") boolean skipFlush,
+                         @JsonProperty("partitionRefreshRateMs") long partitionRefreshRateMs) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -110,6 +116,7 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
         this.useConfiguredPartitioner = useConfiguredPartitioner;
         this.skipFlush = skipFlush;
+        this.partitionRefreshRateMs = partitionRefreshRateMs;
     }
 
     @JsonProperty
@@ -180,6 +187,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public boolean skipFlush() {
         return skipFlush;
+    }
+
+    @JsonProperty
+    public long partitionRefreshRateMs() {
+        return partitionRefreshRateMs;
     }
 
     @Override
