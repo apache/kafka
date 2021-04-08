@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -162,6 +163,16 @@ public class ReplicationControlManagerTest {
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
         assertEquals(expectedResponse3, result3.response());
+        Uuid fooId = result2.response().topics().find("foo").topicId();
+        ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
+                    setPartitionId(0).setTopicId(fooId).
+                    setReplicas(Arrays.asList(2, 0, 1)).setIsr(Arrays.asList(2, 0, 1)).
+                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(2).
+                    setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
+                new ApiMessageAndVersion(new TopicRecord().
+                    setTopicId(fooId).setName("foo"), (short) 0))),
+            ctx.replicationControl.iterator(Long.MAX_VALUE));
     }
 
     @Test

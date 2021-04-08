@@ -592,44 +592,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToUnattached(candidateEpoch);
         }
 
-        final boolean voteGranted;
-        if (quorum.isLeader()) {
-            logger.debug("Rejecting vote request {} with epoch {} since we are already leader on that epoch",
-                    request, candidateEpoch);
-            voteGranted = false;
-        } else if (quorum.isCandidate()) {
-            logger.debug("Rejecting vote request {} with epoch {} since we are already candidate on that epoch",
-                    request, candidateEpoch);
-            voteGranted = false;
-        } else if (quorum.isResigned()) {
-            logger.debug("Rejecting vote request {} with epoch {} since we have resigned as candidate/leader in this epoch",
-                request, candidateEpoch);
-            voteGranted = false;
-        } else if (quorum.isFollower()) {
-            FollowerState state = quorum.followerStateOrThrow();
-            logger.debug("Rejecting vote request {} with epoch {} since we already have a leader {} on that epoch",
-                request, candidateEpoch, state.leaderId());
-            voteGranted = false;
-        } else if (quorum.isVoted()) {
-            VotedState state = quorum.votedStateOrThrow();
-            voteGranted = state.votedId() == candidateId;
+        OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
+        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
 
-            if (!voteGranted) {
-                logger.debug("Rejecting vote request {} with epoch {} since we already have voted for " +
-                    "another candidate {} on that epoch", request, candidateEpoch, state.votedId());
-            }
-        } else if (quorum.isUnattached()) {
-            OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-            voteGranted = lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0;
-
-            if (voteGranted) {
-                transitionToVoted(candidateId, candidateEpoch);
-            }
-        } else {
-            throw new IllegalStateException("Unexpected quorum state " + quorum);
+        if (voteGranted && quorum.isUnattached()) {
+            transitionToVoted(candidateId, candidateEpoch);
         }
 
-        logger.info("Vote request {} is {}", request, voteGranted ? "granted" : "rejected");
+        logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");
         return buildVoteResponse(Errors.NONE, voteGranted);
     }
 

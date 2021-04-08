@@ -27,7 +27,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -142,7 +142,7 @@ class PartitionLockTest extends Logging {
       .setIsNew(true)
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     // Update replica set synchronously first to avoid race conditions
-    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints)
+    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints, None)
     assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
 
     val future = executorService.submit((() => {
@@ -155,7 +155,7 @@ class PartitionLockTest extends Logging {
           secondReplicaSet
         }
 
-        partition.makeLeader(partitionState(replicas), offsetCheckpoints)
+        partition.makeLeader(partitionState(replicas), offsetCheckpoints, None)
 
         i += 1
         Thread.sleep(1) // just to avoid tight loop
@@ -278,8 +278,8 @@ class PartitionLockTest extends Logging {
         }
       }
 
-      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints)
+      override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
+        val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
         new SlowLog(log, mockTime, appendSemaphore)
       }
     }
@@ -288,7 +288,7 @@ class PartitionLockTest extends Logging {
     when(alterIsrManager.submit(ArgumentMatchers.any[AlterIsrItem]))
       .thenReturn(true)
 
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
@@ -301,7 +301,7 @@ class PartitionLockTest extends Logging {
       .setIsr(isr)
       .setZkVersion(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints), "Expected become leader transition to succeed")
+      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
 
     partition
   }
@@ -353,7 +353,9 @@ class PartitionLockTest extends Logging {
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
     log.producerStateManager,
-    new LogDirFailureChannel(1)) {
+    new LogDirFailureChannel(1),
+    topicId = None,
+    keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {
       val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)

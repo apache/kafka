@@ -1113,7 +1113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
-        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota)
+        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
         nonExistingTopics.map { topic =>
           val error = try {
@@ -1341,7 +1341,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
-        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota)
+        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => createFindCoordinatorResponse(
           Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs))
       } else {
@@ -3294,7 +3294,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
-    // This function will not be called when in self-managed quorum mode, since the
+    // This function will not be called when in KRaft mode, since the
     // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
     // manager.
     throw new UnsupportedVersionException("The broker unregistration API is not available when using " +

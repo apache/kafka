@@ -51,7 +51,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Before
     public void setUp() {
-        store = new ChangeLoggingWindowBytesStore(inner, false);
+        store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
     }
 
     private void init() {
@@ -154,7 +154,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
-        store = new ChangeLoggingWindowBytesStore(inner, true);
+        store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
 
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
