@@ -16,12 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
+
+import java.lang.reflect.Array;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.ForeachProcessor;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -46,6 +55,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -54,26 +64,15 @@ import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.kstream.ForeachProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
-
-import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
-
-import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
 public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K, V> {
 
@@ -1210,17 +1209,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
-        final KTableValueGetterSupplier<KG, VG> valueGetterSupplier =
+        final KTableValueAndTimestampGetterSupplier<KG, VG> valueGetterSupplier =
             ((GlobalKTableImpl<KG, VG>) globalTable).valueGetterSupplier();
-        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(
+        final String name = new NamedInternal(named)
+            .orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
+        final ProcessorSupplier<? super K, ? super V, ? super K, ? extends VR> processorSupplier = new KStreamGlobalKTableJoin<>(
             valueGetterSupplier,
             joiner,
             keySelector,
             leftJoin);
-        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null);
+        final ProcessorParameters<? super K, ? super V, ? super K, ? extends VR> processorParameters = new ProcessorParameters<>(
+            processorSupplier, name);
+        final StreamTableJoinNode<? super K, ? super V> streamTableJoinNode = new StreamTableJoinNode<>(
+            name, processorParameters, new String[] {}, null);
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
