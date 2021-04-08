@@ -187,7 +187,8 @@ public class KafkaRaftClientTest {
             .build();
 
         context.pollUntilRequest();
-        List<RaftRequest.Outbound> requests = context.collectEndQuorumRequests(epoch, Utils.mkSet(voter1, voter2));
+        List<RaftRequest.Outbound> requests = context.collectEndQuorumRequests(
+            epoch, Utils.mkSet(voter1, voter2), Optional.empty());
         assertEquals(2, requests.size());
 
         // Respond to one of the requests so that we can verify that no additional
@@ -203,7 +204,8 @@ public class KafkaRaftClientTest {
         int nonRespondedId = requests.get(1).destinationId();
         context.time.sleep(6000);
         context.pollUntilRequest();
-        List<RaftRequest.Outbound> retries = context.collectEndQuorumRequests(epoch, Utils.mkSet(nonRespondedId));
+        List<RaftRequest.Outbound> retries = context.collectEndQuorumRequests(
+            epoch, Utils.mkSet(nonRespondedId), Optional.empty());
         assertEquals(1, retries.size());
     }
 
@@ -831,13 +833,14 @@ public class KafkaRaftClientTest {
         // First poll has no high watermark advance
         context.client.poll();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        assertEquals(1L, context.log.endOffset().offset);
 
         // Let follower send a fetch to initialize the high watermark,
         // note the offset 0 would be a control message for becoming the leader
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0L, epoch, 500));
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(OptionalLong.of(0L), context.client.highWatermark());
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
         List<String> records = Arrays.asList("a", "b", "c");
         long offset = context.client.scheduleAppend(epoch, records);
@@ -1579,7 +1582,18 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
-        context.buildFollowerSet(epoch, closeFollower, laggingFollower);
+        // The lagging follower fetches first
+        context.deliverRequest(context.fetchRequest(1, laggingFollower, 1L, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(1L, epoch);
+
+        // Append some records, so that the close follower will be able to advance further.
+        context.client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
+        context.client.poll();
+
+        context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(3L, epoch);
 
         // Now shutdown
         context.client.shutdown(context.electionTimeoutMs() * 2);
@@ -1591,10 +1605,11 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
         assertTrue(context.client.isRunning());
 
-        List<RaftRequest.Outbound> endQuorumRequests = context.collectEndQuorumRequests(
-            1, Utils.mkSet(closeFollower, laggingFollower));
-
-        assertEquals(2, endQuorumRequests.size());
+        context.collectEndQuorumRequests(
+            epoch,
+            Utils.mkSet(closeFollower, laggingFollower),
+            Optional.of(Arrays.asList(closeFollower, laggingFollower))
+        );
     }
 
     @Test
@@ -1607,22 +1622,27 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
-        context.buildFollowerSet(epoch, closeFollower, laggingFollower);
+        context.deliverRequest(context.fetchRequest(1, laggingFollower, 1L, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(1L, epoch);
+
+        context.client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
+        context.client.poll();
+
+        context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(3L, epoch);
 
         // Create observer
         int observerId = 3;
         context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
-
         context.pollUntilResponse();
-
-        long highWatermark = 1L;
-        context.assertSentFetchPartitionResponse(highWatermark, epoch);
+        context.assertSentFetchPartitionResponse(3L, epoch);
 
         context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
-
         context.pollUntilResponse();
 
-        context.assertSentDescribeQuorumResponse(localId, epoch, highWatermark,
+        context.assertSentDescribeQuorumResponse(localId, epoch, 3L,
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)
@@ -1631,10 +1651,10 @@ public class KafkaRaftClientTest {
                     .setLogEndOffset(3L),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
-                    .setLogEndOffset(0L),
+                    .setLogEndOffset(1L),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
-                    .setLogEndOffset(1L)),
+                    .setLogEndOffset(3)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
@@ -2099,6 +2119,10 @@ public class KafkaRaftClientTest {
         context.becomeLeader();
         context.client.poll();
 
+        // After becoming leader, we expect the `LeaderChange` record to be appended
+        // in addition to the initial 9 records in the log.
+        assertEquals(10L, context.log.endOffset().offset);
+
         // The high watermark is not known to the leader until the followers
         // begin fetching, so we should not have fired the `handleClaim` callback.
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
@@ -2114,8 +2138,8 @@ public class KafkaRaftClientTest {
 
         // Now catch up to the start of the leader epoch so that the high
         // watermark advances and we can start sending committed data to the
-        // listener.
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 9L, 2, 500));
+        // listener. Note that the `LeaderChange` control record is filtered.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 500));
         context.client.poll();
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
         assertEquals(3, context.listener.numCommittedBatches());
@@ -2150,11 +2174,12 @@ public class KafkaRaftClientTest {
 
         context.becomeLeader();
         context.client.poll();
+        assertEquals(10L, context.log.endOffset().offset);
 
         // Let the initial listener catch up
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 9L, 2, 500));
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
         context.client.poll();
-        assertEquals(OptionalLong.of(9L), context.client.highWatermark());
+        assertEquals(OptionalLong.of(10L), context.client.highWatermark());
         context.client.poll();
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
 
@@ -2280,16 +2305,18 @@ public class KafkaRaftClientTest {
 
         // Start off as the leader and receive a fetch to initialize the high watermark
         context.becomeLeader();
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 9L, epoch, 500));
+        assertEquals(10L, context.log.endOffset().offset);
+
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
         context.pollUntilResponse();
-        assertEquals(OptionalLong.of(9L), context.client.highWatermark());
+        assertEquals(OptionalLong.of(10L), context.client.highWatermark());
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
         // Now we receive a vote request which transitions us to the 'unattached' state
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch, 9L));
         context.pollUntilResponse();
         context.assertUnknownLeader(epoch + 1);
-        assertEquals(OptionalLong.of(9L), context.client.highWatermark());
+        assertEquals(OptionalLong.of(10L), context.client.highWatermark());
 
         // Timeout the election and become candidate
         int candidateEpoch = epoch + 2;

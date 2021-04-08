@@ -113,13 +113,18 @@ public class LeaderState implements EpochState {
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
         if (highWatermarkUpdateOpt.isPresent()) {
-            // When a leader is first elected, it cannot know the high watermark of the previous
-            // leader. In order to avoid exposing a non-monotonically increasing value, we have
-            // to wait for followers to catch up to the start of the leader's epoch.
+
+            // The KRaft protocol requires an extra condition on commitment after a leader
+            // election. The leader must commit one record from its own epoch before it is
+            // allowed to expose records from any previous epoch. This guarantees that its
+            // log will contain the largest record (in terms of epoch/offset) in any log
+            // which ensures that any future leader will have replicated this record as well
+            // as all records from previous epochs that the current leader has committed.
+
             LogOffsetMetadata highWatermarkUpdateMetadata = highWatermarkUpdateOpt.get();
             long highWatermarkUpdateOffset = highWatermarkUpdateMetadata.offset;
 
-            if (highWatermarkUpdateOffset >= epochStartOffset) {
+            if (highWatermarkUpdateOffset > epochStartOffset) {
                 if (highWatermark.isPresent()) {
                     LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();
                     if (highWatermarkUpdateOffset > currentHighWatermarkMetadata.offset
