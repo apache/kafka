@@ -27,7 +27,7 @@ import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFa
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
@@ -220,6 +220,13 @@ final class KafkaMetadataLog private (
     topicPartition
   }
 
+  /**
+   * Return the topic ID associated with the log.
+   */
+  override def topicId(): Uuid = {
+    log.topicId.get
+  }
+
   override def createSnapshot(snapshotId: OffsetAndEpoch): RawSnapshotWriter = {
     // Do not let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
@@ -321,6 +328,7 @@ object KafkaMetadataLog {
 
   def apply(
     topicPartition: TopicPartition,
+    topicId: Uuid,
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
@@ -346,7 +354,7 @@ object KafkaMetadataLog {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
-      topicId = None,
+      topicId = Some(topicId),
       keepPartitionMetadataFile = false
     )
 

@@ -14,21 +14,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+package org.apache.kafka.controller;
 
-@Deprecated
-public class SerializedInternal<K, V> extends org.apache.kafka.streams.kstream.Serialized<K, V> {
-    public SerializedInternal(final org.apache.kafka.streams.kstream.Serialized<K, V> serialized) {
-        super(serialized);
+import java.io.IOException;
+import java.util.List;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
+
+
+/**
+ * The no-op snapshot writer which does nothing.
+ *
+ * TODO: This will be moved to the test/ directory once we have the KRaft
+ * implementation of the snapshot writer.
+ */
+public final class NoOpSnapshotWriter implements SnapshotWriter {
+    private final long epoch;
+
+    public NoOpSnapshotWriter(long epoch) {
+        this.epoch = epoch;
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
+    @Override
+    public long epoch() {
+        return epoch;
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    @Override
+    public boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
+        return true;
+    }
+
+    @Override
+    public void close() {
+    }
+
+    @Override
+    public void completeSnapshot() throws IOException {
     }
 }

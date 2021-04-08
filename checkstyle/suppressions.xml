@@ -268,6 +268,8 @@
               files="(ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(QuorumController|ReplicationControlManager).java"/>
+    <suppress checks="ParameterNumber"
+              files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"

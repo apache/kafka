@@ -125,7 +125,7 @@ public final class RaftClientTestContext {
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
-        private final MockLog log = new MockLog(METADATA_PARTITION);
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 

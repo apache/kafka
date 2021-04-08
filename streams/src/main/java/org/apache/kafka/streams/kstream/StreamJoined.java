@@ -108,6 +108,10 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      * or an outer join. The changelog topics will have the -changelog suffix.  The user should note that even though the join stores will have a
      * specified name, the stores will remain unavailable for querying.
      *
+     * Please note that if you are using {@link StreamJoined} to replace deprecated {@link KStream#join} functions with
+     * {@link Joined} parameters in order to set the name for the join processors, you would need to create the {@link StreamJoined}
+     * object first and then call {@link StreamJoined#withName}
+     *
      * @param storeName  The name to use for the store
      * @param <K>        The key type
      * @param <V1>       This value type
