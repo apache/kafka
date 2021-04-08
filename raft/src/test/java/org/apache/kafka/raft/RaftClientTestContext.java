@@ -86,6 +86,7 @@ public final class RaftClientTestContext {
     private static final StringSerde STRING_SERDE = new StringSerde();
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
+    final Uuid metadataTopicId = Uuid.METADATA_TOPIC_ID;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
@@ -996,7 +997,7 @@ public final class RaftClientTestContext {
         int lastFetchedEpoch,
         int maxWaitTimeMs
     ) {
-        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, fetchPartition -> {
+        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, metadataTopicId, fetchPartition -> {
             fetchPartition
                 .setCurrentLeaderEpoch(epoch)
                 .setLastFetchedEpoch(lastFetchedEpoch)
@@ -1015,7 +1016,7 @@ public final class RaftClientTestContext {
         long highWatermark,
         Errors error
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData
                 .setRecords(records)
                 .setErrorCode(error.code())
@@ -1034,7 +1035,7 @@ public final class RaftClientTestContext {
         int divergingEpoch,
         long highWatermark
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
+        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
             partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()

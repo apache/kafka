@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumE
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{RaftRequest, RaftUtil}
 import org.junit.jupiter.api.Assertions._
@@ -41,6 +41,7 @@ class KafkaNetworkChannelTest {
   private val time = new MockTime()
   private val client = new MockClient(time, new StubMetadataUpdater)
   private val topicPartition = new TopicPartition("topic", 0)
+  private val topicId = Uuid.randomUuid()
   private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs, threadNamePrefix = "test-raft")
 
   @BeforeEach
@@ -209,7 +210,7 @@ class KafkaNetworkChannelTest {
         VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329)
 
       case ApiKeys.FETCH =>
-        val request = RaftUtil.singletonFetchRequest(topicPartition, fetchPartition => {
+        val request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition => {
           fetchPartition
             .setCurrentLeaderEpoch(5)
             .setFetchOffset(333)
