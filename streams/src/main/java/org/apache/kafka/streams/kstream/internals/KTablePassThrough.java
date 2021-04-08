@@ -26,11 +26,11 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import java.util.Collection;
 
 public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V> {
-    private final Collection<KStreamAggProcessorSupplier> parents; //TODO change to aggregationprocessor
+    private final Collection<KStreamAggregateProcessorSupplier> parents; //TODO change to aggregationprocessor
     private final String storeName;
 
 
-    KTablePassThrough(final Collection<KStreamAggProcessorSupplier> parents, final String storeName) {
+    KTablePassThrough(final Collection<KStreamAggregateProcessorSupplier> parents, final String storeName) {
         this.parents = parents;
         this.storeName = storeName;
     }
@@ -43,7 +43,7 @@ public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K,
     @Override
     public boolean enableSendingOldValues(final boolean forceMaterialization) {
         // Aggregation requires materialization so we will always enable sending old values
-        for (final KStreamAggProcessorSupplier parent : parents) {
+        for (final KStreamAggregateProcessorSupplier parent : parents) {
             parent.enableSendingOldValues();
         }
         return true;
