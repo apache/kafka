@@ -378,6 +378,8 @@ public class ReplicationControlManager {
 
     ControllerResult<CreateTopicsResponseData>
             createTopics(CreateTopicsRequestData request) {
+        System.err.println("replicreateTopics");
+
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
@@ -401,6 +403,7 @@ public class ReplicationControlManager {
         }
         records.addAll(configResult.records());
 
+        System.err.println("try create");
         // Try to create whatever topics are needed.
         Map<String, CreatableTopicResult> successes = new HashMap<>();
         for (CreatableTopic topic : request.topics()) {
@@ -410,6 +413,7 @@ public class ReplicationControlManager {
                 topicErrors.put(topic.name(), error);
             }
         }
+        System.err.println("create response");
 
         // Create responses for all topics.
         CreateTopicsResponseData data = new CreateTopicsResponseData();

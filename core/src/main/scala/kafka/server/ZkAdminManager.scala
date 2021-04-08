@@ -151,6 +151,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
+    System.err.println("zkcreateTopics:" + toCreate + timeout)
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
     val metadata = toCreate.values.map(topic =>
@@ -186,6 +187,7 @@ class ZkAdminManager(val config: KafkaConfig,
           assignments
         }
         trace(s"Assignments for topic $topic are $assignments ")
+        System.err.println(s"Assignments for topic $topic are $assignments ")
 
         val configs = new Properties()
         topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
@@ -209,23 +211,29 @@ class ZkAdminManager(val config: KafkaConfig,
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
           debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
+          System.err.println(s"Topic creation failed since topic '${topic.name}' already exists." + e)
           CreatePartitionsMetadata(topic.name, e)
         case e: ThrottlingQuotaExceededException =>
           debug(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+          System.err.println(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
           CreatePartitionsMetadata(topic.name, e)
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
+          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, e)
         case e: ConfigException =>
           info(s"Error processing create topic request $topic", e)
+          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, new InvalidConfigurationException(e.getMessage, e.getCause))
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
+          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, e)
       }).toBuffer
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+      System.err.println("validateonly")
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
         if (createTopicMetadata.error.isSuccess && !validateOnly) {
@@ -237,6 +245,7 @@ class ZkAdminManager(val config: KafkaConfig,
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
+      System.err.println("delay")
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
         responseCallback)
       val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer
