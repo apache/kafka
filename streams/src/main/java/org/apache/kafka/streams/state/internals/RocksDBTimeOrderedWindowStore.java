@@ -135,8 +135,6 @@ public class RocksDBTimeOrderedWindowStore
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        // TODO: when we want to leverage on this function, we should further optimize to skip the
-        // schema.hasNextCondition since we know all records within the range would be satisfied
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(timeFrom, timeTo);
         return new TimeOrderedWindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }
