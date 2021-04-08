@@ -24,55 +24,55 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThrows;
 
-public class ValueOrOtherValueSerializerTest {
+public class LeftOrRightValueSerializerTest {
     private static final String TOPIC = "some-topic";
 
-    private static final ValueOrOtherValueSerde<String, Integer> STRING_OR_INTEGER_SERDE =
-        new ValueOrOtherValueSerde<>(Serdes.String(), Serdes.Integer());
+    private static final LeftOrRightValueSerde<String, Integer> STRING_OR_INTEGER_SERDE =
+        new LeftOrRightValueSerde<>(Serdes.String(), Serdes.Integer());
 
     @Test
     public void shouldSerializeStringValue() {
         final String value = "some-string";
 
-        final ValueOrOtherValue<String, Integer> valueOrOtherValue = ValueOrOtherValue.makeValue(value);
+        final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeLeftValue(value);
 
         final byte[] serialized =
-            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, valueOrOtherValue);
+            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final ValueOrOtherValue<String, Integer> deserialized =
+        final LeftOrRightValue<String, Integer> deserialized =
             STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
 
-        assertThat(deserialized, is(valueOrOtherValue));
+        assertThat(deserialized, is(leftOrRightValue));
     }
 
     @Test
     public void shouldSerializeIntegerValue() {
         final int value = 5;
 
-        final ValueOrOtherValue<String, Integer> valueOrOtherValue = ValueOrOtherValue.makeOtherValue(value);
+        final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeRightValue(value);
 
         final byte[] serialized =
-            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, valueOrOtherValue);
+            STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
 
         assertThat(serialized, is(notNullValue()));
 
-        final ValueOrOtherValue<String, Integer> deserialized =
+        final LeftOrRightValue<String, Integer> deserialized =
             STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, serialized);
 
-        assertThat(deserialized, is(valueOrOtherValue));
+        assertThat(deserialized, is(leftOrRightValue));
     }
 
     @Test
     public void shouldThrowIfSerializeValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, ValueOrOtherValue.makeValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeLeftValue(null)));
     }
 
     @Test
     public void shouldThrowIfSerializeOtherValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, ValueOrOtherValue.makeOtherValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeRightValue(null)));
     }
 }

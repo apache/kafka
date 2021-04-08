@@ -21,15 +21,15 @@ import org.apache.kafka.common.serialization.Serdes;
 
 import static java.util.Objects.requireNonNull;
 
-public class ValueOrOtherValueSerde<V1, V2> extends Serdes.WrapperSerde<ValueOrOtherValue<V1, V2>> {
-    public ValueOrOtherValueSerde(final Serde<V1> thisValueSerde, final Serde<V2> otherValueSerde) {
+public class LeftOrRightValueSerde<V1, V2> extends Serdes.WrapperSerde<LeftOrRightValue<V1, V2>> {
+    public LeftOrRightValueSerde(final Serde<V1> leftValueSerde, final Serde<V2> rightValueSerde) {
         super(
-            new ValueOrOtherValueSerializer<>(
-                requireNonNull(thisValueSerde, "thisValueSerde was null").serializer(),
-                requireNonNull(otherValueSerde, "thisValueSerde was null").serializer()),
-            new ValueOrOtherValueDeserializer<>(
-                requireNonNull(thisValueSerde, "otherValueSerde was null").deserializer(),
-                requireNonNull(otherValueSerde, "otherValueSerde was null").deserializer())
+            new LeftOrRightValueSerializer<>(
+                requireNonNull(leftValueSerde, "leftValueSerde was null").serializer(),
+                requireNonNull(rightValueSerde, "leftValueSerde was null").serializer()),
+            new LeftOrRightValueDeserializer<>(
+                requireNonNull(leftValueSerde, "rightValueSerde was null").deserializer(),
+                requireNonNull(rightValueSerde, "rightValueSerde was null").deserializer())
         );
     }
 }

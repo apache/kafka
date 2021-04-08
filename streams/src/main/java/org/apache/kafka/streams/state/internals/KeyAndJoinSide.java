@@ -28,27 +28,27 @@ import java.util.Objects;
  */
 public class KeyAndJoinSide<K> {
     private final K key;
-    private final boolean thisJoin;
+    private final boolean leftJoin;
 
-    private KeyAndJoinSide(final boolean thisJoin, final K key) {
+    private KeyAndJoinSide(final boolean leftJoin, final K key) {
         this.key = Objects.requireNonNull(key, "key is null");
-        this.thisJoin = thisJoin;
+        this.leftJoin = leftJoin;
     }
 
     /**
      * Create a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
      *
-     * @param thisJoin True if the key is part of the left topic (reference as thisJoin in {@code KStreamImplJoin})
+     * @param leftJoin True if the key is part of the left topic; False if it is from the right topic
      * @param key      the key
      * @param <K>      the type of the key
      * @return a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}
      */
-    public static <K> KeyAndJoinSide<K> make(final boolean thisJoin, final K key) {
-        return new KeyAndJoinSide<>(thisJoin, key);
+    public static <K> KeyAndJoinSide<K> make(final boolean leftJoin, final K key) {
+        return new KeyAndJoinSide<>(leftJoin, key);
     }
 
-    public boolean isThisJoin() {
-        return thisJoin;
+    public boolean isLeftJoin() {
+        return leftJoin;
     }
 
     public K getKey() {
@@ -57,7 +57,8 @@ public class KeyAndJoinSide<K> {
 
     @Override
     public String toString() {
-        return "<" + thisJoin + "," + key + ">";
+        final String joinSide = leftJoin ? "left" : "right";
+        return "<" + joinSide + "," + key + ">";
     }
 
     @Override
@@ -69,12 +70,12 @@ public class KeyAndJoinSide<K> {
             return false;
         }
         final KeyAndJoinSide<?> that = (KeyAndJoinSide<?>) o;
-        return thisJoin == that.thisJoin &&
+        return leftJoin == that.leftJoin &&
             Objects.equals(key, that.key);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(thisJoin, key);
+        return Objects.hash(leftJoin, key);
     }
 }

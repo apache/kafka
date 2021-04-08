@@ -21,53 +21,57 @@ import java.util.Objects;
 /**
  * This class is used in combination of {@link KeyAndJoinSide}. The {@link KeyAndJoinSide} class
  * combines a key with a boolean value that specifies if the key is found in the left side of a
- * join or on the right side. This {@link ValueOrOtherValue} object contains either the V1 value,
+ * join or on the right side. This {@link LeftOrRightValue} object contains either the V1 value,
  * which is found in the left topic, or V2 value if it is found in the right topic.
  */
-public class ValueOrOtherValue<V1, V2> {
-    private final V1 thisValue;
-    private final V2 otherValue;
+public class LeftOrRightValue<V1, V2> {
+    private final V1 leftValue;
+    private final V2 rightValue;
 
-    private ValueOrOtherValue(final V1 thisValue, final V2 otherValue) {
-        this.thisValue = thisValue;
-        this.otherValue = otherValue;
+    private LeftOrRightValue(final V1 leftValue, final V2 rightValue) {
+        this.leftValue = leftValue;
+        this.rightValue = rightValue;
     }
 
     /**
-     * Create a new {@link ValueOrOtherValue} instance with the V1 value as {@code thisValue} and
+     * Create a new {@link LeftOrRightValue} instance with the V1 value as {@code leftValue} and
      * V2 value as null.
      *
-     * @param thisValue the V1 value
+     * @param leftValue the left V1 value
      * @param <V1>      the type of the value
-     * @return a new {@link ValueOrOtherValue} instance
+     * @return a new {@link LeftOrRightValue} instance
      */
-    public static <V1, V2> ValueOrOtherValue<V1, V2> makeValue(final V1 thisValue) {
-        return new ValueOrOtherValue<>(thisValue, null);
+    public static <V1, V2> LeftOrRightValue<V1, V2> makeLeftValue(final V1 leftValue) {
+        Objects.requireNonNull(leftValue, "leftValue is null");
+        return new LeftOrRightValue<>(leftValue, null);
     }
 
     /**
-     * Create a new {@link ValueOrOtherValue} instance with the V2 value as {@code otherValue} and
+     * Create a new {@link LeftOrRightValue} instance with the V2 value as {@code rightValue} and
      * V1 value as null.
      *
-     * @param otherValue the V2 value
+     * @param rightValue the right V2 value
      * @param <V2>       the type of the value
-     * @return a new {@link ValueOrOtherValue} instance
+     * @return a new {@link LeftOrRightValue} instance
      */
-    public static <V1, V2> ValueOrOtherValue<V1, V2> makeOtherValue(final V2 otherValue) {
-        return new ValueOrOtherValue<>(null, otherValue);
+    public static <V1, V2> LeftOrRightValue<V1, V2> makeRightValue(final V2 rightValue) {
+        Objects.requireNonNull(rightValue, "rightValue is null");
+        return new LeftOrRightValue<>(null, rightValue);
     }
 
-    public V1 getThisValue() {
-        return thisValue;
+    public V1 getLeftValue() {
+        return leftValue;
     }
 
-    public V2 getOtherValue() {
-        return otherValue;
+    public V2 getRightValue() {
+        return rightValue;
     }
 
     @Override
     public String toString() {
-        return "<" + thisValue + "," + otherValue + ">";
+        return "<"
+            + ((leftValue != null) ? "left," + leftValue : "right," + rightValue)
+            + ">";
     }
 
     @Override
@@ -78,13 +82,13 @@ public class ValueOrOtherValue<V1, V2> {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final ValueOrOtherValue<?, ?> that = (ValueOrOtherValue<?, ?>) o;
-        return Objects.equals(thisValue, that.thisValue) &&
-            Objects.equals(otherValue, that.otherValue);
+        final LeftOrRightValue<?, ?> that = (LeftOrRightValue<?, ?>) o;
+        return Objects.equals(leftValue, that.leftValue) &&
+            Objects.equals(rightValue, that.rightValue);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(thisValue, otherValue);
+        return Objects.hash(leftValue, rightValue);
     }
 }

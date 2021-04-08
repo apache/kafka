@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -42,13 +41,10 @@ public class KeyAndJoinSideDeserializer<K> implements Deserializer<KeyAndJoinSid
         return KeyAndJoinSide.make(bool, key);
     }
 
-    static byte[] rawKey(final byte[] data) {
-        final int rawValueLength = data.length - 1;
-
-        return ByteBuffer
-            .allocate(rawValueLength)
-            .put(data, 1, rawValueLength)
-            .array();
+    private byte[] rawKey(final byte[] data) {
+        final byte[] rawKey = new byte[data.length - 1];
+        System.arraycopy(data, 1, rawKey, 0, rawKey.length);
+        return rawKey;
     }
 
     @Override

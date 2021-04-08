@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
-import org.apache.kafka.streams.state.internals.ValueOrOtherValue;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +94,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
-        private Optional<WindowStore<KeyAndJoinSide<K>, ValueOrOtherValue>> outerJoinWindowStore = Optional.empty();
+        private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
         private boolean internalOuterJoinFixDisabled;
 
         @SuppressWarnings("unchecked")
@@ -204,10 +204,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             }
         }
 
-        private ValueOrOtherValue makeValueOrOtherValue(final boolean thisJoin, final V1 value) {
+        private LeftOrRightValue makeValueOrOtherValue(final boolean thisJoin, final V1 value) {
             return thisJoin
-                ? ValueOrOtherValue.makeValue(value)
-                : ValueOrOtherValue.makeOtherValue(value);
+                ? LeftOrRightValue.makeLeftValue(value)
+                : LeftOrRightValue.makeRightValue(value);
         }
 
         private void emitExpiredNonJoinedOuterRecords() {
@@ -237,10 +237,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
 
         @SuppressWarnings("unchecked")
-        private void emitExpiredNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, ValueOrOtherValue> store, final Predicate<Windowed<KeyAndJoinSide<K>>> emitCondition) {
-            try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, ValueOrOtherValue> it = store.all()) {
+        private void emitExpiredNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store, final Predicate<Windowed<KeyAndJoinSide<K>>> emitCondition) {
+            try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store.all()) {
                 while (it.hasNext()) {
-                    final KeyValue<Windowed<KeyAndJoinSide<K>>, ValueOrOtherValue> e = it.next();
+                    final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> e = it.next();
 
                     // Skip next records if the emit condition is false
                     if (!emitCondition.test(e.key)) {
@@ -253,16 +253,16 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     // this join is using a reverse joiner or not. Also whether the returned record from the
                     // outer window store is a V1 or V2 value.
                     if (thisJoin) {
-                        if (e.key.key().isThisJoin()) {
-                            context().forward(key, joiner.apply(key, (V1) e.value.getThisValue(), null));
+                        if (e.key.key().isLeftJoin()) {
+                            context().forward(key, joiner.apply(key, (V1) e.value.getLeftValue(), null));
                         } else {
-                            context().forward(key, joiner.apply(key, null, (V2) e.value.getOtherValue()));
+                            context().forward(key, joiner.apply(key, null, (V2) e.value.getRightValue()));
                         }
                     } else {
-                        if (e.key.key().isThisJoin()) {
-                            context().forward(key, joiner.apply(key, null, (V2) e.value.getThisValue()));
+                        if (e.key.key().isLeftJoin()) {
+                            context().forward(key, joiner.apply(key, null, (V2) e.value.getLeftValue()));
                         } else {
-                            context().forward(key, joiner.apply(key, (V1) e.value.getOtherValue(), null));
+                            context().forward(key, joiner.apply(key, (V1) e.value.getRightValue(), null));
                         }
                     }
 
