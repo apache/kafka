@@ -32,6 +32,8 @@
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
             and <code>AclAuthorizer</code> instead.</li>
         <li>The <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
+        <li>The <code>Sum</code> and <code>Total</code> classes were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12584">KAFKA-12584</a>).
+            Please use <code>WindowedSum</code> and <code>CumulativeSum</code> instead.</li>
         <li>The <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code> classes were removed.
         <li>Various constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>, <code>AclBinding</code> and
             <code>AclBindingFilter</code>.</li>
@@ -49,7 +51,7 @@
             were removed. These methods were not intended to be public API and there is no replacement.</li>
         <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
             instead.</li>
-        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Plese use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
+        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
         <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
             Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
