@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
@@ -108,6 +107,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 subscribedTopics.addAll(subscription.topics());
             } else if (!(subscription.topics().size() == subscribedTopics.size()
                 && subscribedTopics.containsAll(subscription.topics()))) {
+                // we don't need consumerToOwnedPartitions in general assign case
+                consumerToOwnedPartitions = null;
                 return false;
             }
 
@@ -149,12 +150,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * This constrainedAssign optimizes the assignment algorithm when all consumers were subscribed to same set of topics.
      * The method includes the following steps:
      *
-     * 1. Reassign as many previously owned partitions as possible, up to the maxQuota
-     * 2. Fill remaining members up to minQuota
-     * 3. If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
-     *    from the over-full consumers at max capacity
-     * 4. Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
-     *    should just distribute one partition each to all consumers at min capacity
+     * 1. Reassign as many previously owned partitions as possible, up to the expected number of maxQuota, otherwise, minQuota
+     * 2. Fill remaining members up to the expected numbers of maxQuota, otherwise, to minQuota
      *
      * @param partitionsPerTopic          The number of partitions for each subscribed topic
      * @param consumerToOwnedPartitions   Each consumer's previously owned and still-subscribed partitions
@@ -163,25 +160,31 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      */
     private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
                                                                 Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        if (log.isDebugEnabled()) {
+            log.debug(String.format("performing constrained assign. partitionsPerTopic: %s, consumerToOwnedPartitions: %s",
+                partitionsPerTopic, consumerToOwnedPartitions));
+        }
+
         SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
 
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
-        // Each consumer should end up in exactly one of the below
-        // the consumers not yet at capacity
+        // the consumers not yet at expected capacity
         List<String> unfilledMembers = new LinkedList<>();
-        // the members with exactly maxQuota partitions assigned
-        Queue<String> maxCapacityMembers = new LinkedList<>();
-        // the members with exactly minQuota partitions assigned
-        Queue<String> minCapacityMembers = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
-        int minQuota = (int) Math.floor(((double) unassignedPartitions.size()) / numberOfConsumers);
-        int maxQuota = (int) Math.ceil(((double) unassignedPartitions.size()) / numberOfConsumers);
+        int totalPartitionsCount = unassignedPartitions.size();
 
-        // initialize the assignment map with an empty array of size minQuota for all members
+        int minQuota = (int) Math.floor(((double) totalPartitionsCount) / numberOfConsumers);
+        int maxQuota = (int) Math.ceil(((double) totalPartitionsCount) / numberOfConsumers);
+        // the expected number of members with maxQuota assignment
+        int numExpectedMaxCapacityMembers = totalPartitionsCount % numberOfConsumers;
+        // the number of members with exactly maxQuota partitions assigned
+        int numMaxCapacityMembers = 0;
+
+        // initialize the assignment map with an empty array of size maxQuota for all members
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
-            consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
+            consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(maxQuota))));
 
         // Reassign as many previously owned partitions as possible
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
@@ -189,33 +192,40 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
 
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
-            int i = 0;
-            // assign the first N partitions up to the max quota, and mark the remaining as being revoked
-            for (TopicPartition tp : ownedPartitions) {
-                if (i < maxQuota) {
-                    consumerAssignment.add(tp);
-                    unassignedPartitions.remove(tp);
-                } else {
-                    allRevokedPartitions.add(tp);
-                }
-                ++i;
-            }
 
             if (ownedPartitions.size() < minQuota) {
+                // the expected assignment size is more than consumer have now, so keep all the owned partitions
+                // and put this member into unfilled member list
+                if (ownedPartitions.size() > 0) {
+                    consumerAssignment.addAll(ownedPartitions);
+                    unassignedPartitions.removeAll(ownedPartitions);
+                }
                 unfilledMembers.add(consumer);
+            } else if (ownedPartitions.size() >= maxQuota && numMaxCapacityMembers++ <= numExpectedMaxCapacityMembers) {
+                // consumer owned the "maxQuota" of partitions or more, and we still under the number of expected max capacity members
+                // so keep "maxQuota" of the owned partitions, and revoke the rest of the partitions
+                consumerAssignment.addAll(ownedPartitions.subList(0, maxQuota));
+                unassignedPartitions.removeAll(ownedPartitions.subList(0, maxQuota));
+                allRevokedPartitions.addAll(ownedPartitions.subList(maxQuota, ownedPartitions.size()));
             } else {
-                // It's possible for a consumer to be at both min and max capacity if minQuota == maxQuota
-                if (consumerAssignment.size() == minQuota)
-                    minCapacityMembers.add(consumer);
-                if (consumerAssignment.size() == maxQuota)
-                    maxCapacityMembers.add(consumer);
+                // consumer owned the "minQuota" of partitions or more
+                // so keep "minQuota" of the owned partitions, and revoke the rest of the partitions
+                consumerAssignment.addAll(ownedPartitions.subList(0, minQuota));
+                unassignedPartitions.removeAll(ownedPartitions.subList(0, minQuota));
+                allRevokedPartitions.addAll(ownedPartitions.subList(minQuota, ownedPartitions.size()));
             }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug(String.format(
+                "After reassigning previously owned partitions, unfilled members: %s, unassigned partitions: %s, " +
+                    "current assignment: %s", unfilledMembers, unassignedPartitions, assignment));
         }
 
         Collections.sort(unfilledMembers);
         Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
 
-        // Fill remaining members up to minQuota
+        // fill remaining members up to the expected numbers of maxQuota, otherwise, to minQuota
         while (!unfilledMembers.isEmpty() && !unassignedPartitions.isEmpty()) {
             Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
 
@@ -223,6 +233,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 String consumer = unfilledConsumerIter.next();
                 List<TopicPartition> consumerAssignment = assignment.get(consumer);
 
+                int expectedAssignedCount = numMaxCapacityMembers < numExpectedMaxCapacityMembers ? maxQuota : minQuota;
                 if (unassignedPartitionsIter.hasNext()) {
                     TopicPartition tp = unassignedPartitionsIter.next();
                     consumerAssignment.add(tp);
@@ -231,48 +242,26 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     if (allRevokedPartitions.contains(tp))
                         partitionsTransferringOwnership.put(tp, consumer);
                 } else {
+                    // Should not enter here since we have calculated the exact number to assign to each consumer
+                    log.warn(String.format(
+                        "No more partitions to be assigned. consumer: [%s] with current size: %d, but expected size is %d",
+                        consumer, consumerAssignment.size(), expectedAssignedCount));
                     break;
                 }
 
-                if (consumerAssignment.size() == minQuota) {
-                    minCapacityMembers.add(consumer);
+                int currentAssignedCount = consumerAssignment.size();
+
+                if (currentAssignedCount == expectedAssignedCount) {
+                    if (currentAssignedCount == maxQuota) {
+                        numMaxCapacityMembers++;
+                    }
                     unfilledConsumerIter.remove();
                 }
             }
         }
 
-        // If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
-        // from the over-full consumers at max capacity
-        for (String consumer : unfilledMembers) {
-            List<TopicPartition> consumerAssignment = assignment.get(consumer);
-            int remainingCapacity = minQuota - consumerAssignment.size();
-            while (remainingCapacity > 0) {
-                String overloadedConsumer = maxCapacityMembers.poll();
-                if (overloadedConsumer == null) {
-                    throw new IllegalStateException("Some consumers are under capacity but all partitions have been assigned");
-                }
-                TopicPartition swappedPartition = assignment.get(overloadedConsumer).remove(0);
-                consumerAssignment.add(swappedPartition);
-                --remainingCapacity;
-                // This partition is by definition transferring ownership, the swapped partition must have come from
-                // the max capacity member's owned partitions since it can only reach max capacity with owned partitions
-                partitionsTransferringOwnership.put(swappedPartition, consumer);
-            }
-            minCapacityMembers.add(consumer);
-        }
-
-        // Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
-        // should just distribute one partition each to all consumers at min capacity
-        for (TopicPartition unassignedPartition : unassignedPartitions) {
-            String underCapacityConsumer = minCapacityMembers.poll();
-            if (underCapacityConsumer == null) {
-                throw new IllegalStateException("Some partitions are unassigned but all consumers are at maximum capacity");
-            }
-            // We can skip the bookkeeping of unassignedPartitions and maxCapacityMembers here since we are at the end
-            assignment.get(underCapacityConsumer).add(unassignedPartition);
-
-            if (allRevokedPartitions.contains(unassignedPartition))
-                partitionsTransferringOwnership.put(unassignedPartition, underCapacityConsumer);
+        if (log.isDebugEnabled()) {
+            log.debug("final assignment: " + assignment);
         }
 
         return assignment;
