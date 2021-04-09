@@ -108,7 +108,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
         public void process(Record<K, V> record) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
-            if (record.key() == null) {
+            if (record.key() == null) { //TODO
 //                LOG.warn(
 //                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
 //                    value, context().topic(), context().partition(), context().offset()
@@ -141,7 +141,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
                 }
             }
 
-            if (mergedWindow.end() < closeTime) {
+            if (mergedWindow.end() < closeTime) { //TODO
 //                LOG.warn(
 //                    "Skipping record for expired window. " +
 //                        "key=[{}] " +

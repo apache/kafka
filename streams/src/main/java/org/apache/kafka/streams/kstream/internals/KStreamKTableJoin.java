@@ -21,15 +21,15 @@ import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
-class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R> {
+class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner;
     private final boolean leftJoin;
 
     KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
-                      final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner,
+                      final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner,
                       final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
@@ -37,7 +37,7 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R> 
     }
 
     @Override
-    public Processor<K, V1, K, R> get() {
+    public Processor<K, V1, K, VOut> get() {
         return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin);
     }
 

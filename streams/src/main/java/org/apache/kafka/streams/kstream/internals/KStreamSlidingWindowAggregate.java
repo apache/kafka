@@ -109,6 +109,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
         @Override
         public void process(Record<K, V> record) {
             if (record.key() == null || record.value() == null) {
+                //TODO
 //                log.warn(
 //                    "Skipping record due to null key or value. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
 //                    value, context().topic(), context().partition(), context().offset()
@@ -122,6 +123,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
+                //TODO
 //                log.warn(
 //                    "Skipping record for expired window. " +
 //                        "key=[{}] " +

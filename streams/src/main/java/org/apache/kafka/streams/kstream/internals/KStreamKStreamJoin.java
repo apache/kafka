@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R> {
+class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
 
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
@@ -40,13 +40,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R>
     private final long joinBeforeMs;
     private final long joinAfterMs;
 
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner;
     private final boolean outer;
 
     KStreamKStreamJoin(final String otherWindowName,
                        final long joinBeforeMs,
                        final long joinAfterMs,
-                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
+                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
                        final boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
@@ -56,18 +56,18 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R>
     }
 
     @Override
-    public Processor<K, V1, K, R> get() {
+    public Processor<K, V1, K, VOut> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, R> {
+    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
 
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
         @Override
-        public void init(final ProcessorContext<K, R> context) {
+        public void init(final ProcessorContext<K, VOut> context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
@@ -84,7 +84,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R>
             // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
             // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
             if (record.key() == null || record.value() == null) {
-//                LOG.warn(
+//TODO                LOG.warn(
 //                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
 //                    key, value, context().topic(), context().partition(), context().offset()
 //                );

@@ -1238,30 +1238,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @SuppressWarnings("unchecked")
-    private <VO, VR> KStream<K, VR> doStreamTableJoin(final KTable<K, VO> table,
-                                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                                      final Joined<K, V, VO> joined,
-                                                      final boolean leftJoin) {
+    private <V2, VOut> KStream<K, VOut> doStreamTableJoin(final KTable<K, V2> table,
+                                                          final ValueJoinerWithKey<? super K, ? super V, ? super V2, ? extends VOut> joiner,
+                                                          final Joined<K, V, V2> joined,
+                                                          final boolean leftJoin) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, V2>) table));
 
-        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final JoinedInternal<K, V, V2> joinedInternal = new JoinedInternal<>(joined);
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-        final KStreamKTableJoin<K, ? extends VR, ? super V, VO> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
+        final KStreamKTableJoin<K, ? super V, V2, ? extends VOut> processorSupplier = new KStreamKTableJoin<>(
+            ((KTableImpl<K, ?, V2>) table).valueGetterSupplier(),
             joiner,
             leftJoin);
 
-        final ProcessorParameters<K, ? super V, K, ? extends VR> processorParameters = new ProcessorParameters<>(
+        final ProcessorParameters<K, ? super V, K, ? extends VOut> processorParameters = new ProcessorParameters<>(
             processorSupplier, name);
         final StreamTableJoinNode<K, ? super V> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            ((KTableImpl<K, ?, V2>) table).valueGetterSupplier().storeNames(),
             this.name
         );
 
