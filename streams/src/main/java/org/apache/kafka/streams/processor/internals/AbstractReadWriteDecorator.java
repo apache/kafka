@@ -154,13 +154,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             super(inner);
         }
 
-        @Deprecated
-        @Override
-        public void put(final K key,
-                        final V value) {
-            wrapped().put(key, value);
-        }
-
         @Override
         public void put(final K key,
                         final V value,

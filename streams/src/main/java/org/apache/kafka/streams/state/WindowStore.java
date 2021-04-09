@@ -36,24 +36,6 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**
-     * Use the current record timestamp as the {@code windowStartTimestamp} and
-     * delegate to {@link WindowStore#put(Object, Object, long)}.
-     * <p>
-     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
-     * is unlikely to be the correct windowStartTimestamp in general.
-     *
-     * @param key   The key to associate the value to
-     * @param value The value to update, it can be null;
-     *              if the serialized bytes are also null it is interpreted as delete
-     * @throws NullPointerException if the given key is {@code null}
-     * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
-     * to identify the window frame to which the key belongs.
-     * Use {@link #put(Object, Object, long)} instead.
-     */
-    @Deprecated
-    void put(K key, V value);
-
-    /**
      * Put a key-value pair into the window with given window start timestamp
      * <p>
      * If serialized value bytes are null it is interpreted as delete. Note that deletes will be

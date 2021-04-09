@@ -227,7 +227,6 @@ public class ProcessorContextImplTest {
 
             checkThrowsUnsupportedOperation(store::flush, "flush()");
             checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -246,7 +245,6 @@ public class ProcessorContextImplTest {
 
             checkThrowsUnsupportedOperation(store::flush, "flush()");
             checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put() [with timestamp]");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L)), "put() [no timestamp]");
 
             assertEquals(timestampedIters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -335,7 +333,7 @@ public class ProcessorContextImplTest {
             store.flush();
             assertTrue(flushExecuted);
 
-            store.put("1", 1L);
+            store.put("1", 1L, 1L);
             assertTrue(putExecuted);
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
@@ -355,7 +353,7 @@ public class ProcessorContextImplTest {
             store.flush();
             assertTrue(flushExecuted);
 
-            store.put("1", ValueAndTimestamp.make(1L, 1L));
+            store.put("1", ValueAndTimestamp.make(1L, 1L), 1L);
             assertTrue(putExecuted);
 
             store.put("1", ValueAndTimestamp.make(1L, 1L), 1L);
@@ -639,7 +637,7 @@ public class ProcessorContextImplTest {
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE);
         expect(windowStore.all()).andReturn(iters.get(2));
 
-        windowStore.put(anyString(), anyLong());
+        windowStore.put(anyString(), anyLong(), anyLong());
         expectLastCall().andAnswer(() -> {
             putExecuted = true;
             return null;
@@ -662,7 +660,7 @@ public class ProcessorContextImplTest {
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE_AND_TIMESTAMP);
         expect(windowStore.all()).andReturn(timestampedIters.get(2));
 
-        windowStore.put(anyString(), anyObject(ValueAndTimestamp.class));
+        windowStore.put(anyString(), anyObject(ValueAndTimestamp.class), anyLong());
         expectLastCall().andAnswer(() -> {
             putExecuted = true;
             return null;
