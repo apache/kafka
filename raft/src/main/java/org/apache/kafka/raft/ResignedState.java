@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
@@ -45,6 +47,7 @@ public class ResignedState implements EpochState {
     private final Set<Integer> unackedVoters;
     private final Timer electionTimer;
     private final List<Integer> preferredSuccessors;
+    private final Logger log;
 
     public ResignedState(
         Time time,
@@ -52,7 +55,8 @@ public class ResignedState implements EpochState {
         int epoch,
         Set<Integer> voters,
         long electionTimeoutMs,
-        List<Integer> preferredSuccessors
+        List<Integer> preferredSuccessors,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.epoch = epoch;
@@ -62,6 +66,7 @@ public class ResignedState implements EpochState {
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.preferredSuccessors = preferredSuccessors;
+        this.log = logContext.logger(ResignedState.class);
     }
 
     @Override
@@ -123,6 +128,13 @@ public class ResignedState implements EpochState {
 
     public List<Integer> preferredSuccessors() {
         return preferredSuccessors;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in epoch {}",
+            candidateId, epoch);
+        return false;
     }
 
     @Override

@@ -51,7 +51,7 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A self-managed Kafka broker.
+ * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
                     val config: KafkaConfig,
@@ -115,6 +115,7 @@ class BrokerServer(
   var metadataCache: RaftMetadataCache = null
 
   var quotaManagers: QuotaFactory.QuotaManagers = null
+
   var quotaCache: ClientQuotaCache = null
 
   private var _brokerTopicStats: BrokerTopicStats = null
@@ -323,7 +324,7 @@ class BrokerServer(
 
       // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
       // and started all services that we previously delayed starting.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache)
+      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,

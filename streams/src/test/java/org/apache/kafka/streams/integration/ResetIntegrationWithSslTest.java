@@ -23,10 +23,12 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
@@ -36,7 +38,6 @@ import java.util.Properties;
 @Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
     private static final Map<String, Object> SSL_CONFIG;
@@ -59,6 +60,16 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Override

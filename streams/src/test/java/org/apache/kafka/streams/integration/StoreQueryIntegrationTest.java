@@ -48,6 +48,7 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +83,6 @@ public class StoreQueryIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
-    @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @Rule
@@ -92,7 +92,8 @@ public class StoreQueryIntegrationTest {
     private final MockTime mockTime = cluster.time;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() throws InterruptedException, IOException {
+        cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }
 
@@ -101,6 +102,7 @@ public class StoreQueryIntegrationTest {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
         }
+        cluster.stop();
     }
 
     @Test
