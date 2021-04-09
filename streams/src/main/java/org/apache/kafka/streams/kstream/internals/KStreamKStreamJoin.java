@@ -37,7 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
@@ -53,14 +52,11 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
     private final Optional<String> outerJoinWindowName;
-    private final boolean thisJoin;
+    private final boolean isLeftJoin;
 
-    // Observed time is AtomicLong because this time is shared between the left and side processor nodes. However,
-    // this time is not updated in parallel, so we can call get() several times without worry about getting different
-    // times.
-    private final AtomicLong maxObservedStreamTime;
+    private final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime;
 
-    KStreamKStreamJoin(final boolean thisJoin,
+    KStreamKStreamJoin(final boolean isLeftJoin,
                        final String otherWindowName,
                        final long joinBeforeMs,
                        final long joinAfterMs,
@@ -68,8 +64,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
-                       final AtomicLong maxObservedStreamTime) {
-        this.thisJoin = thisJoin;
+                       final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
+        this.isLeftJoin = isLeftJoin;
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
@@ -95,7 +91,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
-        private boolean internalOuterJoinFixDisabled;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -105,8 +100,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindow = context.getStateStore(otherWindowName);
 
-            internalOuterJoinFixDisabled = internalOuterJoinFixDisabled(context.appConfigs());
-            if (!internalOuterJoinFixDisabled) {
+            if (!internalOuterJoinFixDisabled(context.appConfigs())) {
                 outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
             }
         }
@@ -148,8 +142,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
-            // maxObservedStreamTime is updated and shared between left and right join sides
-            maxObservedStreamTime.updateAndGet(t -> Math.max(t, inputRecordTimestamp));
+            maxObservedStreamTime.advance(inputRecordTimestamp);
 
             try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
@@ -192,22 +185,16 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     //
                     // the condition below allows us to process the late record without the need
                     // to hold it in the temporary outer store
-                    if (internalOuterJoinFixDisabled || timeTo < maxObservedStreamTime.get()) {
+                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
                         outerJoinWindowStore.ifPresent(store -> store.put(
-                            KeyAndJoinSide.make(thisJoin, key),
-                            makeValueOrOtherValue(thisJoin, value),
+                            KeyAndJoinSide.make(isLeftJoin, key),
+                            LeftOrRightValue.make(isLeftJoin, value),
                             inputRecordTimestamp));
                     }
                 }
             }
-        }
-
-        private LeftOrRightValue makeValueOrOtherValue(final boolean thisJoin, final V1 value) {
-            return thisJoin
-                ? LeftOrRightValue.makeLeftValue(value)
-                : LeftOrRightValue.makeRightValue(value);
         }
 
         private void emitExpiredNonJoinedOuterRecords() {
@@ -217,7 +204,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         private void emitExpiredNonJoinedOuterRecordsExcept(final K key, final long timestamp) {
             outerJoinWindowStore.ifPresent(store -> {
-                final KeyAndJoinSide<K> keyAndJoinSide = KeyAndJoinSide.make(!thisJoin, key);
+                final KeyAndJoinSide<K> keyAndJoinSide = KeyAndJoinSide.make(!isLeftJoin, key);
 
                 // Emit all expired records except the just found non-joined key. We need
                 // to emit all expired records before calling put(), otherwise the internal
@@ -248,25 +235,18 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     }
 
                     final K key = e.key.key().getKey();
+                    final To timestamp = To.all().withTimestamp(e.key.window().start());
 
-                    // Emit the record by joining with a null value. But the order varies depending whether
-                    // this join is using a reverse joiner or not. Also whether the returned record from the
-                    // outer window store is a V1 or V2 value.
-                    if (thisJoin) {
-                        if (e.key.key().isLeftJoin()) {
-                            context().forward(key, joiner.apply(key, (V1) e.value.getLeftValue(), null));
-                        } else {
-                            context().forward(key, joiner.apply(key, null, (V2) e.value.getRightValue()));
-                        }
+                    final R nullJoinedValue;
+                    if (isLeftJoin) {
+                        nullJoinedValue = joiner.apply(key, (V1) e.value.getLeftValue(), (V2) e.value.getRightValue());
                     } else {
-                        if (e.key.key().isLeftJoin()) {
-                            context().forward(key, joiner.apply(key, null, (V2) e.value.getLeftValue()));
-                        } else {
-                            context().forward(key, joiner.apply(key, (V1) e.value.getRightValue(), null));
-                        }
+                        nullJoinedValue = joiner.apply(key, (V1) e.value.getRightValue(), (V2) e.value.getLeftValue());
                     }
 
-                    // Delete the key from tne outer window store now it is emitted
+                    context().forward(key, nullJoinedValue, timestamp);
+
+                    // Delete the key from the outer window store now it is emitted
                     store.put(e.key.key(), null, e.key.window().start());
                 }
             }

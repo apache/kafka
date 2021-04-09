@@ -232,8 +232,8 @@ public class KStreamKStreamOuterJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             inputTopic2.pipeInput(expectedKeys[i], "b" + expectedKeys[i], time + i);
         }
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "null+a2", 1000),
-            new KeyValueTimestamp<>(3, "null+a3", 1000));
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "null+a2", 0),
+            new KeyValueTimestamp<>(3, "null+a3", 0));
 
         // push four items with larger timestamp to the primary stream; this should produce four full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
@@ -330,16 +330,16 @@ public class KStreamKStreamOuterJoinTest {
         // push a dummy record to produce all left-join non-joined items
         time += 301L;
         inputTopic1.pipeInput(0, "dummy", time);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "C0+null", 1405),
-            new KeyValueTimestamp<>(0, "D0+null", 1405),
-            new KeyValueTimestamp<>(1, "D1+null", 1405),
-            new KeyValueTimestamp<>(0, "E0+null", 1405),
-            new KeyValueTimestamp<>(1, "E1+null", 1405),
-            new KeyValueTimestamp<>(2, "E2+null", 1405),
-            new KeyValueTimestamp<>(0, "F0+null", 1405),
-            new KeyValueTimestamp<>(1, "F1+null", 1405),
-            new KeyValueTimestamp<>(2, "F2+null", 1405),
-            new KeyValueTimestamp<>(3, "F3+null", 1405));
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "C0+null", 1101),
+            new KeyValueTimestamp<>(0, "D0+null", 1102),
+            new KeyValueTimestamp<>(1, "D1+null", 1102),
+            new KeyValueTimestamp<>(0, "E0+null", 1103),
+            new KeyValueTimestamp<>(1, "E1+null", 1103),
+            new KeyValueTimestamp<>(2, "E2+null", 1103),
+            new KeyValueTimestamp<>(0, "F0+null", 1104),
+            new KeyValueTimestamp<>(1, "F1+null", 1104),
+            new KeyValueTimestamp<>(2, "F2+null", 1104),
+            new KeyValueTimestamp<>(3, "F3+null", 1104));
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,

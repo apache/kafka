@@ -531,8 +531,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in left topic will emit expired non-joined records from the left topic
             inputTopic1.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 401),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 401));
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
 
             // Flush internal non-joined state store by joining the dummy record
             inputTopic2.pipeInput(2, "dummy", windowStart + 401);
@@ -559,8 +559,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in right topic will emit expired non-joined records from the left topic
             inputTopic2.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 401),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 401));
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
 
             // Flush internal non-joined state store by joining the dummy record
             inputTopic1.pipeInput(2, "dummy", windowStart + 402);
@@ -666,8 +666,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in left topic will emit expired non-joined records from the left topic
             inputTopic1.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 401),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 401));
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
 
             // Flush internal non-joined state store by joining the dummy record
             inputTopic2.pipeInput(2, "dummy", windowStart + 401);
@@ -694,8 +694,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in right topic will emit expired non-joined records from the left topic
             inputTopic2.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", windowStart + 401),
-                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 401));
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
 
             // Flush internal non-joined state store by joining the dummy record
             inputTopic1.pipeInput(2, "dummy", windowStart + 402);
@@ -722,8 +722,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in left topic will emit expired non-joined records from the right topic
             inputTopic1.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+A0", windowStart + 401),
-                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 401));
+                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1),
+                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3));
 
             // Process the dummy joined record
             inputTopic2.pipeInput(2, "dummy", windowStart + 402);
@@ -750,8 +750,8 @@ public class KStreamKStreamJoinTest {
             // Dummy record in right topic will emit expired non-joined records from the right topic
             inputTopic2.pipeInput(2, "dummy", windowStart + 401);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+A0", windowStart + 401),
-                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 401));
+                new KeyValueTimestamp<>(0, "null+A0", windowStart + 1),
+                new KeyValueTimestamp<>(0, "null+A0-0", windowStart + 3));
 
             // Process the dummy joined record
             inputTopic1.pipeInput(2, "dummy", windowStart + 402);
@@ -803,7 +803,7 @@ public class KStreamKStreamJoinTest {
 
             // all non-joined of the previous window are emitted
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", 400));
+                new KeyValueTimestamp<>(0, "A0+null", 1));
         }
     }
 

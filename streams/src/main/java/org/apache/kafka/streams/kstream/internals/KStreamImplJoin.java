@@ -47,7 +47,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
@@ -58,6 +57,17 @@ class KStreamImplJoin {
     private final boolean leftOuter;
     private final boolean rightOuter;
 
+    static class MaxObservedStreamTime {
+        private long maxObservedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+
+        public void advance(final long streamTime) {
+            maxObservedStreamTime = Math.max(streamTime, maxObservedStreamTime);
+        }
+
+        public long get() {
+            return maxObservedStreamTime;
+        }
+    }
 
     KStreamImplJoin(final InternalStreamsBuilder builder,
                     final boolean leftOuter,
@@ -135,14 +145,21 @@ class KStreamImplJoin {
         Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
         if (leftOuter || rightOuter) {
             final String outerJoinSuffix = "-shared-outer-join-store";
-            final String outerJoinStoreGeneratedName = builder.newProcessorName(KStreamImpl.OUTERSHARED_NAME);
+
+            // Get the suffix index of the joinThisGeneratedName to build the outer join store name.
+            final String outerJoinStoreGeneratedName = KStreamImpl.OUTERSHARED_NAME
+                + joinThisGeneratedName.substring(
+                    rightOuter
+                        ? KStreamImpl.OUTERTHIS_NAME.length()
+                        : KStreamImpl.JOINTHIS_NAME.length());
+
             final String outerJoinStoreName = userProvidedBaseStoreName == null ? outerJoinStoreGeneratedName : userProvidedBaseStoreName + outerJoinSuffix;
 
             outerJoinWindowStore = Optional.of(outerJoinWindowStoreBuilder(outerJoinStoreName, windows, streamJoinedInternal));
         }
 
         // Time shared between joins to keep track of the maximum stream time
-        final AtomicLong maxObservedStreamTime = new AtomicLong(ConsumerRecord.NO_TIMESTAMP);
+        final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();
 
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
             true,

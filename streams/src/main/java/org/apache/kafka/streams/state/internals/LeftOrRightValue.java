@@ -59,6 +59,21 @@ public class LeftOrRightValue<V1, V2> {
         return new LeftOrRightValue<>(null, rightValue);
     }
 
+    /**
+     * Create a new {@link LeftOrRightValue} instance with the V value as {@code leftValue} if
+     * {@code isLeftJoin} is True; otherwise {@code rightValue} if {@code isLeftJoin} is False.
+     *
+     * @param value the V value (either V1 or V2 type)
+     * @param <V>   the type of the value
+     * @return a new {@link LeftOrRightValue} instance
+     */
+    public static <V> LeftOrRightValue make(final boolean isLeftJoin, final V value) {
+        Objects.requireNonNull(value, "value is null");
+        return isLeftJoin
+            ? LeftOrRightValue.makeLeftValue(value)
+            : LeftOrRightValue.makeRightValue(value);
+    }
+
     public V1 getLeftValue() {
         return leftValue;
     }
