@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
@@ -461,7 +460,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 producerConfig.getLong(ProducerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                ClientDnsLookup.forConfig(producerConfig.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                 time,
                 true,
                 apiVersions,
@@ -876,6 +874,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                               when send is invoked after producer has been closed.
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
+     * @throws TimeoutException If the record could not be appended to the send buffer due to memory unavailable
+     *                          or missing metadata within {@code max.block.ms}.
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      */
     @Override

@@ -934,7 +934,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   /**
-   * Check if the replica is local and return the message format version and timestamp
+   * Check if the replica is local and return the message format version
    *
    * @param   partition  Partition of GroupMetadataTopic
    * @return  Some(MessageFormatVersion) if replica is local, None otherwise

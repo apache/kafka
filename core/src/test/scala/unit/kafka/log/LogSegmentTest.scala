@@ -43,7 +43,7 @@ class LogSegmentTest {
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+    val seg = LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
