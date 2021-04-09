@@ -99,7 +99,7 @@ public class RemoteLogMetadataCache {
             = new ConcurrentHashMap<>();
 
     // It contains leader epoch to the respective entry containing the state.
-    // TODO We are not clearing the entry for epoch when RemoteLogLeaderEpochState becomes epty. This will be addressed
+    // TODO We are not clearing the entry for epoch when RemoteLogLeaderEpochState becomes empty. This will be addressed
     // later. We will look into it when we integrate these APIs along with RemoteLogManager changes.
     // https://issues.apache.org/jira/browse/KAFKA-12641
     private final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
