@@ -17,16 +17,15 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -35,33 +34,34 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class InsertHeaderTest {
     private InsertHeader<SourceRecord> xform = new InsertHeader<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithEmptyHeaderName() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "");
         props.put("literal.value", "dummy value");
 
-        xform.configure(props);
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithBlankHeaderName() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "    ");
         props.put("literal.value", "dummy value");
 
-        xform.configure(props);
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
     @Test
@@ -81,22 +81,22 @@ public class InsertHeaderTest {
         assertEquals(expected, transformedRecord.headers());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithBlankHeaderValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "AAA");
         props.put("literal.value", " ");
 
-        xform.configure(props);
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithEmptyHeaderValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "AAA");
         props.put("literal.value", "");
 
-        xform.configure(props);
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
     @Test
@@ -249,10 +249,10 @@ public class InsertHeaderTest {
     }
 
     @Test
-    public void insertHeaderWithFloatValue() {
+    public void insertHeaderWithFloat32Value() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "AAA");
-        props.put("literal.value", "2353245343456.435435");
+        props.put("literal.value", "5.324");
 
         xform.configure(props);
 
@@ -260,7 +260,7 @@ public class InsertHeaderTest {
                 0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addDouble("AAA", 2353245343456.435435);
+        Headers expected = new ConnectHeaders().addFloat("AAA", 5.324F);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
@@ -298,10 +298,8 @@ public class InsertHeaderTest {
                 0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        SchemaAndValue schemaAndValue = new SchemaAndValue(Time.SCHEMA,
+        Headers expected = new ConnectHeaders().addTime("AAA",
                 new SimpleDateFormat("HH:mm:ss.SSS'Z'").parse("14:34:54.346Z"));
-
-        Headers expected = new ConnectHeaders().add("AAA", schemaAndValue);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
@@ -319,10 +317,8 @@ public class InsertHeaderTest {
                 0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        SchemaAndValue schemaAndValue = new SchemaAndValue(Timestamp.SCHEMA,
+        Headers expected = new ConnectHeaders().addTimestamp("AAA",
                 new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").parse("2019-08-23T14:34:54.346Z"));
-
-        Headers expected = new ConnectHeaders().add("AAA", schemaAndValue);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());

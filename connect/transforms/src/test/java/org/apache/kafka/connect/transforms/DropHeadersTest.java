@@ -20,44 +20,48 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class DropHeadersTest {
     private DropHeaders<SourceRecord> xform = new DropHeaders<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithEmptyHeaderNames() {
         Map<String, String> props = new HashMap<>();
         props.put("names", "");
-        xform.configure(props);
+
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithBlankHeaderNames() {
         Map<String, String> props = new HashMap<>();
         props.put("names", "a, ");
-        xform.configure(props);
+
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithBlankHeaderNameAndValidHeaderNames() {
         Map<String, String> props = new HashMap<>();
         props.put("names", "a,,d");
-        xform.configure(props);
+
+        assertThrows(ConfigException.class, () -> xform.configure(props));
     }
 
     @Test
