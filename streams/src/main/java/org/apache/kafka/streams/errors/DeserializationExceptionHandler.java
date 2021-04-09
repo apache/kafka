@@ -19,7 +19,8 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 
 /**
  * Interface that specifies how an exception from source node deserialization
@@ -31,14 +32,14 @@ public interface DeserializationExceptionHandler extends Configurable {
      * Inspect a record and the exception received.
      * <p>
      * Note, that the passed in {@link ProcessorContext} only allows to access metadata like the task ID.
-     * However, it cannot be used to emit records via {@link ProcessorContext#forward(Object, Object)};
+     * However, it cannot be used to emit records via {@link ProcessorContext#forward(Record) ()};
      * calling {@code forward()} (and some other methods) would result in a runtime exception.
      *
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
      */
-    DeserializationHandlerResponse handle(final ProcessorContext context,
+    DeserializationHandlerResponse handle(final ProcessorContext<?, ?> context,
                                           final ConsumerRecord<byte[], byte[]> record,
                                           final Exception exception);
 
