@@ -309,7 +309,7 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
   protected def safeForceUnmap(): Unit = {
     try forceUnmap()
     catch {
-      case t: Throwable => error(s"Error unmapping index $file", t)
+      case t: Throwable => warn(s"Error unmapping index $file", t)
     }
   }
 
