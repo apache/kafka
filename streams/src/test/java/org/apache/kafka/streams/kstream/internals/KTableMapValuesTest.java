@@ -110,8 +110,8 @@ public class KTableMapValuesTest {
 
         final Topology topology = builder.build();
 
-        final KTableValueAndTimestampGetterSupplier<String, Integer> getterSupplier2 = table2.valueAndTimestampGetterSupplier();
-        final KTableValueAndTimestampGetterSupplier<String, Integer> getterSupplier3 = table3.valueAndTimestampGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
         final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
@@ -120,8 +120,8 @@ public class KTableMapValuesTest {
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final KTableValueAndTimestampGetter<String, Integer> getter2 = getterSupplier2.get();
-            final KTableValueAndTimestampGetter<String, Integer> getter3 = getterSupplier3.get();
+            final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+            final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
             getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));

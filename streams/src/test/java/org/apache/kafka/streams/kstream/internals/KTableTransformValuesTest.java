@@ -63,7 +63,6 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -85,9 +84,9 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private InternalProcessorContext context;
     @Mock(MockType.NICE)
-    private KTableValueAndTimestampGetterSupplier<String, String> parentGetterSupplier;
+    private KTableValueGetterSupplier<String, String> parentGetterSupplier;
     @Mock(MockType.NICE)
-    private KTableValueAndTimestampGetter<String, String> parentGetter;
+    private KTableValueGetter<String, String> parentGetter;
     @Mock(MockType.NICE)
     private TimestampedKeyValueStore<String, String> stateStore;
     @Mock(MockType.NICE)
@@ -124,7 +123,7 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldThrowOnViewGetIfSupplierReturnsNull() {
-        final KTableValueAndTimestampGetterSupplier<String, String> view =
+        final KTableValueGetterSupplier<String, String> view =
             new KTableTransformValues<>(parent, new NullSupplier(), null).view();
 
         try {
@@ -217,12 +216,12 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        expect(parent.valueAndTimestampGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
         expect(parentGetter.get("Key")).andReturn(ValueAndTimestamp.make("Value", -1L));
         replay(parent, parentGetterSupplier, parentGetter);
 
-        final KTableValueAndTimestampGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
 
         final String result = getter.get("Key").value();
@@ -240,7 +239,7 @@ public class KTableTransformValuesTest {
         expect(stateStore.get("Key")).andReturn(ValueAndTimestamp.make("something", 0L));
         replay(context, stateStore);
 
-        final KTableValueAndTimestampGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
 
         final String result = getter.get("Key").value();
@@ -253,7 +252,7 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        expect(parent.valueAndTimestampGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
         replay(parent, parentGetterSupplier);
 
@@ -296,14 +295,14 @@ public class KTableTransformValuesTest {
 
         expect(mockSupplier.get()).andReturn(transformer);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
-        expect(parent.valueAndTimestampGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
 
         transformer.close();
         expectLastCall();
 
         replay(mockSupplier, transformer, parent, parentGetterSupplier);
 
-        final KTableValueAndTimestampGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.close();
 
         verify(transformer);
@@ -314,7 +313,7 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, mockSupplier, null);
 
-        expect(parent.valueAndTimestampGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(mockSupplier.get()).andReturn(transformer);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
 
@@ -323,7 +322,7 @@ public class KTableTransformValuesTest {
 
         replay(mockSupplier, parent, parentGetterSupplier, parentGetter);
 
-        final KTableValueAndTimestampGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.close();
 
         verify(parentGetter);

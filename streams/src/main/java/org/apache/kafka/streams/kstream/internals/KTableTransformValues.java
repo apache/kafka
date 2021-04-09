@@ -50,15 +50,15 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V1> view() {
+    public KTableValueGetterSupplier<K, V1> view() {
         if (queryableName != null) {
-            return new KTableMaterializedValueAndTimestampGetterSupplier<>(queryableName);
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         }
 
-        return new KTableValueAndTimestampGetterSupplier<K, V1>() {
-            final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier = parent.valueAndTimestampGetterSupplier();
+        return new KTableValueGetterSupplier<K, V1>() {
+            final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-            public KTableValueAndTimestampGetter<K, V1> get() {
+            public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
                     parentValueGetterSupplier.get(),
                     transformerSupplier.get());
@@ -130,11 +130,11 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
     }
 
 
-    private class KTableTransformValuesGetter implements KTableValueAndTimestampGetter<K, V1> {
-        private final KTableValueAndTimestampGetter<K, V> parentGetter;
+    private class KTableTransformValuesGetter implements KTableValueGetter<K, V1> {
+        private final KTableValueGetter<K, V> parentGetter;
         private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
 
-        KTableTransformValuesGetter(final KTableValueAndTimestampGetter<K, V> parentGetter,
+        KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
                                     final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
             this.parentGetter = Objects.requireNonNull(parentGetter, "parentGetter");
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");

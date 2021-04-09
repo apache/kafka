@@ -186,10 +186,10 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<Windowed<K>, Agg> view() {
-        return new KTableValueAndTimestampGetterSupplier<Windowed<K>, Agg>() {
+    public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
+        return new KTableValueGetterSupplier<Windowed<K>, Agg>() {
             @Override
-            public KTableValueAndTimestampGetter<Windowed<K>, Agg> get() {
+            public KTableValueGetter<Windowed<K>, Agg> get() {
                 return new KTableSessionWindowValueGetter();
             }
 
@@ -201,7 +201,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
     }
 
     private class KTableSessionWindowValueGetter
-        implements KTableValueAndTimestampGetter<Windowed<K>, Agg> {
+        implements KTableValueGetter<Windowed<K>, Agg> {
         private SessionStore<K, Agg> store;
 
         @Override

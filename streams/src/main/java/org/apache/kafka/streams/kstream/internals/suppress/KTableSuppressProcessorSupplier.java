@@ -25,8 +25,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableChangeProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -62,14 +62,14 @@ public class KTableSuppressProcessorSupplier<K, V> implements
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
-        final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier = parentKTable.valueAndTimestampGetterSupplier();
-        return new KTableValueAndTimestampGetterSupplier<K, V>() {
+    public KTableValueGetterSupplier<K, V> view() {
+        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parentKTable.valueGetterSupplier();
+        return new KTableValueGetterSupplier<K, V>() {
 
             @Override
-            public KTableValueAndTimestampGetter<K, V> get() {
-                final KTableValueAndTimestampGetter<K, V> parentGetter = parentValueGetterSupplier.get();
-                return new KTableValueAndTimestampGetter<K, V>() {
+            public KTableValueGetter<K, V> get() {
+                final KTableValueGetter<K, V> parentGetter = parentValueGetterSupplier.get();
+                return new KTableValueGetter<K, V>() {
                     private TimeOrderedKeyValueBuffer<K, V> buffer;
 
                     @Override

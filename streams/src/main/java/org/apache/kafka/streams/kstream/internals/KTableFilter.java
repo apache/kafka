@@ -133,17 +133,17 @@ class KTableFilter<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V>
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
+    public KTableValueGetterSupplier<K, V> view() {
         // if the KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply filter on-the-fly
         if (queryableName != null) {
-            return new KTableMaterializedValueAndTimestampGetterSupplier<>(queryableName);
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
-            return new KTableValueAndTimestampGetterSupplier<K, V>() {
-                final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier =
-                    parent.valueAndTimestampGetterSupplier();
+            return new KTableValueGetterSupplier<K, V>() {
+                final KTableValueGetterSupplier<K, V> parentValueGetterSupplier =
+                    parent.valueGetterSupplier();
 
-                public KTableValueAndTimestampGetter<K, V> get() {
+                public KTableValueGetter<K, V> get() {
                     return new KTableFilterValueGetter(parentValueGetterSupplier.get());
                 }
 
@@ -156,10 +156,10 @@ class KTableFilter<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V>
     }
 
 
-    private class KTableFilterValueGetter implements KTableValueAndTimestampGetter<K, V> {
-        private final KTableValueAndTimestampGetter<K, V> parentGetter;
+    private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
+        private final KTableValueGetter<K, V> parentGetter;
 
-        KTableFilterValueGetter(final KTableValueAndTimestampGetter<K, V> parentGetter) {
+        KTableFilterValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 

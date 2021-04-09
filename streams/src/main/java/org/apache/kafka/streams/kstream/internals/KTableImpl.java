@@ -753,9 +753,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
                 .withThisJoinSideNodeName(name)
                 .withOtherJoinSideNodeName(((KTableImpl<?, ?, ?>) other).name)
-                .withJoinThisStoreNames(valueAndTimestampGetterSupplier().storeNames())
+                .withJoinThisStoreNames(valueGetterSupplier().storeNames())
                 .withJoinOtherStoreNames(
-                    ((KTableImpl<?, ?, ?>) other).valueAndTimestampGetterSupplier().storeNames())
+                    ((KTableImpl<?, ?, ?>) other).valueGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
@@ -808,12 +808,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    public KTableValueAndTimestampGetterSupplier<K, V> valueAndTimestampGetterSupplier() {
+    public KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
             final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
             // whenever a source ktable is required for getter, it should be materialized
             source.materialize();
-            return new KTableSourceValueAndTimestampGetterSupplier<>(source.queryableName());
+            return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggregateProcessorSupplier) {
             return ((KStreamAggregateProcessorSupplier<?, K, S, V>) processorSupplier).view();
         } else {
@@ -1068,13 +1068,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             new StatefulProcessorNode<>(
                 new ProcessorParameters<>(
                     new SubscriptionJoinForeignProcessorSupplier<>(
-                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueAndTimestampGetterSupplier()
+                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier()
                     ),
                     renamed.suffixWithOrElseGet("-subscription-join-foreign", builder, SUBSCRIPTION_PROCESSOR)
                 ),
                 Collections.emptySet(),
                 Collections.singleton(
-                    ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueAndTimestampGetterSupplier())
+                    ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier())
             );
         builder.addGraphNode(subscriptionReceiveNode, subscriptionJoinForeignNode);
 
@@ -1113,7 +1113,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         resultSourceNodes.add(foreignResponseSource.nodeName());
         builder.internalTopologyBuilder.copartitionSources(resultSourceNodes);
 
-        final KTableValueAndTimestampGetterSupplier<K, V> primaryKeyValueGetter = valueAndTimestampGetterSupplier();
+        final KTableValueGetterSupplier<K, V> primaryKeyValueGetter = valueGetterSupplier();
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessorSupplier =
             new SubscriptionResolverJoinProcessorSupplier<>(
                 primaryKeyValueGetter,

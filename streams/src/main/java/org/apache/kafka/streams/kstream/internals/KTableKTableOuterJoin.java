@@ -46,29 +46,29 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, R> view() {
+    public KTableValueGetterSupplier<K, R> view() {
         return new KTableKTableOuterJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
     }
 
     private class KTableKTableOuterJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> {
 
-        KTableKTableOuterJoinValueGetterSupplier(final KTableValueAndTimestampGetterSupplier<K, V1> valueGetterSupplier1,
-                                                 final KTableValueAndTimestampGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableOuterJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
-        public KTableValueAndTimestampGetter<K, R> get() {
+        public KTableValueGetter<K, R> get() {
             return new KTableKTableOuterJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
         }
     }
 
     private class KTableKTableOuterJoinProcessor extends ContextualProcessor<K, Change<V1>, K, Change<R>> {
 
-        private final KTableValueAndTimestampGetter<K, V2> valueGetter;
+        private final KTableValueGetter<K, V2> valueGetter;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
-        KTableKTableOuterJoinProcessor(final KTableValueAndTimestampGetter<K, V2> valueGetter) {
+        KTableKTableOuterJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
@@ -125,13 +125,13 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
     }
 
-    private class KTableKTableOuterJoinValueGetter implements KTableValueAndTimestampGetter<K, R> {
+    private class KTableKTableOuterJoinValueGetter implements KTableValueGetter<K, R> {
 
-        private final KTableValueAndTimestampGetter<K, V1> valueGetter1;
-        private final KTableValueAndTimestampGetter<K, V2> valueGetter2;
+        private final KTableValueGetter<K, V1> valueGetter1;
+        private final KTableValueGetter<K, V2> valueGetter2;
 
-        KTableKTableOuterJoinValueGetter(final KTableValueAndTimestampGetter<K, V1> valueGetter1,
-                                         final KTableValueAndTimestampGetter<K, V2> valueGetter2) {
+        KTableKTableOuterJoinValueGetter(final KTableValueGetter<K, V1> valueGetter1,
+                                         final KTableValueGetter<K, V2> valueGetter2) {
             this.valueGetter1 = valueGetter1;
             this.valueGetter2 = valueGetter2;
         }

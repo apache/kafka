@@ -20,8 +20,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 public interface KStreamAggregateProcessorSupplier<K, RK, V, T> extends ProcessorSupplier<K, V, RK, Change<T>> {
 
-    KTableValueAndTimestampGetterSupplier<RK, T> view();
+    KTableValueGetterSupplier<RK, T> view();
 
     void enableSendingOldValues();
 }
-

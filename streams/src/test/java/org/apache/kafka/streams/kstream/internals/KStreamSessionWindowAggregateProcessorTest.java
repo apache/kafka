@@ -289,7 +289,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldGetAggregatedValuesFromValueGetter() {
-        final KTableValueAndTimestampGetter<Windowed<String>, Long> getter = sessionAggregator
+        final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator
             .view().get();
         getter.init(context);
         processor.process(new Record<>("a", "1", 0));

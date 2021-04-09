@@ -20,8 +20,8 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 import java.util.Objects;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -42,10 +42,10 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     implements
     ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>> {
 
-    private final KTableValueAndTimestampGetterSupplier<KO, VO> foreignValueGetterSupplier;
+    private final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier;
 
     public SubscriptionJoinForeignProcessorSupplier(
-        final KTableValueAndTimestampGetterSupplier<KO, VO> foreignValueGetterSupplier) {
+        final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier) {
         this.foreignValueGetterSupplier = foreignValueGetterSupplier;
     }
 
@@ -54,7 +54,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
 
         return new ContextualProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>>() {
 
-            private KTableValueAndTimestampGetter<KO, VO> foreignValues;
+            private KTableValueGetter<KO, VO> foreignValues;
 
             @Override
             public void init(

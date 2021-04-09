@@ -218,7 +218,7 @@ public class KTableSourceTest {
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
 
         final Topology topology = builder.build();
-        final KTableValueAndTimestampGetterSupplier<String, String> getterSupplier1 = table1.valueAndTimestampGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
         final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         topologyBuilder.connectProcessorAndStateStores(table1.name, getterSupplier1.storeNames());
@@ -232,7 +232,7 @@ public class KTableSourceTest {
                     Instant.ofEpochMilli(0L),
                     Duration.ZERO
                 );
-            final KTableValueAndTimestampGetter<String, String> getter1 = getterSupplier1.get();
+            final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
             inputTopic1.pipeInput("A", "01", 10L);

@@ -32,14 +32,14 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends ContextualProcessor<K1, V1, K1, R> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
-    private final KTableValueAndTimestampGetter<K2, V2> valueGetter;
+    private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
     private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
     private StreamsMetricsImpl metrics;
     private Sensor droppedRecordsSensor;
 
-    KStreamKTableJoinProcessor(final KTableValueAndTimestampGetter<K2, V2> valueGetter,
+    KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
                                final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                final boolean leftJoin) {

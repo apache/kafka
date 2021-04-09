@@ -21,8 +21,8 @@ import java.util.function.Supplier;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -42,13 +42,13 @@ import org.apache.kafka.streams.state.internals.Murmur3;
  * @param <VR> Type of joined result of primary and foreign values
  */
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>, K, VR> {
-    private final KTableValueAndTimestampGetterSupplier<K, V> valueGetterSupplier;
+    private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;
     private final Supplier<String> valueHashSerdePseudoTopicSupplier;
     private final ValueJoiner<V, VO, VR> joiner;
     private final boolean leftJoin;
 
-    public SubscriptionResolverJoinProcessorSupplier(final KTableValueAndTimestampGetterSupplier<K, V> valueGetterSupplier,
+    public SubscriptionResolverJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
                                                      final Serializer<V> valueSerializer,
                                                      final Supplier<String> valueHashSerdePseudoTopicSupplier,
                                                      final ValueJoiner<V, VO, VR> joiner,
@@ -66,7 +66,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
             private String valueHashSerdePseudoTopic;
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
-            private KTableValueAndTimestampGetter<K, V> valueGetter;
+            private KTableValueGetter<K, V> valueGetter;
 
             @SuppressWarnings("unchecked")
             @Override

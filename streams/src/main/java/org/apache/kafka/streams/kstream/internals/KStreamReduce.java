@@ -104,10 +104,10 @@ public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K,
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
-        return new KTableValueAndTimestampGetterSupplier<K, V>() {
+    public KTableValueGetterSupplier<K, V> view() {
+        return new KTableValueGetterSupplier<K, V>() {
 
-            public KTableValueAndTimestampGetter<K, V> get() {
+            public KTableValueGetter<K, V> get() {
                 return new KStreamReduceValueGetter();
             }
 
@@ -119,7 +119,7 @@ public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K,
     }
 
 
-    private class KStreamReduceValueGetter implements KTableValueAndTimestampGetter<K, V> {
+    private class KStreamReduceValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
         @Override

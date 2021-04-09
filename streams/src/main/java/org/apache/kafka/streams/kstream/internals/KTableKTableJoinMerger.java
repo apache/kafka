@@ -52,15 +52,15 @@ public class KTableKTableJoinMerger<K, V> implements KTableChangeProcessorSuppli
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
+    public KTableValueGetterSupplier<K, V> view() {
         // if the result KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply join on-the-fly
         if (queryableName != null) {
-            return new KTableMaterializedValueAndTimestampGetterSupplier<>(queryableName);
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
-            return new KTableValueAndTimestampGetterSupplier<K, V>() {
+            return new KTableValueGetterSupplier<K, V>() {
 
-                public KTableValueAndTimestampGetter<K, V> get() {
+                public KTableValueGetter<K, V> get() {
                     return parent1.view().get();
                 }
 

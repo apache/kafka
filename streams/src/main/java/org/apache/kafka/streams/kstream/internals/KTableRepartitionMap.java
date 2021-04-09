@@ -52,13 +52,13 @@ public class KTableRepartitionMap<K, V, K1, V1> implements
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, KeyValue<K1, V1>> view() {
-        final KTableValueAndTimestampGetterSupplier<K, V> parentValueGetterSupplier =
-            parent.valueAndTimestampGetterSupplier();
+    public KTableValueGetterSupplier<K, KeyValue<K1, V1>> view() {
+        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier =
+            parent.valueGetterSupplier();
 
-        return new KTableValueAndTimestampGetterSupplier<K, KeyValue<K1, V1>>() {
+        return new KTableValueGetterSupplier<K, KeyValue<K1, V1>>() {
 
-            public KTableValueAndTimestampGetter<K, KeyValue<K1, V1>> get() {
+            public KTableValueGetter<K, KeyValue<K1, V1>> get() {
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
@@ -114,10 +114,10 @@ public class KTableRepartitionMap<K, V, K1, V1> implements
         }
     }
 
-    private class KTableMapValueGetter implements KTableValueAndTimestampGetter<K, KeyValue<K1, V1>> {
-        private final KTableValueAndTimestampGetter<K, V> parentGetter;
+    private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
+        private final KTableValueGetter<K, V> parentGetter;
 
-        KTableMapValueGetter(final KTableValueAndTimestampGetter<K, V> parentGetter) {
+        KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 

@@ -20,12 +20,13 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public abstract class KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> implements KTableValueAndTimestampGetterSupplier<K, R> {
-    final KTableValueAndTimestampGetterSupplier<K, V1> valueGetterSupplier1;
-    final KTableValueAndTimestampGetterSupplier<K, V2> valueGetterSupplier2;
+public abstract class KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> implements
+    KTableValueGetterSupplier<K, R> {
+    final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
+    final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
 
-    KTableKTableAbstractJoinValueGetterSupplier(final KTableValueAndTimestampGetterSupplier<K, V1> valueGetterSupplier1,
-                                                final KTableValueAndTimestampGetterSupplier<K, V2> valueGetterSupplier2) {
+    KTableKTableAbstractJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
         this.valueGetterSupplier1 = valueGetterSupplier1;
         this.valueGetterSupplier2 = valueGetterSupplier2;
     }

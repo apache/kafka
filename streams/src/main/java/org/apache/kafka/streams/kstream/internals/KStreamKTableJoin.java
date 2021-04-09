@@ -24,11 +24,11 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R> {
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
-    private final KTableValueAndTimestampGetterSupplier<K, V2> valueGetterSupplier;
+    private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableValueAndTimestampGetterSupplier<K, V2> valueGetterSupplier,
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner,
                       final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;

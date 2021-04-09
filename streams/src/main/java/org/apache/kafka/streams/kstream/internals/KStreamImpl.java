@@ -1210,7 +1210,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
-        final KTableValueAndTimestampGetterSupplier<KG, VG> valueGetterSupplier =
+        final KTableValueGetterSupplier<KG, VG> valueGetterSupplier =
             ((GlobalKTableImpl<KG, VG>) globalTable).valueGetterSupplier();
         final String name = new NamedInternal(named)
             .orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
@@ -1252,7 +1252,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
         final KStreamKTableJoin<K, ? extends VR, ? super V, VO> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VO>) table).valueAndTimestampGetterSupplier(),
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
             leftJoin);
 
@@ -1261,7 +1261,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StreamTableJoinNode<K, ? super V> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueAndTimestampGetterSupplier().storeNames(),
+            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name
         );
 

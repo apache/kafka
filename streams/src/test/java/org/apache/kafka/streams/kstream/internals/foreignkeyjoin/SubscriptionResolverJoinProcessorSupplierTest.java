@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -43,12 +43,13 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
     private static final ValueJoiner<String, String, String> JOINER =
         (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
-    private static class TestKTableValueGetterSupplier<K, V> implements KTableValueAndTimestampGetterSupplier<K, V> {
+    private static class TestKTableValueGetterSupplier<K, V> implements
+        KTableValueGetterSupplier<K, V> {
         private final Map<K, V> map = new HashMap<>();
 
         @Override
-        public KTableValueAndTimestampGetter<K, V> get() {
-            return new KTableValueAndTimestampGetter<K, V>() {
+        public KTableValueGetter<K, V> get() {
+            return new KTableValueGetter<K, V>() {
 
                 @Override
                 public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {

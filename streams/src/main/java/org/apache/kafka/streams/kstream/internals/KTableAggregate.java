@@ -120,7 +120,7 @@ public class KTableAggregate<K, V, T> implements KTableChangeProcessorSupplier<K
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, T> view() {
-        return new KTableMaterializedValueAndTimestampGetterSupplier<>(storeName);
+    public KTableValueGetterSupplier<K, T> view() {
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
 }

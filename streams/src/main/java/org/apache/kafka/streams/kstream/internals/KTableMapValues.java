@@ -46,17 +46,17 @@ class KTableMapValues<K, VIn, VOut> implements KTableChangeProcessorSupplier<K, 
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, VOut> view() {
+    public KTableValueGetterSupplier<K, VOut> view() {
         // if the KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply map-values on-the-fly
         if (queryableName != null) {
-            return new KTableMaterializedValueAndTimestampGetterSupplier<>(queryableName);
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
-            return new KTableValueAndTimestampGetterSupplier<K, VOut>() {
-                final KTableValueAndTimestampGetterSupplier<K, VIn> parentValueGetterSupplier =
-                    parent.valueAndTimestampGetterSupplier();
+            return new KTableValueGetterSupplier<K, VOut>() {
+                final KTableValueGetterSupplier<K, VIn> parentValueGetterSupplier =
+                    parent.valueGetterSupplier();
 
-                public KTableValueAndTimestampGetter<K, VOut> get() {
+                public KTableValueGetter<K, VOut> get() {
                     return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
                 }
 
@@ -147,10 +147,10 @@ class KTableMapValues<K, VIn, VOut> implements KTableChangeProcessorSupplier<K, 
     }
 
 
-    private class KTableMapValuesValueGetter implements KTableValueAndTimestampGetter<K, VOut> {
-        private final KTableValueAndTimestampGetter<K, VIn> parentGetter;
+    private class KTableMapValuesValueGetter implements KTableValueGetter<K, VOut> {
+        private final KTableValueGetter<K, VIn> parentGetter;
 
-        KTableMapValuesValueGetter(final KTableValueAndTimestampGetter<K, VIn> parentGetter) {
+        KTableMapValuesValueGetter(final KTableValueGetter<K, VIn> parentGetter) {
             this.parentGetter = parentGetter;
         }
 

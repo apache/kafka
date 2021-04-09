@@ -20,15 +20,16 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-public class KTableMaterializedValueAndTimestampGetterSupplier<K, V> implements KTableValueAndTimestampGetterSupplier<K, V> {
+public class KTableMaterializedValueGetterSupplier<K, V> implements
+    KTableValueGetterSupplier<K, V> {
     private final String storeName;
 
-    KTableMaterializedValueAndTimestampGetterSupplier(final String storeName) {
+    KTableMaterializedValueGetterSupplier(final String storeName) {
         this.storeName = storeName;
     }
 
-    public KTableValueAndTimestampGetter<K, V> get() {
-        return new KTableMaterializedValueAndTimestampGetter();
+    public KTableValueGetter<K, V> get() {
+        return new KTableMaterializedValueGetter();
     }
 
     @Override
@@ -36,7 +37,7 @@ public class KTableMaterializedValueAndTimestampGetterSupplier<K, V> implements 
         return new String[]{storeName};
     }
 
-    private class KTableMaterializedValueAndTimestampGetter implements KTableValueAndTimestampGetter<K, V> {
+    private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
         @Override

@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 public interface KTableChangeProcessorSupplier<KIn, VIn, T, KOut, VOut> extends ProcessorSupplier<KIn, Change<VIn>, KOut, Change<VOut>> {
 
-    KTableValueAndTimestampGetterSupplier<KIn, T> view();
+    KTableValueGetterSupplier<KIn, T> view();
 
     /**
      * Potentially enables sending old values.

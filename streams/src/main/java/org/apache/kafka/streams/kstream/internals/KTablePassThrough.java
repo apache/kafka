@@ -50,11 +50,11 @@ public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K,
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
+    public KTableValueGetterSupplier<K, V> view() {
 
-        return new KTableValueAndTimestampGetterSupplier<K, V>() {
+        return new KTableValueGetterSupplier<K, V>() {
 
-            public KTableValueAndTimestampGetter<K, V> get() {
+            public KTableValueGetter<K, V> get() {
                 return new KTablePassThroughValueGetter();
             }
 
@@ -72,7 +72,7 @@ public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K,
         }
     }
 
-    private class KTablePassThroughValueGetter implements KTableValueAndTimestampGetter<K, V> {
+    private class KTablePassThroughValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
         @Override

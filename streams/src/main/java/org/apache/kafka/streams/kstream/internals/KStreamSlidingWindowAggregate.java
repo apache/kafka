@@ -504,10 +504,10 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<Windowed<K>, Agg> view() {
-        return new KTableValueAndTimestampGetterSupplier<Windowed<K>, Agg>() {
+    public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
+        return new KTableValueGetterSupplier<Windowed<K>, Agg>() {
 
-            public KTableValueAndTimestampGetter<Windowed<K>, Agg> get() {
+            public KTableValueGetter<Windowed<K>, Agg> get() {
                 return new KStreamWindowAggregateValueGetter();
             }
 
@@ -519,7 +519,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
     }
 
     private class KStreamWindowAggregateValueGetter
-        implements KTableValueAndTimestampGetter<Windowed<K>, Agg> {
+        implements KTableValueGetter<Windowed<K>, Agg> {
         private TimestampedWindowStore<K, Agg> windowStore;
 
 

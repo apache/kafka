@@ -111,7 +111,7 @@ public class KTableReduce<K, V> implements KTableChangeProcessorSupplier<K, V, V
     }
 
     @Override
-    public KTableValueAndTimestampGetterSupplier<K, V> view() {
-        return new KTableMaterializedValueAndTimestampGetterSupplier<>(storeName);
+    public KTableValueGetterSupplier<K, V> view() {
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
 }

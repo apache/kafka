@@ -16,14 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+public interface KTableValueGetterSupplier<K, V> {
 
-public interface KTableValueAndTimestampGetter<K, V> {
+    KTableValueGetter<K, V> get();
 
-    <KParent, VParent> void init(ProcessorContext<KParent, VParent> context);
-
-    ValueAndTimestamp<V> get(K key);
-
-    default void close() {}
+    String[] storeNames();
 }
