@@ -36,8 +36,15 @@ public class ConsumerPartitionAssignorTest {
     private List<Object> classTypes;
 
     @Test
-    public void shouldInstantiateNewAssignors() {
+    public void shouldInstantiateAssignor() {
         classNames = Collections.singletonList(StickyAssignor.class.getName());
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
+        assertTrue(assignors.get(0) instanceof StickyAssignor);
+    }
+
+    @Test
+    public void shouldInstantiateListOfAssignors() {
+        classNames = Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName());
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
         assertTrue(assignors.get(0) instanceof StickyAssignor);
     }
@@ -55,7 +62,21 @@ public class ConsumerPartitionAssignorTest {
     }
 
     @Test
-    public void shouldInstantiateFromListOfOldAndNewClassTypes() {
+    public void shouldInstantiateFromClassType() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        classTypes = Collections.singletonList(StickyAssignor.class);
+
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
+                props, new StringDeserializer(), new StringDeserializer());
+
+        consumer.close();
+    }
+
+    @Test
+    public void shouldInstantiateFromListOfClassTypes() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
