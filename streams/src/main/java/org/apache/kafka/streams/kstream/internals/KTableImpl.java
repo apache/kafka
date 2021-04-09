@@ -830,7 +830,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                     return false;
                 }
                 source.enableSendingOldValues();
-            } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+            } else if (processorSupplier instanceof KStreamAggregateProcessorSupplier) {
                 ((KStreamAggregateProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
             } else {
                 final KTableChangeProcessorSupplier<K, S, V, ?, ?> tableProcessorSupplier =

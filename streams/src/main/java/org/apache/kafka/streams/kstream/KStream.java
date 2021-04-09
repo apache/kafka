@@ -4615,8 +4615,8 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-//    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-//                 final String... stateStoreNames);
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final String... stateStoreNames);
 
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
@@ -4709,9 +4709,9 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-//    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-//                 final Named named,
-//                 final String... stateStoreNames);
+    void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final Named named,
+                 final String... stateStoreNames);
 
     <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,
         final String... stateStoreNames);

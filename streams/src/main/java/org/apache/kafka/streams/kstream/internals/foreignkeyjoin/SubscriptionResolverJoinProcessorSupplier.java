@@ -17,14 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.function.Supplier;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueAndTimestampGetterSupplier;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -32,8 +30,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
-
-import java.util.function.Supplier;
 
 /**
  * Receives {@code SubscriptionResponseWrapper<VO>} events and filters out events which do not match the current hash

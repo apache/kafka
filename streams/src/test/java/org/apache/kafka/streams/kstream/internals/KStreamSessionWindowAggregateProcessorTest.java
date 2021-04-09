@@ -109,6 +109,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, metrics),
             Time.SYSTEM
         ) {
+            @SuppressWarnings("unchecked")
             @Override
             public void forward(final Object key, final Object value, final To to) {
                 toInternal.update(to);

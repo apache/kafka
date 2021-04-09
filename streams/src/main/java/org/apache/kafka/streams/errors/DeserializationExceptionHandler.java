@@ -32,7 +32,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * Inspect a record and the exception received.
      * <p>
      * Note, that the passed in {@link ProcessorContext} only allows to access metadata like the task ID.
-     * However, it cannot be used to emit records via {@link ProcessorContext#forward(Record) ()};
+     * However, it cannot be used to emit records via {@link ProcessorContext#forward(Record)};
      * calling {@code forward()} (and some other methods) would result in a runtime exception.
      *
      * @param context processor context
