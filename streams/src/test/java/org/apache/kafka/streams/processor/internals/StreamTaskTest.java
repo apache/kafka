@@ -620,10 +620,10 @@ public class StreamTaskTest {
 
         // Create a processor that only forwards even keys to test the metrics at the source and terminal nodes
         final MockSourceNode<Integer, Integer> evenKeyForwardingSourceNode = new MockSourceNode<Integer, Integer>(intDeserializer, intDeserializer) {
-            InternalProcessorContext context;
+            InternalProcessorContext<Integer, Integer> context;
 
             @Override
-            public void init(final InternalProcessorContext context) {
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
                 this.context = context;
                 super.init(context);
             }
@@ -1505,6 +1505,7 @@ public class StreamTaskTest {
         assertFalse(checkpointFile.exists());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
         task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
@@ -1545,6 +1546,7 @@ public class StreamTaskTest {
         assertThrows(IllegalStateException.class, () -> task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { }));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
         task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);

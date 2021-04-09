@@ -296,7 +296,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> processorSupplier = new MockProcessorSupplier<>();
         source.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -316,10 +316,10 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.through("topic-sink");
 
-        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
         source.process(sourceProcessorSupplier);
 
-        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -337,10 +337,10 @@ public class StreamsBuilderTest {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.repartition();
 
-        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
         source.process(sourceProcessorSupplier);
 
-        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -362,7 +362,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> source2 = builder.stream(topic2);
         final KStream<String, String> merged = source1.merge(source2);
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

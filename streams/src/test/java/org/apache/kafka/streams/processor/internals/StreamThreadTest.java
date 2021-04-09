@@ -64,7 +64,11 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -1808,16 +1812,17 @@ public class StreamThreadTest {
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
-            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
+        final ProcessorSupplier<Object, Object, Object, Object> punctuateProcessor =
+            () -> new ContextualProcessor<Object, Object, Object, Object>() {
                 @Override
-                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
+                public void process(Record<Object, Object> record) {
                 }
 
                 @Override
-                public void process(final Object key, final Object value) {}
+                public void init(final ProcessorContext<Object, Object> context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
+                }
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1893,13 +1898,8 @@ public class StreamThreadTest {
             };
 
         final List<Long> peekedContextTime = new ArrayList<>();
-        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> peekProcessor =
-            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
-                @Override
-                public void process(final Object key, final Object value) {
-                    peekedContextTime.add(context.timestamp());
-                }
-            };
+        final ProcessorSupplier<Object, Object, Object, Object> peekProcessor =
+            () -> (Processor<Object, Object, Object, Object>) record -> peekedContextTime.add(record.timestamp());
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .transform(punctuateProcessor)

@@ -33,8 +33,8 @@ public class SinkNodeTest {
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final RecordCollector recordCollector = new MockRecordCollector();
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext<>(anyStateSerde, recordCollector);
-    private final SinkNode<byte[], byte[], ?, ?> sink = new SinkNode<>("anyNodeName",
+    private final InternalMockProcessorContext<Void, Void> context = new InternalMockProcessorContext<>(anyStateSerde, recordCollector);
+    private final SinkNode<byte[], byte[], Void, Void> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed

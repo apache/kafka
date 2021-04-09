@@ -88,9 +88,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionMerger);
 
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
-    private final Processor<String, String, ?, ?> processor = sessionAggregator.get();
+    private final Processor<String, String, Windowed<String>, Change<Long>> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
     private Metrics metrics;
 
     @Before
@@ -99,7 +99,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         metrics = new Metrics();
         final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
 
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
             stateDir,
             Serdes.String(),
             Serdes.String(),
@@ -109,7 +109,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, metrics),
             Time.SYSTEM
         ) {
-            @SuppressWarnings("unchecked")
             @Override
             public void forward(final Object key, final Object value, final To to) {
                 toInternal.update(to);
@@ -368,7 +367,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final InternalMockProcessorContext<Windowed<String>, Change<Long>> context = createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
@@ -409,8 +408,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
-        final Processor<String, String, ?, ?> processor = new KStreamSessionWindowAggregate<>(
+        final InternalMockProcessorContext<Windowed<String>, Change<Long>> context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
             initializer,
@@ -507,8 +506,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
-        final Processor<String, String, ?, ?> processor = new KStreamSessionWindowAggregate<>(
+        final InternalMockProcessorContext<Windowed<String>, Change<Long>> context = createInternalMockProcessorContext(builtInMetricsVersion);
+        final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
             initializer,
@@ -602,9 +601,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
             greaterThan(0.0));
     }
 
-    private InternalMockProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+    private InternalMockProcessorContext<Windowed<String>, Change<Long>> createInternalMockProcessorContext(final String builtInMetricsVersion) {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<Windowed<String>, Change<Long>> context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),

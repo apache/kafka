@@ -58,13 +58,13 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext<?, ?> context = mockContext();
         context.setTime(0);
         store.init((StateStoreContext) context, store);
     }
 
-    private InternalMockProcessorContext mockContext() {
-        return new InternalMockProcessorContext(
+    private InternalMockProcessorContext<?, ?> mockContext() {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -81,7 +81,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext<?, ?> context = mockContext();
         final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
         inner.init((ProcessorContext) context, outer);
@@ -93,7 +93,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     @Test
     public void shouldDelegateInit() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext<?, ?> context = mockContext();
         final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
         inner.init((StateStoreContext) context, outer);

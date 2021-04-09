@@ -78,7 +78,7 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> {
 
     private final long windowSizeForTimeWindow = 500;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private AbstractRocksDBSegmentedBytesStore<S> bytesStore;
     private File stateDir;
     private final Window[] windows = new Window[4];
@@ -124,7 +124,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDir,
             Serdes.String(),
             Serdes.Long(),
@@ -400,7 +400,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );

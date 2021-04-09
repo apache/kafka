@@ -128,14 +128,14 @@ public class RocksDBStoreTest {
         return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
-        return new InternalMockProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final Properties streamsProps) {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsProps)
         );
     }
 
-    private InternalMockProcessorContext getProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(
         final RecordingLevel recordingLevel,
         final Class<? extends RocksDBConfigSetter> rocksDBConfigSetterClass) {
 
@@ -145,7 +145,7 @@ public class RocksDBStoreTest {
         return getProcessorContext(streamsProps);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final RecordingLevel recordingLevel) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
@@ -320,7 +320,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final InternalMockProcessorContext<?, ?> tmpContext = new InternalMockProcessorContext<>(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 

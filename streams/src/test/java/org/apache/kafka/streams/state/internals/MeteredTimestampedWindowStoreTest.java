@@ -66,7 +66,7 @@ public class MeteredTimestampedWindowStoreTest {
     private static final byte[] VALUE_AND_TIMESTAMP_BYTES = "\0\0\0\0\0\0\0avalue".getBytes();
     private static final int WINDOW_SIZE_MS = 10;
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
@@ -87,7 +87,7 @@ public class MeteredTimestampedWindowStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
 
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),

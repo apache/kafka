@@ -25,8 +25,8 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -62,14 +62,14 @@ public class ProcessorNodeTest {
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
-    private static class ExceptionalProcessor implements Processor<Object, Object> {
+    private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             throw new RuntimeException();
         }
 
         @Override
-        public void process(final Object key, final Object value) {
+        public void process(Record<Object, Object> record) {
             throw new RuntimeException();
         }
 
@@ -79,20 +79,18 @@ public class ProcessorNodeTest {
         }
     }
 
-    private static class NoOpProcessor implements Processor<Object, Object> {
+    private static class NoOpProcessor implements Processor<Object, Object, Object, Object> {
         @Override
-        public void init(final ProcessorContext context) {
-
+        public void init(final ProcessorContext<Object, Object> context) {
         }
 
         @Override
-        public void process(final Object key, final Object value) {
-
+        public void process(Record<Object, Object> record) {
         }
+
 
         @Override
         public void close() {
-
         }
     }
 
@@ -110,8 +108,8 @@ public class ProcessorNodeTest {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion, new MockTime());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
-        final ProcessorNode<Object, Object, ?, ?> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
+        final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
+        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
         node.init(context);
 
         final String threadId = Thread.currentThread().getName();
@@ -182,11 +180,11 @@ public class ProcessorNodeTest {
     private static class ClassCastProcessor extends ExceptionalProcessor {
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
         }
 
         @Override
-        public void process(final Object key, final Object value) {
+        public void process(final Record<Object, Object> record) {
             throw new ClassCastException("Incompatible types simulation exception.");
         }
     }
@@ -196,8 +194,8 @@ public class ProcessorNodeTest {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
-        final ProcessorNode<Object, Object, ?, ?> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
+        final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
+        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
         final StreamsException se = assertThrows(
             StreamsException.class,

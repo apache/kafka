@@ -804,7 +804,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountWindowedWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count()

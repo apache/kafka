@@ -24,8 +24,9 @@ import java.util.Collections;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransformValues.KStreamFlatTransformValuesProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
@@ -38,7 +39,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
     private Integer inputValue;
 
     private ValueTransformerWithKey<Integer, Integer, Iterable<String>> valueTransformer;
-    private ProcessorContext context;
+    private ProcessorContext<Integer, String> context;
 
     private KStreamFlatTransformValuesProcessor<Integer, Integer, String> processor;
 
@@ -72,11 +73,11 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
 
         EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andReturn(outputValues);
         for (final String outputValue : outputValues) {
-            context.forward(inputKey, outputValue);
+            context.forward(new Record<>(inputKey, outputValue, 0));
         }
         replayAll();
 
-        processor.process(inputKey, inputValue);
+        processor.process(new Record<>(inputKey, inputValue, 0L));
 
         verifyAll();
     }
@@ -89,7 +90,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andReturn(Collections.<String>emptyList());
         replayAll();
 
-        processor.process(inputKey, inputValue);
+        processor.process(new Record<>(inputKey, inputValue, 0L));
 
         verifyAll();
     }
@@ -102,7 +103,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         EasyMock.expect(valueTransformer.transform(inputKey, inputValue)).andReturn(null);
         replayAll();
 
-        processor.process(inputKey, inputValue);
+        processor.process(new Record<>(inputKey, inputValue, 0L));
 
         verifyAll();
     }
@@ -127,7 +128,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         EasyMock.expect(valueTransformerSupplier.get()).andReturn(valueTransformer);
         replayAll();
 
-        final Processor<Integer, Integer> processor = processorSupplier.get();
+        final Processor<Integer, Integer, Integer, String> processor = processorSupplier.get();
 
         verifyAll();
         assertTrue(processor instanceof KStreamFlatTransformValuesProcessor);

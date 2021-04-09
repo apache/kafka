@@ -40,7 +40,7 @@ import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext<Object, Object> {
+public class MockInternalProcessorContext<K, V> extends MockProcessorContext implements InternalProcessorContext<K, V> {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
@@ -71,12 +71,13 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K1 extends K, V1 extends V> void forward(Record<K1, V1> record) {
         forward(record.key(), record.value(), To.all().withTimestamp(record.timestamp()));
     }
 
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(Record<K1, V1> record,
+                                                     String childName) {
         forward(record.key(), record.value(), To.child(childName).withTimestamp(record.timestamp()));
     }
 

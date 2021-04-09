@@ -60,7 +60,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     private final static String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private CachingKeyValueStore store;
     private KeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
@@ -74,7 +74,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store = new CachingKeyValueStore(underlyingStore);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
-        context = new InternalMockProcessorContext(null, null, null, null, cache);
+        context = new InternalMockProcessorContext<>(null, null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         store.init((StateStoreContext) context, null);
     }
@@ -200,7 +200,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         EasyMock.replay(underlyingStore);
         store = new CachingKeyValueStore(underlyingStore);
         cache = EasyMock.niceMock(ThreadCache.class);
-        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         store.init((StateStoreContext) context, store);
     }

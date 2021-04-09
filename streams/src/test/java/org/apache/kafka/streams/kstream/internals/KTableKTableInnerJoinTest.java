@@ -28,8 +28,9 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
@@ -257,23 +258,25 @@ public class KTableKTableInnerJoinTest {
         shouldLogAndMeterSkippedRecordsDueToNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
     }
 
+    @SuppressWarnings("unchecked")
     private void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final String builtInMetricsVersion) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
+        final Processor<String, Change<String>, String, Change<Object>> join = new KTableKTableInnerJoin<>(
+            (KTableImpl<String, String, String>) builder
+                .table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String, String>) builder
+                .table("right", Consumed.with(Serdes.String(), Serdes.String())),
             null
         ).get();
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockProcessorContext context = new MockProcessorContext(props);
-        context.setRecordMetadata("left", -1, -2, null, -3);
+        final MockProcessorContext<String, Change<Object>> context = new MockProcessorContext<>(props);
+        context.setRecordMetadata("left", -1, -2);
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableInnerJoin.class)) {
-            join.process(null, new Change<>("new", "old"));
+            join.process(new Record<>(null, new Change<>("new", "old"), -3));
 
             assertThat(
                 appender.getMessages(),

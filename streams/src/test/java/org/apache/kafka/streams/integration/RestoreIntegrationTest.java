@@ -40,10 +40,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingS
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -430,7 +431,7 @@ public class RestoreIntegrationTest {
         }
     }
 
-    public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
+    public static class KeyValueStoreProcessor implements Processor<Integer, Integer, Integer, Integer> {
 
         private final String topic;
         private final CountDownLatch processorLatch;
@@ -442,16 +443,15 @@ public class RestoreIntegrationTest {
             this.processorLatch = processorLatch;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
+        public void init(final ProcessorContext<Integer, Integer> context) {
+            this.store = context.getStateStore(topic);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
-            if (key != null) {
-                store.put(key, value);
+        public void process(final Record<Integer, Integer> record) {
+            if (record.key() != null) {
+                store.put(record.key(), record.value());
                 processorLatch.countDown();
             }
         }
