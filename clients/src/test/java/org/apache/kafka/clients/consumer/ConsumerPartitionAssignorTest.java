@@ -26,79 +26,84 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.getAssignorInstances;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerPartitionAssignorTest {
 
-    private List<String> classNames;
-    private List<Object> classTypes;
-
     @Test
     public void shouldInstantiateAssignor() {
-        classNames = Collections.singletonList(StickyAssignor.class.getName());
-        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(
+                Collections.singletonList(StickyAssignor.class.getName()),
+                Collections.emptyMap()
+        );
         assertTrue(assignors.get(0) instanceof StickyAssignor);
     }
 
     @Test
     public void shouldInstantiateListOfAssignors() {
-        classNames = Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName());
-        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(
+                Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName()),
+                Collections.emptyMap()
+        );
         assertTrue(assignors.get(0) instanceof StickyAssignor);
+        assertTrue(assignors.get(1) instanceof CooperativeStickyAssignor);
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnNonAssignor() {
-        classNames = Collections.singletonList(String.class.getName());
-        assertThrows(KafkaException.class, () -> getAssignorInstances(classNames, Collections.emptyMap()));
+        assertThrows(KafkaException.class, () -> getAssignorInstances(
+                Collections.singletonList(String.class.getName()),
+                Collections.emptyMap())
+        );
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnAssignorNotFound() {
-        classNames = Collections.singletonList("Non-existent assignor");
-        assertThrows(KafkaException.class, () -> getAssignorInstances(classNames, Collections.emptyMap()));
+        assertThrows(KafkaException.class, () -> getAssignorInstances(
+                Collections.singletonList("Non-existent assignor"),
+                Collections.emptyMap())
+        );
     }
 
     @Test
     public void shouldInstantiateFromClassType() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
-        classTypes = Collections.singletonList(StickyAssignor.class);
-
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                props, new StringDeserializer(), new StringDeserializer());
-
-        consumer.close();
+        List<String> classTypes =
+                initConsumerConfigWithClassTypes(Collections.singletonList(StickyAssignor.class))
+                .getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
+        assertTrue(assignors.get(0) instanceof StickyAssignor);
     }
 
     @Test
     public void shouldInstantiateFromListOfClassTypes() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        List<String> classTypes = initConsumerConfigWithClassTypes(
+                Arrays.asList(StickyAssignor.class, CooperativeStickyAssignor.class)
+        ).getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
-        classTypes = Arrays.asList(StickyAssignor.class, CooperativeStickyAssignor.class);
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
 
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                props, new StringDeserializer(), new StringDeserializer());
-
-        consumer.close();
+        assertTrue(assignors.get(0) instanceof StickyAssignor);
+        assertTrue(assignors.get(1) instanceof CooperativeStickyAssignor);
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnListWithNonAssignorClassType() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        List<String> classTypes =
+                initConsumerConfigWithClassTypes(Arrays.asList(StickyAssignor.class, String.class))
+                .getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
-        classTypes = Arrays.asList(StickyAssignor.class, String.class);
-
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
-        assertThrows(KafkaException.class, () -> new KafkaConsumer<>(
-                props, new StringDeserializer(), new StringDeserializer()));
+        assertThrows(KafkaException.class, () -> getAssignorInstances(classTypes, Collections.emptyMap()));
     }
 
+    private ConsumerConfig initConsumerConfigWithClassTypes(List<Object> classTypes) {
+        Properties props = new Properties();
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
+        return new ConsumerConfig(props);
+    }
 }
