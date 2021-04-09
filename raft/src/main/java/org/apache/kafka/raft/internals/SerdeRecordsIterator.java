@@ -19,6 +19,7 @@ package org.apache.kafka.raft.internals;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -40,11 +41,11 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
     private final BufferSupplier bufferSupplier;
     private final int maxBatchSize;
 
-    private Optional<Iterator<MutableRecordBatch>> nextBatches = Optional.empty();
+    private Iterator<MutableRecordBatch> nextBatches = Collections.emptyIterator();
     private Optional<Batch<T>> nextBatch = Optional.empty();
     // Buffer used to as the backing store for nextBatches if needed
     private Optional<ByteBuffer> allocatedBuffer = Optional.empty();
-    // Number of bytes from records that read
+    // Number of bytes from records read up to now
     private int bytesRead = 0;
     private boolean isClosed = false;
 
@@ -96,7 +97,7 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
         }
     }
 
-    private Optional<Iterator<MutableRecordBatch>> nextBatches() {
+    private Iterator<MutableRecordBatch> nextBatches() {
         int recordSize = records.sizeInBytes();
         if (bytesRead < recordSize) {
             final MemoryRecords memoryRecords;
@@ -108,18 +109,6 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                 if (allocatedBuffer.isPresent()) {
                     buffer = allocatedBuffer.get();
                     buffer.compact();
-
-                    if (!buffer.hasRemaining()) {
-                        // The buffer is not big enough to read an entire batch
-                        throw new IllegalStateException(
-                            String.format(
-                                "Unable to read batch from file records buffer %s with maximum batch %s and record size %s",
-                                buffer,
-                                maxBatchSize,
-                                records.sizeInBytes()
-                            )
-                        );
-                    }
                 } else {
                     buffer = bufferSupplier.get(Math.min(maxBatchSize, records.sizeInBytes()));
                     allocatedBuffer = Optional.of(buffer);
@@ -138,33 +127,43 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                 throw new IllegalStateException(String.format("Unexpected Records type %s", records.getClass()));
             }
 
-            return Optional.of(memoryRecords.batchIterator());
-        } else {
-            return Optional.empty();
+            Iterator<MutableRecordBatch> batches = memoryRecords.batchIterator();
+            if (!batches.hasNext()) {
+                // The buffer is not big enough to read an entire batch
+                throw new IllegalStateException(
+                    String.format(
+                        "Unable to read batch from records buffer %s with maximum batch %s and record size %s",
+                        allocatedBuffer,
+                        maxBatchSize,
+                        records.sizeInBytes()
+                    )
+                );
+            }
+
+            return batches;
         }
+
+        return Collections.emptyIterator();
     }
 
     private Optional<Batch<T>> nextBatch() {
-        if (!nextBatches.isPresent()) {
+        if (!nextBatches.hasNext()) {
             nextBatches = nextBatches();
         }
 
-        while (nextBatches.isPresent()) {
-            if (nextBatches.get().hasNext()) {
-                MutableRecordBatch nextBatch = nextBatches.get().next();
+        if (nextBatches.hasNext()) {
+            MutableRecordBatch nextBatch = nextBatches.next();
 
-                // Update the buffer position to reflect the read batch
-                allocatedBuffer.ifPresent(buffer -> buffer.position(buffer.position() + nextBatch.sizeInBytes()));
+            // Update the buffer position to reflect the read batch
+            allocatedBuffer.ifPresent(buffer -> buffer.position(buffer.position() + nextBatch.sizeInBytes()));
 
-                if (!(nextBatch instanceof DefaultRecordBatch)) {
-                    throw new IllegalStateException(
-                        String.format("DefaultRecordBatch expected by record type was %s", nextBatch.getClass())
-                    );
-                }
-                return Optional.of(readBatch((DefaultRecordBatch) nextBatch));
+            if (!(nextBatch instanceof DefaultRecordBatch)) {
+                throw new IllegalStateException(
+                    String.format("DefaultRecordBatch expected by record type was %s", nextBatch.getClass())
+                );
             }
 
-            nextBatches = nextBatches();
+            return Optional.of(readBatch((DefaultRecordBatch) nextBatch));
         }
 
         return Optional.empty();

@@ -31,6 +31,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private final int nodeId;
     private final Logger log;
     private final RaftClient<Integer> client;
+    private final int snapshotDelayInRecords = 10;
 
     private int committed = 0;
     private int uncommitted = 0;
@@ -70,31 +71,34 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     @Override
     public synchronized void handleCommit(BatchReader<Integer> reader) {
         try {
-            int initialValue = committed;
+            int initialCommitted = committed;
             while (reader.hasNext()) {
                 BatchReader.Batch<Integer> batch = reader.next();
-                log.debug("Handle commit of batch with records {} at base offset {}",
-                    batch.records(), batch.baseOffset());
-                for (Integer value : batch.records()) {
-                    if (value != committed + 1) {
+                log.debug(
+                    "Handle commit of batch with records {} at base offset {}",
+                    batch.records(),
+                    batch.baseOffset()
+                );
+                for (Integer nextCommitted: batch.records()) {
+                    if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
                                 "Expected next committed value to be %s, but instead found %s on node %s",
                                 committed + 1,
-                                value,
+                                nextCommitted,
                                 nodeId
                             )
                         );
                     }
-                    committed = value;
+                    committed = nextCommitted;
                 }
 
                 nextReadOffset = batch.lastOffset() + 1;
                 readEpoch = batch.epoch();
             }
-            log.debug("Counter incremented from {} to {}", initialValue, committed);
+            log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastSnapshotEndOffset + 10 < nextReadOffset) {
+            if (lastSnapshotEndOffset + snapshotDelayInRecords  < nextReadOffset) {
                 log.debug("Generating new snapshot at {} since next commit offset is {}", lastSnapshotEndOffset, nextReadOffset);
                 try (SnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
                     snapshot.append(singletonList(committed));

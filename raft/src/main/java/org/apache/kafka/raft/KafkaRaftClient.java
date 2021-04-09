@@ -337,11 +337,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
-        return log.latestSnapshotId().flatMap(snapshoId -> {
-            return log
-                .readSnapshot(snapshoId)
-                .map(reader -> SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES));
-        });
+        return log.latestSnapshotId().flatMap(snapshotId ->
+            log
+            .readSnapshot(snapshotId)
+            .map(reader ->
+                SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+            )
+        );
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {
@@ -2168,7 +2170,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        maybeUpdateEarliestSnapshotId();
+        maybeDeleteBeforeSnapshot();
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2232,7 +2234,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeUpdateEarliestSnapshotId() {
+    private void maybeDeleteBeforeSnapshot() {
         log.latestSnapshotId().ifPresent(snapshotId -> {
             quorum.highWatermark().ifPresent(highWatermark -> {
                 if (highWatermark.offset >= snapshotId.offset) {
