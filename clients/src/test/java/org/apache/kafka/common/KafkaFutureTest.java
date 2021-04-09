@@ -17,6 +17,7 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Java;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -635,49 +636,51 @@ public class KafkaFutureTest {
         assertThrows(UnsupportedOperationException.class, () -> comfut.completeExceptionally(new RuntimeException()));
         // Annoyingly CompletableFuture added some more methods in Java 9, but the tests need to run on Java 8
         // so test reflectively
-        Method completeOnTimeout = CompletableFuture.class.getDeclaredMethod("completeOnTimeout", Object.class, Long.TYPE, TimeUnit.class);
-        assertThrows(UnsupportedOperationException.class, () -> {
-            try {
-                completeOnTimeout.invoke(comfut, "", 1L, TimeUnit.MILLISECONDS);
-            } catch (InvocationTargetException e) {
-                throw e.getCause();
-            }
-        });
+        if (Java.IS_JAVA9_COMPATIBLE) {
+            Method completeOnTimeout = CompletableFuture.class.getDeclaredMethod("completeOnTimeout", Object.class, Long.TYPE, TimeUnit.class);
+            assertThrows(UnsupportedOperationException.class, () -> {
+                try {
+                    completeOnTimeout.invoke(comfut, "", 1L, TimeUnit.MILLISECONDS);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            });
 
-        Method completeAsync = CompletableFuture.class.getDeclaredMethod("completeAsync", Supplier.class);
-        assertThrows(UnsupportedOperationException.class, () -> {
-            try {
-                completeAsync.invoke(comfut, (Supplier<String>) () -> "");
-            } catch (InvocationTargetException e) {
-                throw e.getCause();
-            }
-        });
+            Method completeAsync = CompletableFuture.class.getDeclaredMethod("completeAsync", Supplier.class);
+            assertThrows(UnsupportedOperationException.class, () -> {
+                try {
+                    completeAsync.invoke(comfut, (Supplier<String>) () -> "");
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            });
 
-        Method obtrudeValue = CompletableFuture.class.getDeclaredMethod("obtrudeValue", Object.class);
-        assertThrows(UnsupportedOperationException.class, () -> {
-            try {
-                obtrudeValue.invoke(comfut, "");
-            } catch (InvocationTargetException e) {
-                throw e.getCause();
-            }
-        });
+            Method obtrudeValue = CompletableFuture.class.getDeclaredMethod("obtrudeValue", Object.class);
+            assertThrows(UnsupportedOperationException.class, () -> {
+                try {
+                    obtrudeValue.invoke(comfut, "");
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            });
 
-        Method obtrudeException = CompletableFuture.class.getDeclaredMethod("obtrudeException", Throwable.class);
-        assertThrows(UnsupportedOperationException.class, () -> {
-            try {
-                obtrudeException.invoke(comfut, new RuntimeException());
-            } catch (InvocationTargetException e) {
-                throw e.getCause();
-            }
-        });
+            Method obtrudeException = CompletableFuture.class.getDeclaredMethod("obtrudeException", Throwable.class);
+            assertThrows(UnsupportedOperationException.class, () -> {
+                try {
+                    obtrudeException.invoke(comfut, new RuntimeException());
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            });
 
-        // Check the CF from a minimal CompletionStage doesn't cause completion of the original KafkaFuture
-        Method minimal = CompletableFuture.class.getDeclaredMethod("minimalCompletionStage");
-        CompletionStage<String> cs = (CompletionStage<String>) minimal.invoke(comfut);
-        cs.toCompletableFuture().complete("");
+            // Check the CF from a minimal CompletionStage doesn't cause completion of the original KafkaFuture
+            Method minimal = CompletableFuture.class.getDeclaredMethod("minimalCompletionStage");
+            CompletionStage<String> cs = (CompletionStage<String>) minimal.invoke(comfut);
+            cs.toCompletableFuture().complete("");
 
-        assertFalse(kfut.isDone());
-        assertFalse(comfut.isDone());
+            assertFalse(kfut.isDone());
+            assertFalse(comfut.isDone());
+        }
     }
 
 }
