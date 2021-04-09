@@ -77,7 +77,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     private MockRecordCollector recordCollector;
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
@@ -89,7 +89,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -608,7 +608,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
             recordCollector

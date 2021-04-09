@@ -23,7 +23,8 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -505,7 +506,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    private static class SimpleProcessor implements Processor<String, String, String, String> {
 
         final List<String> valueList;
 
@@ -514,8 +515,8 @@ public class RepartitionTopicNamingTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            valueList.add(value);
+        public void process(Record<String, String> record) {
+            valueList.add(record.value());
         }
     }
 

@@ -57,7 +57,7 @@ public class KStreamSelectKeyTest {
 
         final KStream<String, Integer>  stream =
             builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final MockProcessorSupplier<String, Integer, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer, Integer, Integer> supplier = new MockProcessorSupplier<>();
         stream.selectKey((key, value) -> keyMap.get(value)).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

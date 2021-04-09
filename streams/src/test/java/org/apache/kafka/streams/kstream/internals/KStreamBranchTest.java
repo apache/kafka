@@ -59,7 +59,7 @@ public class KStreamBranchTest {
 
         assertEquals(3, branches.length);
 
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
         for (final KStream<Integer, String> branch : branches) {
             branch.process(supplier);
         }

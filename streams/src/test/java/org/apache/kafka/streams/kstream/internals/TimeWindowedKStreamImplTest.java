@@ -68,7 +68,7 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldCountWindowed() {
-        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         windowedStream
             .count()
             .toStream()
@@ -93,7 +93,7 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldReduceWindowed() {
-        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         windowedStream
             .reduce(MockReducer.STRING_ADDER)
             .toStream()
@@ -118,7 +118,7 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldAggregateWindowed() {
-        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         windowedStream
             .aggregate(
                 MockInitializer.STRING_INIT,

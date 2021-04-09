@@ -59,7 +59,7 @@ public class KTableMapKeysTest {
         final int[] originalKeys = new int[] {1, 2, 3};
         final String[] values = new String[] {"V_ONE", "V_TWO", "V_THREE"};
 
-        final MockProcessorSupplier<String, String, ? , ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
         convertedStream.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

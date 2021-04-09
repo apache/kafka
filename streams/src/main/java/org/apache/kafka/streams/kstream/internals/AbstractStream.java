@@ -16,25 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /*
  * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
@@ -111,38 +103,38 @@ public abstract class AbstractStream<K, V> {
         return (readOnlyKey, value) -> valueMapper.apply(value);
     }
 
-    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
-        final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        ApiUtils.checkSupplier(valueTransformerSupplier);
-        return new ValueTransformerWithKeySupplier<K, V, VR>() {
-            @Override
-            public ValueTransformerWithKey<K, V, VR> get() {
-                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-                return new ValueTransformerWithKey<K, V, VR>() {
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        valueTransformer.init(context);
-                    }
-
-                    @Override
-                    public VR transform(final K readOnlyKey, final V value) {
-                        return valueTransformer.transform(value);
-                    }
-
-                    @Override
-                    public void close() {
-                        valueTransformer.close();
-                    }
-                };
-            }
-
-            @Override
-            public Set<StoreBuilder<?>> stores() {
-                return valueTransformerSupplier.stores();
-            }
-        };
-    }
+//    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
+//        final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+//        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+//        ApiUtils.checkSupplier(valueTransformerSupplier);
+//        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+//            @Override
+//            public ValueTransformerWithKey<K, V, VR> get() {
+//                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+//                return new ValueTransformerWithKey<K, V, VR>() {
+//                    @Override
+//                    public void init(final ProcessorContext context) {
+//                        valueTransformer.init(context);
+//                    }
+//
+//                    @Override
+//                    public VR transform(final K readOnlyKey, final V value) {
+//                        return valueTransformer.transform(value);
+//                    }
+//
+//                    @Override
+//                    public void close() {
+//                        valueTransformer.close();
+//                    }
+//                };
+//            }
+//
+//            @Override
+//            public Set<StoreBuilder<?>> stores() {
+//                return valueTransformerSupplier.stores();
+//            }
+//        };
+//    }
 
     static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> toValueJoinerWithKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
         Objects.requireNonNull(valueJoiner, "joiner can't be null");

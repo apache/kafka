@@ -98,7 +98,7 @@ public class RocksDBStoreTest {
 
     private final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
 
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<?, ?> context;
     RocksDBStore rocksDBStore;
 
     @Before
@@ -106,7 +106,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -304,7 +304,7 @@ public class RocksDBStoreTest {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         final Object param = new Object();
         props.put("abc.def", param);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -683,7 +683,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
+        context = new InternalMockProcessorContext<>(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));

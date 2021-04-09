@@ -46,7 +46,7 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         final KStream<Integer, String> stream;
-        final MockProcessorSupplier<Integer, String, ? , ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
 
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.filter(isMultipleOfThree).process(supplier);
@@ -67,7 +67,7 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         final KStream<Integer, String> stream;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
 
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.filterNot(isMultipleOfThree).process(supplier);

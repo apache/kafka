@@ -60,7 +60,7 @@ public class RecordQueueTest {
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    final InternalMockProcessorContext<Integer, Integer> context = new InternalMockProcessorContext<>(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new MockRecordCollector()
     );

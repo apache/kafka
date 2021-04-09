@@ -346,7 +346,7 @@ public class KStreamKStreamJoinTest {
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
-        final MockProcessorSupplier<String, Integer, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = new MockProcessorSupplier<>();
         final KStream<String, Integer> joinedStream;
 
         joinedStream = left.join(
@@ -384,7 +384,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
         joined = stream1.join(
@@ -495,7 +495,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -609,7 +609,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -1137,7 +1137,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -1388,7 +1388,7 @@ public class KStreamKStreamJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);

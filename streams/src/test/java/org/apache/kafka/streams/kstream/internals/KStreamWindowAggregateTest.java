@@ -79,7 +79,7 @@ public class KStreamWindowAggregateTest {
             .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
-        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -157,7 +157,7 @@ public class KStreamWindowAggregateTest {
             .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
-        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<Windowed<String>, String> table2 = builder

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.List;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -56,7 +57,7 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, List<String>> supplier = new MockProcessorSupplier<>();
         stream.flatMapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -92,7 +93,7 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, List<String>> supplier = new MockProcessorSupplier<>();
 
         stream.flatMapValues(mapper).process(supplier);
 

@@ -45,7 +45,7 @@ public class KStreamMapTest {
         final String topicName = "topic";
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
-        final MockProcessorSupplier<String, Integer, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer, Integer, String> supplier = new MockProcessorSupplier<>();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.map((key, value) -> KeyValue.pair(value, key)).process(supplier);
 

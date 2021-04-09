@@ -202,7 +202,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMillis(2000L)))
                 .count(Materialized.as("aggregate-by-key-windowed"))
@@ -214,7 +214,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSlidingWindowsWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMillis(2000L)))
                 .count()
@@ -792,7 +792,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountWindowed() {
-        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("aggregate-by-key-windowed"))

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.List;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -58,7 +59,7 @@ public class KStreamFlatMapTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, String> stream;
-        final MockProcessorSupplier<String, String, ?, ?> supplier;
+        final MockProcessorSupplier<String, String, String, List<String>> supplier;
 
         supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));

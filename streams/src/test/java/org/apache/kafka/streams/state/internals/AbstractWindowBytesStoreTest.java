@@ -80,7 +80,7 @@ public abstract class AbstractWindowBytesStoreTest {
     static final long RETENTION_PERIOD = 2 * SEGMENT_INTERVAL;
 
     WindowStore<Integer, String> windowStore;
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<?, ?> context;
     MockRecordCollector recordCollector;
 
     final File baseDir = TestUtils.tempDirectory("test");
@@ -101,7 +101,7 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
             Serdes.Integer(),

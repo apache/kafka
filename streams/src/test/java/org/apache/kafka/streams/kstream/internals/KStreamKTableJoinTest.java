@@ -66,7 +66,7 @@ public class KStreamKTableJoinTest {
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-    private final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
 
     @Before
     public void setUp() {

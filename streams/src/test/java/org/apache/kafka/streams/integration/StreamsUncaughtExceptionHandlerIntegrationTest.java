@@ -31,6 +31,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
@@ -209,7 +212,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
-
     }
 
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
@@ -224,7 +226,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             timestamp);
     }
 
-    private static class ShutdownProcessor extends AbstractProcessor<String, String> {
+    private static class ShutdownProcessor extends ContextualProcessor<String, String, Void, Void> {
         final List<String> valueList;
 
         ShutdownProcessor(final List<String> valueList) {
@@ -232,8 +234,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            valueList.add(value + " " + context.taskId());
+        public void process(Record<String, String> record) {
+            valueList.add(record + " " + context.taskId());
             if (throwError.get()) {
                 throw new StreamsException(Thread.currentThread().getName());
             }

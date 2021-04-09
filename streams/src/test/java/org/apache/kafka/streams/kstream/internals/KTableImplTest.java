@@ -91,7 +91,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        final MockProcessorSupplier<String, Object, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Object, String, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -159,7 +159,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed, Materialized.as("fred"));
 
-        final MockProcessorSupplier<String, Object, ?, ?> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Object, String, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));

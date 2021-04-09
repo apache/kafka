@@ -33,7 +33,7 @@ public class SinkNodeTest {
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final RecordCollector recordCollector = new MockRecordCollector();
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext<>(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[], ?, ?> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
