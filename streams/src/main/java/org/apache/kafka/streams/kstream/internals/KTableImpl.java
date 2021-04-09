@@ -807,13 +807,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
+    @SuppressWarnings("unchecked")
     public KTableValueAndTimestampGetterSupplier<K, V> valueAndTimestampGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
             final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
             // whenever a source ktable is required for getter, it should be materialized
             source.materialize();
             return new KTableSourceValueAndTimestampGetterSupplier<>(source.queryableName());
-        } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+        } else if (processorSupplier instanceof KStreamAggregateProcessorSupplier) {
             return ((AggregationProcessorSupplier<?, K, S, V, ?>) processorSupplier).view();
         } else {
             return ((KTableChangeProcessorSupplier<K, S, V, ?, ?>) processorSupplier).view();
@@ -830,9 +831,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 }
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-                ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
+                ((KStreamAggregateProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
             } else {
-                final KTableProcessorSupplier<K, S, V> tableProcessorSupplier = (KTableProcessorSupplier<K, S, V>) processorSupplier;
+                final KTableChangeProcessorSupplier<K, S, V, ?, ?> tableProcessorSupplier =
+                    (KTableChangeProcessorSupplier<K, S, V, ?, ?>) processorSupplier;
                 if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
                     return false;
                 }

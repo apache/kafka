@@ -16,45 +16,48 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
- * This class is used to determine if a processor should forward values to child nodes.
- * Forwarding by this class only occurs when caching is not enabled. If caching is enabled,
- * forwarding occurs in the flush listener when the cached store flushes.
+ * This class is used to determine if a processor should forward values to child nodes. Forwarding
+ * by this class only occurs when caching is not enabled. If caching is enabled, forwarding occurs
+ * in the flush listener when the cached store flushes.
  *
  * @param <K> the type of the key
  * @param <V> the type of the value
  */
 class TupleChangeForwarder<K, V> {
+
     private final ProcessorContext<K, Change<V>> context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
+    @SuppressWarnings("unchecked")
     TupleChangeForwarder(final StateStore store,
-                              final ProcessorContext<K, Change<V>> context,
-                              final TupleChangeCacheFlushListener<K, V> flushListener,
-                              final boolean sendOldValues) {
+                         final ProcessorContext<K, Change<V>> context,
+                         final TupleChangeCacheFlushListener<K, V> flushListener,
+                         final boolean sendOldValues) {
         this.context = context;
         this.sendOldValues = sendOldValues;
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
     public <VIn> void maybeForward(final Record<K, VIn> record,
-                             final V newValue,
-                             final V oldValue) {
+                                   final V newValue,
+                                   final V oldValue) {
         if (!cachingEnabled) {
-            context.forward(record.withValue(new Change<>(newValue, sendOldValues ? oldValue : null)));
+            context
+                .forward(record.withValue(new Change<>(newValue, sendOldValues ? oldValue : null)));
         }
     }
 
     public <VIn> void maybeForward(final Record<K, VIn> record,
-                             final V newValue,
-                             final V oldValue,
-                             final long timestamp) {
+                                   final V newValue,
+                                   final V oldValue,
+                                   final long timestamp) {
         if (!cachingEnabled) {
             context.forward(record
                 .withValue(new Change<>(newValue, sendOldValues ? oldValue : null))

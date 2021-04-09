@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
@@ -39,12 +39,12 @@ public class TimestampedTupleForwarderTest {
 
     private void setFlushListener(final boolean sendOldValues) {
         final WrappedStateStore<StateStore, Object, ValueAndTimestamp<Object>> store = mock(WrappedStateStore.class);
-        final TimestampedCacheFlushListener<Object, Object> flushListener = mock(TimestampedCacheFlushListener.class);
+        final TupleChangeCacheFlushListener<Object, Object> flushListener = mock(TupleChangeCacheFlushListener.class);
 
         expect(store.setFlushListener(flushListener, sendOldValues)).andReturn(false);
         replay(store);
 
-        new TimestampedTupleForwarder<>(store, null, flushListener, sendOldValues);
+        new TupleChangeForwarder<>(store, null, flushListener, sendOldValues);
 
         verify(store);
     }
@@ -57,23 +57,29 @@ public class TimestampedTupleForwarderTest {
 
     private void shouldForwardRecordsIfWrappedStateStoreDoesNotCache(final boolean sendOldValues) {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<String, Change<String>> context = mock(ProcessorContext.class);
 
         expect(store.setFlushListener(null, sendOldValues)).andReturn(false);
         if (sendOldValues) {
-            context.forward("key1", new Change<>("newValue1",  "oldValue1"));
-            context.forward("key2", new Change<>("newValue2",  "oldValue2"), To.all().withTimestamp(42L));
+            final Record<String, Change<String>> record1 = new Record<>("key1", new Change<>("newValue1",  "oldValue1"), 0L);
+            context.forward(record1);
+            final Record<String, Change<String>> record2 = new Record<>("key2", new Change<>("newValue2",  "oldValue2"), 42L);
+            context.forward(record2);
         } else {
-            context.forward("key1", new Change<>("newValue1", null));
-            context.forward("key2", new Change<>("newValue2", null), To.all().withTimestamp(42L));
+            final Record<String, Change<String>> record1 = new Record<>("key1", new Change<>("newValue1",  null), 0L);
+            context.forward(record1);
+            final Record<String, Change<String>> record2 = new Record<>("key2", new Change<>("newValue2",  null), 42L);
+            context.forward(record2);
         }
         expectLastCall();
         replay(store, context);
 
-        final TimestampedTupleForwarder<String, String> forwarder =
-            new TimestampedTupleForwarder<>(store, context, null, sendOldValues);
-        forwarder.maybeForward("key1", "newValue1", "oldValue1");
-        forwarder.maybeForward("key2", "newValue2", "oldValue2", 42L);
+        final TupleChangeForwarder<String, String> forwarder =
+            new TupleChangeForwarder<>(store, context, null, sendOldValues);
+        final Record<String, String> record1 = new Record<>("key1", "newValue1", 0L);
+        forwarder.maybeForward(record1, "newValue1", "oldValue1");
+        final Record<String, String> record2 = new Record<>("key2", "newValue2", 0L);
+        forwarder.maybeForward(record2, "newValue2", "oldValue2", 42L);
 
         verify(store, context);
     }
@@ -81,15 +87,17 @@ public class TimestampedTupleForwarderTest {
     @Test
     public void shouldNotForwardRecordsIfWrappedStateStoreDoesCache() {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<String, Change<String>> context = mock(ProcessorContext.class);
 
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
 
-        final TimestampedTupleForwarder<String, String> forwarder =
-            new TimestampedTupleForwarder<>(store, context, null, false);
-        forwarder.maybeForward("key", "newValue", "oldValue");
-        forwarder.maybeForward("key", "newValue", "oldValue", 42L);
+        final TupleChangeForwarder<String, String> forwarder =
+            new TupleChangeForwarder<>(store, context, null, false);
+        final Record<String, Change<String>> record1 = new Record<>("key", null, 0L);
+        forwarder.maybeForward(record1, "newValue", "oldValue");
+        final Record<String, Change<String>> record2 = new Record<>("key", null, 0L);
+        forwarder.maybeForward(record2, "newValue", "oldValue", 42L);
 
         verify(store, context);
     }

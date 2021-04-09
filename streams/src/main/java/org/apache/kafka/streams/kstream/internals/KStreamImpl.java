@@ -1465,32 +1465,32 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    @Override
-    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-                        final String... stateStoreNames) {
-        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
-    }
-
-    @Override
-    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
-                        final Named named,
-                        final String... stateStoreNames) {
-        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
-        Objects.requireNonNull(named, "named can't be null");
-        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
-        ApiUtils.checkSupplier(processorSupplier);
-        for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
-        }
-
-        final String name = new NamedInternal(named).name();
-        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
-            name,
-            new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames);
-
-        builder.addGraphNode(graphNode, processNode);
-    }
+//    @Override
+//    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+//                        final String... stateStoreNames) {
+//        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
+//    }
+//
+//    @Override
+//    public void process(final org.apache.kafka.streams.processor.ProcessorSupplier<? super K, ? super V> processorSupplier,
+//                        final Named named,
+//                        final String... stateStoreNames) {
+//        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
+//        Objects.requireNonNull(named, "named can't be null");
+//        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+//        ApiUtils.checkSupplier(processorSupplier);
+//        for (final String stateStoreName : stateStoreNames) {
+//            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+//        }
+//
+//        final String name = new NamedInternal(named).name();
+//        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
+//            name,
+//            new ProcessorParameters<>(processorSupplier, name),
+//            stateStoreNames);
+//
+//        builder.addGraphNode(graphNode, processNode);
+//    }
 
     @Override
     public <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,

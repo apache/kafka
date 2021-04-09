@@ -229,7 +229,7 @@ public class InternalTopologyBuilder {
     // even if it can be matched by multiple regex patterns. Only used by SourceNodeFactory
     private final Map<String, Pattern> topicToPatterns = new HashMap<>();
 
-    private class SourceNodeFactory<KIn, VIn, KOut, VOut> extends NodeFactory<KIn, VIn, KOut, VOut> {
+    private class SourceNodeFactory<KIn, VIn> extends NodeFactory<KIn, VIn, KIn, VIn> {
         private final List<String> topics;
         private final Pattern pattern;
         private final Deserializer<KIn> keyDeserializer;
@@ -277,7 +277,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public ProcessorNode<KIn, VIn, KOut, VOut> build() {
+        public ProcessorNode<KIn, VIn, KIn, VIn> build() {
             return new SourceNode<>(name, timestampExtractor, keyDeserializer, valDeserializer);
         }
 
@@ -733,14 +733,14 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private Set<SourceNodeFactory<?, ?, ?, ?>> findSourcesForProcessorPredecessors(final String[] predecessors) {
-        final Set<SourceNodeFactory<?, ?, ?, ?>> sourceNodes = new HashSet<>();
+    private Set<SourceNodeFactory<?, ?>> findSourcesForProcessorPredecessors(final String[] predecessors) {
+        final Set<SourceNodeFactory<?, ?>> sourceNodes = new HashSet<>();
         for (final String predecessor : predecessors) {
             final NodeFactory<?, ?, ?, ?> nodeFactory = nodeFactories.get(predecessor);
             if (nodeFactory instanceof SourceNodeFactory) {
-                sourceNodes.add((SourceNodeFactory<?, ?, ?, ?>) nodeFactory);
+                sourceNodes.add((SourceNodeFactory<?, ?>) nodeFactory);
             } else if (nodeFactory instanceof ProcessorNodeFactory) {
-                sourceNodes.addAll(findSourcesForProcessorPredecessors(((ProcessorNodeFactory<?, ?, ?, ?>) nodeFactory).predecessors));
+                sourceNodes.addAll(findSourcesForProcessorPredecessors((nodeFactory).predecessors));
             }
         }
         return sourceNodes;
@@ -759,10 +759,10 @@ public class InternalTopologyBuilder {
 
         final Set<String> sourceTopics = new HashSet<>();
         final Set<Pattern> sourcePatterns = new HashSet<>();
-        final Set<SourceNodeFactory<?, ?, ?, ?>> sourceNodesForPredecessor =
+        final Set<SourceNodeFactory<?, ?>> sourceNodesForPredecessor =
             findSourcesForProcessorPredecessors(processorNodeFactory.predecessors);
 
-        for (final SourceNodeFactory<?, ?, ?, ?> sourceNodeFactory : sourceNodesForPredecessor) {
+        for (final SourceNodeFactory<?, ?> sourceNodeFactory : sourceNodesForPredecessor) {
             if (sourceNodeFactory.pattern != null) {
                 sourcePatterns.add(sourceNodeFactory.pattern);
             } else {
@@ -897,7 +897,7 @@ public class InternalTopologyBuilder {
         Objects.requireNonNull(applicationId, "topology has not completed optimization");
 
         final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap = new LinkedHashMap<>();
-        final Map<String, SourceNode<?, ?, ?, ?>> topicSourceMap = new HashMap<>();
+        final Map<String, SourceNode<?, ?>> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode<?, ?, ?, ?>> topicSinkMap = new HashMap<>();
         final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
         final Set<String> repartitionTopics = new HashSet<>();
@@ -918,8 +918,8 @@ public class InternalTopologyBuilder {
                 } else if (factory instanceof SourceNodeFactory) {
                     buildSourceNode(topicSourceMap,
                                     repartitionTopics,
-                                    (SourceNodeFactory<?, ?, ?, ?>) factory,
-                                    (SourceNode<?, ?, ?, ?>) node);
+                                    (SourceNodeFactory<?, ?>) factory,
+                                    (SourceNode<?, ?>) node);
 
                 } else if (factory instanceof SinkNodeFactory) {
                     buildSinkNode(processorMap,
@@ -974,10 +974,10 @@ public class InternalTopologyBuilder {
         return (ProcessorNode<KIn, VIn, KOut, VOut>) processorMap.get(predecessor);
     }
 
-    private void buildSourceNode(final Map<String, SourceNode<?, ?, ?, ?>> topicSourceMap,
+    private void buildSourceNode(final Map<String, SourceNode<?, ?>> topicSourceMap,
                                  final Set<String> repartitionTopics,
-                                 final SourceNodeFactory<?, ?, ?, ?> sourceNodeFactory,
-                                 final SourceNode<?, ?, ?, ?> node) {
+                                 final SourceNodeFactory<?, ?> sourceNodeFactory,
+                                 final SourceNode<?, ?> node) {
 
         final List<String> topics = (sourceNodeFactory.pattern != null) ?
             sourceNodeFactory.getTopics(subscriptionUpdates()) :
@@ -1140,7 +1140,7 @@ public class InternalTopologyBuilder {
     private void setRegexMatchedTopicsToSourceNodes() {
         if (hasSubscriptionUpdates()) {
             for (final String nodeName : nodeToSourcePatterns.keySet()) {
-                final SourceNodeFactory<?, ?, ?, ?> sourceNode = (SourceNodeFactory<?, ?, ?, ?>) nodeFactories.get(nodeName);
+                final SourceNodeFactory<?, ?> sourceNode = (SourceNodeFactory<?, ?>) nodeFactories.get(nodeName);
                 final List<String> sourceTopics = sourceNode.getTopics(subscriptionUpdates);
                 //need to update nodeToSourceTopics and sourceTopicNames with topics matched from given regex
                 nodeToSourceTopics.put(nodeName, sourceTopics);
@@ -1330,7 +1330,7 @@ public class InternalTopologyBuilder {
         final NodeFactory<?, ?, ?, ?> nodeFactory = nodeFactories.get(nodeName);
 
         if (nodeFactory instanceof SourceNodeFactory) {
-            final List<String> topics = ((SourceNodeFactory<?, ?, ?, ?>) nodeFactory).topics;
+            final List<String> topics = ((SourceNodeFactory<?, ?>) nodeFactory).topics;
             return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
         }
         return false;

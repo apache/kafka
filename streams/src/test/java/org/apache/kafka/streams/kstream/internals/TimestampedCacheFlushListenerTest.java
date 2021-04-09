@@ -31,7 +31,7 @@ public class TimestampedCacheFlushListenerTest {
 
     @Test
     public void shouldForwardValueTimestampIfNewValueExists() {
-        final InternalProcessorContext context = mock(InternalProcessorContext.class);
+        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
         expect(context.currentNode()).andReturn(null).anyTimes();
         context.setCurrentNode(null);
         context.setCurrentNode(null);
@@ -42,7 +42,7 @@ public class TimestampedCacheFlushListenerTest {
         expectLastCall();
         replay(context);
 
-        new TimestampedCacheFlushListener<>(context).apply(
+        new TupleChangeCacheFlushListener<>(context).apply(
             "key",
             ValueAndTimestamp.make("newValue", 42L),
             ValueAndTimestamp.make("oldValue", 21L),
@@ -53,7 +53,7 @@ public class TimestampedCacheFlushListenerTest {
 
     @Test
     public void shouldForwardParameterTimestampIfNewValueIsNull() {
-        final InternalProcessorContext context = mock(InternalProcessorContext.class);
+        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
         expect(context.currentNode()).andReturn(null).anyTimes();
         context.setCurrentNode(null);
         context.setCurrentNode(null);
@@ -64,7 +64,7 @@ public class TimestampedCacheFlushListenerTest {
         expectLastCall();
         replay(context);
 
-        new TimestampedCacheFlushListener<>(context).apply(
+        new TupleChangeCacheFlushListener<>(context).apply(
             "key",
             null,
             ValueAndTimestamp.make("oldValue", 21L),

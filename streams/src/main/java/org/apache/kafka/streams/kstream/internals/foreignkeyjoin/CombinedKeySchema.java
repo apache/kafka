@@ -51,15 +51,6 @@ public class CombinedKeySchema<KO, K> {
     }
 
     @SuppressWarnings("unchecked")
-    public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-        primaryKeySerdeTopic = undecoratedPrimaryKeySerdeTopicSupplier.get();
-        foreignKeySerdeTopic = undecoratedForeignKeySerdeTopicSupplier.get();
-        primaryKeySerializer = primaryKeySerializer == null ? (Serializer<K>) context.keySerde().serializer() : primaryKeySerializer;
-        primaryKeyDeserializer = primaryKeyDeserializer == null ? (Deserializer<K>) context.keySerde().deserializer() : primaryKeyDeserializer;
-        foreignKeySerializer = foreignKeySerializer == null ? (Serializer<KO>) context.keySerde().serializer() : foreignKeySerializer;
-        foreignKeyDeserializer = foreignKeyDeserializer == null ? (Deserializer<KO>) context.keySerde().deserializer() : foreignKeyDeserializer;
-    }
-
     public void init(final ProcessorContext<?, ?> context) {
         primaryKeySerdeTopic = undecoratedPrimaryKeySerdeTopicSupplier.get();
         foreignKeySerdeTopic = undecoratedForeignKeySerdeTopicSupplier.get();

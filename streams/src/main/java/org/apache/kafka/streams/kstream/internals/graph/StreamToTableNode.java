@@ -57,10 +57,10 @@ public class StreamToTableNode<K, V> extends GraphNode {
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         final String processorName = processorParameters.processorName();
-        final KTableSource<K, V> ktableSource = processorParameters.kTableSourceSupplier();
+        final KTableSource<K, V> kTableSource = processorParameters.kTableSourceSupplier();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
-        if (storeBuilder != null && ktableSource.materialized()) {
+        if (storeBuilder != null && kTableSource.materialized()) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
         }
     }

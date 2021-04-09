@@ -16,23 +16,24 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1, K, R> {
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
@@ -55,61 +56,63 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public Processor<K, V1, K, R> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, R> {
 
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, R> context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
-            otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(), context.taskId().toString(), metrics);
+            otherWindow = context.getStateStore(otherWindowName);
         }
 
-
         @Override
-        public void process(final K key, final V1 value) {
+        public void process(Record<K, V1> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             //
             // we also ignore the record if value is null, because in a key-value data model a null-value indicates
             // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
             // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
             // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-            if (key == null || value == null) {
-                LOG.warn(
-                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    key, value, context().topic(), context().partition(), context().offset()
-                );
+            if (record.key() == null || record.value() == null) {
+//                LOG.warn(
+//                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+//                    key, value, context().topic(), context().partition(), context().offset()
+//                );
                 droppedRecordsSensor.record();
                 return;
             }
 
             boolean needOuterJoin = outer;
 
-            final long inputRecordTimestamp = context().timestamp();
+            final long inputRecordTimestamp = record.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
-            try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V2> iter = otherWindow
+                .fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     context().forward(
-                        key,
-                        joiner.apply(key, value, otherRecord.value),
-                        To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
+                        record
+                            .withValue(
+                                joiner.apply(record.key(), record.value(), otherRecord.value))
+                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
                 }
 
                 if (needOuterJoin) {
-                    context().forward(key, joiner.apply(key, value, null));
+                    context().forward(
+                        record.withValue(joiner.apply(record.key(), record.value(), null)));
                 }
             }
         }

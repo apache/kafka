@@ -17,23 +17,18 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
 class SessionCacheFlushListener<K, V> implements CacheFlushListener<Windowed<K>, V> {
-    private final InternalProcessorContext context;
+    private final InternalProcessorContext<Windowed<K>, Change<V>> context;
     private final ProcessorNode myNode;
 
-    SessionCacheFlushListener(final org.apache.kafka.streams.processor.api.ProcessorContext<Windowed<K>, Change<V>> context) {
-        this.context = (InternalProcessorContext) context;
-        myNode = this.context.currentNode();
-    }
-
-    SessionCacheFlushListener(final ProcessorContext context) {
-        this.context = (InternalProcessorContext) context;
+    SessionCacheFlushListener(final ProcessorContext<Windowed<K>, Change<V>> context) {
+        this.context = (InternalProcessorContext<Windowed<K>, Change<V>>) context;
         myNode = this.context.currentNode();
     }
 
