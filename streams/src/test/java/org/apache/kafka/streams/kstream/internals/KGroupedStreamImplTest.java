@@ -202,7 +202,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         groupedStream
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMillis(2000L)))
                 .count(Materialized.as("aggregate-by-key-windowed"))
@@ -214,7 +214,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSlidingWindowsWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         groupedStream
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMillis(2000L)))
                 .count()
@@ -224,7 +224,7 @@ public class KGroupedStreamImplTest {
         doCountSlidingWindows(supplier);
     }
 
-    private void doCountSlidingWindows(final  MockProcessorSupplier<Windowed<String>, Long> supplier) {
+    private void doCountSlidingWindows(final  MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
@@ -319,7 +319,7 @@ public class KGroupedStreamImplTest {
         )));
     }
 
-    private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer> supplier) {
+    private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer, Windowed<String>, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
@@ -345,7 +345,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldAggregateSessionWindows() {
-        final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Integer, Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
@@ -363,7 +363,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Integer, Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
@@ -376,7 +376,7 @@ public class KGroupedStreamImplTest {
         doAggregateSessionWindows(supplier);
     }
 
-    private void doCountSessionWindows(final MockProcessorSupplier<Windowed<String>, Long> supplier) {
+    private void doCountSessionWindows(final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier) {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -403,7 +403,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSessionWindows() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .count(Materialized.as("session-store"));
@@ -414,7 +414,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .count();
@@ -423,7 +423,7 @@ public class KGroupedStreamImplTest {
         assertNull(table.queryableStoreName());
     }
 
-    private void doReduceSessionWindows(final MockProcessorSupplier<Windowed<String>, String> supplier) {
+    private void doReduceSessionWindows(final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
@@ -449,7 +449,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldReduceSessionWindows() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as("session-store"));
@@ -460,7 +460,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .reduce((value1, value2) -> value1 + ":" + value2);
@@ -724,7 +724,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldAggregateWithDefaultSerdes() {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
         groupedStream
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER)
             .toStream()
@@ -757,7 +757,7 @@ public class KGroupedStreamImplTest {
         inputTopic.pipeInput("3", (String) null);
     }
 
-    private void doCountWindowed(final  MockProcessorSupplier<Windowed<String>, Long> supplier) {
+    private void doCountWindowed(final  MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
@@ -792,7 +792,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountWindowed() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("aggregate-by-key-windowed"))
@@ -804,7 +804,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldCountWindowedWithInternalStoreName() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count()

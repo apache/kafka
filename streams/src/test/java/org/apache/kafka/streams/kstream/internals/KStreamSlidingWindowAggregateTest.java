@@ -117,7 +117,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -173,7 +173,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockReducer.STRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =

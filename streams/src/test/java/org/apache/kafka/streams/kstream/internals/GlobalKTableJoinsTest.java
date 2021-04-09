@@ -58,7 +58,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
         stream
             .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -73,7 +73,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldInnerJoinWithStream() {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
         stream
             .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -86,7 +86,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
-                            final MockProcessorSupplier<String, String> supplier) {
+                            final MockProcessorSupplier<String, String, String, String> supplier) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

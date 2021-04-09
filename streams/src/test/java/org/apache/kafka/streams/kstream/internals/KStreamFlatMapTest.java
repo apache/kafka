@@ -58,7 +58,7 @@ public class KStreamFlatMapTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, String> stream;
-        final MockProcessorSupplier<String, String> supplier;
+        final MockProcessorSupplier<String, String, ?, ?> supplier;
 
         supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));

@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
@@ -28,13 +33,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-
-public abstract class AbstractProcessorContext implements InternalProcessorContext<Object, Object> {
+public abstract class AbstractProcessorContext<K, V> implements InternalProcessorContext<K, V> {
 
     private final TaskId taskId;
     private final String applicationId;

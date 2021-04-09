@@ -91,7 +91,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Object, ?, ?> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -115,7 +115,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<? extends MockProcessor<String, Object, ?, ?>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -159,7 +159,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed, Materialized.as("fred"));
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Object, ?, ?> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -183,7 +183,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<? extends MockProcessor<String, Object, ?, ?>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),

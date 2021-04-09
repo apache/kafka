@@ -53,7 +53,7 @@ public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
-    private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<String, Object, String, Object> supplier = new MockProcessorSupplier<>();
     private final static Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
@@ -168,7 +168,7 @@ public class KTableAggregateTest {
 
     private static void testCountHelper(final StreamsBuilder builder,
                                         final String input,
-                                        final MockProcessorSupplier<String, Object> supplier) {
+                                        final MockProcessorSupplier<String, Object, ?, ?> supplier) {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
@@ -228,7 +228,7 @@ public class KTableAggregateTest {
     public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
 
         builder
             .table(input, consumed)
@@ -252,7 +252,7 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
+            final MockProcessor<String, String, ?, ?> proc = supplier.theCapturedProcessor();
 
             inputTopic.pipeInput("11", "A", 10L);
             inputTopic.pipeInput("12", "B", 8L);

@@ -71,7 +71,7 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldCountSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         windowedStream
             .count()
             .toStream()
@@ -112,7 +112,7 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldReduceSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         windowedStream
             .reduce(MockReducer.STRING_ADDER)
             .toStream()
@@ -153,7 +153,7 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldAggregateSlidingWindows() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         windowedStream
             .aggregate(
                 MockInitializer.STRING_INIT,

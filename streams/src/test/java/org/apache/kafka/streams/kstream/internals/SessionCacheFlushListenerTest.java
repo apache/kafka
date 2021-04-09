@@ -28,6 +28,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 
 public class SessionCacheFlushListenerTest {
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
         final InternalProcessorContext context = mock(InternalProcessorContext.class);

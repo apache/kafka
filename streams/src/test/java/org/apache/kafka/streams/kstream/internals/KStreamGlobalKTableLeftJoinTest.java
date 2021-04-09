@@ -51,7 +51,7 @@ public class KStreamGlobalKTableLeftJoinTest {
     private final String globalTableTopic = "globalTableTopic";
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String> processor;
+    private MockProcessor<Integer, String, String, String> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
 
@@ -63,7 +63,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         final GlobalKTable<String, String> table; // value of stream optionally contains key of table
         final KeyValueMapper<Integer, String, String> keyMapper;
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, String, String> supplier = new MockProcessorSupplier<>();
         final Consumed<Integer, String> streamConsumed = Consumed.with(Serdes.Integer(), Serdes.String());
         final Consumed<String, String> tableConsumed = Consumed.with(Serdes.String(), Serdes.String());
         stream = builder.stream(streamTopic, streamConsumed);

@@ -59,8 +59,8 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<K, V>
+    extends AbstractProcessorContext<K, V>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -293,16 +293,13 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    public void commit() {}
-
-    @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K1 extends K, V1 extends V> void forward(Record<K1, V1> record) {
         forward(record, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(Record<K1, V1> record, String childName) {
         if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
             setTime(record.timestamp());
         }
@@ -310,12 +307,15 @@ public class InternalMockProcessorContext
         try {
             for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 currentNode = childNode;
-                ((ProcessorNode<K, V, ?, ?>) childNode).process(record);
+                ((ProcessorNode<K1, V1, ?, ?>) childNode).process(record);
             }
         } finally {
             currentNode = thisNode;
         }
     }
+
+    @Override
+    public void commit() {}
 
     @Override
     public void forward(final Object key, final Object value) {

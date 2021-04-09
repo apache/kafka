@@ -80,7 +80,7 @@ public class SessionWindowedKStreamImplTest {
     }
 
     private void shouldCountSessionWindowed() {
-        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, Long, ?, ?> supplier = new MockProcessorSupplier<>();
         stream.count()
             .toStream()
             .process(supplier);
@@ -106,7 +106,7 @@ public class SessionWindowedKStreamImplTest {
 
     @Test
     public void shouldReduceWindowed() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         stream.reduce(MockReducer.STRING_ADDER)
             .toStream()
             .process(supplier);
@@ -132,7 +132,7 @@ public class SessionWindowedKStreamImplTest {
 
     @Test
     public void shouldAggregateSessionWindowed() {
-        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Windowed<String>, String, ?, ?> supplier = new MockProcessorSupplier<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,

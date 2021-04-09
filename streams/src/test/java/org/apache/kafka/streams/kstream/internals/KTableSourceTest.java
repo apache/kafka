@@ -68,7 +68,7 @@ public class KTableSourceTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -208,17 +208,17 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
 
         final Topology topology = builder.build();
-        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        final KTableValueAndTimestampGetterSupplier<String, String> getterSupplier1 = table1.valueAndTimestampGetterSupplier();
 
         final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         topologyBuilder.connectProcessorAndStateStores(table1.name, getterSupplier1.storeNames());
@@ -232,7 +232,7 @@ public class KTableSourceTest {
                     Instant.ofEpochMilli(0L),
                     Duration.ZERO
                 );
-            final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+            final KTableValueAndTimestampGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
             inputTopic1.pipeInput("A", "01", 10L);
@@ -265,12 +265,12 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
@@ -318,12 +318,12 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
         table1.enableSendingOldValues(true);

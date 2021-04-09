@@ -22,8 +22,9 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.Test;
 
@@ -50,12 +51,13 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> gracelessAncestor = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long>() {
+                () -> new Processor<String, Long, String, Long>() {
                     @Override
-                    public void init(final ProcessorContext context) {}
+                    public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
-                    public void process(final String key, final Long value) {}
+                    public void process(Record<String, Long> record) {
+                    }
 
                     @Override
                     public void close() {}
@@ -134,12 +136,13 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long>() {
+                () -> new Processor<String, Long, String, Long>() {
                     @Override
-                    public void init(final ProcessorContext context) {}
+                    public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
-                    public void process(final String key, final Long value) {}
+                    public void process(Record<String, Long> record) {
+                    }
 
                     @Override
                     public void close() {}

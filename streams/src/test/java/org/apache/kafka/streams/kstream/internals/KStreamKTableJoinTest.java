@@ -62,11 +62,11 @@ public class KStreamKTableJoinTest {
     private TestInputTopic<Integer, String> inputTableTopic;
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String> processor;
+    private MockProcessor<Integer, String, ?, ?> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-    private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<Integer, String, ?, ?> supplier = new MockProcessorSupplier<>();
 
     @Before
     public void setUp() {

@@ -126,8 +126,8 @@ public class KGroupedTableImplTest {
             Materialized.as(INVALID_STORE_NAME)));
     }
 
-    private MockProcessorSupplier<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+    private MockProcessorSupplier<String, Integer, String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = new MockProcessorSupplier<>();
         inputKTable
             .toStream()
             .process(supplier);
@@ -172,7 +172,7 @@ public class KGroupedTableImplTest {
                 MockReducer.INTEGER_SUBTRACTOR,
                 Materialized.as("reduced"));
 
-        final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertEquals(reduced.queryableStoreName(), "reduced");
@@ -194,7 +194,7 @@ public class KGroupedTableImplTest {
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
-        final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertNull(reduced.queryableStoreName());
@@ -219,7 +219,7 @@ public class KGroupedTableImplTest {
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
+        final MockProcessorSupplier<String, Integer, String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             {

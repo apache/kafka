@@ -94,7 +94,7 @@ public class GlobalKTableIntegrationTest {
     private String streamTopic;
     private GlobalKTable<Long, String> globalTable;
     private KStream<String, Long> stream;
-    private MockProcessorSupplier<String, String> supplier;
+    private MockProcessorSupplier<String, String, String, String> supplier;
 
     @Rule
     public TestName testName = new TestName();

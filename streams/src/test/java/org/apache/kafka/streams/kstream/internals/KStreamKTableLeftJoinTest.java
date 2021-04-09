@@ -56,7 +56,7 @@ public class KStreamKTableLeftJoinTest {
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private TopologyTestDriver driver;
-    private MockProcessor<Integer, String> processor;
+    private MockProcessor<Integer, String, Integer, String> processor;
     private StreamsBuilder builder;
 
     @Before
@@ -66,7 +66,7 @@ public class KStreamKTableLeftJoinTest {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
         final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         stream = builder.stream(streamTopic, consumed);
         table = builder.table(tableTopic, consumed);

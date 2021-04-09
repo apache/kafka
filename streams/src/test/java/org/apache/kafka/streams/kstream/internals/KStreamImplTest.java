@@ -55,7 +55,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -103,11 +102,11 @@ import static org.junit.Assert.assertTrue;
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<String, String, String, String> processorSupplier = new MockProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public KeyValue<String, String> transform(final String key, final String value) {
@@ -120,7 +119,7 @@ public class KStreamImplTest {
     private final TransformerSupplier<String, String, Iterable<KeyValue<String, String>>> flatTransformerSupplier =
         () -> new Transformer<String, String, Iterable<KeyValue<String, String>>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public Iterable<KeyValue<String, String>> transform(final String key, final String value) {
@@ -133,7 +132,7 @@ public class KStreamImplTest {
     private final ValueTransformerSupplier<String, String> valueTransformerSupplier =
         () -> new ValueTransformer<String, String>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public String transform(final String value) {
@@ -146,7 +145,7 @@ public class KStreamImplTest {
     private final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier =
         () -> new ValueTransformerWithKey<String, String, String>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public String transform(final String key, final String value) {
@@ -159,7 +158,7 @@ public class KStreamImplTest {
     private final ValueTransformerSupplier<String, Iterable<String>> flatValueTransformerSupplier =
         () -> new ValueTransformer<String, Iterable<String>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public Iterable<String> transform(final String value) {
@@ -1504,7 +1503,7 @@ public class KStreamImplTest {
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
         }
-        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockProcessor<String, String, String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
@@ -2382,7 +2381,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String>) null));
+            () -> testStream.process(null));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2390,7 +2389,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String>) null, "storeName"));
+            () -> testStream.process(null, "storeName"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2398,7 +2397,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String>) null, Named.as("processor")));
+            () -> testStream.process(null, Named.as("processor")));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2406,7 +2405,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process((ProcessorSupplier<? super String, ? super String>) null, Named.as("processor"), "stateStore"));
+            () -> testStream.process(null, Named.as("processor"), "stateStore"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
