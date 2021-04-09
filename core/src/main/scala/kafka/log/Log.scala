@@ -2422,7 +2422,7 @@ class Log(@volatile private var _dir: File,
       // If not recovered swap file we need to increment logStartOffset here.
       // Otherwise, we do this when loading the log where we can update the highWatermark.
       if (!isRecoveredSwapFile)
-         maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentReplacement)
+         maybeIncrementLogStartOffset(segments.firstSegment.get.baseOffset, SegmentReplacement)
     }
   }
 

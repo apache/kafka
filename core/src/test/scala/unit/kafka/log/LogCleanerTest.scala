@@ -408,7 +408,7 @@ class LogCleanerTest {
     assertEquals(List(2), LogTest.keysInLog(log))
     assertEquals(List(1, 3, 4), offsetsInLog(log))
 
-    cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
+    cleaner.doClean(LogToClean(tp, log, log.logStartOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(2), LogTest.keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
   }
@@ -635,7 +635,7 @@ class LogCleanerTest {
     assertEquals(List(1, 2, 3, 4, 5), lastOffsetsPerBatchInLog(log))
 
     // On the second round of cleaning, the marker from the first transaction should be removed.
-    cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
+    cleaner.doClean(LogToClean(tp, log, log.logStartOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(3, 4, 5), offsetsInLog(log))
     assertEquals(List(2, 3, 4, 5), lastOffsetsPerBatchInLog(log))
   }
@@ -697,7 +697,7 @@ class LogCleanerTest {
     assertEquals(List(3), lastOffsetsPerBatchInLog(log))
 
     // we do not bother retaining the aborted transaction in the index
-    assertEquals(0, log.collectAbortedTransactions(0L, 100L).size)
+    assertEquals(0, log.collectAbortedTransactions(log.logStartOffset, 100L).size)
   }
 
   /**
@@ -910,7 +910,7 @@ class LogCleanerTest {
     // Append a new entry from the producer and verify that the empty batch is cleaned up
     appendProducer(Seq(1, 5))
     log.roll()
-    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, log.logStartOffset, log.activeSegment.baseOffset))
 
     assertEquals(List(3, 5), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 4), lastSequencesInLog(log))
