@@ -29,7 +29,6 @@ import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.KafkaBroker.metricsPrefix
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.internals.Topic
@@ -45,13 +44,14 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka broker.
+ * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
                     val config: KafkaConfig,
@@ -61,7 +61,7 @@ class BrokerServer(
                     val metrics: Metrics,
                     val threadNamePrefix: Option[String],
                     val initialOfflineDirs: Seq[String],
-                    val controllerQuorumVotersFuture: CompletableFuture[util.List[String]],
+                    val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                     val supportedFeatures: util.Map[String, VersionRange]
                   ) extends KafkaBroker {
 
@@ -102,6 +102,8 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = null
 
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
+
   var forwardingManager: ForwardingManager = null
 
   var alterIsrManager: AlterIsrManager = null
@@ -113,6 +115,7 @@ class BrokerServer(
   var metadataCache: RaftMetadataCache = null
 
   var quotaManagers: QuotaFactory.QuotaManagers = null
+
   var quotaCache: ClientQuotaCache = null
 
   private var _brokerTopicStats: BrokerTopicStats = null
@@ -121,7 +124,7 @@ class BrokerServer(
 
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
-  val clusterId: String = metaProps.clusterId.toString
+  val clusterId: String = metaProps.clusterId
 
   val configRepository = new CachedConfigRepository()
 
@@ -176,10 +179,10 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
 
-      val forwardingChannelManager = BrokerToControllerChannelManager(
+      clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
@@ -188,8 +191,8 @@ class BrokerServer(
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
-      forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
-      forwardingManager.start()
+      clientToControllerChannelManager.start()
+      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
@@ -210,7 +213,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "alterisr",
+        channelName = "alterIsr",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
@@ -245,12 +248,9 @@ class BrokerServer(
         new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
         createTemporaryProducerIdManager, metrics, metadataCache, Time.SYSTEM)
 
-      val autoTopicCreationChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
-        time, metrics, config, "autocreate", threadNamePrefix, 60000)
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, metadataCache, Some(autoTopicCreationChannelManager), None, None,
+        config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
-      autoTopicCreationManager.start()
 
       /* Add all reconfigurables for config change notification before starting the metadata listener */
       config.dynamicConfig.addReconfigurables(this)
@@ -266,7 +266,6 @@ class BrokerServer(
         groupCoordinator,
         replicaManager,
         transactionCoordinator,
-        logManager,
         threadNamePrefix,
         clientQuotaMetadataManager)
 
@@ -325,7 +324,7 @@ class BrokerServer(
 
       // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
       // and started all services that we previously delayed starting.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache)
+      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
@@ -399,6 +398,9 @@ class BrokerServer(
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
+        // Shut down the broker metadata listener, so that we don't get added to any
+        // more ISRs.
+        brokerMetadataListener.beginShutdown()
         lifecycleManager.beginControlledShutdown()
         try {
           lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
@@ -446,11 +448,8 @@ class BrokerServer(
       if (alterIsrManager != null)
         CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-      if (forwardingManager != null)
-        CoreUtils.swallow(forwardingManager.shutdown(), this)
-
-      if (autoTopicCreationManager != null)
-        CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
+      if (clientToControllerChannelManager != null)
+        CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
@@ -472,7 +471,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
 
-      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(metricsPrefix, config.nodeId.toString, metrics), this)
+      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")
     } catch {
       case e: Throwable =>

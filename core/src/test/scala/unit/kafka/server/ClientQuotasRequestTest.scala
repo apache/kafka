@@ -38,7 +38,7 @@ import kafka.test.junit.ClusterTestExtensions
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.ZK)
+@ClusterTestDefaults(clusterType = Type.BOTH)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
@@ -174,7 +174,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     ))
   }
 
-  @ClusterTest
+  @ClusterTest(clusterType = Type.ZK) // No SCRAM for Raft yet
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 
@@ -208,23 +208,23 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
 
     def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
-      val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
-      assertEquals(expectedMatches.keySet, result.asScala.keySet)
-      result.asScala.foreach { case (entity, props) =>
-        assertEquals(Set(IpConnectionRateProp), props.asScala.keySet)
-        assertEquals(expectedMatches(entity), props.get(IpConnectionRateProp))
-        val entityName = entity.entries.get(ClientQuotaEntity.IP)
-        // ClientQuotaEntity with null name maps to default entity
-        val entityIp = if (entityName == null)
-          InetAddress.getByName(unknownHost)
-        else
-          InetAddress.getByName(entityName)
-        var currentServerQuota = 0
-        TestUtils.waitUntilTrue(
-          () => {
-            currentServerQuota = cluster.brokerSocketServers().asScala.head.connectionQuotas.connectionRateForIp(entityIp)
-            Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
-          }, s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
+      TestUtils.tryUntilNoAssertionError() {
+        val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
+        assertEquals(expectedMatches.keySet, result.asScala.keySet)
+        result.asScala.foreach { case (entity, props) =>
+          assertEquals(Set(IpConnectionRateProp), props.asScala.keySet)
+          assertEquals(expectedMatches(entity), props.get(IpConnectionRateProp))
+          val entityName = entity.entries.get(ClientQuotaEntity.IP)
+          // ClientQuotaEntity with null name maps to default entity
+          val entityIp = if (entityName == null)
+            InetAddress.getByName(unknownHost)
+          else
+            InetAddress.getByName(entityName)
+          var currentServerQuota = 0
+          currentServerQuota = cluster.brokerSocketServers().asScala.head.connectionQuotas.connectionRateForIp(entityIp)
+          assertTrue(Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01,
+            s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
+        }
       }
     }
 
@@ -362,12 +362,14 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
     // Test exact matches.
     matchUserClientEntities.foreach { case (e, v) =>
-      val result = matchEntity(e)
-      assertEquals(1, result.size)
-      assertTrue(result.get(e) != null)
-      val value = result.get(e).get(RequestPercentageProp)
-      assertNotNull(value)
-      assertEquals(value, v, 1e-6)
+      TestUtils.tryUntilNoAssertionError() {
+        val result = matchEntity(e)
+        assertEquals(1, result.size)
+        assertTrue(result.get(e) != null)
+        val value = result.get(e).get(RequestPercentageProp)
+        assertNotNull(value)
+        assertEquals(value, v, 1e-6)
+      }
     }
 
     // Entities not contained in `matchEntityList`.
@@ -396,31 +398,33 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     setupDescribeClientQuotasMatchTest()
 
     def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean): Unit = {
-      val result = describeClientQuotas(filter)
-      val (expectedMatches, _) = (matchUserClientEntities ++ matchIpEntities).partition(e => partition(e._1))
-      assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
-      assertEquals(expectedMatchSize, result.size)
-      val expectedMatchesMap = expectedMatches.toMap
-      matchUserClientEntities.foreach { case (entity, expectedValue) =>
-        if (expectedMatchesMap.contains(entity)) {
-          val config = result.get(entity)
-          assertNotNull(config)
-          val value = config.get(RequestPercentageProp)
-          assertNotNull(value)
-          assertEquals(expectedValue, value, 1e-6)
-        } else {
-          assertNull(result.get(entity))
+      TestUtils.tryUntilNoAssertionError() {
+        val result = describeClientQuotas(filter)
+        val (expectedMatches, _) = (matchUserClientEntities ++ matchIpEntities).partition(e => partition(e._1))
+        assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
+        assertEquals(expectedMatchSize, result.size, s"Failed to match $expectedMatchSize entities for $filter")
+        val expectedMatchesMap = expectedMatches.toMap
+        matchUserClientEntities.foreach { case (entity, expectedValue) =>
+          if (expectedMatchesMap.contains(entity)) {
+            val config = result.get(entity)
+            assertNotNull(config)
+            val value = config.get(RequestPercentageProp)
+            assertNotNull(value)
+            assertEquals(expectedValue, value, 1e-6)
+          } else {
+            assertNull(result.get(entity))
+          }
         }
-      }
-      matchIpEntities.foreach { case (entity, expectedValue) =>
-        if (expectedMatchesMap.contains(entity)) {
-          val config = result.get(entity)
-          assertNotNull(config)
-          val value = config.get(IpConnectionRateProp)
-          assertNotNull(value)
-          assertEquals(expectedValue, value, 1e-6)
-        } else {
-          assertNull(result.get(entity))
+        matchIpEntities.foreach { case (entity, expectedValue) =>
+          if (expectedMatchesMap.contains(entity)) {
+            val config = result.get(entity)
+            assertNotNull(config)
+            val value = config.get(IpConnectionRateProp)
+            assertNotNull(value)
+            assertEquals(expectedValue, value, 1e-6)
+          } else {
+            assertNull(result.get(entity))
+          }
         }
       }
     }
@@ -533,23 +537,25 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
-    val components = entity.entries.asScala.map { case (entityType, entityName) =>
-      Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
-        .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
-      )
-    }
-    val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
-    if (quotas.isEmpty) {
-      assertEquals(0, describe.size)
-    } else {
-      assertEquals(1, describe.size)
-      val configs = describe.get(entity)
-      assertNotNull(configs)
-      assertEquals(quotas.size, configs.size)
-      quotas.foreach { case (k, v) =>
-        val value = configs.get(k)
-        assertNotNull(value)
-        assertEquals(v, value, 1e-6)
+    TestUtils.tryUntilNoAssertionError(waitTime = 5000L) {
+      val components = entity.entries.asScala.map { case (entityType, entityName) =>
+        Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
+          .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
+          )
+      }
+      val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
+      if (quotas.isEmpty) {
+        assertEquals(0, describe.size)
+      } else {
+        assertEquals(1, describe.size)
+        val configs = describe.get(entity)
+        assertNotNull(configs)
+        assertEquals(quotas.size, configs.size)
+        quotas.foreach { case (k, v) =>
+          val value = configs.get(k)
+          assertNotNull(value)
+          assertEquals(v, value, 1e-6)
+        }
       }
     }
   }
@@ -570,7 +576,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
     IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer(),
+      destination = cluster.anyBrokerSocketServer(),
       listenerName = cluster.clientListener())
   }
 
@@ -598,7 +604,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
     IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer(),
+      destination = cluster.anyBrokerSocketServer(),
       listenerName = cluster.clientListener())
   }
 

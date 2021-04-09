@@ -17,40 +17,28 @@
 package kafka.raft
 
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.Optional
+import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
+import java.util.{Collections, Optional}
+
 import kafka.log.Log
-import kafka.log.LogManager
-import kafka.log.LogTest
-import kafka.server.BrokerTopicStats
-import kafka.server.LogDirFailureChannel
-import kafka.utils.MockTime
-import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.record.SimpleRecord
+import kafka.server.KafkaRaftServer
+import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordTooLargeException}
+import org.apache.kafka.common.protocol
+import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.raft.LogAppendInfo
-import org.apache.kafka.raft.LogOffsetMetadata
-import org.apache.kafka.raft.OffsetAndEpoch
-import org.apache.kafka.raft.ReplicatedLog
-import org.apache.kafka.snapshot.SnapshotPath
-import org.apache.kafka.snapshot.Snapshots
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import org.apache.kafka.raft.internals.BatchBuilder
+import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, RecordSerde, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.snapshot.{SnapshotPath, Snapshots}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
 
-  var tempDir: File = null
+  var tempDir: File = _
   val mockTime = new MockTime()
 
   @BeforeEach
@@ -65,8 +53,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testUnexpectedAppendOffset(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
 
     val recordFoo = new SimpleRecord("foo".getBytes())
     val currentEpoch = 3
@@ -100,11 +87,10 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testCreateSnapshot(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
     val numberOfRecords = 10
     val epoch = 0
     val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
 
     append(log, numberOfRecords, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
@@ -119,17 +105,22 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testTopicId(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(KafkaRaftServer.MetadataTopicId, log.topicId())
+  }
+
+  @Test
   def testReadMissingSnapshot(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
 
     assertEquals(Optional.empty(), log.readSnapshot(new OffsetAndEpoch(10, 0)))
   }
 
   @Test
   def testUpdateLogStartOffset(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val offset = 10
     val epoch = 0
     val snapshotId = new OffsetAndEpoch(offset, epoch)
@@ -148,7 +139,7 @@ final class KafkaMetadataLogTest {
     assertEquals(offset, log.highWatermark.offset)
 
     val newRecords = 10
-    append(log, newRecords, epoch + 1, log.endOffset.offset)
+    append(log, newRecords, epoch + 1)
     // Start offset should not change since a new snapshot was not generated
     assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(offset + newRecords, epoch)))
     assertEquals(offset, log.startOffset)
@@ -159,9 +150,41 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testUpdateLogStartOffsetWillRemoveOlderSnapshot(): Unit = {
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val offset = 10
+    val epoch = 0
+
+    append(log, offset, epoch)
+    val oldSnapshotId = new OffsetAndEpoch(offset, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, offset, epoch)
+    val newSnapshotId = new OffsetAndEpoch(offset * 2, epoch)
+    TestUtils.resource(log.createSnapshot(newSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    log.updateHighWatermark(new LogOffsetMetadata(offset * 2))
+    assertTrue(log.deleteBeforeSnapshot(newSnapshotId))
+    log.close()
+
+    mockTime.sleep(log.fileDeleteDelayMs)
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
+      }
+  }
+
+  @Test
   def testUpdateLogStartOffsetWithMissingSnapshot(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val offset = 10
     val epoch = 0
 
@@ -177,8 +200,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testFailToIncreaseLogStartPastHighWatermark(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val offset = 10
     val epoch = 0
     val snapshotId = new OffsetAndEpoch(2 * offset, 1 + epoch)
@@ -198,8 +220,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testTruncateFullyToLatestSnapshot(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 0
     val sameEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch)
@@ -218,7 +239,7 @@ final class KafkaMetadataLogTest {
 
     val greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1)
 
-    append(log, numberOfRecords, epoch, log.endOffset.offset)
+    append(log, numberOfRecords, epoch)
 
     TestUtils.resource(log.createSnapshot(greaterEpochSnapshotId)) { snapshot =>
       snapshot.freeze()
@@ -232,9 +253,55 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testTruncateWillRemoveOlderSnapshot(): Unit = {
+
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, 1, epoch - 1)
+    val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId1)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, 1, epoch)
+    val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId2)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, numberOfRecords - 2, epoch)
+    val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId3)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(greaterSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    assertNotEquals(log.earliestSnapshotId(), log.latestSnapshotId())
+    assertTrue(log.truncateToLatestSnapshot())
+    assertEquals(log.earliestSnapshotId(), log.latestSnapshotId())
+    log.close()
+
+    mockTime.sleep(log.fileDeleteDelayMs)
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
+      }
+  }
+
+  @Test
   def testDoesntTruncateFully(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
 
@@ -247,7 +314,7 @@ final class KafkaMetadataLogTest {
 
     assertFalse(log.truncateToLatestSnapshot())
 
-    append(log, numberOfRecords, epoch, log.endOffset.offset)
+    append(log, numberOfRecords, epoch)
 
     val olderOffsetSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
     TestUtils.resource(log.createSnapshot(olderOffsetSnapshotId)) { snapshot =>
@@ -258,9 +325,8 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
-  def testCleanupSnapshots(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime, topicPartition)
+  def testCleanupPartialSnapshots(): Unit = {
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
     val snapshotId = new OffsetAndEpoch(1, epoch)
@@ -277,9 +343,9 @@ final class KafkaMetadataLogTest {
     Snapshots.createTempFile(logDir, new OffsetAndEpoch(1, epoch))
     Snapshots.createTempFile(logDir, new OffsetAndEpoch(2, epoch + 1))
 
-    val secondLog = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val secondLog = buildMetadataLog(tempDir, mockTime)
 
-    assertEquals(snapshotId, secondLog.latestSnapshotId.get)
+    assertEquals(snapshotId, secondLog.latestSnapshotId().get)
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(numberOfRecords, log.endOffset().offset)
@@ -296,9 +362,57 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testCleanupOlderSnapshots(): Unit = {
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, 1, epoch - 1)
+    val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId1)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, 1, epoch)
+    val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId2)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, numberOfRecords - 2, epoch)
+    val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId3)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(greaterSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    log.close()
+
+    val secondLog = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
+    assertEquals(3 * numberOfRecords, secondLog.startOffset)
+    assertEquals(epoch, secondLog.lastFetchedEpoch)
+    mockTime.sleep(log.fileDeleteDelayMs)
+
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
+      }
+  }
+
+  @Test
   def testCreateReplicatedLogTruncatesFully(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime, topicPartition)
+    val log = buildMetadataLog(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
     val snapshotId = new OffsetAndEpoch(numberOfRecords + 1, epoch + 1)
@@ -310,48 +424,294 @@ final class KafkaMetadataLogTest {
 
     log.close()
 
-    val secondLog = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val secondLog = buildMetadataLog(tempDir, mockTime)
 
-    assertEquals(snapshotId, secondLog.latestSnapshotId.get)
+    assertEquals(snapshotId, secondLog.latestSnapshotId().get)
     assertEquals(snapshotId.offset, secondLog.startOffset)
     assertEquals(snapshotId.epoch, secondLog.lastFetchedEpoch)
     assertEquals(snapshotId.offset, secondLog.endOffset().offset)
     assertEquals(snapshotId.offset, secondLog.highWatermark.offset)
   }
+
+  @Test
+  def testMaxBatchSize(): Unit = {
+    val leaderEpoch = 5
+    val maxBatchSizeInBytes = 16384
+    val recordSize = 64
+    val log = buildMetadataLog(tempDir, mockTime, maxBatchSizeInBytes)
+
+    val oversizeBatch = buildFullBatch(leaderEpoch, recordSize, maxBatchSizeInBytes + recordSize)
+    assertThrows(classOf[RecordTooLargeException], () => {
+      log.appendAsLeader(oversizeBatch, leaderEpoch)
+    })
+
+    val undersizeBatch = buildFullBatch(leaderEpoch, recordSize, maxBatchSizeInBytes)
+    val appendInfo = log.appendAsLeader(undersizeBatch, leaderEpoch)
+    assertEquals(0L, appendInfo.firstOffset)
+  }
+
+  @Test
+  def testTruncateBelowHighWatermark(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val numRecords = 10
+    val epoch = 5
+
+    append(log, numRecords, epoch)
+    assertEquals(numRecords.toLong, log.endOffset.offset)
+
+    log.updateHighWatermark(new LogOffsetMetadata(numRecords))
+    assertEquals(numRecords.toLong, log.highWatermark.offset)
+
+    assertThrows(classOf[IllegalArgumentException], () => log.truncateTo(5L))
+    assertEquals(numRecords.toLong, log.highWatermark.offset)
+  }
+
+  private def buildFullBatch(
+    leaderEpoch: Int,
+    recordSize: Int,
+    maxBatchSizeInBytes: Int
+  ): MemoryRecords = {
+    val buffer = ByteBuffer.allocate(maxBatchSizeInBytes)
+    val batchBuilder = new BatchBuilder[Array[Byte]](
+      buffer,
+      new ByteArraySerde,
+      CompressionType.NONE,
+      0L,
+      mockTime.milliseconds(),
+      false,
+      leaderEpoch,
+      maxBatchSizeInBytes
+    )
+
+    val serializationCache = new ObjectSerializationCache
+    val records = Collections.singletonList(new Array[Byte](recordSize))
+    while (!batchBuilder.bytesNeeded(records, serializationCache).isPresent) {
+      batchBuilder.appendRecord(records.get(0), serializationCache)
+    }
+
+    batchBuilder.build()
+  }
+
+  @Test
+  def testValidateEpochGreaterThanLastKnownEpoch(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 1
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 1)
+    assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
+    assertEquals(new OffsetAndEpoch(log.endOffset.offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateEpochLessThanOldestSnapshotEpoch(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+    assertTrue(log.deleteBeforeSnapshot(snapshotId))
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch - 1)
+    assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateOffsetLessThanOldestSnapshotOffset(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val offset = 2
+    val epoch = 1
+
+    append(log, offset, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(offset))
+
+    val snapshotId = new OffsetAndEpoch(offset, epoch)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+    assertTrue(log.deleteBeforeSnapshot(snapshotId))
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
+    assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateOffsetEqualToOldestSnapshotOffset(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val offset = 2
+    val epoch = 1
+
+    append(log, offset, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(offset))
+
+    val snapshotId = new OffsetAndEpoch(offset, epoch)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+    assertTrue(log.deleteBeforeSnapshot(snapshotId))
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch)
+    assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind)
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateUnknownEpochLessThanLastKnownGreaterThanOldestSnapshot(): Unit = {
+    val offset = 10
+    val numOfRecords = 5
+
+    val log = buildMetadataLog(tempDir, mockTime)
+    log.updateHighWatermark(new LogOffsetMetadata(offset))
+    val snapshotId = new OffsetAndEpoch(offset, 1)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+    log.truncateToLatestSnapshot()
+
+
+    append(log, numOfRecords, epoch = 1)
+    append(log, numOfRecords, epoch = 2)
+    append(log, numOfRecords, epoch = 4)
+
+    // offset is not equal to oldest snapshot's offset
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3)
+    assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
+    assertEquals(new OffsetAndEpoch(20, 2), resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateEpochLessThanFirstEpochInLog(): Unit = {
+    val offset = 10
+    val numOfRecords = 5
+
+    val log = buildMetadataLog(tempDir, mockTime)
+    log.updateHighWatermark(new LogOffsetMetadata(offset))
+    val snapshotId = new OffsetAndEpoch(offset, 1)
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+    log.truncateToLatestSnapshot()
+
+    append(log, numOfRecords, epoch = 3)
+
+    // offset is not equal to oldest snapshot's offset
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2)
+    assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
+    assertEquals(snapshotId, resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateOffsetGreatThanEndOffset(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 1
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch)
+    assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
+    assertEquals(new OffsetAndEpoch(log.endOffset.offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateOffsetLessThanLEO(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch + 1)
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch)
+    assertEquals(ValidOffsetAndEpoch.Kind.DIVERGING, resultOffsetAndEpoch.kind)
+    assertEquals(new OffsetAndEpoch(10, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+  }
+
+  @Test
+  def testValidateValidEpochAndOffset(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    val numberOfRecords = 5
+    val epoch = 1
+
+    append(log, numberOfRecords, epoch)
+
+    val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch)
+    assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind)
+    assertEquals(new OffsetAndEpoch(numberOfRecords - 1, epoch), resultOffsetAndEpoch.offsetAndEpoch())
+  }
 }
 
 object KafkaMetadataLogTest {
-  def buildMetadataLogAndDir(tempDir: File, time: MockTime, topicPartition: TopicPartition): (Path, KafkaMetadataLog) = {
-
-    val logDir = createLogDirectory(tempDir, Log.logDirName(topicPartition))
-    val logConfig = LogTest.createLogConfig()
-
-    val log = Log(
-      dir = logDir,
-      config = logConfig,
-      logStartOffset = 0,
-      recoveryPoint = 0,
-      scheduler = time.scheduler,
-      brokerTopicStats = new BrokerTopicStats,
-      time = time,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(5)
-    )
-
-    (logDir.toPath, KafkaMetadataLog(log, topicPartition))
+  class ByteArraySerde extends RecordSerde[Array[Byte]] {
+    override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
+      data.length
+    }
+    override def write(data: Array[Byte], serializationCache: ObjectSerializationCache, out: Writable): Unit = {
+      out.writeByteArray(data)
+    }
+    override def read(input: protocol.Readable, size: Int): Array[Byte] = {
+      val array = new Array[Byte](size)
+      input.readArray(array)
+      array
+    }
   }
 
-  def buildMetadataLog(tempDir: File, time: MockTime, topicPartition: TopicPartition): KafkaMetadataLog = {
-    val (_, log) = buildMetadataLogAndDir(tempDir, time, topicPartition)
+  def buildMetadataLogAndDir(
+    tempDir: File,
+    time: MockTime,
+    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+  ): (Path, KafkaMetadataLog) = {
+
+    val logDir = createLogDirectory(
+      tempDir,
+      Log.logDirName(KafkaRaftServer.MetadataPartition)
+    )
+
+    val metadataLog = KafkaMetadataLog(
+      KafkaRaftServer.MetadataPartition,
+      KafkaRaftServer.MetadataTopicId,
+      logDir,
+      time,
+      time.scheduler,
+      maxBatchSizeInBytes,
+      maxFetchSizeInBytes
+    )
+
+    (logDir.toPath, metadataLog)
+  }
+
+  def buildMetadataLog(
+    tempDir: File,
+    time: MockTime,
+    maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+    maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+  ): KafkaMetadataLog = {
+    val (_, log) = buildMetadataLogAndDir(tempDir, time, maxBatchSizeInBytes, maxFetchSizeInBytes)
     log
   }
 
-
-  def append(log: ReplicatedLog, numberOfRecords: Int, epoch: Int, initialOffset: Long = 0L): LogAppendInfo = {
+  def append(log: ReplicatedLog, numberOfRecords: Int, epoch: Int): LogAppendInfo = {
     log.appendAsLeader(
       MemoryRecords.withRecords(
-        initialOffset,
+        log.endOffset().offset,
         CompressionType.NONE,
         epoch,
         (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
@@ -363,7 +723,7 @@ object KafkaMetadataLogTest {
   private def createLogDirectory(logDir: File, logDirName: String): File = {
     val logDirPath = logDir.getAbsolutePath
     val dir = new File(logDirPath, logDirName)
-    if (!Files.exists((dir.toPath))) {
+    if (!Files.exists(dir.toPath)) {
       Files.createDirectories(dir.toPath)
     }
     dir

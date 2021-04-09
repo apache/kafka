@@ -136,16 +136,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
-  @deprecated("Serializer now includes a default method that provides the headers", since = "2.1")
-  @Test
-  def testHeadersExtendedSerializerDeserializer(): Unit = {
-    val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
-
-    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] with DeserializerImpl
-
-    testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
-  }
-
   @Test
   def testHeadersSerializerDeserializer(): Unit = {
     val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
@@ -582,7 +572,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.seekToEnd(List(tp).asJava)
     assertEquals(totalRecords, consumer.position(tp))
-    assertTrue(pollForRecord(consumer, Duration.ofMillis(50)).isEmpty)
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp).asJava)
     assertEquals(0L, consumer.position(tp))
@@ -600,7 +590,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.seekToEnd(List(tp2).asJava)
     assertEquals(totalRecords, consumer.position(tp2))
-    assertTrue(pollForRecord(consumer, Duration.ofMillis(50)).isEmpty)
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp2).asJava)
     assertEquals(0L, consumer.position(tp2))
@@ -669,7 +659,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.pause(partitions)
     startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
-    assertTrue(pollForRecord(consumer, Duration.ofMillis(100)).isEmpty)
+    assertTrue(consumer.poll(Duration.ofMillis(100)).isEmpty)
     consumer.resume(partitions)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
@@ -717,8 +707,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consuming a record that is too large should succeed since KIP-74
     consumer.assign(List(tp).asJava)
-    val duration = Duration.ofMillis(20000)
-    val records = pollForRecord(consumer, duration)
+    val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
     assertEquals(0L, consumerRecord.offset)
@@ -750,7 +739,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // we should only get the small record in the first `poll`
     consumer.assign(List(tp).asJava)
-    val records = pollForRecord(consumer, Duration.ofMillis(20000))
+    val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
     assertEquals(0L, consumerRecord.offset)
@@ -1862,12 +1851,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer3.assign(asList(tp))
     consumer3.seek(tp, 1)
 
-    val numRecords1 = pollForRecord(consumer1, Duration.ofMillis(5000)).count()
+    val numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count()
     assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
     assertThrows(classOf[InvalidGroupIdException], () => consumer2.committed(Set(tp).asJava))
 
-    val numRecords2 = pollForRecord(consumer2, Duration.ofMillis(5000)).count()
-    val numRecords3 = pollForRecord(consumer3, Duration.ofMillis(5000)).count()
+    val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
+    val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()
 
     consumer1.unsubscribe()
     consumer2.unsubscribe()
@@ -1916,10 +1905,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer1.assign(asList(tp))
     consumer2.assign(asList(tp))
 
-    val records1 = pollForRecord(consumer1, Duration.ofMillis(5000))
+    val records1 = consumer1.poll(Duration.ofMillis(5000))
     consumer1.commitSync()
 
-    val records2 = pollForRecord(consumer2, Duration.ofMillis(5000))
+    val records2 = consumer2.poll(Duration.ofMillis(5000))
     consumer2.commitSync()
 
     consumer1.close()
@@ -1929,20 +1918,5 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       "Expected consumer1 to consume one message from offset 0")
     assertTrue(records2.count() == 1 && records2.records(tp).asScala.head.offset == 1,
       "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
-  }
-
-  /**
-   * Consumer#poll returns early if there is metadata to return even if there are no records,
-   * so when we intend to wait for records, we can't just rely on long polling in the Consumer.
-   */
-  private def pollForRecord(consumer: KafkaConsumer[Array[Byte], Array[Byte]], duration: Duration) = {
-    val deadline = System.currentTimeMillis() + duration.toMillis
-    var durationRemaining = deadline - System.currentTimeMillis()
-    var result = consumer.poll(Duration.ofMillis(durationRemaining))
-    while (result.count() == 0 && durationRemaining > 0) {
-      result = consumer.poll(Duration.ofMillis(durationRemaining))
-      durationRemaining = deadline - System.currentTimeMillis()
-    }
-    result
   }
 }

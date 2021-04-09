@@ -101,10 +101,7 @@
               files="RequestResponseTest.java|FetcherTest.java|KafkaAdminClientTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark|MockConsumer"/>
-
-    <suppress checks="CyclomaticComplexity"
-              files="MockConsumer"/>
+              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
 
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
@@ -140,7 +137,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation)Test.java"/>
+              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation|WorkerSourceTask)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
@@ -253,6 +250,10 @@
     <suppress id="dontUseSystemExit"
               files="VerifiableProducer.java"/>
 
+    <!-- Shell -->
+    <suppress checks="CyclomaticComplexity"
+              files="(GlobComponent).java"/>
+
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"
               files="KafkaLog4jAppender.java"/>
@@ -263,6 +264,14 @@
               files="RequestResponseTest.java"/>
 
     <!-- metadata -->
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="(ReplicationControlManager|ReplicationControlManagerTest).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(QuorumController|ReplicationControlManager).java"/>
+    <suppress checks="ParameterNumber"
+              files="(QuorumController).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="(ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"
               files="KafkaEventQueue.java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"

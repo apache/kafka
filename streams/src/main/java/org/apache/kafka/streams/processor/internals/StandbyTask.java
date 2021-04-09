@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -32,6 +31,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -44,13 +44,13 @@ public class StandbyTask extends AbstractTask implements Task {
     private final StreamsMetricsImpl streamsMetrics;
 
     /**
-     * @param id             the ID of this task
-     * @param partitions     input topic partitions, used for thread metadata only
-     * @param topology       the instance of {@link ProcessorTopology}
-     * @param config         the {@link StreamsConfig} specified by the user
-     * @param streamsMetrics the {@link StreamsMetrics} created by the thread
-     * @param stateMgr       the {@link ProcessorStateManager} for this task
-     * @param stateDirectory the {@link StateDirectory} created by the thread
+     * @param id              the ID of this task
+     * @param inputPartitions input topic partitions, used for thread metadata only
+     * @param topology        the instance of {@link ProcessorTopology}
+     * @param config          the {@link StreamsConfig} specified by the user
+     * @param streamsMetrics  the {@link StreamsMetrics} created by the thread
+     * @param stateMgr        the {@link ProcessorStateManager} for this task
+     * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
@@ -111,7 +111,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void completeRestoration() {
+    public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         throw new IllegalStateException("Standby task " + id + " should never be completing restoration");
     }
 
@@ -283,13 +283,28 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
+    public Map<TopicPartition, Long> committedOffsets() {
+        return Collections.emptyMap();
     }
 
     @Override
-    public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
-        throw new IllegalStateException("Attempted to update metadata for standby task " + id());
+    public Map<TopicPartition, Long> highWaterMark() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Optional<Long> timeCurrentIdlingStarted() {
+        return Optional.empty();
+    }
+
+    @Override
+    public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+
+    }
+
+    @Override
+    public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
     }
 
     InternalProcessorContext processorContext() {

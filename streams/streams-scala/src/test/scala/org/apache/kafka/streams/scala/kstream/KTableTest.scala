@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,21 +16,22 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import java.time.Duration
-import org.apache.kafka.streams.kstream.{Named, SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
+import org.apache.kafka.streams.kstream.{Named, SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.apache.kafka.streams.scala.{ByteArrayKeyValueStore, StreamsBuilder}
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class KTableTest extends FlatSpec with Matchers with TestDriver {
+import java.time.Duration
+import scala.jdk.CollectionConverters._
 
-  "filter a KTable" should "filter records satisfying the predicate" in {
+class KTableTest extends TestDriver {
+
+  @Test
+  def testFilterRecordsSatisfyingPredicate(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -47,25 +46,26 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       testInput.pipeInput("a", "passes filter : add new row to table")
       val record = testOutput.readKeyValue
-      record.key shouldBe "a"
-      record.value shouldBe 1
+      assertEquals("a", record.key)
+      assertEquals(1, record.value)
     }
     {
       testInput.pipeInput("a", "fails filter : remove existing row from table")
       val record = testOutput.readKeyValue
-      record.key shouldBe "a"
-      record.value shouldBe (null: java.lang.Long)
+      assertEquals("a", record.key)
+      assertNull(record.value)
     }
     {
       testInput.pipeInput("b", "fails filter : no output")
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "filterNot a KTable" should "filter records not satisfying the predicate" in {
+  @Test
+  def testFilterRecordsNotSatisfyingPredicate(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -80,27 +80,28 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       testInput.pipeInput("1", "value1")
       val record = testOutput.readKeyValue
-      record.key shouldBe "1"
-      record.value shouldBe 1
+      assertEquals("1", record.key)
+      assertEquals(1, record.value)
     }
     {
       testInput.pipeInput("1", "value2")
       val record = testOutput.readKeyValue
-      record.key shouldBe "1"
-      record.value shouldBe (null: java.lang.Long)
+      assertEquals("1", record.key)
+      assertNull(record.value)
     }
     {
       testInput.pipeInput("2", "value1")
       val record = testOutput.readKeyValue
-      record.key shouldBe "2"
-      record.value shouldBe 1
+      assertEquals("2", record.key)
+      assertEquals(1, record.value)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "join 2 KTables" should "join correctly records" in {
+  @Test
+  def testJoinCorrectlyRecords(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sourceTopic2 = "source2"
@@ -117,14 +118,15 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
 
     testInput1.pipeInput("1", "topic1value1")
     testInput2.pipeInput("1", "topic2value1")
-    testOutput.readValue shouldBe 2
+    assertEquals(2, testOutput.readValue)
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "join 2 KTables with a Materialized" should "join correctly records and state store" in {
+  @Test
+  def testJoinCorrectlyRecordsAndStateStore(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sourceTopic2 = "source2"
@@ -143,15 +145,16 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
 
     testInput1.pipeInput("1", "topic1value1")
     testInput2.pipeInput("1", "topic2value1")
-    testOutput.readValue shouldBe 2
-    testDriver.getKeyValueStore[String, Long](stateStore).get("1") shouldBe 2
+    assertEquals(2, testOutput.readValue)
+    assertEquals(2, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
 
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "windowed KTable#suppress" should "correctly suppress results using Suppressed.untilTimeLimit" in {
+  @Test
+  def testCorrectlySuppressResultsUsingSuppressedUntilTimeLimit(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -174,41 +177,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       // publish key=1 @ time 0 => count==1
       testInput.pipeInput("1", "value1", 0L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish key=1 @ time 1 => count==2
       testInput.pipeInput("1", "value2", 1L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time past the first window, but before the suppression window
       testInput.pipeInput("2", "value1", 1001L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time riiiight before suppression window ends
       testInput.pipeInput("2", "value2", 1999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish a late event before suppression window terminates => count==3
       testInput.pipeInput("1", "value3", 999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time right past the suppression window of the first window.
       testInput.pipeInput("2", "value3", 2001L)
       val record = testOutput.readKeyValue
-      record.key shouldBe "0:1000:1"
-      record.value shouldBe 3L
+      assertEquals("0:1000:1", record.key)
+      assertEquals(3L, record.value)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "windowed KTable#suppress" should "correctly suppress results using Suppressed.untilWindowCloses" in {
+  @Test
+  def testCorrectlySuppressResultsUsingSuppressedUntilWindowClosesByWindowed(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -231,41 +235,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       // publish key=1 @ time 0 => count==1
       testInput.pipeInput("1", "value1", 0L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish key=1 @ time 1 => count==2
       testInput.pipeInput("1", "value2", 1L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time past the window, but before the grace period
       testInput.pipeInput("2", "value1", 1001L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time riiiight before grace period ends
       testInput.pipeInput("2", "value2", 1999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish a late event before grace period terminates => count==3
       testInput.pipeInput("1", "value3", 999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time right past the grace period of the first window.
       testInput.pipeInput("2", "value3", 2001L)
       val record = testOutput.readKeyValue
-      record.key shouldBe "0:1000:1"
-      record.value shouldBe 3L
+      assertEquals("0:1000:1", record.key)
+      assertEquals(3L, record.value)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "session windowed KTable#suppress" should "correctly suppress results using Suppressed.untilWindowCloses" in {
+  @Test
+  def testCorrectlySuppressResultsUsingSuppressedUntilWindowClosesBySession(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -289,32 +294,32 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       // first window
       testInput.pipeInput("k1", "v1", 0L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // first window
       testInput.pipeInput("k1", "v1", 1L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // new window, but grace period hasn't ended for first window
       testInput.pipeInput("k1", "v1", 8L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // out-of-order event for first window, included since grade period hasn't passed
       testInput.pipeInput("k1", "v1", 2L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // add to second window
       testInput.pipeInput("k1", "v1", 13L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // add out-of-order to second window
       testInput.pipeInput("k1", "v1", 10L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // push stream time forward to flush other events through
@@ -323,20 +328,21 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       testInput.pipeInput("k1", "v1", 3L)
       // should now have to results
       val r1 = testOutput.readRecord
-      r1.key shouldBe "0:2:k1"
-      r1.value shouldBe 3L
-      r1.timestamp shouldBe 2L
+      assertEquals("0:2:k1", r1.key)
+      assertEquals(3L, r1.value)
+      assertEquals(2L, r1.timestamp)
       val r2 = testOutput.readRecord
-      r2.key shouldBe "8:13:k1"
-      r2.value shouldBe 3L
-      r2.timestamp shouldBe 13L
+      assertEquals("8:13:k1", r2.key)
+      assertEquals(3L, r2.value)
+      assertEquals(13L, r2.timestamp)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "non-windowed KTable#suppress" should "correctly suppress results using Suppressed.untilTimeLimit" in {
+  @Test
+  def testCorrectlySuppressResultsUsingSuppressedUntilTimeLimtByNonWindowed(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -357,41 +363,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     {
       // publish key=1 @ time 0 => count==1
       testInput.pipeInput("1", "value1", 0L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish key=1 @ time 1 => count==2
       testInput.pipeInput("1", "value2", 1L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time past the window, but before the grace period
       testInput.pipeInput("2", "value1", 1001L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time right before grace period ends
       testInput.pipeInput("2", "value2", 1999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // publish a late event before grace period terminates => count==3
       testInput.pipeInput("1", "value3", 999L)
-      testOutput.isEmpty shouldBe true
+      assertTrue(testOutput.isEmpty)
     }
     {
       // move event time right past the grace period of the first window.
       testInput.pipeInput("2", "value3", 2001L)
       val record = testOutput.readKeyValue
-      record.key shouldBe "1"
-      record.value shouldBe 3L
+      assertEquals("1", record.key)
+      assertEquals(3L, record.value)
     }
-    testOutput.isEmpty shouldBe true
+    assertTrue(testOutput.isEmpty)
 
     testDriver.close()
   }
 
-  "setting a name on a filter processor" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnFilterProcessor(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -405,10 +412,11 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val filterNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(3)
-    filterNode.name() shouldBe "my-name"
+    assertEquals("my-name", filterNode.name())
   }
 
-  "setting a name on a count processor" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnCountProcessor(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
@@ -419,10 +427,11 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     import scala.jdk.CollectionConverters._
 
     val countNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(1)
-    countNode.name() shouldBe "my-name"
+    assertEquals("my-name", countNode.name())
   }
 
-  "setting a name on a join processor" should "pass the name to the topology" in {
+  @Test
+  def testSettingNameOnJoinProcessor(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic1 = "source1"
     val sourceTopic2 = "source2"
@@ -435,12 +444,9 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       .toStream
       .to(sinkTopic)
 
-    import scala.jdk.CollectionConverters._
-
     val joinNodeLeft = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(6)
     val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
-    joinNodeLeft.name() should include("my-name")
-    joinNodeRight.name() should include("my-name")
+    assertTrue(joinNodeLeft.name().contains("my-name"))
+    assertTrue(joinNodeRight.name().contains("my-name"))
   }
-
 }

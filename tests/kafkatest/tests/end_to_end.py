@@ -16,7 +16,7 @@
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
@@ -41,8 +41,8 @@ class EndToEndTest(Test):
         self.records_consumed = []
         self.last_consumed_offsets = {}
         
-    def create_zookeeper(self, num_nodes=1, **kwargs):
-        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs)
+    def create_zookeeper_if_necessary(self, num_nodes=1, **kwargs):
+        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs) if quorum.for_test(self.test_context) == quorum.zk else None
 
     def create_kafka(self, num_nodes=1, **kwargs):
         group_metadata_config = {

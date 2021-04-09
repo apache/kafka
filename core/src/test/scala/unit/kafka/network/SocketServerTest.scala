@@ -31,7 +31,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottledChannel}
+import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
@@ -147,7 +147,7 @@ class SocketServerTest {
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    channel.sendResponse(new RequestChannel.NoOpResponse(request))
+    channel.sendNoOpResponse(request)
   }
 
   def connect(s: SocketServer = server,
@@ -247,7 +247,7 @@ class SocketServerTest {
     assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
     assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
 
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 
     // Send ProduceRequest - client info expected
     sendRequest(plainSocket, producerRequestBytes())
@@ -256,7 +256,7 @@ class SocketServerTest {
     assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
     assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
 
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 
     // Close the socket
     plainSocket.setSoLinger(true, 0)
@@ -678,10 +678,12 @@ class SocketServerTest {
     val request = receiveRequest(server.dataPlaneRequestChannel)
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
-    def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
-      server.dataPlaneRequestChannel.sendResponse(response)
+
+    val channelThrottlingCallback = new ThrottleCallback {
+      override def startThrottling(): Unit = server.dataPlaneRequestChannel.startThrottling(request)
+      override def endThrottling(): Unit = server.dataPlaneRequestChannel.endThrottling(request)
     }
-    val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val throttledChannel = new ThrottledChannel(new MockTime(), 100, channelThrottlingCallback)
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
@@ -1560,8 +1562,15 @@ class SocketServerTest {
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
+      val sleepTimeMs = idleTimeMs / 2 + 1
       val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
-      time.sleep(idleTimeMs + 1)
+      // advance mock time in increments to verify that muted sockets with buffered data dont have their idle time updated
+      // additional calls to poll() should not update the channel last idle time
+      for (_ <- 0 to 3) {
+        time.sleep(sleepTimeMs)
+        testableSelector.operationCounts.clear()
+        testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      }
       testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = false)
 
       val otherSocket = sslConnect(testableServer)
@@ -1573,7 +1582,30 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
     }
   }
-
+  
+  @Test
+  def testUnmuteChannelWithBufferedReceives(): Unit = {
+    val time = new MockTime()
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(time = time)
+    testableServer.startup()
+    val proxyServer = new ProxyServer(testableServer)
+    try {
+      val testableSelector = testableServer.testableSelector
+      val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+      val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
+      assertEquals(Set.empty, keysWithBufferedRead.asScala)
+      processRequest(testableServer.dataPlaneRequestChannel, request)
+      // buffered requests should be processed after channel is unmuted
+      receiveRequest(testableServer.dataPlaneRequestChannel)
+      socket.close()
+    } finally {
+      proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
+    }
+  }
   /**
    * Tests exception handling in [[Processor.processCompletedReceives]]. Exception is
    * injected into [[Selector.mute]] which is used to mute the channel when a receive is complete.
@@ -1741,7 +1773,7 @@ class SocketServerTest {
       // In each iteration, SocketServer processes at most connectionQueueSize (1 in this test)
       // new connections and then does poll() to process data from existing connections. So for
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
-      // we can safely check that there were atleast 4 polls prior to the 5th connection.
+      // we can safely check that there were at least 4 polls prior to the 5th connection.
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
       assertTrue(pollCount >= numConnections - 1, s"Connections created too quickly: $pollCount")
       verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = true)

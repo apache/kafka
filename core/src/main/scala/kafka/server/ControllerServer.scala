@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,33 +17,36 @@
 
 package kafka.server
 
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.Broker.ServerInfo
+import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.Controller
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka controller.
+ * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
                         val metaProperties: MetaProperties,
@@ -53,7 +56,7 @@ class ControllerServer(
                         val time: Time,
                         val metrics: Metrics,
                         val threadNamePrefix: Option[String],
-                        val controllerQuorumVotersFuture: CompletableFuture[util.List[String]]
+                        val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
                       ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -138,10 +141,24 @@ class ControllerServer(
       socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
         config.controllerListeners.head.listenerName))
 
-      controller = null
+      val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
+        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
+      val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+      controller = new QuorumController.Builder(config.nodeId).
+        setTime(time).
+        setThreadNamePrefix(threadNamePrefixAsString).
+        setConfigDefs(configDefs).
+        setLogManager(metaLogManager).
+        setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
+        setDefaultNumPartitions(config.numPartitions.intValue()).
+        setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
+          TimeUnit.MILLISECONDS)).
+        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+        build()
+
+
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-      val controllerNodes =
-        RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -151,7 +168,8 @@ class ControllerServer(
         raftManager,
         config,
         metaProperties,
-        controllerNodes.toSeq)
+        controllerNodes.toSeq,
+        apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,

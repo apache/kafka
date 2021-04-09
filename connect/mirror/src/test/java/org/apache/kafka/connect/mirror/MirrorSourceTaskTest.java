@@ -17,6 +17,10 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
@@ -24,10 +28,16 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MirrorSourceTaskTest {
 
@@ -40,8 +50,8 @@ public class MirrorSourceTaskTest {
         headers.add("header2", new byte[]{'p', 'q', 'r', 's', 't'});
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
             TimestampType.CREATE_TIME, 0L, 5, 6, key, value, headers);
-        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask("cluster7",
-            new DefaultReplicationPolicy(), 50);
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
+                new DefaultReplicationPolicy(), 50);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
         assertEquals("cluster7.topic1", sourceRecord.topic());
         assertEquals(2, sourceRecord.kafkaPartition().intValue());
@@ -85,5 +95,67 @@ public class MirrorSourceTaskTest {
         assertTrue(partitionState.update(3, 209));
         assertTrue(partitionState.update(4, 3));
         assertTrue(partitionState.update(5, 4));
+    }
+
+    @Test
+    public void testPoll() {
+        // Create a consumer mock
+        byte[] key1 = "abc".getBytes();
+        byte[] value1 = "fgh".getBytes();
+        byte[] key2 = "123".getBytes();
+        byte[] value2 = "456".getBytes();
+        List<ConsumerRecord<byte[], byte[]>> consumerRecordsList =  new ArrayList<>();
+        String topicName = "test";
+        String headerKey = "key";
+        RecordHeaders headers = new RecordHeaders(new Header[] {
+            new RecordHeader(headerKey, "value".getBytes()),
+        });
+        consumerRecordsList.add(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, 0L, key1.length, value1.length, key1, value1, headers));
+        consumerRecordsList.add(new ConsumerRecord<>(topicName, 1, 1, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, 0L, key2.length, value2.length, key2, value2, headers));
+        ConsumerRecords<byte[], byte[]> consumerRecords =
+                new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(topicName, 0), consumerRecordsList));
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.poll(any())).thenReturn(consumerRecords);
+
+        MirrorMetrics metrics = mock(MirrorMetrics.class);
+
+        String sourceClusterName = "cluster1";
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
+                replicationPolicy, 50);
+        List<SourceRecord> sourceRecords = mirrorSourceTask.poll();
+
+        assertEquals(2, sourceRecords.size());
+        for (int i = 0; i < sourceRecords.size(); i++) {
+            SourceRecord sourceRecord = sourceRecords.get(i);
+            ConsumerRecord<byte[], byte[]> consumerRecord = consumerRecordsList.get(i);
+            assertEquals(consumerRecord.key(), sourceRecord.key());
+            assertEquals(consumerRecord.value(), sourceRecord.value());
+            // We expect that the topicname will be based on the replication policy currently used
+            assertEquals(replicationPolicy.formatRemoteTopic(sourceClusterName, topicName),
+                    sourceRecord.topic());
+            // We expect that MirrorMaker will keep the same partition assignment
+            assertEquals(consumerRecord.partition(), sourceRecord.kafkaPartition().intValue());
+            // Check header values
+            List<Header> expectedHeaders = new ArrayList<>();
+            consumerRecord.headers().forEach(expectedHeaders::add);
+            List<org.apache.kafka.connect.header.Header> taskHeaders = new ArrayList<>();
+            sourceRecord.headers().forEach(taskHeaders::add);
+            compareHeaders(expectedHeaders, taskHeaders);
+        }
+    }
+
+    private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {
+        assertEquals(expectedHeaders.size(), taskHeaders.size());
+        for (int i = 0; i < expectedHeaders.size(); i++) {
+            Header expectedHeader = expectedHeaders.get(i);
+            org.apache.kafka.connect.header.Header taskHeader = taskHeaders.get(i);
+            assertEquals(expectedHeader.key(), taskHeader.key());
+            assertEquals(expectedHeader.value(), taskHeader.value());
+        }
     }
 }

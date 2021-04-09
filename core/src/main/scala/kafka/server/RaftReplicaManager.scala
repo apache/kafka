@@ -26,8 +26,8 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{ConfigRepository, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.Scheduler
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
@@ -132,8 +132,8 @@ class RaftReplicaManager(config: KafkaConfig,
 
   def endMetadataChangeDeferral(onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
     val startMs = time.milliseconds()
-    val partitionsMadeFollower = mutable.Set[Partition]()
-    val partitionsMadeLeader = mutable.Set[Partition]()
+    var partitionsMadeFollower = Set.empty[Partition]
+    var partitionsMadeLeader = Set.empty[Partition]
     replicaStateChangeLock synchronized {
       stateChangeLogger.info(s"Applying deferred metadata changes")
       val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
@@ -155,15 +155,10 @@ class RaftReplicaManager(config: KafkaConfig,
             partitionsAlreadyExisting += state
           }
         }
-
-        val partitionsMadeLeader = if (leaderPartitionStates.nonEmpty)
-          delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints, None)
-        else
-          Set.empty[Partition]
-        val partitionsMadeFollower = if (followerPartitionStates.nonEmpty)
-          delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints, None)
-        else
-          Set.empty[Partition]
+        if (leaderPartitionStates.nonEmpty)
+          partitionsMadeLeader = delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints, None, metadataImage.topicNameToId)
+        if (followerPartitionStates.nonEmpty)
+          partitionsMadeFollower = delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints, None, metadataImage.topicNameToId)
 
         // We need to transition anything that hasn't transitioned from Deferred to Offline to the Online state.
         deferredPartitionsIterator.foreach { deferredPartition =>
@@ -173,7 +168,7 @@ class RaftReplicaManager(config: KafkaConfig,
 
         updateLeaderAndFollowerMetrics(partitionsMadeFollower.map(_.topic).toSet)
 
-        maybeAddLogDirFetchers(partitionsMadeFollower, highWatermarkCheckpoints)
+        maybeAddLogDirFetchers(partitionsMadeFollower, highWatermarkCheckpoints, metadataImage.topicNameToId)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
@@ -251,6 +246,7 @@ class RaftReplicaManager(config: KafkaConfig,
               (Some(Partition(topicPartition, time, configRepository, this)), None)
           }
           partition.foreach { partition =>
+            checkTopicId(builder.topicNameToId(partition.topic), partition.topicId, partition.topicPartition)
             val isNew = priorDeferredMetadata match {
               case Some(alreadyDeferred) => alreadyDeferred.isNew
               case _ => prevPartitions.topicPartition(topicPartition.topic(), topicPartition.partition()).isEmpty
@@ -286,6 +282,7 @@ class RaftReplicaManager(config: KafkaConfig,
               Some(partition)
           }
           partition.foreach { partition =>
+            checkTopicId(builder.topicNameToId(partition.topic), partition.topicId, partition.topicPartition)
             if (currentState.leaderId == localBrokerId) {
               partitionsToBeLeader.put(partition, currentState)
             } else {
@@ -303,12 +300,12 @@ class RaftReplicaManager(config: KafkaConfig,
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
           delegate.makeLeaders(changedPartitionsPreviouslyExisting, partitionsToBeLeader, highWatermarkCheckpoints,
-            Some(metadataOffset))
+            Some(metadataOffset), builder.topicNameToId)
         else
           Set.empty[Partition]
         val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           delegate.makeFollowers(changedPartitionsPreviouslyExisting, nextBrokers, partitionsToBeFollower, highWatermarkCheckpoints,
-            Some(metadataOffset))
+            Some(metadataOffset), builder.topicNameToId)
         else
           Set.empty[Partition]
         updateLeaderAndFollowerMetrics(partitionsBecomeFollower.map(_.topic).toSet)
@@ -326,11 +323,13 @@ class RaftReplicaManager(config: KafkaConfig,
           }
         }
 
-        maybeAddLogDirFetchers(partitionsBecomeFollower, highWatermarkCheckpoints)
+        maybeAddLogDirFetchers(partitionsBecomeFollower, highWatermarkCheckpoints, builder.topicNameToId)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
+        stateChangeLogger.info(s"Metadata batch $metadataOffset: applied ${partitionsBecomeLeader.size + partitionsBecomeFollower.size} partitions: " +
+          s"${partitionsBecomeLeader.size} leader(s) and ${partitionsBecomeFollower.size} follower(s)")
       }
       // TODO: we should move aside log directories which have been deleted rather than
       // purging them from the disk immediately.
@@ -375,5 +374,31 @@ class RaftReplicaManager(config: KafkaConfig,
   private def cachedState(metadataImage: MetadataImage, partition: Partition): MetadataPartition = {
     metadataImage.partitions.topicPartition(partition.topic, partition.partitionId).getOrElse(
       throw new IllegalStateException(s"Partition has metadata changes but does not exist in the metadata cache: ${partition.topicPartition}"))
+  }
+
+  /**
+   * Checks if the topic ID received from the MetadataPartitionsBuilder is consistent with the topic ID in the log.
+   * If the log does not exist, logTopicIdOpt will be None. In this case, the ID is not inconsistent.
+   *
+   * @param receivedTopicIdOpt the topic ID received from the MetadataRecords if it exists
+   * @param logTopicIdOpt the topic ID in the log if the log exists
+   * @param topicPartition the topicPartition for the Partition being checked
+   * @throws InconsistentTopicIdException if the topic ids are not consistent
+   * @throws IllegalArgumentException if the MetadataPartitionsBuilder did not have a topic ID associated with the topic
+   */
+  private def checkTopicId(receivedTopicIdOpt: Option[Uuid], logTopicIdOpt: Option[Uuid], topicPartition: TopicPartition): Unit = {
+    receivedTopicIdOpt match {
+      case Some(receivedTopicId) =>
+        logTopicIdOpt.foreach { logTopicId =>
+          if (receivedTopicId != logTopicId) {
+            // not sure if we need both the logger and the error thrown
+            stateChangeLogger.error(s"Topic ID in memory: $logTopicId does not" +
+              s" match the topic ID for partition $topicPartition received: " +
+              s"$receivedTopicId.")
+            throw new InconsistentTopicIdException(s"Topic partition $topicPartition had an inconsistent topic ID.")
+          }
+        }
+      case None => throw new IllegalStateException(s"Topic partition $topicPartition is missing a topic ID")
+    }
   }
 }

@@ -1,8 +1,5 @@
 #!/usr/bin/env sh
 
-#
-# Copyright 2015 the original author or authors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -84,7 +81,7 @@ esac
 # Loop in case we encounter an error.
 for attempt in 1 2 3; do
   if [ ! -e "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" ]; then
-    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v6.8.1/gradle/wrapper/gradle-wrapper.jar"; then
+    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v6.8.3/gradle/wrapper/gradle-wrapper.jar"; then
       rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
       # Pause for a bit before looping in case the server throttled us.
       sleep 5

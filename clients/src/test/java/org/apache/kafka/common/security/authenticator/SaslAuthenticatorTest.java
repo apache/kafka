@@ -258,7 +258,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without username");
@@ -282,7 +282,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without password");
@@ -399,7 +399,7 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "DIGEST-MD5");
             createSelector(securityProtocol, saslClientConfigs);
             selector2 = selector;
-            InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+            InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
             NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
             selector = null; // keeps it from being closed when next one is created
@@ -409,7 +409,7 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
             createSelector(securityProtocol, saslClientConfigs);
             selector3 = selector;
-            selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node3, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
             NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
             server.verifyAuthenticationMetrics(3, 0);
             
@@ -2016,7 +2016,7 @@ public class SaslAuthenticatorTest {
         };
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 

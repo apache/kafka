@@ -26,7 +26,7 @@ class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesS
 
     ChangeLoggingTimestampedWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                              final boolean retainDuplicates) {
-        super(bytesStore, retainDuplicates);
+        super(bytesStore, retainDuplicates, WindowKeySchema::toStoreKeyBinary);
     }
 
     @Override

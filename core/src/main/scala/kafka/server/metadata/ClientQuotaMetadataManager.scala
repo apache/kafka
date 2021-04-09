@@ -121,16 +121,20 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       return
     }
 
-    // Update the cache
-    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
-
     // Convert the value to an appropriate Option for the quota manager
     val newValue = if (quotaRecord.remove()) {
       None
     } else {
       Some(quotaRecord.value).map(_.toInt)
     }
-    connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
+    try {
+      connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
+    } catch {
+      case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
+    }
+
+    // Update the cache
+    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 
   def handleUserClientQuota(quotaEntity: QuotaEntity, quotaRecord: QuotaRecord): Unit = {
@@ -163,11 +167,15 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       Some(new Quota(quotaRecord.value(), true))
     }
 
-    manager.updateQuota(
-      sanitizedUser = sanitizedUser,
-      clientId = sanitizedClientId.map(Sanitizer.desanitize),
-      sanitizedClientId = sanitizedClientId,
-      quota = quotaValue)
+    try {
+      manager.updateQuota(
+        sanitizedUser = sanitizedUser,
+        clientId = sanitizedClientId.map(Sanitizer.desanitize),
+        sanitizedClientId = sanitizedClientId,
+        quota = quotaValue)
+    } catch {
+      case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
+    }
 
     quotaCache.updateQuotaCache(quotaEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
