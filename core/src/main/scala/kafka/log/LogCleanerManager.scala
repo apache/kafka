@@ -595,14 +595,11 @@ private[log] object LogCleanerManager extends Logging {
     // may be cleaned
     val firstUncleanableDirtyOffset: Long = Seq(
 
-      // we do not clean beyond the first unstable offset
-      log.firstUnstableOffset,
+      // we do not clean beyond the lastStableOffset
+      Option(log.lastStableOffset),
 
       // the active segment is always uncleanable
       Option(log.activeSegment.baseOffset),
-
-      // we do not want to clean past the high watermark
-      Option(log.highWatermark),
 
       // the first segment whose largest message timestamp is within a minimum time lag from now
       if (minCompactionLagMs > 0) {

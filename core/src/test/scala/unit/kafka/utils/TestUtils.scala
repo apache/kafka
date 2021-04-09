@@ -1200,6 +1200,18 @@ object TestUtils extends Logging {
     }
   }
 
+  def sendRecordsWithKey(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
+                         timestampOffset: Long, tp: TopicPartition, key: String): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
+    val records = (0 until numRecords).map { i =>
+      val record = new ProducerRecord(tp.topic(), tp.partition(), i.toLong + timestampOffset, key.getBytes, s"value: $i".getBytes)
+      producer.send(record)
+      record
+    }
+    producer.flush()
+
+    records
+  }
+
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion

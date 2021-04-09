@@ -1305,11 +1305,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // Send records to first partition -- all duplicates.
     createTopic(topic1, numPartitions = 2, replicationFactor = 1, props)
-    sendDuplicateRecords(producer, numRecords = 100, 0L, new TopicPartition(topic1, 0))
+    TestUtils.sendRecordsWithKey(producer, 100, 0L, new TopicPartition(topic1, 0), "key")
 
     // Send records fo second partition -- only last 50 records are duplicates.
     sendRecords(producer, 50, t1p1)
-    sendDuplicateRecords(producer, numRecords = 50, 50L, new TopicPartition(topic1, 1))
+    TestUtils.sendRecordsWithKey(producer, 50, 50L, new TopicPartition(topic1, 1), "key")
 
     // Sleep to allow compaction to take place.
     Thread.sleep(25000)

@@ -609,7 +609,7 @@ private[log] class Cleaner(val id: Int,
       }
 
       cleanedSegment match {
-        case Some(cleaned) => {
+        case Some(cleaned) =>
           // Result of cleaning included at least one record.
           cleaned.onBecomeInactiveSegment()
           // flush new segment to disk before swap
@@ -622,17 +622,13 @@ private[log] class Cleaner(val id: Int,
           // swap in new segment
           info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
           log.replaceSegments(List(cleaned), segments)
-        }
-        case None => {
+        case None =>
           info(s"Deleting segment(s) $segments in log $log")
           log.deleteSegments(segments, SegmentCompaction)
-        }
       }
     } catch {
       case e: LogCleaningAbortedException =>
-          try if (cleanedSegment.isDefined) {
-            cleanedSegment.get.deleteIfExists()
-          }
+        try cleanedSegment.foreach(_.deleteIfExists())
         catch {
           case deleteException: Exception =>
             e.addSuppressed(deleteException)
@@ -703,9 +699,8 @@ private[log] class Cleaner(val id: Int,
 
     var position = 0
     var destSegment = dest
-    val topicPartition = log.topicPartition
     while (position < sourceRecords.sizeInBytes) {
-      checkDone(topicPartition)
+      checkDone(log.topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
       readBuffer.clear()
       writeBuffer.clear()
@@ -713,7 +708,7 @@ private[log] class Cleaner(val id: Int,
       sourceRecords.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
+      val result = records.filterTo(log.topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 

@@ -210,8 +210,8 @@ case object SegmentDeletion extends LogStartOffsetIncrementReason {
   override def toString: String = "segment deletion"
 }
 
-case object LogCompaction extends LogStartOffsetIncrementReason {
-  override def toString: String = "segment compaction"
+case object SegmentReplacement extends LogStartOffsetIncrementReason {
+  override def toString: String = "segment replacement"
 }
 
 case object SnapshotGenerated extends LogStartOffsetIncrementReason {
@@ -764,16 +764,17 @@ class Log(@volatile private var _dir: File,
       // (1) Log cleaning where multiple segments are merged into one, and
       // (2) Log splitting where one segment is split into multiple.
       //
-      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-      // do a replace with an existing segment.
+      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the offsets in the
+      // swap segment(s) must be found in existing log segment(s) that will be replaced. If we cannot find a segment for a given offset,
+      // it means the deletion of that segment was successful. In such an event where we find no existing segments,
+      // we should simply rename the .swap to .log without having to do a replace with an existing segment.
       //
       // For case 1 (log cleaning), we may have old segments before or after the swap segment that were cleaned.
       // Unfortunately, since the baseOffset and the readNextOffset were changed, these segments will not be removed on
       // recovery if they were not yet given a DeletedFileSuffix. A subsequent cleaning that succeeds will correctly remove these segments.
-      // ie. segments [0, 1000), [1000, 2000), [2000, 3000) cleaned into [1500, 1750).swap without marking old segments with DeletedFileSuffix
-      // -> [0. 1000), [1500, 1750), [2000, 3000)
+      // ie. segments [0, 1000), [1000, 2000), [2000, 3000) [3000,4000) cleaned into [1500, 2500).swap without marking old segments with DeletedFileSuffix
+      // -> [0, 1000), [1500, 2500), [3000, 4000)
+      // In other words, recovery logic in this scenario will lead to only the segments overlapping the new swap segment being replaced.
       val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
         segment.readNextOffset > swapSegment.baseOffset
       }
@@ -2408,9 +2409,10 @@ class Log(@volatile private var _dir: File,
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
 
-      // If not recovered swap file we need to increment logStartOffset here. Otherwise, we do this when loading the log.
+      // If not recovered swap file we need to increment logStartOffset here.
+      // Otherwise, we do this when loading the log where we can update the highWatermark.
       if (!isRecoveredSwapFile)
-         maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, LogCompaction)
+         maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentReplacement)
     }
   }
 
