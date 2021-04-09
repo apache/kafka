@@ -68,12 +68,6 @@ public class RocksDBTimeOrderedWindowStore
         super.init(context, root);
     }
 
-    @Deprecated
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        put(key, value, context != null ? context.timestamp() : 0L);
-    }
-
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
         // Skip if value is null and duplicates are allowed since this delete is a no-op
