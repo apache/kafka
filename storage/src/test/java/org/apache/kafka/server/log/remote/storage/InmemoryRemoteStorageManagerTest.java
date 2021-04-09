@@ -96,7 +96,7 @@ public class InmemoryRemoteStorageManagerTest {
         for (Map.Entry<RemoteStorageManager.IndexType, Path> entry : expectedIndexToPaths.entrySet()) {
             RemoteStorageManager.IndexType indexType = entry.getKey();
             Path indexPath = entry.getValue();
-            log.info("Fetching index type: {}, indexPath: {}", indexType, indexPath);
+            log.debug("Fetching index type: {}, indexPath: {}", indexType, indexPath);
 
             try (InputStream offsetIndexStream = rsm.fetchIndex(segmentMetadata, indexType)) {
                 checkContentSame(offsetIndexStream, indexPath);

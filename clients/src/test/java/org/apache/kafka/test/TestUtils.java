@@ -551,9 +551,7 @@ public class TestUtils {
                 return false;
             }
 
-            Object elem1 = iterator1.next();
-            Object elem2 = iterator2.next();
-            if (!Objects.equals(elem1, elem2)) {
+            if (!Objects.equals(iterator1.next(), iterator2.next())) {
                 return false;
             }
         }
@@ -570,7 +568,7 @@ public class TestUtils {
      */
     public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
                                                        Iterator<T> iterator2) {
-        // check both the iterators have the same set of elements irrespective of order and duplicates.
+        // Check both the iterators have the same set of elements irrespective of order and duplicates.
         Set<T> allSegmentsSet = new HashSet<>();
         iterator1.forEachRemaining(allSegmentsSet::add);
         Set<T> expectedSegmentsSet = new HashSet<>();

@@ -99,6 +99,9 @@ public class RemoteLogMetadataCache {
             = new ConcurrentHashMap<>();
 
     // It contains leader epoch to the respective entry containing the state.
+    // TODO We are not clearing the entry for epoch when RemoteLogLeaderEpochState becomes epty. This will be addressed
+    // later. We will look into it when we integrate these APIs along with RemoteLogManager changes.
+    // https://issues.apache.org/jira/browse/KAFKA-12641
     private final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
 
     /**
@@ -167,7 +170,7 @@ public class RemoteLogMetadataCache {
                 handleSegmentWithDeleteSegmentFinishedState(metadataUpdate, existingMetadata);
                 break;
             default:
-                throw new IllegalArgumentException("Metadata with the state" + targetState + " is not supported");
+                throw new IllegalArgumentException("Metadata with the state " + targetState + " is not supported");
         }
     }
 
@@ -251,7 +254,8 @@ public class RemoteLogMetadataCache {
      *
      * @param leaderEpoch leader epoch.
      */
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch) {
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch)
+            throws RemoteResourceNotFoundException {
         RemoteLogLeaderEpochState remoteLogLeaderEpochState = leaderEpochEntries.get(leaderEpoch);
         if (remoteLogLeaderEpochState == null) {
             return Collections.emptyIterator();
@@ -289,14 +293,17 @@ public class RemoteLogMetadataCache {
                     + " but it contains state as: " + remoteLogSegmentMetadata.state());
         }
 
-        checkStateTransition(null, remoteLogSegmentMetadata.state());
+        RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
+        RemoteLogSegmentMetadata existingMetadata = idToSegmentMetadata.get(remoteLogSegmentId);
+        checkStateTransition(existingMetadata != null ? existingMetadata.state() : null,
+                remoteLogSegmentMetadata.state());
 
         for (Integer epoch : remoteLogSegmentMetadata.segmentLeaderEpochs().keySet()) {
             leaderEpochEntries.computeIfAbsent(epoch, leaderEpoch -> new RemoteLogLeaderEpochState())
-                    .handleSegmentWithCopySegmentStartedState(remoteLogSegmentMetadata.remoteLogSegmentId());
+                    .handleSegmentWithCopySegmentStartedState(remoteLogSegmentId);
         }
 
-        idToSegmentMetadata.put(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata);
+        idToSegmentMetadata.put(remoteLogSegmentId, remoteLogSegmentMetadata);
     }
 
     private void checkStateTransition(RemoteLogSegmentState existingState, RemoteLogSegmentState targetState) {

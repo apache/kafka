@@ -18,8 +18,10 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -49,7 +51,7 @@ class RemoteLogLeaderEpochState {
      */
     private final Set<RemoteLogSegmentId> unreferencedSegmentIds = ConcurrentHashMap.newKeySet();
 
-    // It represents the highest log offset of the segments that were updated with updateHighestLogOffset.
+    // It represents the highest log offset of the segments that reached the COPY_SEGMENT_FINISHED state.
     private volatile Long highestLogOffset;
 
     /**
@@ -58,7 +60,8 @@ class RemoteLogLeaderEpochState {
      * @param idToSegmentMetadata mapping of id to segment metadata. This will be used to get RemoteLogSegmentMetadata
      *                            for an id to be used for sorting.
      */
-    Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments(Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata) {
+    Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments(Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata)
+            throws RemoteResourceNotFoundException {
         // Return all the segments including unreferenced metadata.
         int size = offsetToId.size() + unreferencedSegmentIds.size();
         if (size == 0) {
@@ -66,20 +69,28 @@ class RemoteLogLeaderEpochState {
         }
 
         ArrayList<RemoteLogSegmentMetadata> metadataList = new ArrayList<>(size);
-        for (RemoteLogSegmentId id : offsetToId.values()) {
-            metadataList.add(idToSegmentMetadata.get(id));
-        }
+        collectConvertedIdToMetadata(offsetToId.values(), idToSegmentMetadata, metadataList);
 
         if (!unreferencedSegmentIds.isEmpty()) {
-            for (RemoteLogSegmentId id : unreferencedSegmentIds) {
-                metadataList.add(idToSegmentMetadata.get(id));
-            }
+            collectConvertedIdToMetadata(unreferencedSegmentIds, idToSegmentMetadata, metadataList);
 
-            // sort only when unreferenced entries exist as they are already sorted in offsetToId.
+            // Sort only when unreferenced entries exist as they are already sorted in offsetToId.
             metadataList.sort(Comparator.comparingLong(RemoteLogSegmentMetadata::startOffset));
         }
 
         return metadataList.iterator();
+    }
+
+    private void collectConvertedIdToMetadata(Collection<RemoteLogSegmentId> segmentIds,
+                                              Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata,
+                                              Collection<RemoteLogSegmentMetadata> result) throws RemoteResourceNotFoundException {
+        for (RemoteLogSegmentId id : segmentIds) {
+            RemoteLogSegmentMetadata metadata = idToSegmentMetadata.get(id);
+            if (metadata == null) {
+                throw new RemoteResourceNotFoundException("No remote log segment metadata found for :" + id);
+            }
+            result.add(metadata);
+        }
     }
 
     void handleSegmentWithCopySegmentStartedState(RemoteLogSegmentId remoteLogSegmentId) {
@@ -101,7 +112,9 @@ class RemoteLogLeaderEpochState {
         }
 
         // Update the highest offset entry for this leader epoch as we added a new mapping.
-        maybeUpdateHighestLogOffset(leaderEpochEndOffset);
+        if (highestLogOffset == null || leaderEpochEndOffset > highestLogOffset) {
+            highestLogOffset = leaderEpochEndOffset;
+        }
     }
 
     void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
@@ -112,29 +125,16 @@ class RemoteLogLeaderEpochState {
         // Add this entry to unreferenced set for the leader epoch as it is being deleted.
         // This allows any retries of deletion as these are returned from listAllSegments and listSegments(leaderEpoch).
         unreferencedSegmentIds.add(remoteLogSegmentId);
-
-        // Update the highest offset entry for this leader epoch. This needs to be done as a segment can reach this
-        // state without going through COPY_SEGMENT_FINISHED state.
-        maybeUpdateHighestLogOffset(leaderEpochEndOffset);
     }
 
     void handleSegmentWithDeleteSegmentFinishedState(long startOffset, RemoteLogSegmentId remoteLogSegmentId,
                                                      Long leaderEpochEndOffset) {
         // It completely removes the tracking of this segment as it is considered as deleted.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
-
-        // We do not need to update the highest offset entry with this segment as it would have already been processed
-        // as part of the earlier state of DELETE_SEGMENT_STARTED.
     }
 
     Long highestLogOffset() {
         return highestLogOffset;
-    }
-
-    private void maybeUpdateHighestLogOffset(long offset) {
-        if (highestLogOffset == null || offset > highestLogOffset) {
-            highestLogOffset = offset;
-        }
     }
 
     /**

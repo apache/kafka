@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 public class RemoteLogMetadataCacheTest {
     private static final Logger log = LoggerFactory.getLogger(RemoteLogMetadataCacheTest.class);
@@ -72,6 +73,10 @@ public class RemoteLogMetadataCacheTest {
         // We should not get this as the segment is still getting copied and it is not yet considered successful until
         // it reaches RemoteLogSegmentState.COPY_SEGMENT_FINISHED.
         Assertions.assertFalse(cache.remoteLogSegmentMetadata(40, 1).isPresent());
+
+        // Check that these leader epochs are to considered for highest offsets as they are still getting copied and
+        // they did nto reach COPY_SEGMENT_FINISHED state.
+        Stream.of(0, 1, 2).forEach(epoch -> Assertions.assertFalse(cache.highestOffsetForEpoch(epoch).isPresent()));
 
         RemoteLogSegmentMetadataUpdate segment0Update = new RemoteLogSegmentMetadataUpdate(
                 segment0Id, time.milliseconds(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
@@ -195,7 +200,7 @@ public class RemoteLogMetadataCacheTest {
     }
 
     @Test
-    public void testCacheSegmentWithCopySegmentStartedState() {
+    public void testCacheSegmentWithCopySegmentStartedState() throws Exception {
         RemoteLogMetadataCache cache = new RemoteLogMetadataCache();
 
         // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
@@ -332,7 +337,10 @@ public class RemoteLogMetadataCacheTest {
         });
     }
 
-    private void checkListSegments(RemoteLogMetadataCache cache, int leaderEpoch, RemoteLogSegmentMetadata expectedSegment) {
+    private void checkListSegments(RemoteLogMetadataCache cache,
+                                   int leaderEpoch,
+                                   RemoteLogSegmentMetadata expectedSegment)
+            throws RemoteResourceNotFoundException {
         // cache.listRemoteLogSegments(leaderEpoch) should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> segmentsIter = cache.listRemoteLogSegments(leaderEpoch);
         Assertions.assertTrue(segmentsIter.hasNext() && Objects.equals(segmentsIter.next(), expectedSegment));
