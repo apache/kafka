@@ -229,9 +229,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     /*
-     * Retrieves config map by connector name
+     * Retrieves raw config map by connector name.
      */
-    protected abstract Map<String, String> config(String connName);
+    protected abstract Map<String, String> rawConfig(String connName);
+
+    @Override
+    public void connectorConfig(String connName, Callback<Map<String, String>> callback) {
+        // Subset of connectorInfo, so piggy back on that implementation
+        connectorInfo(connName, (error, result) -> {
+            if (error != null)
+                callback.onCompletion(error, null);
+            else
+                callback.onCompletion(null, result.config());
+        });
+    }
 
     @Override
     public Collection<String> connectors() {
@@ -254,6 +265,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         );
     }
 
+    protected Map<ConnectorTaskId, Map<String, String>> buildTasksConfig(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return Collections.emptyMap();
+
+        Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
+        for (ConnectorTaskId cti : configState.tasks(connector)) {
+            configs.put(cti, configState.taskConfig(cti));
+        }
+
+        return configs;
+    }
+
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
@@ -273,7 +298,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        Map<String, String> conf = config(connName);
+        Map<String, String> conf = rawConfig(connName);
         return new ConnectorStateInfo(connName, connectorState, taskStates,
             conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -502,8 +527,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
-                configValue.addErrorMessage("Configuration is not defined: " + configName);
                 configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue, null)));
+                errorCount += configValue.errorMessages().size();
             }
         }
 
@@ -621,7 +646,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString("UTF-8");
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             return null;
         }

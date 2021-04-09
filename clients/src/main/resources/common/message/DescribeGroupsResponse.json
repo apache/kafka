@@ -23,7 +23,7 @@
   //
   // Starting in version 3, brokers can send authorized operations.
   //
-  // Starting in version 4, the response will include group.instance.id info for members.
+  // Starting in version 4, the response will optionally include group.instance.id info for members.
   //
   // Version 5 is the first flexible version.
   "validVersions": "0-5",
@@ -49,7 +49,7 @@
         "about": "The group members.", "fields": [
         { "name": "MemberId", "type": "string", "versions": "0+",
           "about": "The member ID assigned by the group coordinator." },
-        { "name": "GroupInstanceId", "type": "string", "versions": "4+",
+        { "name": "GroupInstanceId", "type": "string", "versions": "4+", "ignorable": true,
           "nullableVersions": "4+", "default": "null",
           "about": "The unique identifier of the consumer instance provided by end user." },
         { "name": "ClientId", "type": "string", "versions": "0+",

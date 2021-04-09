@@ -23,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -49,6 +52,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
@@ -61,7 +65,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final boolean eosEnabled;
     private final Map<TopicPartition, Long> offsets;
 
-    private volatile KafkaException sendException;
+    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     /**
      * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
@@ -109,11 +113,18 @@ public class RecordCollectorImpl implements RecordCollector {
             final List<PartitionInfo> partitions;
             try {
                 partitions = streamsProducer.partitionsFor(topic);
-            } catch (final KafkaException e) {
+            } catch (final TimeoutException timeoutException) {
+                log.warn("Could not get partitions for topic {}, will retry", topic);
+
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
+            } catch (final KafkaException fatal) {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + e.toString());
+                    "' for task " + taskId + " due to " + fatal.toString(),
+                    fatal
+                );
             }
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
@@ -170,7 +181,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             // if there's already an exception record, skip logging offsets or new exceptions
-            if (sendException != null) {
+            if (sendException.get() != null) {
                 return;
             }
 
@@ -195,29 +206,32 @@ public class RecordCollectorImpl implements RecordCollector {
 
         if (isFatalException(exception)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
-            sendException = new StreamsException(errorMessage, exception);
-        } else if (exception instanceof ProducerFencedException || exception instanceof OutOfOrderSequenceException) {
+            sendException.set(new StreamsException(errorMessage, exception));
+        } else if (exception instanceof ProducerFencedException ||
+                exception instanceof InvalidProducerEpochException ||
+                exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
-            sendException = new TaskMigratedException(errorMessage, exception);
+            sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-            }
-
-            if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
-                errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
-                sendException = new StreamsException(errorMessage, exception);
+                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
-                droppedRecordsSensor.record();
+                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                    errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
+                    sendException.set(new StreamsException(errorMessage, exception));
+                } else {
+                    errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
+                    droppedRecordsSensor.record();
+                }
             }
         }
 
-        log.error(errorMessage);
+        log.error(errorMessage, exception);
     }
 
     private boolean isFatalException(final Exception exception) {
@@ -250,10 +264,26 @@ public class RecordCollectorImpl implements RecordCollector {
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
-    public void close() {
-        log.debug("Closing record collector");
+    public void closeClean() {
+        log.info("Closing record collector clean");
+
+        // No need to abort transaction during a clean close: either we have successfully committed the ongoing
+        // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
+        // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
+
+        checkForException();
+    }
+
+    /**
+     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws TaskMigratedException recoverable error that would cause the task to be removed
+     */
+    @Override
+    public void closeDirty() {
+        log.info("Closing record collector dirty");
 
         if (eosEnabled) {
+            // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
             streamsProducer.abortTransaction();
         }
 
@@ -266,8 +296,11 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private void checkForException() {
-        if (sendException != null) {
-            throw sendException;
+        final KafkaException exception = sendException.get();
+
+        if (exception != null) {
+            sendException.set(null);
+            throw exception;
         }
     }
 

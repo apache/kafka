@@ -110,21 +110,27 @@ public class StateConsumerTest {
 
     @Test
     public void shouldCloseConsumer() throws IOException {
-        stateConsumer.close();
+        stateConsumer.close(false);
         assertTrue(consumer.closed());
     }
 
     @Test
     public void shouldCloseStateMaintainer() throws IOException {
-        stateConsumer.close();
+        stateConsumer.close(false);
         assertTrue(stateMaintainer.closed);
     }
 
+    @Test
+    public void shouldWipeStoreOnClose() throws IOException {
+        stateConsumer.close(true);
+        assertTrue(stateMaintainer.wipeStore);
+    }
 
     private static class TaskStub implements GlobalStateMaintainer {
         private final Map<TopicPartition, Long> partitionOffsets;
         private final Map<TopicPartition, Integer> updatedPartitions = new HashMap<>();
         private boolean flushed;
+        private boolean wipeStore;
         private boolean closed;
 
         TaskStub(final Map<TopicPartition, Long> partitionOffsets) {
@@ -141,8 +147,9 @@ public class StateConsumerTest {
         }
 
         @Override
-        public void close() {
+        public void close(final boolean wipeStateStore) {
             closed = true;
+            wipeStore = wipeStateStore;
         }
 
         @Override

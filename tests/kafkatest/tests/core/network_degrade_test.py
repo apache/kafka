@@ -129,7 +129,7 @@ class NetworkDegradeTest(Test):
         self.logger.info("Measured rates: %s" % measured_rates)
 
         # We expect to see measured rates within an order of magnitude of our target rate
-        low_kbps = rate_limit_kbit / 10
+        low_kbps = rate_limit_kbit // 10
         high_kbps = rate_limit_kbit * 10
         acceptable_rates = [r for r in measured_rates if low_kbps < r < high_kbps]
 

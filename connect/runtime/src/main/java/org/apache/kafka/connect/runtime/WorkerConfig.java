@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.storage.Converter;
@@ -146,20 +147,22 @@ public class WorkerConfig extends AbstractConfig {
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
     private static final String REST_HOST_NAME_DOC
-            = "Hostname for the REST API. If this is set, it will only bind to this interface.";
+            = "Hostname for the REST API. If this is set, it will only bind to this interface.\n" +
+            "Deprecated, only used when listeners is not set. Use listeners instead.";
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
     private static final String REST_PORT_DOC
-            = "Port for the REST API to listen on.";
+            = "Port for the REST API to listen on.\n" +
+            "Deprecated, only used when listeners is not set. Use listeners instead.";
     public static final int REST_PORT_DEFAULT = 8083;
 
     public static final String LISTENERS_CONFIG = "listeners";
@@ -282,8 +285,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                        in(ClientDnsLookup.DEFAULT.toString(),
-                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                        in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                         Importance.MEDIUM,
                         CLIENT_DNS_LOOKUP_DOC)
@@ -444,7 +446,7 @@ public class WorkerConfig extends AbstractConfig {
     public static List<String> pluginLocations(Map<String, String> props) {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
-                         ? new ArrayList<String>()
+                         ? new ArrayList<>()
                          : Arrays.asList(COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
     }
 
@@ -516,7 +518,7 @@ public class WorkerConfig extends AbstractConfig {
                 if (!(item instanceof String)) {
                     throw new ConfigException("Invalid type for admin listener (expected String).");
                 }
-                if (((String) item).trim().isEmpty()) {
+                if (Utils.isBlank((String) item)) {
                     throw new ConfigException("Empty listener found when parsing list.");
                 }
             }
@@ -527,7 +529,7 @@ public class WorkerConfig extends AbstractConfig {
         @Override
         public void ensureValid(String name, Object value) {
             String strValue = (String) value;
-            if (strValue == null || strValue.trim().isEmpty()) {
+            if (Utils.isBlank(strValue)) {
                 return;
             }
 

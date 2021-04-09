@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ApiVersionsTest {
 
@@ -39,4 +42,17 @@ public class ApiVersionsTest {
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
     }
 
+    @Test
+    public void testMaxUsableProduceMagicWithRaftController() {
+        ApiVersions apiVersions = new ApiVersions();
+        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+
+        // something that doesn't support PRODUCE, which is the case with Raft-based controllers
+        apiVersions.update("2", new NodeApiVersions(Collections.singleton(
+            new ApiVersionsResponseData.ApiVersion()
+                .setApiKey(ApiKeys.FETCH.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 2))));
+        assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+    }
 }

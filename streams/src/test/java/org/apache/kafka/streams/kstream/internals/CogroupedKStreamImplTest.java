@@ -18,6 +18,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Properties;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -43,12 +45,14 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,64 +89,69 @@ public class CogroupedKStreamImplTest {
         cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEInCogroupIfKGroupedStreamIsNull() {
-        cogroupedStream.cogroup(null, MockAggregator.TOSTRING_ADDER);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.cogroup(null, MockAggregator.TOSTRING_ADDER));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullAggregatorOnCogroup() {
-        cogroupedStream.cogroup(groupedStream, null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.cogroup(groupedStream, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerOnAggregate() {
-        cogroupedStream.aggregate(null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerOnAggregateWitNamed() {
-        cogroupedStream.aggregate(null, Named.as("name"));
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(null, Named.as("name")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerOnAggregateWitMaterialized() {
-        cogroupedStream.aggregate(null, Materialized.as("store"));
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(null, Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerOnAggregateWitNamedAndMaterialized() {
-        cogroupedStream.aggregate(null, Named.as("name"), Materialized.as("store"));
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(null, Named.as("name"), Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullNamedOnAggregate() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, (Named) null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER, (Named) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullMaterializedOnAggregate() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullNamedOnAggregateWithMateriazlied() {
-        cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store"));
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullMaterializedOnAggregateWithNames() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, Named.as("name"), null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER, Named.as("name"), null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullWindowOnWindowedByTime() {
-        cogroupedStream.windowedBy((Windows<? extends Window>) null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.windowedBy((Windows<? extends Window>) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullWindowOnWindowedBySession() {
-        cogroupedStream.windowedBy((SessionWindows) null);
+        assertThrows(NullPointerException.class, () -> cogroupedStream.windowedBy((SessionWindows) null));
+    }
+
+    @Test
+    public void shouldNotHaveNullWindowOnWindowedBySliding() {
+        assertThrows(NullPointerException.class, () -> cogroupedStream.windowedBy((SlidingWindows) null));
     }
 
     @Test
@@ -379,7 +388,7 @@ public class CogroupedKStreamImplTest {
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInSameCogroupsWithOptimization() {
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -528,7 +537,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -653,7 +662,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -707,7 +716,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -1192,6 +1201,46 @@ public class CogroupedKStreamImplTest {
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", 500);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", 500);
             assertOutputKeyValueTimestamp(testOutputTopic, "k3", "B", 500);
+        }
+    }
+
+    @Test
+    public void testCogroupWithKTableKTableInnerJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> grouped1 = builder.stream("one", stringConsumed).groupByKey();
+        final KGroupedStream<String, String> grouped2 = builder.stream("two", stringConsumed).groupByKey();
+
+        final KTable<String, String> table1 = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(grouped2, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER, Named.as("name"), Materialized.as("store"));
+
+        final KTable<String, String> table2 = builder.table("three", stringConsumed);
+        final KTable<String, String> joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.with(Serdes.String(), Serdes.String()));
+        joined.toStream().to(OUTPUT);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic3 =
+                driver.createInputTopic("three", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 5L);
+            testInputTopic2.pipeInput("k2", "B", 6L);
+
+            assertTrue(testOutputTopic.isEmpty());
+
+            testInputTopic3.pipeInput("k1", "C", 0L);
+            testInputTopic3.pipeInput("k2", "D", 10L);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", 5L);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B+D", 10L);
+            assertTrue(testOutputTopic.isEmpty());
         }
     }
 

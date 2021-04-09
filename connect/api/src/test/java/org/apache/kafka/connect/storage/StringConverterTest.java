@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class StringConverterTest {
     private static final String TOPIC = "topic";
@@ -33,29 +35,29 @@ public class StringConverterTest {
     private StringConverter converter = new StringConverter();
 
     @Test
-    public void testStringToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals(SAMPLE_STRING.getBytes("UTF8"), converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, SAMPLE_STRING));
+    public void testStringToBytes() {
+        assertArrayEquals(Utils.utf8(SAMPLE_STRING), converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, SAMPLE_STRING));
     }
 
     @Test
-    public void testNonStringToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals("true".getBytes("UTF8"), converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
+    public void testNonStringToBytes() {
+        assertArrayEquals(Utils.utf8("true"), converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, true));
     }
 
     @Test
     public void testNullToBytes() {
-        assertEquals(null, converter.fromConnectData(TOPIC, Schema.OPTIONAL_STRING_SCHEMA, null));
+        assertNull(converter.fromConnectData(TOPIC, Schema.OPTIONAL_STRING_SCHEMA, null));
     }
 
     @Test
-    public void testToBytesIgnoresSchema() throws UnsupportedEncodingException {
-        assertArrayEquals("true".getBytes("UTF8"), converter.fromConnectData(TOPIC, null, true));
+    public void testToBytesIgnoresSchema() {
+        assertArrayEquals(Utils.utf8("true"), converter.fromConnectData(TOPIC, null, true));
     }
 
     @Test
-    public void testToBytesNonUtf8Encoding() throws UnsupportedEncodingException {
-        converter.configure(Collections.singletonMap("converter.encoding", "UTF-16"), true);
-        assertArrayEquals(SAMPLE_STRING.getBytes("UTF-16"), converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, SAMPLE_STRING));
+    public void testToBytesNonUtf8Encoding() {
+        converter.configure(Collections.singletonMap("converter.encoding", StandardCharsets.UTF_16.name()), true);
+        assertArrayEquals(SAMPLE_STRING.getBytes(StandardCharsets.UTF_16), converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, SAMPLE_STRING));
     }
 
     @Test
@@ -69,13 +71,13 @@ public class StringConverterTest {
     public void testBytesNullToString() {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, data.schema());
-        assertEquals(null, data.value());
+        assertNull(data.value());
     }
 
     @Test
-    public void testBytesToStringNonUtf8Encoding() throws UnsupportedEncodingException {
-        converter.configure(Collections.singletonMap("converter.encoding", "UTF-16"), true);
-        SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_STRING.getBytes("UTF-16"));
+    public void testBytesToStringNonUtf8Encoding() {
+        converter.configure(Collections.singletonMap("converter.encoding", StandardCharsets.UTF_16.name()), true);
+        SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_STRING.getBytes(StandardCharsets.UTF_16));
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, data.schema());
         assertEquals(SAMPLE_STRING, data.value());
     }
@@ -84,17 +86,17 @@ public class StringConverterTest {
     // The following simply verify that the delegation works.
 
     @Test
-    public void testStringHeaderValueToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals(SAMPLE_STRING.getBytes("UTF8"), converter.fromConnectHeader(TOPIC, "hdr", Schema.STRING_SCHEMA, SAMPLE_STRING));
+    public void testStringHeaderValueToBytes() {
+        assertArrayEquals(Utils.utf8(SAMPLE_STRING), converter.fromConnectHeader(TOPIC, "hdr", Schema.STRING_SCHEMA, SAMPLE_STRING));
     }
 
     @Test
-    public void testNonStringHeaderValueToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals("true".getBytes("UTF8"), converter.fromConnectHeader(TOPIC, "hdr", Schema.BOOLEAN_SCHEMA, true));
+    public void testNonStringHeaderValueToBytes() {
+        assertArrayEquals(Utils.utf8("true"), converter.fromConnectHeader(TOPIC, "hdr", Schema.BOOLEAN_SCHEMA, true));
     }
 
     @Test
     public void testNullHeaderValueToBytes() {
-        assertEquals(null, converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
+        assertNull(converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
     }
 }

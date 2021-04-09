@@ -77,11 +77,10 @@
         <div class="section" id="step-1-run-the-application-reset-tool">
             <h2>Step 1: Run the application reset tool<a class="headerlink" href="#step-1-run-the-application-reset-tool" title="Permalink to this headline"></a></h2>
             <p>Invoke the application reset tool from the command line</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span>&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset
-</pre></div>
+            <div class="highlight-bash"><div class="highlight"><pre><span></span><code>&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset</code></pre></div>
             </div>
             <p>The tool accepts the following parameters:</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span>Option <span class="o">(</span>* <span class="o">=</span> required<span class="o">)</span>                 Description
+            <div class="highlight-bash"><div class="highlight"><pre><span>Option</span><code> <span class="o">(</span>* <span class="o">=</span> required<span class="o">)</span>                 Description
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
                                         <span class="o">(</span>application.id<span class="o">)</span>.
@@ -120,8 +119,7 @@
                                         directly.
 --force                               Force removing members of the consumer group
                                       (intended to remove left-over members if
-                                      long session timeout was configured).
-</pre></div>
+                                      long session timeout was configured).</code></pre></div>
             </div>
             <p>Consider the following as reset-offset scenarios for <code>input-topics</code>:</p>
             <ul>
@@ -161,10 +159,10 @@
 
 <!--#include virtual="../../../includes/_header.htm" -->
 <!--#include virtual="../../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
   <!--#include virtual="../../../includes/_nav.htm" -->
   <div class="right">
-    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a></li>
       <li><a href="/documentation/streams">Kafka Streams</a></li>

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -33,10 +34,10 @@ import java.util.Collections;
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
+public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
 
     private final MaterializedInternal<K, V, ?> materializedInternal;
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
     private boolean shouldReuseSourceTopicForChangelog = false;
@@ -46,7 +47,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
                             final String topic,
                             final ConsumedInternal<K, V> consumedInternal,
                             final MaterializedInternal<K, V, ?> materializedInternal,
-                            final ProcessorParameters<K, V> processorParameters,
+                            final ProcessorParameters<K, V, ?, ?> processorParameters,
                             final boolean isGlobalKTable) {
 
         super(nodeName,
@@ -89,14 +90,16 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {
-            topologyBuilder.addGlobalStore(storeBuilder,
-                                           sourceName,
-                                           consumedInternal().timestampExtractor(),
-                                           consumedInternal().keyDeserializer(),
-                                           consumedInternal().valueDeserializer(),
-                                           topicName,
-                                           processorParameters.processorName(),
-                                           processorParameters.processorSupplier());
+            topologyBuilder.addGlobalStore(
+                storeBuilder,
+                sourceName,
+                consumedInternal().timestampExtractor(),
+                consumedInternal().keyDeserializer(),
+                consumedInternal().valueDeserializer(),
+                topicName,
+                processorParameters.processorName(),
+                (ProcessorSupplier<K, V, Void, Void>) processorParameters.processorSupplier()
+            );
         } else {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
                                       sourceName,
@@ -108,7 +111,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
 
             // only add state store if the source KTable should be materialized
-            final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
+            final KTableSource<K, V> ktableSource = processorParameters.kTableSourceSupplier();
             if (ktableSource.materialized()) {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
 
@@ -128,7 +131,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
         private MaterializedInternal<K, V, ?> materializedInternal;
-        private ProcessorParameters<K, V> processorParameters;
+        private ProcessorParameters<K, V, ?, ?> processorParameters;
         private boolean isGlobalKTable = false;
 
         private TableSourceNodeBuilder() {
@@ -154,7 +157,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

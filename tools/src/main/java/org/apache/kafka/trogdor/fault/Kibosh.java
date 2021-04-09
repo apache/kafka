@@ -124,7 +124,7 @@ public final class Kibosh {
         private final List<KiboshFaultSpec> faults;
 
         public final static KiboshControlFile EMPTY =
-            new KiboshControlFile(Collections.<KiboshFaultSpec>emptyList());
+            new KiboshControlFile(Collections.emptyList());
 
         public static KiboshControlFile read(Path controlPath) throws IOException {
             byte[] controlFileBytes = Files.readAllBytes(controlPath);
@@ -133,7 +133,7 @@ public final class Kibosh {
 
         @JsonCreator
         public KiboshControlFile(@JsonProperty("faults") List<KiboshFaultSpec> faults) {
-            this.faults = faults == null ? new ArrayList<KiboshFaultSpec>() : faults;
+            this.faults = faults == null ? new ArrayList<>() : faults;
         }
 
         @JsonProperty

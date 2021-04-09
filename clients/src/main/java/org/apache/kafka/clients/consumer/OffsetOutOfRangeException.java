@@ -40,6 +40,9 @@ public class OffsetOutOfRangeException extends InvalidOffsetException {
         this.offsetOutOfRangePartitions = offsetOutOfRangePartitions;
     }
 
+    /**
+     * Get a map of the topic partitions and the respective out-of-range fetch offsets.
+     */
     public Map<TopicPartition, Long> offsetOutOfRangePartitions() {
         return offsetOutOfRangePartitions;
     }

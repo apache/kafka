@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import matrix, ignore
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -22,8 +21,6 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-
-import logging
 
 class ZookeeperTlsEncryptOnlyTest(ProduceConsumeValidateTest):
     """Tests TLS encryption-only (ssl.clientAuth=none) connectivity to zookeeper.
@@ -69,9 +66,7 @@ class ZookeeperTlsEncryptOnlyTest(ProduceConsumeValidateTest):
         self.zk.start()
         self.kafka.security_protocol = self.kafka.interbroker_security_protocol = "PLAINTEXT"
 
-        # Cannot use --zookeeper because kafka-topics.sh is unable to connect to a TLS-enabled ZooKeeper quorum,
-        # so indicate that topics should be created via the Admin client
-        self.kafka.start(use_zk_to_create_topic=False)
+        self.kafka.start()
 
         self.perform_produce_consume_validation()
 

@@ -26,9 +26,6 @@ import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.task.AgentWorkerStatusTracker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.io.OutputStream;
@@ -37,13 +34,15 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class ExternalCommandWorkerTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     static class ExternalCommandWorkerBuilder {
         private final String id;

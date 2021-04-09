@@ -41,7 +41,7 @@
     </p>
     <img class="centered" src="/{{version}}/images/streams-architecture-overview.jpg" style="width:750px">
 
-    <h3><a id="streams_architecture_tasks" href="#streams_architecture_tasks">Stream Partitions and Tasks</a></h3>
+    <h3 class="anchor-heading"><a id="streams_architecture_tasks" class="anchor-link"></a><a href="#streams_architecture_tasks">Stream Partitions and Tasks</a></h3>
 
     <p>
         The messaging layer of Kafka partitions data for storing and transporting it. Kafka Streams partitions data for processing it.
@@ -91,7 +91,7 @@
     <img class="centered" src="/{{version}}/images/streams-architecture-tasks.jpg" style="width:400px">
     <br>
 
-    <h3><a id="streams_architecture_threads" href="#streams_architecture_threads">Threading Model</a></h3>
+    <h3 class="anchor-heading"><a id="streams_architecture_threads" class="anchor-link"></a><a href="#streams_architecture_threads">Threading Model</a></h3>
 
     <p>
         Kafka Streams allows the user to configure the number of <b>threads</b> that the library can use to parallelize processing within an application instance.
@@ -110,9 +110,14 @@
         and Kafka Streams takes care of distributing partitions amongst tasks that run in the application instances. You can start as many threads of the application
         as there are input Kafka topic partitions so that, across all running instances of an application, every thread (or rather, the tasks it runs) has at least one input partition to process.
     </p>
+    <p>
+        As of Kafka 2.8 you can scale stream threads much in the same way you can scale your Kafka Stream clients.
+        Simply add or remove stream threads and Kafka Streams will take care of redistributing the partitions.
+        You may also add threads to replace stream threads that have died removing the need to restart clients to recover the number of thread running.
+    </p>
     <br>
 
-    <h3><a id="streams_architecture_state" href="#streams_architecture_state">Local State Stores</a></h3>
+    <h3 class="anchor-heading"><a id="streams_architecture_state" class="anchor-link"></a><a href="#streams_architecture_state">Local State Stores</a></h3>
 
     <p>
         Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data,
@@ -131,7 +136,7 @@
     <img class="centered" src="/{{version}}/images/streams-architecture-states.jpg" style="width:400px">
     <br>
 
-    <h3><a id="streams_architecture_recovery" href="#streams_architecture_recovery">Fault Tolerance</a></h3>
+    <h3 class="anchor-heading"><a id="streams_architecture_recovery" class="anchor-link"></a><a href="#streams_architecture_recovery">Fault Tolerance</a></h3>
 
     <p>
         Kafka Streams builds on fault-tolerance capabilities integrated natively within Kafka. Kafka partitions are highly available and replicated; so when stream data is persisted to Kafka it is available
@@ -151,8 +156,10 @@
     <p>
         Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics.
         To minimize this restoration time, users can configure their applications to have <b>standby replicas</b> of local states (i.e. fully replicated copies of the state).
-        When a task migration happens, Kafka Streams then attempts to assign a task to an application instance where such a standby replica already exists in order to minimize
+        When a task migration happens, Kafka Streams will assign a task to an application instance where such a standby replica already exists in order to minimize
         the task (re)initialization cost. See <code>num.standby.replicas</code> in the <a href="/{{version}}/documentation/#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
+        Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance
+        exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure.
     </p>
 
     <div class="pagination">
@@ -163,10 +170,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

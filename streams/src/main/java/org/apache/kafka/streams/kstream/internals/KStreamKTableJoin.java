@@ -17,23 +17,20 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
-    private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
-        @Override
-        public K apply(final K key, final V1 value) {
-            return key;
-        }
-    };
+    private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoiner<? super V1, ? super V2, R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final ValueJoiner<? super V1, ? super V2, R> joiner, final boolean leftJoin) {
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
+                      final ValueJoinerWithKey<? super K, ? super V1, ? super V2, R> joiner,
+                      final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;

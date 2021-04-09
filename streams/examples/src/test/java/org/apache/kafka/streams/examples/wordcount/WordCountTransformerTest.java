@@ -21,18 +21,19 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void test() {
         final MockProcessorContext context = new MockProcessorContext();
@@ -40,7 +41,10 @@ public class WordCountTransformerTest {
         // Create and initialize the transformer under test; including its provided store
         final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
         for (final StoreBuilder<?> storeBuilder : supplier.stores()) {
-            final StateStore store = storeBuilder.withLoggingDisabled().build(); // Changelog is not supported by MockProcessorContext.
+            final StateStore store = storeBuilder
+                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
+                .build();
             store.init(context, store);
             context.register(store, null);
         }
@@ -48,7 +52,7 @@ public class WordCountTransformerTest {
         transformer.init(context);
 
         // send a record to the transformer
-        transformer.transform("key", "alpha beta gamma alpha");
+        transformer.transform("key", "alpha beta\tgamma\n\talpha");
 
         // note that the transformer does not forward during transform()
         assertTrue(context.forwarded().isEmpty());

@@ -87,7 +87,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -108,7 +108,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -261,38 +261,6 @@ public class ProcessorNodeMetricsTest {
         }
     }
 
-    @Test
-    public void shouldGetRecordE2ELatencySensor() {
-        final String operation = "record-e2e-latency";
-        final String recordE2ELatencyMinDescription =
-            "The minimum end-to-end latency of a record, measuring by comparing the record timestamp with the "
-                + "system time when it has been fully processed by the node";
-        final String recordE2ELatencyMaxDescription =
-            "The maximum end-to-end latency of a record, measuring by comparing the record timestamp with the "
-                + "system time when it has been fully processed by the node";
-        final String recordE2ELatencyP99Description =
-            "The 99th percentile end-to-end latency of a record, measuring by comparing the record timestamp with the "
-                + "system time when it has been fully processed by the node";
-        final String recordE2ELatencyP90Description =
-            "The 90th percentile end-to-end latency of a record, measuring by comparing the record timestamp with the "
-                + "system time when it has been fully processed by the node";
-        expect(streamsMetrics.nodeLevelSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, operation, RecordingLevel.INFO))
-            .andReturn(expectedSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
-        StreamsMetricsImpl.addMinAndMaxAndP99AndP90ToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            operation,
-            recordE2ELatencyMinDescription,
-            recordE2ELatencyMaxDescription,
-            recordE2ELatencyP99Description,
-            recordE2ELatencyP90Description
-        );
-
-        verifySensor(() -> ProcessorNodeMetrics.recordE2ELatencySensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, RecordingLevel.INFO, streamsMetrics));
-    }
-
     private void shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(final String metricNamePrefix,
                                                                             final String descriptionOfRate,
                                                                             final String descriptionOfCount,
@@ -353,7 +321,7 @@ public class ProcessorNodeMetricsTest {
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -361,7 +329,7 @@ public class ProcessorNodeMetricsTest {
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
             descriptionOfAvg,
@@ -378,7 +346,7 @@ public class ProcessorNodeMetricsTest {
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -395,7 +363,7 @@ public class ProcessorNodeMetricsTest {
         setUpThroughputSensor(metricNamePrefix, descriptionOfRate, descriptionOfCount, RecordingLevel.DEBUG, parentSensors);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
             descriptionOfAvgLatency,
@@ -419,7 +387,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,

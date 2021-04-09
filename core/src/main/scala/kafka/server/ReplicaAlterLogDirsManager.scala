@@ -36,7 +36,7 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
   }
 
   override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,
-                                                      initialOffsetAndEpochs: collection.Map[TopicPartition, OffsetAndEpoch]): Unit = {
+                                                      initialOffsetAndEpochs: collection.Map[TopicPartition, InitialFetchState]): Unit = {
     val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
     val (addedInitialOffsets, notAddedInitialOffsets) = initialOffsetAndEpochs.partition { case (tp, _) =>
       addedPartitions.contains(tp)

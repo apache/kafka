@@ -33,7 +33,7 @@ public interface SinkTaskContext {
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
      */
-    public Map<String, String> configs();
+    Map<String, String> configs();
 
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets

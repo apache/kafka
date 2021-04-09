@@ -17,39 +17,74 @@
 
 package org.apache.kafka.clients;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class ClusterConnectionStatesTest {
+
+    private static ArrayList<InetAddress> initialAddresses;
+    private static ArrayList<InetAddress> newAddresses;
+
+    static {
+        try {
+            initialAddresses = new ArrayList<>(Arrays.asList(
+                    InetAddress.getByName("10.200.20.100"),
+                    InetAddress.getByName("10.200.20.101"),
+                    InetAddress.getByName("10.200.20.102")
+            ));
+            newAddresses = new ArrayList<>(Arrays.asList(
+                    InetAddress.getByName("10.200.20.103"),
+                    InetAddress.getByName("10.200.20.104"),
+                    InetAddress.getByName("10.200.20.105")
+            ));
+        } catch (UnknownHostException e) {
+            fail("Attempted to create an invalid InetAddress, this should not happen");
+        }
+    }
 
     private final MockTime time = new MockTime();
     private final long reconnectBackoffMs = 10 * 1000;
     private final long reconnectBackoffMax = 60 * 1000;
-    private final double reconnectBackoffJitter = 0.2;
+    private final long connectionSetupTimeoutMs = 10 * 1000;
+    private final long connectionSetupTimeoutMaxMs = 127 * 1000;
+    private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
+    private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
+    private final int connectionSetupTimeoutExpBase = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_EXP_BASE;
+    private final double connectionSetupTimeoutJitter = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_JITTER;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
-    private final String hostTwoIps = "kafka.apache.org";
-
+    private final String nodeId3 = "3003";
+    private final String hostTwoIps = "multiple.ip.address";
     private ClusterConnectionStates connectionStates;
 
-    @Before
+    // For testing nodes with a single IP address, use localhost and default DNS resolution
+    private DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
+
+    // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
+    private AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
+            initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+
+    @BeforeEach
     public void setup() {
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, new LogContext());
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.singleIPHostResolver);
     }
 
     @Test
@@ -57,7 +92,7 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // Start connecting to Node and check state
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.CONNECTING);
         assertTrue(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.isReady(nodeId1, time.milliseconds()));
@@ -105,7 +140,7 @@ public class ClusterConnectionStatesTest {
 
         // Start connecting one node and check that the pool only shows ready nodes after
         // successful connect
-        connectionStates.connecting(nodeId2, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId2, time.milliseconds(), "localhost");
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId2);
@@ -113,7 +148,7 @@ public class ClusterConnectionStatesTest {
 
         // Connect second node and check that both are shown as ready, pool should immediately
         // show ready nodes, since node2 is already connected
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId1);
@@ -137,7 +172,7 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testAuthorizationFailed() {
         // Try connecting
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
 
         time.sleep(100);
 
@@ -157,7 +192,7 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testRemoveNode() {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         time.sleep(1000);
         connectionStates.ready(nodeId1);
         time.sleep(10000);
@@ -173,7 +208,7 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testMaxReconnectBackoff() {
         long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMax * (1 + reconnectBackoffJitter));
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         time.sleep(1000);
         connectionStates.disconnected(nodeId1, time.milliseconds());
 
@@ -184,7 +219,7 @@ public class ClusterConnectionStatesTest {
             assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
             time.sleep(reconnectBackoff + 1);
             assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
             time.sleep(10);
             connectionStates.disconnected(nodeId1, time.milliseconds());
         }
@@ -192,14 +227,12 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testExponentialReconnectBackoff() {
-        // Calculate fixed components for backoff process
-        final int reconnectBackoffExpBase = 2;
         double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
             / Math.log(reconnectBackoffExpBase);
 
         // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
         for (int i = 0; i < 10; i++) {
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
             connectionStates.disconnected(nodeId1, time.milliseconds());
             // Calculate expected backoff value without jitter
             long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
@@ -212,7 +245,7 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testThrottled() {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         time.sleep(1000);
         connectionStates.ready(nodeId1);
         time.sleep(10000);
@@ -237,64 +270,42 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testSingleIPWithDefault() throws UnknownHostException {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+    public void testSingleIP() throws UnknownHostException {
+        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size());
+
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertSame(currAddress, connectionStates.currentAddress(nodeId1));
     }
 
     @Test
-    public void testSingleIPWithUseAll() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", ClientDnsLookup.USE_ALL_DNS_IPS).size());
+    public void testMultipleIPs() throws UnknownHostException {
+        setupMultipleIPs();
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
-        InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
-        assertSame(currAddress, connectionStates.currentAddress(nodeId1));
-    }
+        assertTrue(ClientUtils.resolve(hostTwoIps, multipleIPHostResolver).size() > 1);
 
-    @Test
-    public void testMultipleIPsWithDefault() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
-
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
-        InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
-        assertSame(currAddress, connectionStates.currentAddress(nodeId1));
-    }
-
-    @Test
-    public void testMultipleIPsWithUseAll() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
-
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
-
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
         InetAddress addr3 = connectionStates.currentAddress(nodeId1);
-        assertSame(addr1, addr3);
+        assertNotSame(addr1, addr3);
     }
 
     @Test
-    public void testHostResolveChange() throws UnknownHostException, ReflectiveOperationException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
+    public void testHostResolveChange() throws UnknownHostException {
+        setupMultipleIPs();
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
+        assertTrue(ClientUtils.resolve(hostTwoIps, multipleIPHostResolver).size() > 1);
+
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
 
-        // reflection to simulate host change in DNS lookup
-        Method nodeStateMethod = connectionStates.getClass().getDeclaredMethod("nodeState", String.class);
-        nodeStateMethod.setAccessible(true);
-        Object nodeState = nodeStateMethod.invoke(connectionStates, nodeId1);
-        Field hostField = nodeState.getClass().getDeclaredField("host");
-        hostField.setAccessible(true);
-        hostField.set(nodeState, "localhost");
-
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        multipleIPHostResolver.changeAddresses();
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
 
         assertNotSame(addr1, addr2);
@@ -302,10 +313,13 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testNodeWithNewHostname() throws UnknownHostException {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        setupMultipleIPs();
+
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
+        this.multipleIPHostResolver.changeAddresses();
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
 
         assertNotSame(addr1, addr2);
@@ -314,11 +328,98 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testIsPreparingConnection() {
         assertFalse(connectionStates.isPreparingConnection(nodeId1));
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertTrue(connectionStates.isPreparingConnection(nodeId1));
         connectionStates.checkingApiVersions(nodeId1);
         assertTrue(connectionStates.isPreparingConnection(nodeId1));
         connectionStates.disconnected(nodeId1, time.milliseconds());
         assertFalse(connectionStates.isPreparingConnection(nodeId1));
+    }
+
+    @Test
+    public void testExponentialConnectionSetupTimeout() {
+        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+
+        // Check the exponential timeout growth
+        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(connectionSetupTimeoutExpBase); n++) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+            assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+            assertEquals(connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n),
+                    connectionStates.connectionSetupTimeoutMs(nodeId1),
+                    connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n) * connectionSetupTimeoutJitter);
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        }
+
+        // Check the timeout value upper bound
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+        assertEquals(connectionSetupTimeoutMaxMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMaxMs * connectionSetupTimeoutJitter);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+
+        // Should reset the timeout value to the init value
+        connectionStates.ready(nodeId1);
+        assertEquals(connectionSetupTimeoutMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+        assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+
+        // Check if the connection state transition from ready to disconnected
+        // won't increase the timeout value
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+        assertEquals(connectionSetupTimeoutMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+    }
+
+    @Test
+    public void testTimedOutConnections() {
+        // Initiate two connections
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+        connectionStates.connecting(nodeId2, time.milliseconds(), "localhost");
+
+        // Expect no timed out connections
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
+
+        // Advance time by half of the connection setup timeout
+        time.sleep(connectionSetupTimeoutMs / 2);
+
+        // Initiate a third connection
+        connectionStates.connecting(nodeId3, time.milliseconds(), "localhost");
+
+        // Advance time beyond the connection setup timeout (+ max jitter) for the first two connections
+        time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
+
+        // Expect two timed out connections.
+        List<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        assertEquals(2, timedOutConnections.size());
+        assertTrue(timedOutConnections.contains(nodeId1));
+        assertTrue(timedOutConnections.contains(nodeId2));
+
+        // Disconnect the first two connections
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+        connectionStates.disconnected(nodeId2, time.milliseconds());
+
+        // Advance time beyond the connection setup timeout (+ max jitter) for the third connections
+        time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
+
+        // Expect one timed out connection
+        timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        assertEquals(1, timedOutConnections.size());
+        assertTrue(timedOutConnections.contains(nodeId3));
+
+        // Disconnect the third connection
+        connectionStates.disconnected(nodeId3, time.milliseconds());
+
+        // Expect no timed out connections
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
+    }
+
+    private void setupMultipleIPs() {
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);
     }
 }

@@ -35,46 +35,6 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
     /**
-     * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions
-     * start is &le; latestSessionStartTime
-     *
-     * This iterator must be closed after use.
-     *
-     * @param key the key to return sessions for
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return iterator of sessions with the matching key and aggregated values
-     * @throws NullPointerException If null is used for key.
-     */
-    KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime);
-
-    /**
-     * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
-     * start is &le; latestSessionStartTime
-     *
-     * This iterator must be closed after use.
-     *
-     * @param keyFrom The first key that could be in the range
-     * @param keyTo The last key that could be in the range
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return iterator of sessions with the matching keys and aggregated values
-     * @throws NullPointerException If null is used for any key.
-     */
-    KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime);
-
-    /**
-     * Get the value of key from a single session.
-     *
-     * @param key            the key to fetch
-     * @param startTime      start timestamp of the session
-     * @param endTime        end timestamp of the session
-     * @return The value or {@code null} if no session associated with the key can be found
-     * @throws NullPointerException If {@code null} is used for any key.
-     */
-    AGG fetchSession(final K key, final long startTime, final long endTime);
-
-    /**
      * Remove the session aggregated with provided {@link Windowed} key from the store
      * @param sessionKey key of the session to remove
      * @throws NullPointerException If null is used for sessionKey.

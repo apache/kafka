@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -42,11 +39,12 @@ import org.apache.kafka.streams.kstream.{
 }
 import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
+import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, StreamsBuilder => StreamsBuilderJ}
-import org.junit.Assert._
-import org.junit._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.jdk.CollectionConverters._
 
@@ -67,7 +65,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -95,7 +93,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import org.apache.kafka.streams.scala.Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -133,7 +131,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import org.apache.kafka.streams.scala.Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -174,7 +172,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import org.apache.kafka.streams.scala.Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines1 = streamBuilder.stream[String, String](inputTopic)
@@ -219,7 +217,7 @@ class TopologyTest {
 
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
-      import Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val builder = new StreamsBuilder()
 
@@ -282,7 +280,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import Serdes._
+      import org.apache.kafka.streams.scala.serialization.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -335,10 +333,10 @@ class TopologyTest {
   def shouldBuildIdenticalTopologyInJavaNScalaProperties(): Unit = {
 
     val props = new Properties()
-    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE)
+    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE)
 
     val propsNoOptimization = new Properties()
-    propsNoOptimization.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.NO_OPTIMIZATION)
+    propsNoOptimization.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION)
 
     val AGGREGATION_TOPIC = "aggregationTopic"
     val REDUCE_TOPIC = "reduceTopic"
@@ -354,7 +352,7 @@ class TopologyTest {
       val builder: StreamsBuilder = new StreamsBuilder
 
       val sourceStream: KStream[String, String] =
-        builder.stream(inputTopic)(Consumed.`with`(Serdes.String, Serdes.String))
+        builder.stream(inputTopic)(Consumed.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
 
       val mappedStream: KStream[String, String] =
         sourceStream.map((k: String, v: String) => (k.toUpperCase(Locale.getDefault), v))
@@ -364,30 +362,30 @@ class TopologyTest {
         .process(() => new SimpleProcessor(processorValueCollector))
 
       val stream2 = mappedStream.groupByKey
-        .aggregate(0)(aggregator)(Materialized.`with`(Serdes.String, Serdes.Integer))
+        .aggregate(0)(aggregator)(Materialized.`with`(NewSerdes.stringSerde, NewSerdes.intSerde))
         .toStream
-      stream2.to(AGGREGATION_TOPIC)(Produced.`with`(Serdes.String, Serdes.Integer))
+      stream2.to(AGGREGATION_TOPIC)(Produced.`with`(NewSerdes.stringSerde, NewSerdes.intSerde))
 
       // adding operators for case where the repartition node is further downstream
       val stream3 = mappedStream
         .filter((_: String, _: String) => true)
         .peek((k: String, v: String) => System.out.println(k + ":" + v))
         .groupByKey
-        .reduce(reducer)(Materialized.`with`(Serdes.String, Serdes.String))
+        .reduce(reducer)(Materialized.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
         .toStream
-      stream3.to(REDUCE_TOPIC)(Produced.`with`(Serdes.String, Serdes.String))
+      stream3.to(REDUCE_TOPIC)(Produced.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
 
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream2)((v1: String, v2: Int) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
-          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.Integer)
+          StreamJoined.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, NewSerdes.intSerde)
         )
         .to(JOINED_TOPIC)
 
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream3)((v1: String, v2: String) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
-          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.String)
+          StreamJoined.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, NewSerdes.stringSerde)
         )
         .to(JOINED_TOPIC)
 
@@ -410,7 +408,7 @@ class TopologyTest {
 
       val builder = new StreamsBuilderJ
 
-      val sourceStream = builder.stream(inputTopic, Consumed.`with`(Serdes.String, Serdes.String))
+      val sourceStream = builder.stream(inputTopic, Consumed.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
 
       val mappedStream: KStreamJ[String, String] =
         sourceStream.map(keyValueMapper)
@@ -420,25 +418,25 @@ class TopologyTest {
         .process(processorSupplier)
 
       val stream2: KStreamJ[String, Integer] = mappedStream.groupByKey
-        .aggregate(initializer, aggregator, MaterializedJ.`with`(Serdes.String, SerdesJ.Integer))
+        .aggregate(initializer, aggregator, MaterializedJ.`with`(NewSerdes.stringSerde, SerdesJ.Integer))
         .toStream
-      stream2.to(AGGREGATION_TOPIC, Produced.`with`(Serdes.String, SerdesJ.Integer))
+      stream2.to(AGGREGATION_TOPIC, Produced.`with`(NewSerdes.stringSerde, SerdesJ.Integer))
 
       // adding operators for case where the repartition node is further downstream
       val stream3 = mappedStream
         .filter((_, _) => true)
         .peek((k, v) => System.out.println(k + ":" + v))
         .groupByKey
-        .reduce(reducer, MaterializedJ.`with`(Serdes.String, Serdes.String))
+        .reduce(reducer, MaterializedJ.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
         .toStream
-      stream3.to(REDUCE_TOPIC, Produced.`with`(Serdes.String, Serdes.String))
+      stream3.to(REDUCE_TOPIC, Produced.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde))
 
       mappedStream
         .filter((key, _) => key == "A")
         .join[Integer, String](stream2,
                                valueJoiner2,
                                JoinWindows.of(Duration.ofMillis(5000)),
-                               StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Integer))
+                               StreamJoinedJ.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, SerdesJ.Integer))
         .to(JOINED_TOPIC)
 
       mappedStream
@@ -446,7 +444,7 @@ class TopologyTest {
         .join(stream3,
               valueJoiner3,
               JoinWindows.of(Duration.ofMillis(5000)),
-              StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.String))
+              StreamJoinedJ.`with`(NewSerdes.stringSerde, NewSerdes.stringSerde, SerdesJ.String))
         .to(JOINED_TOPIC)
 
       builder

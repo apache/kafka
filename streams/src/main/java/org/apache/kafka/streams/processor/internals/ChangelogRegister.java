@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * See {@link StoreChangelogReader}.
  */
-interface ChangelogRegister {
+public interface ChangelogRegister {
     /**
      * Register a state store for restoration.
      *

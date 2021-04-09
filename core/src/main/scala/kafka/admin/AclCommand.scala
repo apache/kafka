@@ -112,7 +112,7 @@ object AclCommand extends Logging {
           adminClient.createAcls(aclBindings).all().get()
         }
 
-        listAcls()
+        listAcls(adminClient)
       }
     }
 
@@ -130,31 +130,37 @@ object AclCommand extends Logging {
           }
         }
 
-        listAcls()
+        listAcls(adminClient)
       }
     }
 
     def listAcls(): Unit = {
       withAdminClient(opts) { adminClient =>
-        val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
-        val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
-        val resourceToAcls = getAcls(adminClient, filters)
+        listAcls(adminClient)
+      }
+    }
 
-        if (listPrincipals.isEmpty) {
-          for ((resource, acls) <- resourceToAcls)
-            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-        } else {
-          listPrincipals.foreach(principal => {
-            println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.map { case (resource, acls) =>
-              resource -> acls.filter(acl => principal.toString.equals(acl.principal))
-            }.filter { case (_, acls) => acls.nonEmpty }
+    private def listAcls(adminClient: Admin): Unit = {
+      val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
+      val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
+      val resourceToAcls = getAcls(adminClient, filters)
 
-            for ((resource, acls) <- filteredResourceToAcls)
-              println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          })
+      if (listPrincipals.isEmpty) {
+        printResourceAcls(resourceToAcls)
+      } else {
+        listPrincipals.foreach{principal =>
+          println(s"ACLs for principal `$principal`")
+          val filteredResourceToAcls = resourceToAcls.map { case (resource, acls) =>
+            resource -> acls.filter(acl => principal.toString.equals(acl.principal))
+          }.filter { case (_, acls) => acls.nonEmpty }
+          printResourceAcls(filteredResourceToAcls)
         }
       }
+    }
+
+    private def printResourceAcls(resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
+      for ((resource, acls) <- resourceToAcls)
+        println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
 
     private def removeAcls(adminClient: Admin, acls: Set[AccessControlEntry], filter: ResourcePatternFilter): Unit = {
@@ -313,7 +319,7 @@ object AclCommand extends Logging {
   }
 
   private def getResourceToAcls(opts: AclCommandOptions): Map[ResourcePattern, Set[AccessControlEntry]] = {
-    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    val patternType = opts.options.valueOf(opts.resourcePatternType)
     if (!patternType.isSpecific)
       CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
@@ -351,8 +357,8 @@ object AclCommand extends Logging {
   private def getProducerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[AccessControlEntry]] = {
     val filters = getResourceFilter(opts)
 
-    val topics: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
-    val transactionalIds: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
+    val topics = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val transactionalIds = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
     val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
     val topicAcls = getAcl(opts, Set(WRITE, DESCRIBE, CREATE))
@@ -370,8 +376,8 @@ object AclCommand extends Logging {
   private def getConsumerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[AccessControlEntry]] = {
     val filters = getResourceFilter(opts)
 
-    val topics: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
-    val groups: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.GROUP)
+    val topics = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val groups = filters.filter(_.resourceType == JResourceType.GROUP)
 
     //Read, Describe on topic, Read on consumerGroup
 
@@ -439,7 +445,7 @@ object AclCommand extends Logging {
   }
 
   private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
-    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    val patternType = opts.options.valueOf(opts.resourcePatternType)
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))

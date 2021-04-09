@@ -146,7 +146,7 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
-    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retires before the producer give up and drop this message.")
+    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)
@@ -266,6 +266,7 @@ object ConsoleProducer {
     var keySeparator = "\t"
     var ignoreError = false
     var lineNumber = 0
+    var printPrompt = System.console != null
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -280,7 +281,8 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
-      print(">")
+      if (printPrompt)
+        print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>

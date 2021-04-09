@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -30,6 +30,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
+import java.util.List;
 
 abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
 
@@ -44,8 +46,15 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
+                     final StateStore root) {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
                      final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
@@ -91,8 +100,19 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public KeyValueIterator<K, V> reverseRange(final K from,
+                                                   final K to) {
+            return wrapped().reverseRange(from, to);
+        }
+
+        @Override
         public KeyValueIterator<K, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return wrapped().reverseAll();
         }
 
         @Override
@@ -169,12 +189,27 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public WindowStoreIterator<V> backwardFetch(final K key,
+                                                    final long timeFrom,
+                                                    final long timeTo) {
+            return wrapped().backwardFetch(key, timeFrom, timeTo);
+        }
+
+        @Override
         @Deprecated
-        public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                      final K to,
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
+            return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
+                                                              final long timeFrom,
+                                                              final long timeTo) {
+            return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
@@ -183,10 +218,21 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public KeyValueIterator<Windowed<K>, V> backwardAll() {
+            return wrapped().backwardAll();
+        }
+
+        @Override
         @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
+            return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
     }
 

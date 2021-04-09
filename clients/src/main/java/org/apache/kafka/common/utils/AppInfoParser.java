@@ -79,6 +79,8 @@ public class AppInfoParser {
             unregisterMetrics(metrics);
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
+        } finally {
+            log.info("App info {} for {} unregistered", prefix, id);
         }
     }
 

@@ -17,8 +17,9 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.junit.Assert;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 public class HistogramTest {
     private static Histogram createHistogram(int maxValue, int... values) {
@@ -32,23 +33,23 @@ public class HistogramTest {
     @Test
     public void testHistogramAverage() {
         Histogram empty = createHistogram(1);
-        Assert.assertEquals(0, (int) empty.summarize(new float[0]).average());
+        assertEquals(0, (int) empty.summarize(new float[0]).average());
 
         Histogram histogram = createHistogram(70, 1, 2, 3, 4, 5, 6, 1);
 
-        Assert.assertEquals(3, (int) histogram.summarize(new float[0]).average());
+        assertEquals(3, (int) histogram.summarize(new float[0]).average());
         histogram.add(60);
-        Assert.assertEquals(10, (int) histogram.summarize(new float[0]).average());
+        assertEquals(10, (int) histogram.summarize(new float[0]).average());
     }
 
     @Test
     public void testHistogramSamples() {
         Histogram empty = createHistogram(100);
-        Assert.assertEquals(0, empty.summarize(new float[0]).numSamples());
+        assertEquals(0, empty.summarize(new float[0]).numSamples());
         Histogram histogram = createHistogram(100, 4, 8, 2, 4, 1, 100, 150);
-        Assert.assertEquals(7, histogram.summarize(new float[0]).numSamples());
+        assertEquals(7, histogram.summarize(new float[0]).numSamples());
         histogram.add(60);
-        Assert.assertEquals(8, histogram.summarize(new float[0]).numSamples());
+        assertEquals(8, histogram.summarize(new float[0]).numSamples());
     }
 
     @Test
@@ -56,30 +57,30 @@ public class HistogramTest {
         Histogram histogram = createHistogram(100, 1, 2, 3, 4, 5, 6, 80, 90);
         float[] percentiles = new float[] {0.5f, 0.90f, 0.99f, 1f};
         Histogram.Summary summary = histogram.summarize(percentiles);
-        Assert.assertEquals(8, summary.numSamples());
-        Assert.assertEquals(4, summary.percentiles().get(0).value());
-        Assert.assertEquals(80, summary.percentiles().get(1).value());
-        Assert.assertEquals(80, summary.percentiles().get(2).value());
-        Assert.assertEquals(90, summary.percentiles().get(3).value());
+        assertEquals(8, summary.numSamples());
+        assertEquals(4, summary.percentiles().get(0).value());
+        assertEquals(80, summary.percentiles().get(1).value());
+        assertEquals(80, summary.percentiles().get(2).value());
+        assertEquals(90, summary.percentiles().get(3).value());
         histogram.add(30);
         histogram.add(30);
         histogram.add(30);
 
         summary = histogram.summarize(new float[] {0.5f});
-        Assert.assertEquals(11, summary.numSamples());
-        Assert.assertEquals(5, summary.percentiles().get(0).value());
+        assertEquals(11, summary.numSamples());
+        assertEquals(5, summary.percentiles().get(0).value());
 
         Histogram empty = createHistogram(100);
         summary = empty.summarize(new float[] {0.5f});
-        Assert.assertEquals(0, summary.percentiles().get(0).value());
+        assertEquals(0, summary.percentiles().get(0).value());
 
         histogram = createHistogram(1000);
         histogram.add(100);
         histogram.add(200);
         summary = histogram.summarize(new float[] {0f, 0.5f, 1.0f});
-        Assert.assertEquals(0, summary.percentiles().get(0).value());
-        Assert.assertEquals(100, summary.percentiles().get(1).value());
-        Assert.assertEquals(200, summary.percentiles().get(2).value());
+        assertEquals(0, summary.percentiles().get(0).value());
+        assertEquals(100, summary.percentiles().get(1).value());
+        assertEquals(200, summary.percentiles().get(2).value());
     }
 };
 

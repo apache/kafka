@@ -60,8 +60,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 }
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
-                        "State store is not available anymore and may have been migrated to another instance; " +
-                                "please re-discover its location from the state metadata.");
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
             }
         }
         return null;
@@ -84,8 +84,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 }
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
-                        "State store is not available anymore and may have been migrated to another instance; " +
-                                "please re-discover its location from the state metadata.");
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
             }
         }
         return KeyValueIterators.emptyWindowStoreIterator();
@@ -94,24 +94,47 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     @SuppressWarnings("deprecation") // removing fetch(K from, long from, long to) will fix this
     @Override
     public WindowStoreIterator<V> fetch(final K key,
-                                        final Instant from,
-                                        final Instant to) throws IllegalArgumentException {
+                                        final Instant timeFrom,
+                                        final Instant timeTo) throws IllegalArgumentException {
         return fetch(
             key,
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "from")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "to")));
+    }
+
+    @Override
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final Instant timeFrom,
+                                                final Instant timeTo) throws IllegalArgumentException {
+        Objects.requireNonNull(key, "key can't be null");
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
+            try {
+                final WindowStoreIterator<V> result = windowStore.backwardFetch(key, timeFrom, timeTo);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (final InvalidStateStoreException e) {
+                throw new InvalidStateStoreException(
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
+            }
+        }
+        return KeyValueIterators.emptyWindowStoreIterator();
     }
 
     @SuppressWarnings("deprecation") // removing fetch(K from, K to, long from, long to) will fix this
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to,
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
-        Objects.requireNonNull(from, "from can't be null");
-        Objects.requireNonNull(to, "to can't be null");
+        Objects.requireNonNull(keyFrom, "from can't be null");
+        Objects.requireNonNull(keyTo, "to can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
-            store -> store.fetch(from, to, timeFrom, timeTo);
+            store -> store.fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
@@ -120,21 +143,48 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to,
-                                                  final Instant fromTime,
-                                                  final Instant toTime) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo,
+                                                  final Instant timeFrom,
+                                                  final Instant timeTo) throws IllegalArgumentException {
         return fetch(
-            from,
-            to,
-            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
-            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
+            keyFrom,
+            keyTo,
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
+                                                          final Instant timeFrom,
+                                                          final Instant timeTo) throws IllegalArgumentException {
+        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
+        Objects.requireNonNull(keyTo, "keyTo can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             ReadOnlyWindowStore::all;
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardAll() {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            ReadOnlyWindowStore::backwardAll;
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
@@ -157,10 +207,22 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @SuppressWarnings("deprecation") // removing fetchAll(long from, long to) will fix this
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from,
-                                                     final Instant to) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant timeFrom,
+                                                     final Instant timeTo) throws IllegalArgumentException {
         return fetchAll(
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "from")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "to")));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
+                                                             final Instant timeTo) throws IllegalArgumentException {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetchAll(timeFrom, timeTo);
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
     }
 }

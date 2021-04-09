@@ -50,6 +50,7 @@ import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 public class TimeWindowedKStreamImplTest {
     private static final String TOPIC = "input";
@@ -77,15 +78,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make(2L, 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(2L, 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(1L, 500L)));
     }
@@ -102,15 +103,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make("1+2", 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("10+20", 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("3", 500L)));
     }
@@ -130,15 +131,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make("0+1+2", 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+10+20", 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+3", 500L)));
     }
@@ -243,72 +244,72 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
-        windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER);
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
-        windowedStream.aggregate(MockInitializer.STRING_INIT, null);
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
-        windowedStream.reduce(null);
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
-        windowedStream.aggregate(
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
-        windowedStream.aggregate(
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
-        windowedStream.aggregate(
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
-            (Materialized) null);
+            (Materialized) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
-        windowedStream.reduce(
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        windowedStream.reduce(
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
-            (Materialized) null);
+            (Materialized) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
-        windowedStream.reduce(
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
-            (Named) null);
+            (Named) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null);
+        assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
     }
 
     private void processData(final TopologyTestDriver driver) {

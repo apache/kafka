@@ -42,12 +42,14 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.ClassRule;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
@@ -71,8 +73,18 @@ import static org.hamcrest.Matchers.is;
 
 @Category(IntegrationTest.class)
 public class HighAvailabilityTaskAssignorIntegrationTest {
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     @Rule
     public TestName testName = new TestName();
@@ -95,6 +107,11 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
+        final Set<TopicPartition> inputTopicPartitions = mkSet(
+            new TopicPartition(inputTopic, 0),
+            new TopicPartition(inputTopic, 1)
+        );
+
         final String storeName = "store" + testId;
         final String storeChangelog = appId + "-store" + testId + "-changelog";
         final Set<TopicPartition> changelogTopicPartitions = mkSet(
@@ -124,46 +141,27 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         builder.table(inputTopic, materializedFunction.apply(storeName));
         final Topology topology = builder.build();
 
-        final Properties producerProperties = mkProperties(
-            mkMap(
-                mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
-                mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
-                mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
-            )
-        );
+        final int numberOfRecords = 500;
 
-        final StringBuilder kiloBuilder = new StringBuilder(1000);
-        for (int i = 0; i < 1000; i++) {
-            kiloBuilder.append('0');
-        }
-        final String kilo = kiloBuilder.toString();
-
-        try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
-            for (int i = 0; i < 1000; i++) {
-                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
-            }
-        }
-
-        final Properties consumerProperties = mkProperties(
-            mkMap(
-                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
-            )
-        );
-
+        produceTestData(inputTopic, numberOfRecords);
 
         try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
              final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
-             final Consumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
+             final Consumer<String, String> consumer = new KafkaConsumer<>(getConsumerProperties())) {
             kafkaStreams0.start();
+
+            // sanity check: just make sure we actually wrote all the input records
+            TestUtils.waitForCondition(
+                () -> getEndOffsetSum(inputTopicPartitions, consumer) == numberOfRecords,
+                120_000L,
+                () -> "Input records haven't all been written to the input topic: " + getEndOffsetSum(inputTopicPartitions, consumer)
+            );
 
             // wait until all the input records are in the changelog
             TestUtils.waitForCondition(
-                () -> getChangelogOffsetSum(changelogTopicPartitions, consumer) == 1000,
+                () -> getEndOffsetSum(changelogTopicPartitions, consumer) == numberOfRecords,
                 120_000L,
-                () -> "Input records haven't all been written to the changelog: " + getChangelogOffsetSum(changelogTopicPartitions, consumer)
+                () -> "Input records haven't all been written to the changelog: " + getEndOffsetSum(changelogTopicPartitions, consumer)
             );
 
             final AtomicLong instance1TotalRestored = new AtomicLong(-1);
@@ -240,7 +238,44 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         }
     }
 
-    private void assertFalseNoRetry(final boolean assertion, final String message) {
+    private void produceTestData(final String inputTopic, final int numberOfRecords) {
+        final String kilo = getKiloByteValue();
+
+        final Properties producerProperties = mkProperties(
+            mkMap(
+                mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
+                mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
+                mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
+            )
+        );
+
+        try (final Producer<String, String> producer = new KafkaProducer<>(producerProperties)) {
+            for (int i = 0; i < numberOfRecords; i++) {
+                producer.send(new ProducerRecord<>(inputTopic, String.valueOf(i), kilo));
+            }
+        }
+    }
+
+    private static Properties getConsumerProperties() {
+        return mkProperties(
+                mkMap(
+                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
+                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
+                )
+            );
+    }
+
+    private static String getKiloByteValue() {
+        final StringBuilder kiloBuilder = new StringBuilder(1000);
+        for (int i = 0; i < 1000; i++) {
+            kiloBuilder.append('0');
+        }
+        return kiloBuilder.toString();
+    }
+
+    private static void assertFalseNoRetry(final boolean assertion, final String message) {
         if (assertion) {
             throw new NoRetryException(
                 new AssertionError(
@@ -263,13 +298,15 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "60000"),
                 mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "100"),
-                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName())
+                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
+                // Increasing the number of threads to ensure that a rebalance happens each time a consumer sends a rejoin (KAFKA-10455)
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40)
             )
         );
     }
 
-    private static long getChangelogOffsetSum(final Set<TopicPartition> changelogTopicPartitions,
-                                              final Consumer<String, String> consumer) {
+    private static long getEndOffsetSum(final Set<TopicPartition> changelogTopicPartitions,
+                                        final Consumer<String, String> consumer) {
         long sum = 0;
         final Collection<Long> values = consumer.endOffsets(changelogTopicPartitions).values();
         for (final Long value : values) {

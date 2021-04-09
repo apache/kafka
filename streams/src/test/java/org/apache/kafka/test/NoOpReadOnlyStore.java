@@ -69,6 +69,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         if (rocksdbStore) {
@@ -78,6 +79,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
             new File(context.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
+        context.register(root, (k, v) -> { });
     }
 
     @Override

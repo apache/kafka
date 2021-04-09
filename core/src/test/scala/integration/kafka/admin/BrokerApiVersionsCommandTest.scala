@@ -19,22 +19,33 @@ package kafka.admin
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
-
 import scala.collection.Seq
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
+
+import scala.jdk.CollectionConverters._
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
-  def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs: Seq[KafkaConfig] =
+    TestUtils.createBrokerConfigs(1, zkConnect).map(props => {
+      // Configure control plane listener to make sure we have separate listeners from client,
+      // in order to avoid returning Envelope API version.
+      props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
+      props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props
+    }).map(KafkaConfig.fromProps)
 
-  @Test(timeout=120000)
+  @Timeout(120)
+  @Test
   def checkBrokerApiVersionCommandOutput(): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
@@ -42,22 +53,26 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     val content = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val lineIter = content.split("\n").iterator
     assertTrue(lineIter.hasNext)
-    assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next)
+    assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next())
     val nodeApiVersions = NodeApiVersions.create
-    for (apiKey <- ApiKeys.values) {
+    val enabledApis = ApiKeys.zkBrokerApis.asScala
+    for (apiKey <- enabledApis) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
       assertNotNull(apiVersion)
+
       val versionRangeStr =
         if (apiVersion.minVersion == apiVersion.maxVersion) apiVersion.minVersion.toString
         else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"
-      val terminator = if (apiKey == ApiKeys.values.last) "" else ","
       val usableVersion = nodeApiVersions.latestUsableVersion(apiKey)
+
+      val terminator = if (apiKey == enabledApis.last) "" else ","
+
       val line = s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
       assertTrue(lineIter.hasNext)
-      assertEquals(line, lineIter.next)
+      assertEquals(line, lineIter.next())
     }
     assertTrue(lineIter.hasNext)
-    assertEquals(")", lineIter.next)
+    assertEquals(")", lineIter.next())
     assertFalse(lineIter.hasNext)
   }
 }

@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicSt
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StopReplicaResponseTest {
 
@@ -44,12 +44,12 @@ public class StopReplicaResponseTest {
                 new StopReplicaPartitionState().setPartitionIndex(0),
                 new StopReplicaPartitionState().setPartitionIndex(1))));
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version : STOP_REPLICA.allVersions()) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version,
                 15, 20, 0, false, topicStates).build(version);
             StopReplicaResponse response = request
                 .getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-            assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2),
+            assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 3),
                 response.errorCounts());
         }
     }
@@ -59,11 +59,11 @@ public class StopReplicaResponseTest {
         List<StopReplicaPartitionError> errors = new ArrayList<>();
         errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(0));
         errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(1)
-            .setErrorCode(Errors.NOT_LEADER_FOR_PARTITION.code()));
+            .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()));
         StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setPartitionErrors(errors));
-        assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
+        assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 3), response.errorCounts());
     }
 
     @Test
@@ -77,7 +77,7 @@ public class StopReplicaResponseTest {
             .setPartitionErrors(errors));
         Map<Errors, Integer> errorCounts = response.errorCounts();
         assertEquals(2, errorCounts.size());
-        assertEquals(1, errorCounts.get(Errors.NONE).intValue());
+        assertEquals(2, errorCounts.get(Errors.NONE).intValue());
         assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
     }
 
