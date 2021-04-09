@@ -89,7 +89,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         @Override
         public void process(final Record<K, Change<V1>> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
-            if (record.key() == null) {
+            if (record.key() == null) { //TODO
 //                LOG.warn(
 //                    "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
 //                    change, context().topic(), context().partition(), context().offset()
