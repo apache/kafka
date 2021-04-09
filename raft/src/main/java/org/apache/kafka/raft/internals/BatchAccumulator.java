@@ -24,6 +24,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.RecordSerde;
 
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -203,20 +204,32 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    public void addControlBatch(MemoryRecords records) {
-        appendLock.lock();
-        try {
-            drainStatus = DrainStatus.STARTED;
+    public void appendLeaderChangeMessage(LeaderChangeMessage leaderChangeMessage, long currentTimeMs) {
+        maybeCompleteDrain();
+        ByteBuffer buffer = memoryPool.tryAllocate(256);
+        if (buffer != null) {
+            MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
+                    this.nextOffset, 
+                    currentTimeMs, 
+                    this.epoch, 
+                    buffer, 
+                    leaderChangeMessage);
             completed.add(new CompletedBatch<>(
                 nextOffset,
                 null,
-                records,
-                null,
-                null
+                data,
+                memoryPool,
+                buffer
             ));
             nextOffset += 1;
-            lingerTimer.reset(Long.MAX_VALUE);
-            drainStatus = DrainStatus.FINISHED;
+        }
+    }
+
+    public void flush() {
+        appendLock.lock();
+        try {
+            drainStatus = DrainStatus.STARTED;
+            maybeCompleteDrain();
         } finally {
             appendLock.unlock();
         }
@@ -385,9 +398,7 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public void release() {
-            if (records.isPresent()) {
-                pool.release(initialBuffer);
-            }
+            pool.release(initialBuffer);
         }
     }
 

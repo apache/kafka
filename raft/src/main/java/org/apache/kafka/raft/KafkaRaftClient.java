@@ -412,7 +412,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        state.appendLeaderChangeMessage(quorum.epoch(), endOffset, currentTimeMs);
+        state.appendLeaderChangeMessage(currentTimeMs);
 
         resetConnections();
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
@@ -1819,15 +1819,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 offsetAndEpoch.offset + 1, Integer.MAX_VALUE);
 
             future.whenComplete((commitTimeMs, exception) -> {
-                int numRecords = batch.records.get().size();
-                if (exception != null) {
-                    logger.debug("Failed to commit {} records at {}", numRecords, offsetAndEpoch, exception);
-                } else {
-                    long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
-                    double elapsedTimePerRecord = (double) elapsedTime / numRecords;
-                    kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
-                    logger.debug("Completed commit of {} records at {}", numRecords, offsetAndEpoch);
-                    maybeFireHandleCommit(batch.baseOffset, epoch, batch.records.get());
+                if (batch.records.isPresent()) {
+                    int numRecords = batch.records.get().size();
+                    if (exception != null) {
+                        logger.debug("Failed to commit {} records at {}", numRecords, offsetAndEpoch, exception);
+                    } else {
+                        long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
+                        double elapsedTimePerRecord = (double) elapsedTime / numRecords;
+                        kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
+                        logger.debug("Completed commit of {} records at {}", numRecords, offsetAndEpoch);
+                        maybeFireHandleCommit(batch.baseOffset, epoch, batch.records.get());
+                    }
                 }
             });
         } finally {
@@ -1839,8 +1841,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state,
         long currentTimeMs
     ) {
-        long timeUnitFlush = state.accumulator().timeUntilDrain(currentTimeMs);
-        if (timeUnitFlush <= 0) {
+        long timeUntilFlush = state.accumulator().timeUntilDrain(currentTimeMs);
+        if (timeUntilFlush <= 0) {
             List<BatchAccumulator.CompletedBatch<T>> batches = state.accumulator().drain();
             Iterator<BatchAccumulator.CompletedBatch<T>> iterator = batches.iterator();
 
@@ -1857,7 +1859,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
         }
-        return timeUnitFlush;
+        return timeUntilFlush;
     }
 
     private long pollResigned(long currentTimeMs) throws IOException {
@@ -2182,7 +2184,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return append(epoch, records, true);
     }
 
-    @SuppressWarnings("unchecked")
     private Long append(int epoch, List<T> records, boolean isAtomic) {
         BatchAccumulator<T> accumulator;
         try {

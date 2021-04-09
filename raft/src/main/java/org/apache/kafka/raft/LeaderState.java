@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import java.util.ArrayList;
@@ -88,26 +87,20 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    public void appendLeaderChangeMessage(int epoch, long baseOffset, long currentTimeMs) {
-        List<Voter> voters = convertToVoters(this.followers());
+    public void appendLeaderChangeMessage(long currentTimeMs) {
+        List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
         // Adding the leader to the voters as any voter always votes for itself.
-        voters.add(new Voter().setVoterId(this.election().leaderId()));
+        //voters.add(new Voter().setVoterId(this.election().leaderId()));
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
-
-        MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
-            baseOffset,
-            currentTimeMs,
-            epoch,
-            leaderChangeMessage
-        );
         
-        accumulator.addControlBatch(records);
+        accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
+        accumulator.flush();
     }
 
     @Override
@@ -123,10 +116,6 @@ public class LeaderState<T> implements EpochState {
     @Override
     public int epoch() {
         return epoch;
-    }
-
-    public Set<Integer> followers() {
-        return voterStates.keySet().stream().filter(id -> id != localId).collect(Collectors.toSet());
     }
 
     public Set<Integer> grantingVoters() {

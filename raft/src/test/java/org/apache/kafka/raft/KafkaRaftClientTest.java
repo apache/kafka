@@ -299,7 +299,7 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(otherNodeId, localId),
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
             Arrays.asList(otherNodeId, localId), record.key(), record.value());
     }
 
@@ -339,7 +339,7 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(firstNodeId, secondNodeId, localId),
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
             Arrays.asList(firstNodeId, localId), record.key(), record.value());
     }
 
@@ -475,8 +475,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -504,8 +507,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -534,8 +540,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
