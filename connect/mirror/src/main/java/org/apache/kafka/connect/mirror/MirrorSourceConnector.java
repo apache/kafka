@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -49,6 +50,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -407,15 +409,23 @@ public class MirrorSourceConnector extends SourceConnector {
                 .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
-    @SuppressWarnings("deprecation")
-    // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs)
-            throws InterruptedException, ExecutionException {
-        Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x ->
-                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
+    private void updateTopicConfigs(Map<String, Config> topicConfigs) throws InterruptedException, ExecutionException {
+
+        Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
+        for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
+            ConfigResource res = new ConfigResource(ConfigResource.Type.TOPIC, topicConfig.getKey());
+
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            for (ConfigEntry entry : topicConfig.getValue().entries()) {
+                AlterConfigOp alterConfigOp = new AlterConfigOp(entry, AlterConfigOp.OpType.SET);
+                ops.add(alterConfigOp);
+            }
+            configs.put(res, ops);
+        }
+
         log.trace("Syncing configs for {} topics.", configs.size());
-        targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+        
+        targetAdminClient.incrementalAlterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 log.warn("Could not alter configuration of topic {}.", k.name(), e);
             }
