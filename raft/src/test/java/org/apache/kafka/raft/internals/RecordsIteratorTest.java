@@ -20,12 +20,18 @@ package org.apache.kafka.raft.internals;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -34,20 +40,16 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RecordSerde;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public final class SerdeRecordsIteratorTest {
-    private static final int MAX_BATCH_BYTES = 128;
+public final class RecordsIteratorTest {
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
 
     private static Stream<Arguments> emptyRecords() throws IOException {
@@ -63,19 +65,23 @@ public final class SerdeRecordsIteratorTest {
         testIterator(Collections.emptyList(), records);
     }
 
-    @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void testMemoryRecords(CompressionType compressionType) {
-        List<BatchReader.Batch<String>> batches = createBatches(57);
+    @Property
+    public void testMemoryRecords(
+        @ForAll CompressionType compressionType,
+        @ForAll long seed
+    ) {
+        List<BatchReader.Batch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
         testIterator(batches, memRecords);
     }
 
-    @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void testFileRecords(CompressionType compressionType) throws IOException {
-        List<BatchReader.Batch<String>> batches = createBatches(57);
+    @Property
+    public void testFileRecords(
+        @ForAll CompressionType compressionType,
+        @ForAll long seed
+    ) throws IOException {
+        List<BatchReader.Batch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
         FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
@@ -84,29 +90,15 @@ public final class SerdeRecordsIteratorTest {
         testIterator(batches, fileRecords);
     }
 
-    @Test
-    public void testMaxBatchTooSmall() throws IOException {
-        List<BatchReader.Batch<String>> batches = createBatches(57);
-
-        MemoryRecords memRecords = buildRecords(CompressionType.NONE, batches);
-        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
-        fileRecords.append(memRecords);
-
-        SerdeRecordsIterator<String> iterator = createIterator(fileRecords, BufferSupplier.create(), 10);
-        assertThrows(IllegalStateException.class, iterator::hasNext);
-        assertThrows(IllegalStateException.class, iterator::next);
-    }
-
     private void testIterator(
         List<BatchReader.Batch<String>> expectedBatches,
         Records records
     ) {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        SerdeRecordsIterator<String> iterator = createIterator(
+        RecordsIterator<String> iterator = createIterator(
             records,
-            mockBufferSupplier(allocatedBuffers),
-            MAX_BATCH_BYTES
+            mockBufferSupplier(allocatedBuffers)
         );
 
         for (BatchReader.Batch<String> batch : expectedBatches) {
@@ -121,8 +113,8 @@ public final class SerdeRecordsIteratorTest {
         assertEquals(Collections.emptySet(), allocatedBuffers);
     }
 
-    static SerdeRecordsIterator<String> createIterator(Records records, BufferSupplier bufferSupplier, int maxBatchSize) {
-        return new SerdeRecordsIterator<>(records, STRING_SERDE, bufferSupplier, maxBatchSize);
+    static RecordsIterator<String> createIterator(Records records, BufferSupplier bufferSupplier) {
+        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC);
     }
 
     static BufferSupplier mockBufferSupplier(Set<ByteBuffer> buffers) {
@@ -144,19 +136,35 @@ public final class SerdeRecordsIteratorTest {
         return bufferSupplier;
     }
 
-    public static List<BatchReader.Batch<String>> createBatches(long baseOffset) {
-        return asList(
-            BatchReader.Batch.of(baseOffset, 1, asList("a", "b", "c")),
-            BatchReader.Batch.of(baseOffset + 3, 2, asList("d", "e")),
-            BatchReader.Batch.of(baseOffset + 5, 2, asList("f"))
-        );
+    public static List<BatchReader.Batch<String>> createBatches(long seed) {
+        Random random = new Random(seed);
+        long baseOffset = random.nextInt(100);
+        int epoch = random.nextInt(3) + 1;
+
+        int numberOfBatches = random.nextInt(100) + 1;
+        List<BatchReader.Batch<String>> batches = new ArrayList<>(numberOfBatches);
+        for (int i = 0; i < numberOfBatches; i++) {
+            int numberOfRecords = random.nextInt(100) + 1;
+            List<String> records = random
+                .ints(numberOfRecords, 0, 10)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.toList());
+
+            batches.add(BatchReader.Batch.of(baseOffset, epoch, records));
+            baseOffset += records.size();
+            if (i % 5 == 0) {
+                epoch += random.nextInt(3);
+            }
+        }
+
+        return batches;
     }
 
     public static MemoryRecords buildRecords(
         CompressionType compressionType,
         List<BatchReader.Batch<String>> batches
     ) {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteBuffer buffer = ByteBuffer.allocate(102400);
 
         for (BatchReader.Batch<String> batch : batches) {
             BatchBuilder<String> builder = new BatchBuilder<>(
@@ -167,7 +175,7 @@ public final class SerdeRecordsIteratorTest {
                 12345L,
                 false,
                 batch.epoch(),
-                MAX_BATCH_BYTES
+                1024
             );
 
             for (String record : batch.records()) {

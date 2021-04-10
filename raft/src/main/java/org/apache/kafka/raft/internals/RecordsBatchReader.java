@@ -27,7 +27,7 @@ import java.util.OptionalLong;
 
 public final class RecordsBatchReader<T> implements BatchReader<T> {
     private final long baseOffset;
-    private final SerdeRecordsIterator<T> iterator;
+    private final RecordsIterator<T> iterator;
     private final CloseListener<BatchReader<T>> closeListener;
 
     private long lastReturnedOffset;
@@ -37,7 +37,7 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
 
     private RecordsBatchReader(
         long baseOffset,
-        SerdeRecordsIterator<T> iterator,
+        RecordsIterator<T> iterator,
         CloseListener<BatchReader<T>> closeListener
     ) {
         this.baseOffset = baseOffset;
@@ -48,7 +48,7 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
 
     @Override
     public boolean hasNext() {
-        checkIfClosed();
+        ensureOpen();
 
         if (!nextBatch.isPresent()) {
             nextBatch = nextBatch();
@@ -103,12 +103,12 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     ) {
         return new RecordsBatchReader<>(
             baseOffset,
-            new SerdeRecordsIterator<>(records, serde, bufferSupplier, maxBatchSize),
+            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize),
             closeListener
         );
     }
 
-    private void checkIfClosed() {
+    private void ensureOpen() {
         if (isClosed) {
             throw new IllegalStateException("Records batch reader was closed");
         }

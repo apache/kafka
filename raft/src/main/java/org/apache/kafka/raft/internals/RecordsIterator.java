@@ -35,35 +35,35 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader.Batch;
 import org.apache.kafka.raft.RecordSerde;
 
-public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
+public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
     private final Records records;
     private final RecordSerde<T> serde;
     private final BufferSupplier bufferSupplier;
-    private final int maxBatchSize;
+    private final int batchSize;
 
     private Iterator<MutableRecordBatch> nextBatches = Collections.emptyIterator();
     private Optional<Batch<T>> nextBatch = Optional.empty();
-    // Buffer used to as the backing store for nextBatches if needed
+    // Buffer used as the backing store for nextBatches if needed
     private Optional<ByteBuffer> allocatedBuffer = Optional.empty();
     // Number of bytes from records read up to now
     private int bytesRead = 0;
     private boolean isClosed = false;
 
-    public SerdeRecordsIterator(
+    public RecordsIterator(
         Records records,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
-        int maxBatchSize
+        int batchSize
     ) {
         this.records = records;
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
-        this.maxBatchSize = maxBatchSize;
+        this.batchSize = Math.max(batchSize, Records.HEADER_SIZE_UP_TO_MAGIC);
     }
 
     @Override
     public boolean hasNext() {
-        checkIfClosed();
+        ensureOpen();
 
         if (!nextBatch.isPresent()) {
             nextBatch = nextBatch();
@@ -91,9 +91,47 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
         allocatedBuffer = Optional.empty();
     }
 
-    private void checkIfClosed() {
+    private void ensureOpen() {
         if (isClosed) {
             throw new IllegalStateException("Serde record batch itererator was closed");
+        }
+    }
+
+    private MemoryRecords readFileRecords(FileRecords fileRecords, ByteBuffer buffer) {
+        int start = buffer.position();
+        try {
+            fileRecords.readInto(buffer, bytesRead);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read records into memory", e);
+        }
+
+        bytesRead += buffer.limit() - start;
+        return MemoryRecords.readableRecords(buffer.slice());
+    }
+
+    private MemoryRecords createMemoryRecords(FileRecords fileRecords) {
+        final ByteBuffer buffer;
+        if (allocatedBuffer.isPresent()) {
+            buffer = allocatedBuffer.get();
+            buffer.compact();
+        } else {
+            buffer = bufferSupplier.get(Math.min(batchSize, records.sizeInBytes()));
+            allocatedBuffer = Optional.of(buffer);
+        }
+
+        MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
+
+        if (memoryRecords.firstBatchSize() < buffer.remaining()) {
+            return memoryRecords;
+        } else {
+            // Not enough bytes read; create a bigger buffer
+            ByteBuffer newBuffer = bufferSupplier.get(memoryRecords.firstBatchSize());
+            allocatedBuffer = Optional.of(newBuffer);
+
+            newBuffer.put(buffer);
+            bufferSupplier.release(buffer);
+
+            return readFileRecords(fileRecords, newBuffer);
         }
     }
 
@@ -105,42 +143,12 @@ public final class SerdeRecordsIterator<T> implements Iterator<Batch<T>>, AutoCl
                 bytesRead = recordSize;
                 memoryRecords = (MemoryRecords) records;
             } else if (records instanceof FileRecords) {
-                final ByteBuffer buffer;
-                if (allocatedBuffer.isPresent()) {
-                    buffer = allocatedBuffer.get();
-                    buffer.compact();
-                } else {
-                    buffer = bufferSupplier.get(Math.min(maxBatchSize, records.sizeInBytes()));
-                    allocatedBuffer = Optional.of(buffer);
-                }
-
-                int start = buffer.position();
-                try { 
-                    ((FileRecords) records).readInto(buffer, bytesRead);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to read records into memory", e);
-                }
-
-                bytesRead += buffer.limit() - start;
-                memoryRecords = MemoryRecords.readableRecords(buffer.slice());
+                memoryRecords = createMemoryRecords((FileRecords) records);
             } else {
                 throw new IllegalStateException(String.format("Unexpected Records type %s", records.getClass()));
             }
 
-            Iterator<MutableRecordBatch> batches = memoryRecords.batchIterator();
-            if (!batches.hasNext()) {
-                // The buffer is not big enough to read an entire batch
-                throw new IllegalStateException(
-                    String.format(
-                        "Unable to read batch from records buffer %s with maximum batch %s and record size %s",
-                        allocatedBuffer,
-                        maxBatchSize,
-                        records.sizeInBytes()
-                    )
-                );
-            }
-
-            return batches;
+            return memoryRecords.batchIterator();
         }
 
         return Collections.emptyIterator();

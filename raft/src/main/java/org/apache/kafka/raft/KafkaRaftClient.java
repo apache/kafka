@@ -391,7 +391,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // When there is only a single voter, become candidate immediately
             if (quorum.isVoter()
                 && quorum.remoteVoters().isEmpty()
-                && !quorum.isLeader()
                 && !quorum.isCandidate()) {
 
                 transitionToCandidate(currentTimeMs);

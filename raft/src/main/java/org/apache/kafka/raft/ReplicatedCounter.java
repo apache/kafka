@@ -37,8 +37,6 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private int uncommitted = 0;
     private OptionalInt claimedEpoch = OptionalInt.empty();
     private long lastSnapshotEndOffset = 0;
-    private long nextReadOffset = 0;
-    private int readEpoch = 0;
 
     public ReplicatedCounter(
         int nodeId,
@@ -72,6 +70,9 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     public synchronized void handleCommit(BatchReader<Integer> reader) {
         try {
             int initialCommitted = committed;
+            long nextReadOffset = 0;
+            int readEpoch = 0;
+
             while (reader.hasNext()) {
                 BatchReader.Batch<Integer> batch = reader.next();
                 log.debug(
@@ -103,6 +104,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                 try (SnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
                     snapshot.append(singletonList(committed));
                     snapshot.freeze();
+                    lastSnapshotEndOffset = nextReadOffset;
                 }
             }
         } finally {

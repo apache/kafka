@@ -423,14 +423,20 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
-        if (logStartOffset() > snapshotId.offset ||
-            highWatermark.offset < snapshotId.offset) {
-
+        if (logStartOffset() > snapshotId.offset) {
             throw new OffsetOutOfRangeException(
                 String.format(
-                    "New log start (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
+                    "New log start (%s) is less than the curent log start offset (%s)",
                     snapshotId,
-                    logStartOffset(),
+                    logStartOffset()
+                )
+            );
+        }
+        if (highWatermark.offset < snapshotId.offset) {
+            throw new OffsetOutOfRangeException(
+                String.format(
+                    "New log start (%s) is greater than the high watermark (%s)",
+                    snapshotId,
                     highWatermark.offset
                 )
             );

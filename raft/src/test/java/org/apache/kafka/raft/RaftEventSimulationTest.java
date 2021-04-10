@@ -1001,19 +1001,20 @@ public class RaftEventSimulationTest {
             }
 
             AtomicLong startOffset = new AtomicLong(0);
-            log.earliestSnapshotId().ifPresent(snapshoId -> {
-                assertTrue(snapshoId.offset <= highWatermark.getAsLong());
-                startOffset.set(snapshoId.offset);
+            log.earliestSnapshotId().ifPresent(snapshotId -> {
+                assertTrue(snapshotId.offset <= highWatermark.getAsLong());
+                startOffset.set(snapshotId.offset);
 
                 try (SnapshotReader<Integer> snapshot =
-                        SnapshotReader.of(log.readSnapshot(snapshoId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                        SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
                     BatchReader.Batch<Integer> batch = snapshot.next();
                     assertFalse(snapshot.hasNext());
                     assertEquals(1, batch.records().size());
 
-                    long offset = snapshoId.offset - 1;
+                    // The snapshotId offset is an "end offset"
+                    long offset = snapshotId.offset - 1;
                     int sequence = batch.records().get(0);
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 

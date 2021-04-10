@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
-import org.apache.kafka.raft.internals.SerdeRecordsIterator;
+import org.apache.kafka.raft.internals.RecordsIterator;
 
 /**
  * A type for reading an immutable snapshot.
@@ -33,11 +33,11 @@ import org.apache.kafka.raft.internals.SerdeRecordsIterator;
  */
 public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
     private final OffsetAndEpoch snapshotId;
-    private final SerdeRecordsIterator<T> iterator;
+    private final RecordsIterator<T> iterator;
 
     private SnapshotReader(
         OffsetAndEpoch snapshotId,
-        SerdeRecordsIterator<T> iterator
+        RecordsIterator<T> iterator
     ) {
         this.snapshotId = snapshotId;
         this.iterator = iterator;
@@ -75,7 +75,7 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
     ) {
         return new SnapshotReader<>(
             snapshot.snapshotId(),
-            new SerdeRecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
         );
     }
 }

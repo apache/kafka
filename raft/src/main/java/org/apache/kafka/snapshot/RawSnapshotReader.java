@@ -33,8 +33,6 @@ public interface RawSnapshotReader extends Closeable {
 
     /**
      * Returns the number of bytes for the snapshot.
-     *
-     * @throws IOException for any IO error while reading the size
      */
     long sizeInBytes();
 

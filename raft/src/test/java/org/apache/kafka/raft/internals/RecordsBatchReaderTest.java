@@ -49,8 +49,8 @@ class RecordsBatchReaderTest {
     public void testReadFromMemoryRecords(CompressionType compressionType) {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = SerdeRecordsIteratorTest.createBatches(baseOffset);
-        MemoryRecords memRecords = SerdeRecordsIteratorTest.buildRecords(compressionType, batches);
+        List<BatchReader.Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         testBatchReader(baseOffset, memRecords, batches);
     }
@@ -60,8 +60,8 @@ class RecordsBatchReaderTest {
     public void testReadFromFileRecords(CompressionType compressionType) throws Exception {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = SerdeRecordsIteratorTest.createBatches(baseOffset);
-        MemoryRecords memRecords = SerdeRecordsIteratorTest.buildRecords(compressionType, batches);
+        List<BatchReader.Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
         fileRecords.append(memRecords);
