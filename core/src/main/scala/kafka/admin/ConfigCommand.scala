@@ -29,7 +29,7 @@ import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
@@ -347,11 +347,11 @@ object ConfigCommand extends Config {
         val sensitiveEntries = newEntries.filter(_._2.value == null)
         if (sensitiveEntries.nonEmpty)
           throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-        val newConfig = new JConfig(newEntries.asJava.values)
+        val newConfig = (newEntries.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))).asJavaCollection
 
         val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityNameHead)
         val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        adminClient.incrementalAlterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case BrokerLoggerConfigType =>
         val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
