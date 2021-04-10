@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
@@ -79,9 +78,9 @@ public class DescribeTransactionsHandlerTest {
 
         assertEquals(keys, result.completedKeys.keySet());
         assertMatchingTransactionState(brokerId, transactionState1,
-            result.completedKeys.get(coordinatorKey(transactionalId1)));
+            result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId1)));
         assertMatchingTransactionState(brokerId, transactionState2,
-            result.completedKeys.get(coordinatorKey(transactionalId2)));
+            result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId2)));
     }
 
     @Test
@@ -102,7 +101,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId,
         Errors error
     ) {
-        CoordinatorKey key = coordinatorKey(transactionalId);
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         ApiResult<CoordinatorKey, TransactionDescription> result = handleResponseError(handler, transactionalId, error);
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(mkSet(key), result.failedKeys.keySet());
@@ -126,7 +125,7 @@ public class DescribeTransactionsHandlerTest {
         String transactionalId,
         Errors error
     ) {
-        CoordinatorKey key = coordinatorKey(transactionalId);
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         ApiResult<CoordinatorKey, TransactionDescription> result = handleResponseError(handler, transactionalId, error);
         assertEquals(emptyMap(), result.failedKeys);
         assertEquals(singletonList(key), result.unmappedKeys);
@@ -139,7 +138,7 @@ public class DescribeTransactionsHandlerTest {
     ) {
         int brokerId = 1;
 
-        CoordinatorKey key = coordinatorKey(transactionalId);
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         Set<CoordinatorKey> keys = mkSet(key);
 
         DescribeTransactionsResponseData.TransactionState transactionState = new DescribeTransactionsResponseData.TransactionState()
@@ -163,13 +162,9 @@ public class DescribeTransactionsHandlerTest {
         assertEquals(transactionalIds, new HashSet<>(request.data.transactionalIds()));
     }
 
-    private static CoordinatorKey coordinatorKey(String transactionalId) {
-        return new CoordinatorKey(transactionalId, FindCoordinatorRequest.CoordinatorType.TRANSACTION);
-    }
-
     private static Set<CoordinatorKey> coordinatorKeys(Set<String> transactionalIds) {
         return transactionalIds.stream()
-            .map(DescribeTransactionsHandlerTest::coordinatorKey)
+            .map(CoordinatorKey::byTransactionalId)
             .collect(Collectors.toSet());
     }
 

@@ -27,7 +27,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -57,7 +56,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> transactionalIds) {
         return transactionalIds.stream()
-            .map(DescribeTransactionsHandler::asCoordinatorKey)
+            .map(CoordinatorKey::byTransactionalId)
             .collect(Collectors.toSet());
     }
 
@@ -94,9 +93,15 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
         List<CoordinatorKey> unmapped = new ArrayList<>();
 
         for (DescribeTransactionsResponseData.TransactionState transactionState : response.data().transactionStates()) {
-            CoordinatorKey transactionalIdKey = asCoordinatorKey(transactionState.transactionalId());
-            Errors error = Errors.forCode(transactionState.errorCode());
+            CoordinatorKey transactionalIdKey = CoordinatorKey.byTransactionalId(
+                transactionState.transactionalId());
+            if (!keys.contains(transactionalIdKey)) {
+                log.warn("Response included transactionalId `{}`, which was not requested",
+                    transactionState.transactionalId());
+                continue;
+            }
 
+            Errors error = Errors.forCode(transactionState.errorCode());
             if (error != Errors.NONE) {
                 handleError(transactionalIdKey, error, failed, unmapped);
                 continue;
@@ -131,10 +136,6 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
             }
         }
         return res;
-    }
-
-    public static CoordinatorKey asCoordinatorKey(String transactionalId) {
-        return new CoordinatorKey(transactionalId, FindCoordinatorRequest.CoordinatorType.TRANSACTION);
     }
 
     private void handleError(
@@ -174,7 +175,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
             default:
                 failed.put(transactionalIdKey, error.exception("DescribeTransactions request for " +
-                    "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error"));
+                    "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error "));
         }
     }
 

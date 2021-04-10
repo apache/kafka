@@ -24,7 +24,7 @@ public class CoordinatorKey {
     public final String idValue;
     public final FindCoordinatorRequest.CoordinatorType type;
 
-    public CoordinatorKey(String idValue, FindCoordinatorRequest.CoordinatorType type) {
+    private CoordinatorKey(String idValue, FindCoordinatorRequest.CoordinatorType type) {
         this.idValue = idValue;
         this.type = type;
     }
@@ -50,4 +50,13 @@ public class CoordinatorKey {
             ", type=" + type +
             ')';
     }
+
+    public static CoordinatorKey byGroupId(String groupId) {
+        return new CoordinatorKey(groupId, FindCoordinatorRequest.CoordinatorType.GROUP);
+    }
+
+    public static CoordinatorKey byTransactionalId(String transactionalId) {
+        return new CoordinatorKey(transactionalId, FindCoordinatorRequest.CoordinatorType.TRANSACTION);
+    }
+
 }

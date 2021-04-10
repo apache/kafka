@@ -20,8 +20,8 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -34,8 +34,17 @@ public class DescribeTransactionsResult {
         this.futures = futures;
     }
 
-    public KafkaFuture<TransactionDescription> transactionalIdResult(String transactionalId) {
-        CoordinatorKey key = buildKey(transactionalId);
+    /**
+     * Get the description of a specific transactional ID.
+     *
+     * @param transactionalId the transactional ID to describe
+     * @return a future which completes when the transaction description of a particular
+     *         transactional ID is available.
+     * @throws IllegalArgumentException if the `transactionalId` was not included in the
+     *         respective call to {@link Admin#describeTransactions(Collection, DescribeTransactionsOptions)}.
+     */
+    public KafkaFuture<TransactionDescription> description(String transactionalId) {
+        CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         KafkaFuture<TransactionDescription> future = futures.get(key);
         if (future == null) {
             throw new IllegalArgumentException("TransactionalId " +
@@ -43,11 +52,16 @@ public class DescribeTransactionsResult {
         }
         return future;
     }
-
-    private CoordinatorKey buildKey(String transactionalId) {
-        return new CoordinatorKey(transactionalId, FindCoordinatorRequest.CoordinatorType.TRANSACTION);
-    }
-
+    /**
+     * Get a future which returns a map of the transaction descriptions requested in the respective
+     * call to {@link Admin#describeTransactions(Collection, DescribeTransactionsOptions)}.
+     *
+     * If the description fails on any of the transactional IDs in the request, then this future
+     * will also fail.
+     *
+     * @return a future which either completes when all transaction descriptions complete or fails
+     *         if any of the descriptions cannot be obtained
+     */
     public KafkaFuture<Map<String, TransactionDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
             .thenApply(nil -> {

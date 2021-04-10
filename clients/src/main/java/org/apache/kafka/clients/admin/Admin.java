@@ -1509,10 +1509,10 @@ public interface Admin extends AutoCloseable {
     DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
     /**
-     * Describe the state of a set of transactionalIds. See
+     * Describe the state of a set of transactional IDs. See
      * {@link #describeTransactions(Collection, DescribeTransactionsOptions)} for more details.
      *
-     * @param transactionalIds The set of transactionalIds to query
+     * @param transactionalIds The set of transactional IDs to query
      * @return The result
      */
     default DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds) {
@@ -1520,10 +1520,10 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Describe the state of a set of transactionalIds from the respective transaction coordinators,
+     * Describe the state of a set of transactional IDs from the respective transaction coordinators,
      * which are dynamically discovered.
      *
-     * @param transactionalIds The set of transactionalIds to query
+     * @param transactionalIds The set of transactional IDs to query
      * @param options Options to control the method behavior
      * @return The result
      */

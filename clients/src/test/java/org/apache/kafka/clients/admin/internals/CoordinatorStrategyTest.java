@@ -41,7 +41,7 @@ public class CoordinatorStrategyTest {
     public void testBuildLookupRequest() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
         FindCoordinatorRequest.Builder request = strategy.buildRequest(singleton(
-            new CoordinatorKey("foo", CoordinatorType.GROUP)));
+            CoordinatorKey.byGroupId("foo")));
         assertEquals("foo", request.data().key());
         assertEquals(CoordinatorType.GROUP, CoordinatorType.forId(request.data().keyType()));
     }
@@ -51,14 +51,14 @@ public class CoordinatorStrategyTest {
         CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Collections.emptySet()));
 
-        CoordinatorKey group1 = new CoordinatorKey("foo", CoordinatorType.GROUP);
-        CoordinatorKey group2 = new CoordinatorKey("bar", CoordinatorType.GROUP);
+        CoordinatorKey group1 = CoordinatorKey.byGroupId("foo");
+        CoordinatorKey group2 = CoordinatorKey.byGroupId("bar");
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(mkSet(group1, group2)));
     }
 
     @Test
     public void testSuccessfulCoordinatorLookup() {
-        CoordinatorKey group = new CoordinatorKey("foo", CoordinatorType.GROUP);
+        CoordinatorKey group = CoordinatorKey.byGroupId("foo");
 
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -78,7 +78,7 @@ public class CoordinatorStrategyTest {
     }
 
     public void testRetriableCoordinatorLookup(Errors error) {
-        CoordinatorKey group = new CoordinatorKey("foo", CoordinatorType.GROUP);
+        CoordinatorKey group = CoordinatorKey.byGroupId("foo");
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData().setErrorCode(error.code());
         AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(group, responseData);
 
@@ -88,7 +88,7 @@ public class CoordinatorStrategyTest {
 
     @Test
     public void testFatalErrorLookupResponses() {
-        CoordinatorKey group = new CoordinatorKey("foo", CoordinatorType.TRANSACTION);
+        CoordinatorKey group = CoordinatorKey.byTransactionalId("foo");
         assertFatalLookup(group, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
