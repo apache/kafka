@@ -138,6 +138,118 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testGrantVotesFromHigherEpochAfterResigningLeadership() throws Exception {
+        int localId = 0;
+        int remoteId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .updateRandom(random -> {
+                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
+                })
+                .withElectedLeader(epoch, localId)
+                .build();
+
+        // Resign from leader, will restart in resigned state
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(0L, context.log.endOffset().offset);
+        context.assertElectedLeader(epoch, localId);
+
+        // Send vote request with higher epoch
+        context.deliverRequest(context.voteRequest(epoch + 1, remoteId,
+                context.log.lastFetchedEpoch(), context.log.endOffset().offset));
+        context.client.poll();
+
+        // We will first transition to unattached and then grant vote and then transition to voted
+        assertTrue(context.client.quorum().isVoted());
+        context.assertVotedCandidate(epoch + 1, remoteId);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+    }
+
+    @Test
+    public void testGrantVotesFromHigherEpochAfterResigningCandidacy() throws Exception {
+        int localId = 0;
+        int remoteId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .updateRandom(random -> {
+                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
+                })
+                .withVotedCandidate(epoch, localId)
+                .build();
+
+        // Resign from candidate, will restart in candidate state
+        assertTrue(context.client.quorum().isCandidate());
+        assertEquals(0L, context.log.endOffset().offset);
+        context.assertVotedCandidate(epoch, localId);
+
+        // Send vote request with higher epoch
+        context.deliverRequest(context.voteRequest(epoch + 1, remoteId,
+                context.log.lastFetchedEpoch(), context.log.endOffset().offset));
+        context.client.poll();
+
+        // We will first transition to unattached and then grant vote and then transition to voted
+        assertTrue(context.client.quorum().isVoted());
+        context.assertVotedCandidate(epoch + 1, remoteId);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+    }
+
+    @Test
+    public void testGrantVotesWhenShuttingDown() throws Exception {
+        int localId = 0;
+        int remoteId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId);
+        int epoch = 2;
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // Beginning shutdown
+        context.client.shutdown(1000);
+        assertTrue(context.client.isShuttingDown());
+
+        // Send vote request with higher epoch
+        context.deliverRequest(context.voteRequest(epoch + 1, remoteId,
+                context.log.lastFetchedEpoch(), context.log.endOffset().offset));
+        context.client.poll();
+
+        // We will first transition to unattached and then grant vote and then transition to voted
+        assertTrue(context.client.quorum().isVoted());
+        context.assertVotedCandidate(epoch + 1, remoteId);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+    }
+
+    @Test
+    public void testInitializeAsResignedAndBecomeCandidate() throws Exception {
+        int localId = 0;
+        int remoteId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .updateRandom(random -> {
+                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
+                })
+                .withElectedLeader(epoch, localId)
+                .build();
+
+        // Resign from leader, will restart in resigned state
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(0L, context.log.endOffset().offset);
+        context.assertElectedLeader(epoch, localId);
+
+        // Election timeout
+        context.time.sleep(context.electionTimeoutMs());
+        context.client.poll();
+
+        // Become candidate in a new epoch
+        assertTrue(context.client.quorum().isCandidate());
+        context.assertVotedCandidate(epoch + 1, localId);
+    }
+
+    @Test
     public void testInitializeAsResignedLeaderFromStateStore() throws Exception {
         int localId = 0;
         Set<Integer> voters = Utils.mkSet(localId, 1);
