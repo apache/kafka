@@ -24,7 +24,6 @@ import java.net.URLClassLoader;
 import java.util.Collections;
 import java.util.Map.Entry;
 
-import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -51,7 +50,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
