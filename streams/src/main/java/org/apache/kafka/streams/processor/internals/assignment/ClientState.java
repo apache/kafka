@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +62,8 @@ public class ClientState {
     private final Map<String, Set<TaskId>> consumerToAssignedStandbyTaskIds = new TreeMap<>();
     private final Map<String, Set<TaskId>> consumerToRevokingActiveTaskIds = new TreeMap<>();
 
+    private final Map<String, String> clientTags;
+
     private int capacity;
 
     public ClientState() {
@@ -72,6 +75,7 @@ public class ClientState {
         prevStandbyTasks = new TreeSet<>();
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
+        clientTags = new HashMap<>();
         this.capacity = capacity;
     }
 
@@ -79,12 +83,14 @@ public class ClientState {
     public ClientState(final Set<TaskId> previousActiveTasks,
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
-                       final int capacity) {
+                       final int capacity,
+                       final Map<String, String> clientTags) {
         prevActiveTasks = unmodifiableSet(new TreeSet<>(previousActiveTasks));
         prevStandbyTasks = unmodifiableSet(new TreeSet<>(previousStandbyTasks));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
+        this.clientTags = clientTags;
     }
 
     int capacity() {
@@ -198,6 +204,10 @@ public class ClientState {
         standbyTasks.remove(task);
     }
 
+    public void assignClientTags(final Map<String, String> clientTags) {
+        this.clientTags.putAll(clientTags);
+    }
+
     Set<TaskId> assignedTasks() {
         // Since we're copying it, it's not strictly necessary to make it unmodifiable also.
         // I'm just trying to prevent subtle bugs if we write code that thinks it can update
@@ -249,6 +259,10 @@ public class ClientState {
 
     Set<TaskId> previousAssignedTasks() {
         return union(() -> new HashSet<>(prevActiveTasks.size() + prevStandbyTasks.size()), prevActiveTasks, prevStandbyTasks);
+    }
+
+    public Map<String, String> clientTags() {
+        return clientTags;
     }
 
     // May return null

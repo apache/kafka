@@ -139,8 +139,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             state = new ClientState();
         }
 
-        void addConsumer(final String consumerMemberId, final List<TopicPartition> ownedPartitions) {
+        void addConsumer(final String consumerMemberId,
+                         final Map<String, String> clientTags,
+                         final List<TopicPartition> ownedPartitions) {
             consumers.add(consumerMemberId);
+            state.assignClientTags(clientTags);
             state.incrementCapacity();
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
         }
@@ -187,6 +190,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Supplier<TaskAssignor> taskAssignorSupplier;
     private byte uniqueField;
+    private Map<String, String> clientTags;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -220,6 +224,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
+        clientTags = referenceContainer.clientTags;
     }
 
     @Override
@@ -254,7 +259,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             userEndPoint,
             taskManager.getTaskOffsetSums(),
             uniqueField,
-            assignmentErrorCode.get()
+            assignmentErrorCode.get(),
+            clientTags
         ).encode();
     }
 
@@ -341,7 +347,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             // add the consumer and any info in its subscription to the client
-            clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
+            final Map<String, String> clientTags = info.clientTags();
+            clientMetadata.addConsumer(consumerId, clientTags, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
         }
