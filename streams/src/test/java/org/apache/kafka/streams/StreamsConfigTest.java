@@ -62,6 +62,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -970,6 +971,36 @@ public class StreamsConfigTest {
     public void shouldThrowConfigExceptionIfProbingRebalanceIntervalIsOutsideBounds() {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, (60 * 1000L) - 1);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldDefaultToNullIfRackAwareAssignmentTagsIsNotSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertNull(config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+    }
+
+    @Test
+    public void shouldSetRackAwareAssignmentTags() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster,zone");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG), "cluster,zone");
+    }
+
+    @Test
+    public void shouldGetEmptyMapIfClientTagsAreNotSet() {
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final Map<String, String> clientTags = config.getClientTags();
+        assertFalse(clientTags.isEmpty());
+        assertEquals(clientTags.get("zone"), "eu-central-1a");
+        assertEquals(clientTags.get("cluster"), "cluster-1");
+    }
+
+    @Test
+    public void shouldGetClientTagsMapWhenSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getClientTags().isEmpty());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

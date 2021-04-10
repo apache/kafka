@@ -51,8 +51,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -703,6 +705,7 @@ public class StreamsConfig extends AbstractConfig {
                     PROCESSING_GUARANTEE_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
                     Type.STRING,
+                    null,
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -1354,6 +1357,23 @@ public class StreamsConfig extends AbstractConfig {
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         return props;
+    }
+
+    /**
+     * Get the configured client tags set with {@link #CLIENT_TAG_PREFIX} prefix.
+     * @return Map of the client tags.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public Map<String, String> getClientTags() {
+        return originalsWithPrefix(CLIENT_TAG_PREFIX)
+            .entrySet()
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    tagEntry -> Objects.toString(tagEntry.getValue())
+                )
+            );
     }
 
     private Map<String, Object> getClientPropsWithPrefix(final String prefix,
