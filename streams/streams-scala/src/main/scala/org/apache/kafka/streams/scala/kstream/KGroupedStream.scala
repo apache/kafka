@@ -19,19 +19,8 @@ package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
 import org.apache.kafka.streams.scala.serialization.Serdes
-import org.apache.kafka.streams.kstream.{
-  SessionWindows,
-  Window,
-  Windows,
-  KGroupedStream => KGroupedStreamJ,
-  KTable => KTableJ
-}
-import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
-  AggregatorFromFunction,
-  InitializerFromFunction,
-  ReducerFromFunction,
-  ValueMapperFromFunction
-}
+import org.apache.kafka.streams.kstream.{SessionWindows, SlidingWindows, Window, Windows, KGroupedStream => KGroupedStreamJ, KTable => KTableJ}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFromFunction, InitializerFromFunction, ReducerFromFunction, ValueMapperFromFunction}
 
 /**
  * Wraps the Java class KGroupedStream and delegates method calls to the underlying Java object.
@@ -153,6 +142,16 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
    */
   def windowedBy[W <: Window](windows: Windows[W]): TimeWindowedKStream[K, V] =
+    new TimeWindowedKStream(inner.windowedBy(windows))
+
+  /**
+   * Create a new [[TimeWindowedKStream]] instance that can be used to perform windowed aggregations.
+   *
+   * @param windows the specification of the aggregation `SlidingWindows`
+   * @return an instance of [[TimeWindowedKStream]]
+   * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
+   */
+  def windowedBy[W <: Window](windows: SlidingWindows): TimeWindowedKStream[K, V] =
     new TimeWindowedKStream(inner.windowedBy(windows))
 
   /**
