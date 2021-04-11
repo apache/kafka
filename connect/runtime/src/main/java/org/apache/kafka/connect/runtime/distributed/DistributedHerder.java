@@ -60,6 +60,7 @@ import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 
@@ -79,6 +80,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -737,6 +739,27 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         log.info("Herder stopped");
         running = false;
+    }
+
+    @Override
+    public String kafkaClusterId() {
+        log.trace("Submitting Kafka cluster ID (healthcheck) request");
+
+        FutureCallback<String> result = new FutureCallback<>();
+
+        addRequest(
+            () -> {
+                result.onCompletion(null, super.kafkaClusterId());
+                return null;
+            },
+            forwardErrorCallback(result)
+        );
+
+        try {
+            return result.get();
+        } catch (ExecutionException | InterruptedException e) {
+            throw new ConnectException(e);
+        }
     }
 
     @Override

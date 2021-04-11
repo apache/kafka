@@ -131,7 +131,7 @@ public class BlockingConnectorTest {
         // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
         // if the worker is still getting on its feet.
         waitForCondition(
-            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+            () -> connect.requestGet(connect.endpointForResource("")).getStatus() == 200,
             CONNECT_WORKER_STARTUP_TIMEOUT,
             "Worker did not complete startup in time"
         );
