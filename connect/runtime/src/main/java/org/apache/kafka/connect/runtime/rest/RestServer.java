@@ -85,6 +85,7 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
+    private final String kafkaClusterId;
     private ContextHandlerCollection handlers;
     private Server jettyServer;
 
@@ -93,8 +94,9 @@ public class RestServer {
     /**
      * Create a REST server for this herder using the specified configs.
      */
-    public RestServer(WorkerConfig config) {
+    public RestServer(WorkerConfig config, String kafkaClusterId) {
         this.config = config;
+        this.kafkaClusterId = kafkaClusterId;
 
         List<String> listeners = parseListeners();
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
@@ -457,9 +459,7 @@ public class RestServer {
             herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
         }
 
-        ConnectClusterDetails connectClusterDetails = new ConnectClusterDetailsImpl(
-            herder.kafkaClusterId()
-        );
+        ConnectClusterDetails connectClusterDetails = new ConnectClusterDetailsImpl(kafkaClusterId);
 
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(

@@ -115,7 +115,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertArrayEquals(new String[] {"http://localhost:8080", "https://localhost:8443"}, server.parseListeners().toArray());
 
         // Build listener from hostname and port
@@ -124,7 +124,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
     }
 
@@ -136,7 +136,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
 
         // Advertised URI from listeners with protocol
@@ -145,7 +145,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
 
         // Advertised URI from listeners with only SSL available
@@ -153,7 +153,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
 
         // Listener is overriden by advertised values
@@ -164,7 +164,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
         config = new DistributedConfig(configMap);
 
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
 
         // listener from hostname and port
@@ -173,7 +173,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
 
         // correct listener is chosen when https listener is configured before http listener and advertised listener is http
@@ -181,7 +181,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
         configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
         config = new DistributedConfig(configMap);
-        server = new RestServer(config);
+        server = new RestServer(config, KAFKA_CLUSTER_ID);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
     }
 
@@ -190,7 +190,6 @@ public class RestServerTest {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
             workerConfig,
@@ -198,7 +197,7 @@ public class RestServerTest {
             .andStubReturn(Collections.emptyList());
         PowerMock.replayAll();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -227,7 +226,6 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                                            workerConfig,
@@ -238,7 +236,7 @@ public class RestServerTest {
 
         PowerMock.replayAll();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
@@ -281,7 +279,6 @@ public class RestServerTest {
         workerProps.put("offset.storage.file.filename", "/tmp");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
             workerConfig,
@@ -291,7 +288,7 @@ public class RestServerTest {
 
         PowerMock.replayAll();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
@@ -307,7 +304,6 @@ public class RestServerTest {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                 workerConfig,
@@ -318,7 +314,7 @@ public class RestServerTest {
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -344,7 +340,6 @@ public class RestServerTest {
 
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                 workerConfig,
@@ -358,7 +353,7 @@ public class RestServerTest {
         LoggerFactory.getLogger("a.b.c.p.Y");
         LoggerFactory.getLogger("a.b.c.p.Z");
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -380,7 +375,6 @@ public class RestServerTest {
 
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                 workerConfig,
@@ -388,7 +382,7 @@ public class RestServerTest {
                 .andStubReturn(Collections.emptyList());
         PowerMock.replayAll();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -425,7 +419,6 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                 workerConfig,
@@ -435,7 +428,7 @@ public class RestServerTest {
 
         PowerMock.replayAll();
 
-        server = new RestServer(workerConfig);
+        server = new RestServer(workerConfig, KAFKA_CLUSTER_ID);
         try {
             server.initializeServer();
             server.initializeResources(herder);

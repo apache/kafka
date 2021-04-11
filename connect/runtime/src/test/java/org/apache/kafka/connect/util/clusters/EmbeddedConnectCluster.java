@@ -24,7 +24,6 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -284,8 +283,8 @@ public class EmbeddedConnectCluster {
         return connectCluster.stream()
                 .filter(w -> {
                     try {
-                        mapper.readerFor(ServerInfo.class)
-                                .readValue(responseToString(requestGet(w.url().toString())));
+                        mapper.readerFor(new TypeReference<Collection<String>>() { })
+                                .readValue(responseToString(requestGet(w.url().toString() + "connectors")));
                         return true;
                     } catch (ConnectException | IOException e) {
                         // Worker failed to respond. Consider it's offline
