@@ -513,17 +513,16 @@ class KafkaServer(
           time,
           config.saslInterBrokerHandshakeRequestEnable,
           logContext)
-        val selector = new Selector(
-          NetworkReceive.UNLIMITED,
-          config.connectionsMaxIdleMs,
-          metrics,
-          time,
-          "kafka-server-controlled-shutdown",
-          Map.empty.asJava,
-          false,
-          channelBuilder,
-          logContext
-        )
+          val selectorBuilder = new Selector.Builder()
+          selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                                      .withConnectionMaxIdleMs(config.connectionsMaxIdleMs)
+                                      .withMetrics(metrics)
+                                      .withTime(time)
+                                      .withMetricGrpPrefix("kafka-server-controlled-shutdown")
+                                      .withMetricsPerConnection(false)
+                                      .withChannelBuilder(channelBuilder)
+                                      .withLogContext(logContext);
+        val selector = selectorBuilder.build();
         new NetworkClient(
           selector,
           metadataUpdater,

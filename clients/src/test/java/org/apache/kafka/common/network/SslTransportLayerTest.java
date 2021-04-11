@@ -779,8 +779,19 @@ public class SslTransportLayerTest {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                .withConnectionMaxIdleMs(Selector.NO_IDLE_TIMEOUT_MS)
+                .withMetrics(new Metrics())
+                .withTime(Time.SYSTEM)
+                .withMetricGrpPrefix("MetricGroup")
+                .withMetricTags(new HashMap<>())
+                .withMetricsPerConnection(false)
+                .withRecordTimePerConnection(true)
+                .withMemoryPool(MemoryPool.NONE)
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        try (Selector selector = selectorBuilder.build()) {
 
             String node = "0";
             server = createEchoServer(args, SecurityProtocol.SSL);
@@ -896,7 +907,14 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(args.sslClientConfigs);
-            this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+            Selector.Builder selectorBuilder = new Selector.Builder();
+            selectorBuilder.withConnectionMaxIdleMs(5000)
+                    .withMetrics(new Metrics())
+                    .withTime(time)
+                    .withMetricGrpPrefix("MetricGroup")
+                    .withChannelBuilder(channelBuilder)
+                    .withLogContext(new LogContext());
+            this.selector = selectorBuilder.build();
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -975,7 +993,14 @@ public class SslTransportLayerTest {
         String node = "0";
         server = createEchoServer(args, securityProtocol);
         clientChannelBuilder.configure(args.sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(clientChannelBuilder)
+                .withLogContext(new LogContext());
+        this.selector = selectorBuilder.build();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -1288,7 +1313,14 @@ public class SslTransportLayerTest {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(100 * 5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        this.selector = selectorBuilder.build();
         return selector;
     }
 
@@ -1304,7 +1336,14 @@ public class SslTransportLayerTest {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(logContext);
+        selector = selectorBuilder.build();
         return selector;
     }
 

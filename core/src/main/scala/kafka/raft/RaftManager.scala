@@ -271,17 +271,17 @@ class KafkaRaftManager[T](
     val metricGroupPrefix = "raft-channel"
     val collectPerConnectionMetrics = false
 
-    val selector = new Selector(
-      NetworkReceive.UNLIMITED,
-      config.connectionsMaxIdleMs,
-      metrics,
-      time,
-      metricGroupPrefix,
-      Map.empty[String, String].asJava,
-      collectPerConnectionMetrics,
-      channelBuilder,
-      logContext
-    )
+    val selectorBuilder = new Selector.Builder()
+    selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                                  .withConnectionMaxIdleMs(config.connectionsMaxIdleMs)
+                                  .withMetrics(metrics)
+                                  .withTime(time)
+                                  .withMetricGrpPrefix(metricGroupPrefix)
+                                  .withMetricsPerConnection(collectPerConnectionMetrics)
+                                  .withChannelBuilder(channelBuilder)
+                                  .withLogContext(logContext);
+
+    val selector = selectorBuilder.build()
 
     val clientId = s"raft-client-${config.nodeId}"
     val maxInflightRequestsPerConnection = 1

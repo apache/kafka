@@ -62,7 +62,14 @@ public class NetworkTestUtils {
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder, Time time) {
-        return new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        Selector.Builder selectorBuilder = new Selector.Builder();
+        selectorBuilder.withConnectionMaxIdleMs(5000)
+                .withMetrics(new Metrics())
+                .withTime(time)
+                .withMetricGrpPrefix("MetricGroup")
+                .withChannelBuilder(channelBuilder)
+                .withLogContext(new LogContext());
+        return selectorBuilder.build();
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {

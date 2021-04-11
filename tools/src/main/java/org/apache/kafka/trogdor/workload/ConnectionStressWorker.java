@@ -162,8 +162,14 @@ public class ConnectionStressWorker implements TaskWorker {
                 // channelBuilder will be closed as part of Selector.close()
                 ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, logContext);
                 try (Metrics metrics = new Metrics()) {
-                    try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        metrics, TIME, "", channelBuilder, logContext)) {
+                    Selector.Builder selectorBuilder = new Selector.Builder();
+                    selectorBuilder.withConnectionMaxIdleMs(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG))
+                            .withMetrics(metrics)
+                            .withTime(TIME)
+                            .withMetricGrpPrefix("")
+                            .withChannelBuilder(channelBuilder)
+                            .withLogContext(logContext);
+                    try (Selector selector = selectorBuilder.build()) {
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",

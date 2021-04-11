@@ -68,17 +68,17 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
         Some(reconfigurable)
       case _ => None
     }
-    val selector = new Selector(
-      NetworkReceive.UNLIMITED,
-      brokerConfig.connectionsMaxIdleMs,
-      metrics,
-      time,
-      "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
-      false,
-      channelBuilder,
-      logContext
-    )
+    val selectorBuilder = new Selector.Builder()
+    selectorBuilder.withMaxReceiveSize(NetworkReceive.UNLIMITED)
+                                .withConnectionMaxIdleMs(brokerConfig.connectionsMaxIdleMs)
+                                .withMetrics(metrics)
+                                .withTime(time)
+                                .withMetricGrpPrefix("replica-fetcher")
+                                .withMetricTags(Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava)
+                                .withMetricsPerConnection(false)
+                                .withChannelBuilder(channelBuilder)
+                                .withLogContext(logContext);
+    val selector = selectorBuilder.build()
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
