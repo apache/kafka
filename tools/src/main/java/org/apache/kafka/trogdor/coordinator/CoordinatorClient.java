@@ -198,7 +198,7 @@ public class CoordinatorClient {
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/shutdown"), "PUT",
-                null, new TypeReference<Empty>() { }, maxTries);
+                Empty.INSTANCE, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
