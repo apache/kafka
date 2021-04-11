@@ -227,14 +227,17 @@ public class RestServer {
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
+        // Make sure to register REST extensions first as they may be used to secure the REST API.
+        // If other resources (such as the /connectors resource) are registered first, they will be
+        // unsecured until/unless REST extension registration completes.
+        registerRestExtensions(herder, resourceConfig);
+
         resourceConfig.register(new RootResource(herder));
         resourceConfig.register(new ConnectorsResource(herder, config));
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
-
-        registerRestExtensions(herder, resourceConfig);
 
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
         ResourceConfig adminResourceConfig;
