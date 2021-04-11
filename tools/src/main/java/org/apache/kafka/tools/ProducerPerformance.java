@@ -126,6 +126,8 @@ public class ProducerPerformance {
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
+            int currentIndex = 0;
+            int totalPayloadSize = payloadByteList.size();
             for (long i = 0; i < numRecords; i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -134,7 +136,8 @@ public class ProducerPerformance {
 
 
                 if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+                    payload = payloadByteList.get(currentIndex++);
+                    currentIndex = currentIndex == totalPayloadSize ? 0 : currentIndex;
                 }
                 record = new ProducerRecord<>(topicName, payload);
 
@@ -228,7 +231,7 @@ public class ProducerPerformance {
                 .metavar("PAYLOAD-FILE")
                 .dest("payloadFile")
                 .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
-                        "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
+                        "Payloads will be read from this file and be sequentially and circularly selected when sending messages. " +
                         "Note that you must provide exactly one of --record-size or --payload-file.");
 
         parser.addArgument("--payload-delimiter")
