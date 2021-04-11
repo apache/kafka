@@ -25,10 +25,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResignedStateTest {
@@ -49,8 +51,7 @@ class ResignedStateTest {
             epoch,
             voters,
             electionTimeoutMs,
-            preferredSuccessors,
-            logContext
+            preferredSuccessors
         );
     }
 
@@ -86,8 +87,8 @@ class ResignedStateTest {
             Collections.emptyList()
         );
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(1, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(2, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(3, isLogUpToDate));
     }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -29,6 +28,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,7 +37,6 @@ public class CandidateStateTest {
     private final int epoch = 5;
     private final MockTime time = new MockTime();
     private final int electionTimeoutMs = 5000;
-    private final LogContext logContext = new LogContext();
 
     private CandidateState newCandidateState(
             Set<Integer> voters,
@@ -50,8 +49,7 @@ public class CandidateStateTest {
                 voters,
                 highWatermark,
                 0,
-                electionTimeoutMs,
-                logContext
+                electionTimeoutMs
         );
     }
 
@@ -190,9 +188,9 @@ public class CandidateStateTest {
             Optional.empty()
         );
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(1, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(2, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(3, isLogUpToDate));
     }
 
 }

@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -38,7 +36,6 @@ public class VotedState implements EpochState {
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
-    private final Logger log;
 
     public VotedState(
         Time time,
@@ -46,8 +43,7 @@ public class VotedState implements EpochState {
         int votedId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int electionTimeoutMs,
-        LogContext logContext
+        int electionTimeoutMs
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
@@ -55,7 +51,6 @@ public class VotedState implements EpochState {
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
-        this.log = logContext.logger(VotedState.class);
     }
 
     @Override
@@ -98,14 +93,18 @@ public class VotedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+    public Optional<String> validateGrantVote(int candidateId, boolean isLogUpToDate) {
         if (votedId() == candidateId) {
-            return true;
+            return Optional.empty();
         }
 
-        log.debug("Rejecting vote request from candidate {} since we already have voted for " +
-            "another candidate {} in epoch {}", candidateId, votedId(), epoch);
-        return false;
+        return Optional.of(String.format(
+            "Rejecting vote request from candidate %s since we already have voted for " +
+                "another candidate %s in epoch %s",
+            candidateId,
+            votedId(),
+            epoch
+        ));
     }
 
     @Override
