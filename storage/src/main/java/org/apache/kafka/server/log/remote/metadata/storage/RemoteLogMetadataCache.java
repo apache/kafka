@@ -75,7 +75,7 @@ import java.util.concurrent.ConcurrentMap;
  *  The below table summarizes whether the segment with the respective state are available for the given methods.
  * <pre>
  * +---------------------------------+----------------------+------------------------+-------------------------+-------------------------+
- * |  Method / SegmentState          | COPY_SEGMENT_STARTED | COPY_SEGMENT_FINISHED  | DELETE_SEGMENT_STARTED  | DELETE_SEGMENT_STARTED  |
+ * |  Method / SegmentState          | COPY_SEGMENT_STARTED | COPY_SEGMENT_FINISHED  | DELETE_SEGMENT_STARTED  | DELETE_SEGMENT_FINISHED |
  * |---------------------------------+----------------------+------------------------+-------------------------+-------------------------|
  * | remoteLogSegmentMetadata        |        No            |           Yes          |          No             |           No            |
  * | (int leaderEpoch, long offset)  |                      |                        |                         |                         |
