@@ -155,7 +155,7 @@ public class InternalTopicManagerTest {
     public void shouldOnlyRetryNotSuccessfulFuturesDuringSetup() {
         final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
         final StreamsConfig streamsConfig = new StreamsConfig(config);
-        final InternalTopicManager topicManager = new InternalTopicManager(Time.SYSTEM, admin, streamsConfig);
+        final InternalTopicManager topicManager = new InternalTopicManager(new MockTime(), admin, streamsConfig);
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFailFuture = new KafkaFutureImpl<>();
         createTopicFailFuture.completeExceptionally(new TopicExistsException("exists"));
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicSuccessfulFuture = new KafkaFutureImpl<>();
