@@ -510,7 +510,7 @@ class LogLoader(dir: File,
       // materialization of the iterator here, so that results of the iteration remain valid and
       // deterministic.
       val toDelete = segmentsToDelete.toList
-      LogRecovery.logReason(this, toDelete)
+      info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
       toDelete.foreach { segment =>
         components.segments.remove(segment.baseOffset)
       }

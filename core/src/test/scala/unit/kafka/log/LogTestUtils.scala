@@ -24,12 +24,11 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, Record, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import scala.collection.Iterable
-import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 object LogTestUtils {
@@ -97,7 +96,8 @@ object LogTestUtils {
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
-      topicId = topicId)
+      topicId = topicId,
+      keepPartitionMetadataFile = true)
   }
 
   /**
@@ -165,20 +165,6 @@ object LogTestUtils {
     nextOffset = writeNormalSegment(nextOffset)
     nextOffset = writeOverflowSegment(nextOffset)
     writeNormalSegment(nextOffset)
-  }
-
-  def allRecords(log: Log): List[Record] = {
-    val recordsFound = ListBuffer[Record]()
-    for (logSegment <- log.logSegments) {
-      for (batch <- logSegment.log.batches.asScala) {
-        recordsFound ++= batch.iterator().asScala
-      }
-    }
-    recordsFound.toList
-  }
-
-  def verifyRecordsInLog(log: Log, expectedRecords: List[Record]): Unit = {
-    assertEquals(expectedRecords, allRecords(log))
   }
 
   /* extract all the keys from a log */
