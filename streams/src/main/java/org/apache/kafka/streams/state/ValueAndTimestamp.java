@@ -63,7 +63,7 @@ public final class ValueAndTimestamp<V> {
         return valueAndTimestamp == null ? null : valueAndTimestamp.value();
     }
 
-    public static <V> ValueAndTimestamp<V> make(Record<?,V> record) {
+    public static <V> ValueAndTimestamp<V> make(final Record<?, V> record) {
         return record.value() == null ? null : new ValueAndTimestamp<>(record.value(), record.timestamp());
     }
 

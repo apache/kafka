@@ -164,7 +164,7 @@ class KTableFilter<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V>
         }
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
         }
 

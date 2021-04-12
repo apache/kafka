@@ -18,9 +18,11 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -54,7 +56,7 @@ public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K,
     }
 
 
-    private class KStreamReduceProcessor implements Processor<K, V, K, Change<V>> {
+    private class KStreamReduceProcessor extends ContextualProcessor<K, V, K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
         private TupleChangeForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
@@ -73,13 +75,16 @@ public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K,
         }
 
         @Override
-        public void process(Record<K, V> record) {
+        public void process(final Record<K, V> record) {
             // If the key or value is null we don't need to proceed
             if (record.key() == null || record.value() == null) {
-//                LOG.warn(
-//                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    key, value, context().topic(), context().partition(), context().offset()
-//                );
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    record.key(), record.value(),
+                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                );
                 droppedRecordsSensor.record();
                 return;
             }
@@ -123,7 +128,7 @@ public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K,
         private TimestampedKeyValueStore<K, V> store;
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             store = context.getStateStore(storeName);
         }
 

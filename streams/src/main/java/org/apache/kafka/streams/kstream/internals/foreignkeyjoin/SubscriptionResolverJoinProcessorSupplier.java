@@ -81,7 +81,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
             }
 
             @Override
-            public void process(Record<K, SubscriptionResponseWrapper<VO>> record) {
+            public void process(final Record<K, SubscriptionResponseWrapper<VO>> record) {
                 if (record.value().getVersion() != SubscriptionResponseWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
                     //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for

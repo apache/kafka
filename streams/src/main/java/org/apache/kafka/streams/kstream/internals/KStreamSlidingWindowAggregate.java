@@ -107,7 +107,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
 
 
         @Override
-        public void process(Record<K, V> record) {
+        public void process(final Record<K, V> record) {
             if (record.key() == null || record.value() == null) {
                 //TODO
 //                log.warn(
@@ -526,7 +526,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggregat
 
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             windowStore = context.getStateStore(storeName);
         }
 

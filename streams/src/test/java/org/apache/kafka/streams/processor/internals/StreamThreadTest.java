@@ -1815,7 +1815,7 @@ public class StreamThreadTest {
         final ProcessorSupplier<Object, Object, Object, Object> punctuateProcessor =
             () -> new ContextualProcessor<Object, Object, Object, Object>() {
                 @Override
-                public void process(Record<Object, Object> record) {
+                public void process(final Record<Object, Object> record) {
                 }
 
                 @Override

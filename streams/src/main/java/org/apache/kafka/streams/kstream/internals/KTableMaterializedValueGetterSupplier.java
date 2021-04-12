@@ -41,7 +41,7 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements
         private TimestampedKeyValueStore<K, V> store;
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             store = context.getStateStore(storeName);
         }
 

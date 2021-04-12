@@ -23,9 +23,11 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -40,7 +42,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggregateProcessorSupplier<K, Windowed<K>, V, Agg> {
-    private final Logger LOG = LoggerFactory.getLogger(getClass());
+    private final static Logger LOG = LoggerFactory.getLogger(KStreamWindowAggregate.class);
 
     private final String storeName;
     private final Windows<W> windows;
@@ -74,18 +76,19 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
 
-    private class KStreamWindowAggregateProcessor implements Processor<K, V, Windowed<K>, Change<Agg>> {
+    private class KStreamWindowAggregateProcessor extends
+        ContextualProcessor<K, V, Windowed<K>, Change<Agg>> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TupleChangeForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @Override
         public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
-            internalProcessorContext = (InternalProcessorContext) context;
+            final InternalProcessorContext<Windowed<K>, Change<Agg>> internalProcessorContext =
+                (InternalProcessorContext<Windowed<K>, Change<Agg>>) context;
             metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
@@ -104,12 +107,15 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         }
 
         @Override
-        public void process(Record<K, V> record) {
+        public void process(final Record<K, V> record) {
             if (record.key() == null) { //TODO
-//                log.warn(
-//                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    value, context().topic(), context().partition(), context().offset()
-//                );
+                LOG.warn(
+                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    record.value(),
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                );
                 droppedRecordsSensor.record();
                 return;
             }
@@ -148,26 +154,26 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         newAgg,
                         sendOldValues ? oldAgg : null,
                         newTimestamp);
-                } else { //TODO
-//                    log.warn(
-//                        "Skipping record for expired window. " +
-//                            "key=[{}] " +
-//                            "topic=[{}] " +
-//                            "partition=[{}] " +
-//                            "offset=[{}] " +
-//                            "timestamp=[{}] " +
-//                            "window=[{},{}) " +
-//                            "expiration=[{}] " +
-//                            "streamTime=[{}]",
-//                        key,
-//                        context().topic(),
-//                        context().partition(),
-//                        context().offset(),
-//                        context().timestamp(),
-//                        windowStart, windowEnd,
-//                        closeTime,
-//                        observedStreamTime
-//                    );
+                } else {
+                    LOG.warn(
+                        "Skipping record for expired window. " +
+                            "key=[{}] " +
+                            "topic=[{}] " +
+                            "partition=[{}] " +
+                            "offset=[{}] " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}) " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        record.key(),
+                        context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                        context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                        context().recordMetadata().map(RecordMetadata::offset).orElse(-1L),
+                        record.timestamp(),
+                        windowStart, windowEnd,
+                        closeTime,
+                        observedStreamTime
+                    );
                     lateRecordDropSensor.record();
                 }
             }
@@ -195,7 +201,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             windowStore = context.getStateStore(storeName);
         }
 

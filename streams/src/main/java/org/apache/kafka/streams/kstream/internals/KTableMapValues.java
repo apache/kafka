@@ -155,7 +155,7 @@ class KTableMapValues<K, VIn, VOut> implements KTableChangeProcessorSupplier<K, 
         }
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
         }
 

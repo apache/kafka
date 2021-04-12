@@ -740,7 +740,7 @@ public class InternalTopologyBuilder {
             if (nodeFactory instanceof SourceNodeFactory) {
                 sourceNodes.add((SourceNodeFactory<?, ?>) nodeFactory);
             } else if (nodeFactory instanceof ProcessorNodeFactory) {
-                sourceNodes.addAll(findSourcesForProcessorPredecessors((nodeFactory).predecessors));
+                sourceNodes.addAll(findSourcesForProcessorPredecessors(nodeFactory.predecessors));
             }
         }
         return sourceNodes;

@@ -76,7 +76,7 @@ public class KTableAggregate<K, V, T> implements KTableChangeProcessorSupplier<K
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(Record<K, Change<V>> record) {
+        public void process(final Record<K, Change<V>> record) {
             // the keys should never be null
             if (record.key() == null) {
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");

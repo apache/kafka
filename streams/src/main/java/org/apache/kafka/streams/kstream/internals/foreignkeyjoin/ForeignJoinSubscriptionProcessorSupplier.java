@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -82,14 +83,17 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(Record<KO, Change<VO>> record) {
+        public void process(final Record<KO, Change<VO>> record) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (record.key() == null) {
-//                LOG.warn(
-//                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    value, context().topic(), context().partition(), context().offset()
-//                );
+                LOG.warn(
+                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    record.value(),
+                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                );
                 droppedRecordsSensor.record();
                 return;
             }

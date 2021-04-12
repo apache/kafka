@@ -27,7 +27,7 @@ public class TableProcessorNodeTest {
     private static class TestProcessor implements Processor<String, String, String, String> {
 
         @Override
-        public void process(Record<String, String> record) {
+        public void process(final Record<String, String> record) {
         }
     }
 

@@ -73,7 +73,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                     private TimeOrderedKeyValueBuffer<K, V> buffer;
 
                     @Override
-                    public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+                    public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
                         buffer = requireNonNull(context.getStateStore(storeName));
@@ -211,7 +211,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
         }
 
         @Override
-        public void process(Record<K, Change<V>> record) {
+        public void process(final Record<K, Change<V>> record) {
             observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
             buffer(record.key(), record.value());
             enforceConstraints();

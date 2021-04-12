@@ -43,7 +43,7 @@ class TupleChangeCacheFlushListener<K, V> implements CacheFlushListener<K, Value
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            Record<K, Change<V>> record = new Record<>(
+            final Record<K, Change<V>> record = new Record<>(
                 key,
                 new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
                 newValue != null ? newValue.timestamp() : timestamp);

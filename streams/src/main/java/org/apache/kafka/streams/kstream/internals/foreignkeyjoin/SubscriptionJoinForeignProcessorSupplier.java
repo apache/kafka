@@ -66,7 +66,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
 
             @Override
             public void process(
-                Record<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> record) {
+                final Record<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> record) {
                 Objects.requireNonNull(record.key(), "This processor should never see a null key.");
                 Objects.requireNonNull(record.value(),
                     "This processor should never see a null value.");

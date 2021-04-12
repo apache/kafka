@@ -63,7 +63,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements
         }
 
         @Override
-        public void process(KIn key, VIn value) {
+        public void process(final KIn key, final VIn value) {
             final Iterable<VOut> transformedValues =
                 valueTransformer.transform(key, value);
             if (transformedValues != null) {

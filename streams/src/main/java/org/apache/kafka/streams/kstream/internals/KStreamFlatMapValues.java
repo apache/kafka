@@ -37,7 +37,7 @@ class KStreamFlatMapValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn
 
     private class KStreamFlatMapValuesProcessor extends AbstractProcessor<KIn, VIn> {
         @Override
-        public void process(KIn key, VIn value) {
+        public void process(final KIn key, final VIn value) {
             final Iterable<? extends VOut> newValues = mapper.apply(key, value);
             for (final VOut v : newValues) {
                 context().forward(key, v);

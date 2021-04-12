@@ -748,7 +748,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             subTopologySourceNodes = this.subTopologySourceNodes;
         }
 
-        ProcessorSupplier<K, V, K, Change<V>> tableSource = new KTableSource<>(
+        final ProcessorSupplier<K, V, K, Change<V>> tableSource = new KTableSource<>(
             materializedInternal.storeName(),
             materializedInternal.queryableStoreName()
         );

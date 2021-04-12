@@ -56,7 +56,7 @@ public class GraphGraceSearchUtilTest {
                     public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
-                    public void process(Record<String, Long> record) {
+                    public void process(final Record<String, Long> record) {
                     }
 
                     @Override
@@ -141,7 +141,7 @@ public class GraphGraceSearchUtilTest {
                     public void init(final ProcessorContext<String, Long> context) {}
 
                     @Override
-                    public void process(Record<String, Long> record) {
+                    public void process(final Record<String, Long> record) {
                     }
 
                     @Override

@@ -110,7 +110,7 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
         }
 
         @Override
-        public void process(Record<K, Change<V>> record) {
+        public void process(final Record<K, Change<V>> record) {
             final V1 newValue = valueTransformer.transform(record.key(), record.value().newValue);
 
             if (queryableName == null) {
@@ -141,7 +141,7 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
         }
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
 //            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }

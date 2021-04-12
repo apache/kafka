@@ -85,7 +85,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(Record<K, Change<V>> record) {
+        public void process(final Record<K, Change<V>> record) {
             // the original key should never be null
             if (record.key() == null) {
                 throw new StreamsException(
@@ -123,7 +123,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements
 
 
         @Override
-        public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
         }
 

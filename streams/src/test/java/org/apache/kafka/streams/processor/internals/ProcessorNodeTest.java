@@ -69,7 +69,7 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void process(Record<Object, Object> record) {
+        public void process(final Record<Object, Object> record) {
             throw new RuntimeException();
         }
 
@@ -85,7 +85,7 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void process(Record<Object, Object> record) {
+        public void process(final Record<Object, Object> record) {
         }
 
 

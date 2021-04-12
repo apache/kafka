@@ -267,7 +267,7 @@ public class RepartitionOptimizingTest {
         }
 
         @Override
-        public void process(Record<String, String> record) {
+        public void process(final Record<String, String> record) {
             valueList.add(record.value());
         }
     }

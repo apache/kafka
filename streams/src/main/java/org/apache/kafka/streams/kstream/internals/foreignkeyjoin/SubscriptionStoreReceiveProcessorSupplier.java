@@ -74,7 +74,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
             }
 
             @Override
-            public void process(Record<KO, SubscriptionWrapper<K>> record) {
+            public void process(final Record<KO, SubscriptionWrapper<K>> record) {
                 if (record.key() == null) {
 //                    LOG.warn(
 //                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",

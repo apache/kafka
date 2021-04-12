@@ -52,7 +52,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
             return new KTableValueGetter<K, V>() {
 
                 @Override
-                public <KParent, VParent> void init(ProcessorContext<KParent, VParent> context) {
+                public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
                 }
 
                 @Override

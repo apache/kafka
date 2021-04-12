@@ -97,7 +97,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
         }
 
         @Override
-        public void process(Record<K, Change<V>> record) {
+        public void process(final Record<K, Change<V>> record) {
             final long[] currentHash = record.value().newValue == null ?
                 null :
                 Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));

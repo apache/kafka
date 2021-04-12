@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -99,11 +100,12 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V, K, Change<V>>
         public void process(final Record<K, V> record) {
             // if the key is null, then ignore the record
             if (record.key() == null) {
-                // TODO check if context needed for logging
-//                LOG.warn(
-//                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
-//                    context().topic(), context().partition(), context().offset()
-//                );
+                LOG.warn(
+                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
+                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                );
                 droppedRecordsSensor.record();
                 return;
             }

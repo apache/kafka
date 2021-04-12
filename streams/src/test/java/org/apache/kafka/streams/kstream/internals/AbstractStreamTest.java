@@ -123,7 +123,7 @@ public class AbstractStreamTest {
 
         private class ExtendedKStreamDummyProcessor extends ContextualProcessor<K, V, K, V> {
             @Override
-            public void process(Record<K, V> record) {
+            public void process(final Record<K, V> record) {
                 // flip a coin and filter
                 if (rand.nextBoolean()) {
                     context().forward(record);
