@@ -56,7 +56,7 @@ public class KTableMapValuesTest {
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
-                              final MockProcessorSupplier<String, Integer, String,Integer> supplier) {
+                              final MockProcessorSupplier<String, Integer, String, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);

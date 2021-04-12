@@ -145,7 +145,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         valueGetterSupplier.put("lhs1", "lhsValue");
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue"), 0));
-        List<CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
+        final List<CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record().key(), is("lhs1"));
         assertThat(forwarded.get(0).record().value(), is("(lhsValue,rhsValue)"));

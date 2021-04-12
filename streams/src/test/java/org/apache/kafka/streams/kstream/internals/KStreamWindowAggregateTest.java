@@ -180,7 +180,7 @@ public class KStreamWindowAggregateTest {
             inputTopic1.pipeInput("D", "4", 3L);
             inputTopic1.pipeInput("A", "1", 9L);
 
-            List<? extends MockProcessor<Windowed<String>, String, ?, ?>> processors = supplier.capturedProcessors(3);
+            final List<? extends MockProcessor<Windowed<String>, String, ?, ?>> processors = supplier.capturedProcessors(3);
 
             processors.get(0).checkAndClearProcessResult(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1",  0),
