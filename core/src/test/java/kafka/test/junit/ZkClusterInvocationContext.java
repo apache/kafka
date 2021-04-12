@@ -70,7 +70,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[Zk %d] %s", invocationIndex, clusterDesc);
+        return String.format("[%d] Type=ZK, %s", invocationIndex, clusterDesc);
     }
 
     @Override

@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
-@Deprecated
-public class SerializedInternal<K, V> extends org.apache.kafka.streams.kstream.Serialized<K, V> {
-    public SerializedInternal(final org.apache.kafka.streams.kstream.Serialized<K, V> serialized) {
-        super(serialized);
+public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
+
+    private final ForeachAction<K, V> action;
+
+    public ForeachProcessor(final ForeachAction<K, V> action) {
+        this.action = action;
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    @Override
+    public void process(final Record<K, V> record) {
+        action.apply(record.key(), record.value());
     }
 }

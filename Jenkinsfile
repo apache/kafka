@@ -17,14 +17,6 @@
  *
  */
 
-def setupGradle() {
-  // Delete gradle cache to workaround cache corruption bugs, see KAFKA-3167
-  dir('.gradle') {
-    deleteDir()
-  }
-  sh './gradlew -version'
-}
-
 def doValidation() {
   sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
@@ -125,7 +117,6 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             tryStreamsArchetype()
@@ -145,7 +136,6 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
@@ -165,7 +155,6 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 15'
@@ -182,7 +171,6 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
               doTest(env, 'unitTest')
@@ -214,7 +202,6 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             tryStreamsArchetype()
@@ -238,7 +225,6 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
@@ -262,7 +248,6 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 15'
