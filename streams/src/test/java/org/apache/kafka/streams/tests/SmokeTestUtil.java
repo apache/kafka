@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 public class SmokeTestUtil {
 
@@ -45,6 +46,7 @@ public class SmokeTestUtil {
 
             @Override
             public void init(final ProcessorContext<Object, Object> context) {
+                super.init(context);
                 System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 System.out.flush();
                 numRecordsProcessed = 0;
@@ -60,11 +62,12 @@ public class SmokeTestUtil {
                     System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                 }
 
-                if (smallestOffset > context().recordMetadata().get().offset()) {
-                    smallestOffset = context().recordMetadata().get().offset();
+                final long offset = context().recordMetadata().map(RecordMetadata::offset).orElse(-1L);
+                if (smallestOffset > offset) {
+                    smallestOffset = offset;
                 }
-                if (largestOffset < context().recordMetadata().get().offset()) {
-                    largestOffset = context().recordMetadata().get().offset();
+                if (largestOffset < offset) {
+                    largestOffset = offset;
                 }
             }
 
