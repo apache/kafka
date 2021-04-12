@@ -137,6 +137,7 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
+    verbose = true
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
@@ -162,7 +163,8 @@ if (file('.git').exists()) {
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
         'streams/streams-scala/logs/*',
         'licenses/*',
-        '**/generated/**'
+        '**/generated/**',
+        'clients/src/test/resources/serializedData/*'
     ])
   }
 } else {
