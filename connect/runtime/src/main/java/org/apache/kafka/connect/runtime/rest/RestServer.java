@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import javax.servlet.DispatcherType;
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
+import java.net.IDN;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -369,9 +370,33 @@ public class RestServer {
         else if (serverConnector != null && serverConnector.getPort() > 0)
             builder.port(serverConnector.getPort());
 
-        log.info("Advertised URI: {}", builder.build());
+        URI uri = builder.build();
+        validateUriHost(uri);
+        log.info("Advertised URI: {}", uri);
 
-        return builder.build();
+        return uri;
+    }
+
+    /**
+     * Parses the uri and throws a more definitive error
+     * when the internal node to node communication can't happen due to an invalid host name.
+     *
+     * @return
+     */
+    private void validateUriHost(URI uri) {
+        if (uri.getHost() == null) {
+            String host = Utils.getHost(uri.getAuthority());
+            String errorMsg = "Invalid host=" + host + ", in url=" + uri.toString();
+            if (host != null) {
+                try {
+                    IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
+                } catch (IllegalArgumentException e) {
+                    errorMsg += ", doesn't conform to RFC 1123 specification, reason=" + e.getMessage();
+                    throw new ConnectException(errorMsg, e);
+                }
+            }
+            throw new ConnectException(errorMsg);
+        }
     }
 
     /**

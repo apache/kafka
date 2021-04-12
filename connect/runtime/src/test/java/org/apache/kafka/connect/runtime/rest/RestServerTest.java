@@ -29,6 +29,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -60,6 +61,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -183,6 +185,20 @@ public class RestServerTest {
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
+    }
+
+    @Test
+    public void testAdvertisedUriInvalidHost() {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
+        configMap.put(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG, "kafka_connect-0.dev-2");
+        configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        ConnectException exception = assertThrows(ConnectException.class, () -> server.advertisedUrl());
+        assertTrue(exception.getMessage().contains("RFC 1123"));
     }
 
     @Test
