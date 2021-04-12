@@ -14,36 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.kstream;
 
-package org.apache.kafka.controller;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
-import java.io.IOException;
-import java.util.List;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
+    private final ForeachAction<K, V> action;
 
-public final class NoOpSnapshotWriter implements SnapshotWriter {
-    private final long epoch;
-
-    public NoOpSnapshotWriter(long epoch) {
-        this.epoch = epoch;
+    public ForeachProcessor(final ForeachAction<K, V> action) {
+        this.action = action;
     }
 
     @Override
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public boolean writeBatch(List<ApiMessageAndVersion> batch) throws IOException {
-        return true;
-    }
-
-    @Override
-    public void close() {
-    }
-
-    @Override
-    public void completeSnapshot() throws IOException {
+    public void process(final Record<K, V> record) {
+        action.apply(record.key(), record.value());
     }
 }

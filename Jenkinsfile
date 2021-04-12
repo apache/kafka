@@ -65,6 +65,7 @@ def job = {
     }
 
 
+<<<<<<< HEAD
     stage("Compile and validate") {
         sh "./gradlew clean assemble publishToMavenLocal spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                 "--no-daemon --stacktrace -PxmlSpotBugsReport=true"
@@ -80,10 +81,69 @@ def job = {
           publishStep('artifactory_snapshots_settings')
         } else if (config.isPreviewJob) {
           publishStep('artifactory_preview_release_settings')
+=======
+        stage('JDK 8 and Scala 2.12') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+        }
+
+        stage('JDK 11 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
+
+        stage('JDK 15 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_15_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 15'
+          }
+>>>>>>> apache/trunk
         }
       }
     }
 
+<<<<<<< HEAD
     if (config.publish && config.isDevJob && !config.isReleaseJob && !config.isPrJob) {
         stage("Start Downstream Builds") {
             def downstreamBranch = kafkaMuckrakeVersionMap[env.BRANCH_NAME]
@@ -93,9 +153,57 @@ def job = {
                     propagate: false
                 )
             }
+=======
+        stage('ARM') {
+          agent { label 'arm4' }
+          options {
+            timeout(time: 2, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+              doTest(env, 'unitTest')
+            }
+            echo 'Skipping Kafka Streams archetype test for ARM build'
+          }
+        }
+        
+        // To avoid excessive Jenkins resource usage, we only run the stages
+        // above at the PR stage. The ones below are executed after changes
+        // are pushed to trunk and/or release branches. We achieve this via
+        // the `when` clause.
+        
+        stage('JDK 8 and Scala 2.13') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+>>>>>>> apache/trunk
         }
     }
 
+<<<<<<< HEAD
     def runTestsStepName = "Step run-tests"
     def downstreamBuildsStepName = "Step cp-downstream-builds"
     def testTargets = [
@@ -130,12 +238,78 @@ def job = {
                     return "skip downStreamValidation"
                 }
             }
+=======
+        stage('JDK 11 and Scala 2.12') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+>>>>>>> apache/trunk
         }
     ]
 
+<<<<<<< HEAD
     result = parallel testTargets
     // combine results of the two targets into one result string
     return result.runTestsStepName + "\n" + result.downstreamBuildsStepName
+=======
+        stage('JDK 15 and Scala 2.12') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_15_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 15'
+          }
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      node('ubuntu') {
+        script {
+          if (!isChangeRequest(env)) {
+            step([$class: 'Mailer',
+                 notifyEveryUnstableBuild: true,
+                 recipients: "dev@kafka.apache.org",
+                 sendToIndividuals: false])
+          }
+        }
+      }
+    }
+  }
+>>>>>>> apache/trunk
 }
 
 runJob config, job

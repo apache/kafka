@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -197,6 +198,11 @@ public interface ReplicatedLog extends Closeable {
      * Return the topic partition associated with the log.
      */
     TopicPartition topicPartition();
+
+    /**
+     * Return the topic ID associated with the log.
+     */
+    Uuid topicId();
 
     /**
      * Truncate to an offset and epoch.
