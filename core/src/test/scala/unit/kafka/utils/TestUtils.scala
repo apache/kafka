@@ -878,6 +878,28 @@ object TestUtils extends Logging {
     throw new RuntimeException("unexpected error")
   }
 
+  /**
+   * Invoke `assertions` until no AssertionErrors are thrown or `waitTime` elapses.
+   *
+   * This method is useful in cases where there may be some expected delay in a particular test condition that is
+   * otherwise difficult to poll for. `computeUntilTrue` and `waitUntilTrue` should be preferred in cases where we can
+   * easily wait on a condition before evaluating the assertions.
+   */
+  def tryUntilNoAssertionError(waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(assertions: => Unit) = {
+    val (error, success) = TestUtils.computeUntilTrue({
+      try {
+        assertions
+        None
+      } catch {
+        case ae: AssertionError => Some(ae)
+      }
+    }, waitTime = waitTime, pause = pause)(_.isEmpty)
+
+    if (!success) {
+      throw error.get
+    }
+  }
+
   def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
     server.replicaManager.onlinePartition(new TopicPartition(topic, partitionId)).exists(_.leaderLogIfLocal.isDefined)
   }
