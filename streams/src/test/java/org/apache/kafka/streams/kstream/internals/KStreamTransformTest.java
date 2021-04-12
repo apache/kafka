@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.junit.Assert.assertEquals;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Properties;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
@@ -30,15 +35,9 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Properties;
-
-import static org.junit.Assert.assertEquals;
 
 public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
@@ -73,7 +72,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer, Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, Integer> processor = new MockOldProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
@@ -134,7 +133,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer, Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, Integer> processor = new MockOldProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 

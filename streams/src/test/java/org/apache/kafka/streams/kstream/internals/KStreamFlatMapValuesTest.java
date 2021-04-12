@@ -16,27 +16,25 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.List;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+import static org.junit.Assert.assertArrayEquals;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
-
-import static org.junit.Assert.assertArrayEquals;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.test.MockOldProcessorSupplier;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Test;
 
 public class KStreamFlatMapValuesTest {
     private final String topicName = "topic";
@@ -57,7 +55,7 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String, Integer, List<String>> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream.flatMapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -93,7 +91,7 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String, Integer, List<String>> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
         stream.flatMapValues(mapper).process(supplier);
 

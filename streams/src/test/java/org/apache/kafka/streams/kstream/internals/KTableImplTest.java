@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.util.Arrays.asList;
+import static org.easymock.EasyMock.mock;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Properties;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -46,26 +58,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Properties;
-
-import static java.util.Arrays.asList;
-import static org.easymock.EasyMock.mock;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings("unchecked")
 public class KTableImplTest {
@@ -91,7 +90,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        final MockProcessorSupplier<String, Object, String, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<String, Object> supplier = new MockOldProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -115,7 +114,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<? extends MockProcessor<String, Object, ?, ?>> processors = supplier.capturedProcessors(4);
+        final List<? extends MockOldProcessor<String, Object>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -159,7 +158,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed, Materialized.as("fred"));
 
-        final MockProcessorSupplier<String, Object, String, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<String, Object> supplier = new MockOldProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -183,7 +182,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<? extends MockProcessor<String, Object, ?, ?>> processors = supplier.capturedProcessors(4);
+        final List<? extends MockOldProcessor<String, Object>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),

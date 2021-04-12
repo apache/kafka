@@ -16,6 +16,30 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -24,6 +48,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -40,46 +65,20 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
-
-import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
@@ -117,7 +116,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -173,7 +172,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockReducer.STRING_ADDER,
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -231,7 +230,7 @@ public class KStreamSlidingWindowAggregateTest {
                 Materialized.as(storeSupplier)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -403,7 +402,7 @@ public class KStreamSlidingWindowAggregateTest {
                 Materialized.as(storeSupplier2)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         table2.toStream().process(supplier);
@@ -419,7 +418,7 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("B", "2", 11L);
             inputTopic1.pipeInput("C", "3", 12L);
 
-            final List<MockProcessor<Windowed<String>, String, Windowed<String>, String>> processors = supplier.capturedProcessors(3);
+            final List<MockOldProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
 
             processors.get(0).checkAndClearProcessResult(
                     // left windows created by the first set of records to table 1
@@ -504,7 +503,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
             );
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -555,7 +554,7 @@ public class KStreamSlidingWindowAggregateTest {
                 MockAggregator.TOSTRING_ADDER,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
             );
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -607,7 +606,7 @@ public class KStreamSlidingWindowAggregateTest {
                 Materialized.as(storeSupplier)
             );
 
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -812,7 +811,7 @@ public class KStreamSlidingWindowAggregateTest {
                 },
                 Materialized.as(storeSupplier)
             );
-        final MockProcessorSupplier<Windowed<String>, String, Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Windowed<String>, String> supplier = new MockOldProcessorSupplier<>();
         table.toStream().process(supplier);
         final long seed = new Random().nextLong();
         final Random shuffle = new Random(seed);

@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -58,7 +58,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<String, String> supplier = new MockOldProcessorSupplier<>();
         stream
             .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -73,7 +73,7 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldInnerJoinWithStream() {
-        final MockProcessorSupplier<String, String, String, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<String, String> supplier = new MockOldProcessorSupplier<>();
         stream
             .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
             .process(supplier);
@@ -86,7 +86,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
-                            final MockProcessorSupplier<String, String, String, String> supplier) {
+                            final MockOldProcessorSupplier<String, String> supplier) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

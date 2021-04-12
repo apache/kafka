@@ -45,8 +45,8 @@ import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -62,11 +62,11 @@ public class KStreamKTableJoinTest {
     private TestInputTopic<Integer, String> inputTableTopic;
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String, ?, ?> processor;
+    private MockOldProcessor<Integer, String> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-    private final MockProcessorSupplier<Integer, String, Integer, String> supplier = new MockProcessorSupplier<>();
+    private final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
     @Before
     public void setUp() {

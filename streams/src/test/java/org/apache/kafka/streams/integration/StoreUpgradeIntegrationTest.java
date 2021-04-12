@@ -16,20 +16,29 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -50,16 +59,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
-
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 @Category({IntegrationTest.class})
 public class StoreUpgradeIntegrationTest {
@@ -954,112 +953,114 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    private static class KeyValueProcessor implements Processor<Integer, Integer, Integer, Integer> {
+    private static class KeyValueProcessor implements Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
         @Override
-        public void init(final ProcessorContext<Integer, Integer> context) {
+        public void init(final ProcessorContext context) {
             store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Record<Integer, Integer> record) {
+        public void process(final Integer key, final Integer value) {
             final long newCount;
 
-            final Long oldCount = store.get(record.key());
+            final Long oldCount = store.get(key);
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(record.key(), newCount);
+            store.put(key, newCount);
         }
 
         @Override
         public void close() {}
     }
 
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer, Integer, Integer> {
+    private static class TimestampedKeyValueProcessor extends AbstractProcessor<Integer, Integer> {
         private TimestampedKeyValueStore<Integer, Long> store;
 
         @Override
-        public void init(final ProcessorContext<Integer, Integer> context) {
+        public void init(final ProcessorContext context) {
+            super.init(context);
             store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Record<Integer, Integer> record) {
+        public void process(final Integer key, final Integer value) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(record.key());
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(key);
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = record.timestamp();
+                newTimestamp = context.timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
             }
 
-            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
+            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp));
         }
 
         @Override
         public void close() {}
     }
 
-    private static class WindowedProcessor implements Processor<Integer, Integer, Integer, Integer> {
+    private static class WindowedProcessor implements Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
         @Override
-        public void init(final ProcessorContext<Integer, Integer> context) {
+        public void init(final ProcessorContext context) {
             store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Record<Integer, Integer> record) {
+        public void process(final Integer key, final Integer value) {
             final long newCount;
 
-            final Long oldCount = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
+            final Long oldCount = store.fetch(key, key < 10 ? 0L : 100000L);
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(record.key(), newCount, record.key() < 10 ? 0L : 100000L);
+            store.put(key, newCount, key < 10 ? 0L : 100000L);
         }
 
         @Override
         public void close() {}
     }
 
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer, Integer, Integer> {
+    private static class TimestampedWindowedProcessor extends AbstractProcessor<Integer, Integer> {
         private TimestampedWindowStore<Integer, Long> store;
 
         @Override
-        public void init(final ProcessorContext<Integer, Integer> context) {
+        public void init(final ProcessorContext context) {
+            super.init(context);
             store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Record<Integer, Integer> record) {
+        public void process(final Integer key, final Integer value) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(key, key < 10 ? 0L : 100000L);
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = record.timestamp();
+                newTimestamp = context().timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context().timestamp());
             }
 
-            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
+            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp), key < 10 ? 0L : 100000L);
         }
 
         @Override

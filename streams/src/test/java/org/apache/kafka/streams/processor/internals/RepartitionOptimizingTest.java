@@ -44,8 +44,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -258,7 +257,7 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    private static class SimpleProcessor implements Processor<String, String, String, String> {
+    private static class SimpleProcessor extends AbstractProcessor<String, String> {
 
         final List<String> valueList;
 
@@ -267,8 +266,8 @@ public class RepartitionOptimizingTest {
         }
 
         @Override
-        public void process(final Record<String, String> record) {
-            valueList.add(record.value());
+        public void process(final String key, final String value) {
+            valueList.add(value);
         }
     }
 

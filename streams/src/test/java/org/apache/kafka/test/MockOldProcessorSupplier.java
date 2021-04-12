@@ -16,38 +16,36 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.PunctuationType;
+import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
 
-import static org.junit.Assert.assertEquals;
-
-public class MockProcessorSupplier<KIn, VIn, KOut, VOut> implements
-    ProcessorSupplier<KIn, VIn, KOut, VOut> {
+public class MockOldProcessorSupplier<KIn, VIn> implements ProcessorSupplier<KIn, VIn> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
-    private final List<MockProcessor<KIn, VIn, KOut, VOut>> processors = new ArrayList<>();
+    private final List<MockOldProcessor<KIn, VIn>> processors = new ArrayList<>();
 
-    public MockProcessorSupplier() {
+    public MockOldProcessorSupplier() {
         this(-1L);
     }
 
-    public MockProcessorSupplier(final long scheduleInterval) {
+    public MockOldProcessorSupplier(final long scheduleInterval) {
         this(scheduleInterval, PunctuationType.STREAM_TIME);
     }
 
-    public MockProcessorSupplier(final long scheduleInterval, final PunctuationType punctuationType) {
+    public MockOldProcessorSupplier(final long scheduleInterval, final PunctuationType punctuationType) {
         this.scheduleInterval = scheduleInterval;
         this.punctuationType = punctuationType;
     }
 
     @Override
-    public Processor<KIn, VIn, KOut, VOut> get() {
-        final MockProcessor<KIn, VIn, KOut, VOut> processor = new MockProcessor<>(punctuationType, scheduleInterval);
+    public Processor<KIn, VIn> get() {
+        final MockOldProcessor<KIn, VIn> processor = new MockOldProcessor<>(punctuationType, scheduleInterval);
 
         // to keep tests simple, ignore calls from ApiUtils.checkSupplier
         if (!StreamsTestUtils.isCheckSupplierCall()) {
@@ -58,12 +56,16 @@ public class MockProcessorSupplier<KIn, VIn, KOut, VOut> implements
     }
 
     // get the captured processor assuming that only one processor gets returned from this supplier
-    public MockProcessor<KIn, VIn, KOut, VOut> theCapturedProcessor() {
+    public MockOldProcessor<KIn, VIn> theCapturedProcessor() {
         return capturedProcessors(1).get(0);
     }
 
+    public int capturedProcessorsCount() {
+        return processors.size();
+    }
+
         // get the captured processors with the expected number
-    public List<MockProcessor<KIn, VIn, KOut, VOut>> capturedProcessors(final int expectedNumberOfProcessors) {
+    public List<MockOldProcessor<KIn, VIn>> capturedProcessors(final int expectedNumberOfProcessors) {
         assertEquals(expectedNumberOfProcessors, processors.size());
 
         return processors;

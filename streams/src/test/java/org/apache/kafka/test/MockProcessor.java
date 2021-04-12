@@ -54,14 +54,6 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
         delegate.checkAndClearProcessResult(expected);
     }
 
-    public void requestCommit() {
-        delegate.requestCommit();
-    }
-
-    public void checkEmptyAndClearProcessResult() {
-        delegate.checkEmptyAndClearProcessResult();
-    }
-
     public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
         delegate.checkAndClearPunctuateResult(type, expected);
     }

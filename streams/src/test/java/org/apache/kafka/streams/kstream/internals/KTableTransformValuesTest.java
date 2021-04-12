@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.TestUtils;
@@ -77,7 +77,7 @@ public class KTableTransformValuesTest {
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
     private TopologyTestDriver driver;
-    private MockProcessorSupplier<String, String, String, String> capture;
+    private MockOldProcessorSupplier<String, String> capture;
     private StreamsBuilder builder;
     @Mock(MockType.NICE)
     private KTableImpl<String, String, String> parent;
@@ -104,7 +104,7 @@ public class KTableTransformValuesTest {
 
     @Before
     public void setUp() {
-        capture = new MockProcessorSupplier<>();
+        capture = new MockOldProcessorSupplier<>();
         builder = new StreamsBuilder();
     }
 

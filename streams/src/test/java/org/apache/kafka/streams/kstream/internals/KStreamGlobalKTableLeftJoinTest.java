@@ -28,8 +28,8 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -51,7 +51,7 @@ public class KStreamGlobalKTableLeftJoinTest {
     private final String globalTableTopic = "globalTableTopic";
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String, String, String> processor;
+    private MockOldProcessor<Integer, String> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
 
@@ -63,7 +63,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         final GlobalKTable<String, String> table; // value of stream optionally contains key of table
         final KeyValueMapper<Integer, String, String> keyMapper;
 
-        final MockProcessorSupplier<Integer, String, String, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         final Consumed<Integer, String> streamConsumed = Consumed.with(Serdes.Integer(), Serdes.String());
         final Consumed<String, String> tableConsumed = Consumed.with(Serdes.String(), Serdes.String());
         stream = builder.stream(streamTopic, streamConsumed);

@@ -46,7 +46,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
  * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
- * {@link #process(ProcessorSupplier, String...) process(...)},
+ * {@link #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...) process(...)},
  * {@link #transform(TransformerSupplier, String...) transform(...)}, and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
  *
@@ -694,28 +694,28 @@ public interface KStream<K, V> {
 
     /**
      * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * This is a stateless record-by-record operation (cf. {@link #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)}).
      * Note that this is a terminal operation that returns void.
      *
      * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
      * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * This is a stateless record-by-record operation (cf. {@link #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)}).
      * Note that this is a terminal operation that returns void.
      *
      * @param action an action to perform on each record
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     void foreach(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
      * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * This is a stateless record-by-record operation (cf. {@link #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)}).
      * <p>
      * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
      * and returns an unchanged stream.
@@ -723,14 +723,14 @@ public interface KStream<K, V> {
      * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
      *
      * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      * @return itself
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
 
     /**
      * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * This is a stateless record-by-record operation (cf. {@link #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)}).
      * <p>
      * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
      * and returns an unchanged stream.
@@ -739,7 +739,7 @@ public interface KStream<K, V> {
      *
      * @param action an action to perform on each record
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      * @return itself
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
@@ -3199,7 +3199,7 @@ public interface KStream<K, V> {
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
@@ -3327,7 +3327,7 @@ public interface KStream<K, V> {
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final Named named,
@@ -3454,7 +3454,7 @@ public interface KStream<K, V> {
      * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                            final String... stateStoreNames);
@@ -3581,7 +3581,7 @@ public interface KStream<K, V> {
      * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
+     * @see #process(org.apache.kafka.streams.processor.ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                            final Named named,
@@ -4713,10 +4713,4 @@ public interface KStream<K, V> {
                  final Named named,
                  final String... stateStoreNames);
 
-    <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,
-        final String... stateStoreNames);
-
-    <KOut, VOut> void process(final ProcessorSupplier<? super K, ? super V, ? super KOut, ? super VOut> processorSupplier,
-        final Named named,
-        final String... stateStoreNames);
 }

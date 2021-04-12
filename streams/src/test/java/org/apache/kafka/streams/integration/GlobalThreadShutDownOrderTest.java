@@ -30,9 +30,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
@@ -197,7 +196,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private class GlobalStoreProcessor implements Processor<String, Long, String, Long> {
+    private class GlobalStoreProcessor implements Processor<String, Long> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;
@@ -207,12 +206,12 @@ public class GlobalThreadShutDownOrderTest {
         }
 
         @Override
-        public void init(final ProcessorContext<String, Long> context) {
+        public void init(final ProcessorContext context) {
             store = context.getStateStore(storeName);
         }
 
         @Override
-        public void process(final Record<String, Long> record) {
+        public void process(final String key, final Long value) {
             firstRecordProcessed = true;
         }
 

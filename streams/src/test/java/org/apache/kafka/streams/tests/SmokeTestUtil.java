@@ -24,28 +24,26 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 public class SmokeTestUtil {
 
     final static int END = Integer.MAX_VALUE;
 
-    static ProcessorSupplier<Object, Object, Object, Object> printProcessorSupplier(final String topic) {
+    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");
     }
 
-    static ProcessorSupplier<Object, Object, Object, Object> printProcessorSupplier(final String topic, final String name) {
-        return () -> new ContextualProcessor<Object, Object, Object, Object>() {
+    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
+        return () -> new AbstractProcessor<Object, Object>() {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
             private long largestOffset = Long.MIN_VALUE;
 
             @Override
-            public void init(final ProcessorContext<Object, Object> context) {
+            public void init(final ProcessorContext context) {
                 super.init(context);
                 System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 System.out.flush();
@@ -55,14 +53,14 @@ public class SmokeTestUtil {
             }
 
             @Override
-            public void process(final Record<Object, Object> record) {
+            public void process(final Object key, final Object value) {
                 numRecordsProcessed++;
                 if (numRecordsProcessed % 100 == 0) {
                     System.out.printf("%s: %s%n", name, Instant.now());
                     System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                 }
 
-                final long offset = context().recordMetadata().map(RecordMetadata::offset).orElse(-1L);
+                final long offset = context().offset();
                 if (smallestOffset > offset) {
                     smallestOffset = offset;
                 }

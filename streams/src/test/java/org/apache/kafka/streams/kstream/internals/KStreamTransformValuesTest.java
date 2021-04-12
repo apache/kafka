@@ -32,7 +32,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -43,7 +43,7 @@ import org.junit.runner.RunWith;
 @RunWith(EasyMockRunner.class)
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
-    private final MockProcessorSupplier<Integer, Integer, Integer, Integer> supplier = new MockProcessorSupplier<>();
+    private final MockOldProcessorSupplier<Integer, Integer> supplier = new MockOldProcessorSupplier<>();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private ProcessorContext context;
