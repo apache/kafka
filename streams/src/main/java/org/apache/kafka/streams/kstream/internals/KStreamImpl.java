@@ -61,6 +61,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.kstream.ForeachProcessor;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -406,7 +407,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FOREACH_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamPeek<>(action, false), name);
+            new ProcessorParameters<>(() -> new ForeachProcessor<>(action), name);
         final ProcessorGraphNode<? super K, ? super V> foreachNode =
             new ProcessorGraphNode<>(name, processorParameters);
 
@@ -426,7 +427,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PEEK_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamPeek<>(action, true), name);
+            new ProcessorParameters<>(new KStreamPeek<>(action), name);
         final ProcessorGraphNode<? super K, ? super V> peekNode =
             new ProcessorGraphNode<>(name, processorParameters);
 

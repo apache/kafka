@@ -18,28 +18,31 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
-class KStreamFlatMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
-    private final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> mapper;
+    private final KeyValueMapper<? super KIn, ? super VIn, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper;
 
-    KStreamFlatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> mapper) {
+    KStreamFlatMap(final KeyValueMapper<? super KIn, ? super VIn, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper) {
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<KIn, VIn, KOut, VOut> get() {
         return new KStreamFlatMapProcessor();
     }
 
-    private class KStreamFlatMapProcessor extends AbstractProcessor<K, V> {
+    private class KStreamFlatMapProcessor extends ContextualProcessor<KIn, VIn, KOut, VOut> {
         @Override
-        public void process(final K key, final V value) {
-            for (final KeyValue<? extends K1, ? extends V1> newPair : mapper.apply(key, value)) {
-                context().forward(newPair.key, newPair.value);
+        public void process(final Record<KIn, VIn> record) {
+            final Iterable<? extends KeyValue<? extends KOut, ? extends VOut>> newKeyValues =
+                mapper.apply(record.key(), record.value());
+            for (final KeyValue<? extends KOut, ? extends VOut> newPair : newKeyValues) {
+                context().forward(record.withKey(newPair.key).withValue(newPair.value));
             }
         }
     }
