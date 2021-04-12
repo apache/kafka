@@ -1579,6 +1579,11 @@ $ bin/kafka-acls.sh \
         <td>mostly even across brokers</td>
       </tr>
       <tr>
+        <td>Offline Replica counts</td>
+        <td>kafka.server:type=ReplicaManager,name=OfflineReplicaCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
         <td>Leader replica counts</td>
         <td>kafka.server:type=ReplicaManager,name=LeaderCount</td>
         <td>mostly even across brokers</td>
@@ -1595,6 +1600,11 @@ $ bin/kafka-acls.sh \
         <td>ISR expansion rate</td>
         <td>kafka.server:type=ReplicaManager,name=IsrExpandsPerSec</td>
         <td>See above</td>
+      </tr>
+      <tr>
+        <td>Failed ISR update rate</td>
+        <td>kafka.server:type=ReplicaManager,name=FailedIsrUpdatesPerSec</td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Max lag in messages btw follower and leader replicas</td>
