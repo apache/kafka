@@ -196,7 +196,7 @@ public class BatchAccumulator<T> implements Closeable {
         MemoryRecords data = currentBatch.build();
         completed.add(new CompletedBatch<>(
             currentBatch.baseOffset(),
-            currentBatch.records(),
+            Optional.of(currentBatch.records()),
             data,
             memoryPool,
             currentBatch.initialBuffer()
@@ -216,7 +216,7 @@ public class BatchAccumulator<T> implements Closeable {
                     leaderChangeMessage);
             completed.add(new CompletedBatch<>(
                 nextOffset,
-                null,
+                Optional.empty(),
                 data,
                 memoryPool,
                 buffer
@@ -381,13 +381,13 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
-            List<T> records,
+            Optional<List<T>> records,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
-            this.records = Optional.ofNullable(records);
+            this.records = records;
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
