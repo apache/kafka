@@ -112,6 +112,9 @@ public class ProducerPerformance {
 
             /* setup perf test */
             byte[] payload = null;
+            if (recordSize != null) {
+                payload = new byte[recordSize];
+            }
             Random random = new Random(0);
             ProducerRecord<byte[], byte[]> record;
             Stats stats = new Stats(numRecords, 5000);
@@ -126,7 +129,6 @@ public class ProducerPerformance {
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 } else if (recordSize != null) {
-                    payload = new byte[recordSize];
                     for (int j = 0; j < payload.length; ++j)
                         payload[j] = (byte) (random.nextInt(26) + 65);
                 } else {
