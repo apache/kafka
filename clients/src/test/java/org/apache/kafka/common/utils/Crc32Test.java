@@ -29,9 +29,9 @@ public class Crc32Test {
         final byte[] bytes = "Any String you want".getBytes();
         final int len = bytes.length;
 
-        Checksum crc1 = Crc32C.create();
-        Checksum crc2 = Crc32C.create();
-        Checksum crc3 = Crc32C.create();
+        Checksum crc1 = new Crc32();
+        Checksum crc2 = new Crc32();
+        Checksum crc3 = new Crc32();
 
         crc1.update(bytes, 0, len);
         for (int i = 0; i < len; i++)

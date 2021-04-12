@@ -251,7 +251,7 @@ public class CandidateState implements EpochState {
 
     @Override
     public String toString() {
-        return "Candidate(" +
+        return "CandidateState(" +
             "localId=" + localId +
             ", epoch=" + epoch +
             ", retries=" + retries +
