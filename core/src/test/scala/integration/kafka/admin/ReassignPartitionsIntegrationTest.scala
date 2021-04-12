@@ -20,7 +20,6 @@ package kafka.admin
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, List}
-
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.api.KAFKA_2_7_IV1
 import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkIsrManager}
@@ -35,7 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, Disabled, Test, Timeout}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -429,6 +428,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
    * Test moving partitions between directories.
    */
   @Test
+  @Disabled
   def testLogDirReassignment(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
 
@@ -479,6 +479,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  @Disabled
   def testAlterLogDirReassignmentThrottle(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
 

@@ -403,7 +403,8 @@ class KRaftClusterTest {
         }, "Timed out waiting for replica assignments for topic foo. " +
           s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
 
-        checkReplicaManager(
+        TestUtils.waitUntilTrue(() => {
+          checkReplicaManager(
           cluster,
           List(
             (0, List(true, true, false, true)),
@@ -412,6 +413,7 @@ class KRaftClusterTest {
             (3, List(false, false, true, true))
           )
         )
+        }, "ReplicaManager didn't converge")
       } finally {
         admin.close()
       }
@@ -420,27 +422,24 @@ class KRaftClusterTest {
     }
   }
 
-  private def checkReplicaManager(cluster: KafkaClusterTestKit, expectedHosting: List[(Int, List[Boolean])]): Unit = {
+  private def checkReplicaManager(cluster: KafkaClusterTestKit, expectedHosting: List[(Int, List[Boolean])]): Boolean = {
     for ((brokerId, partitionsIsHosted) <- expectedHosting) {
       val broker = cluster.brokers().get(brokerId)
 
       for ((isHosted, partitionId) <- partitionsIsHosted.zipWithIndex) {
         val topicPartition = new TopicPartition("foo", partitionId)
         if (isHosted) {
-          assertNotEquals(
-            HostedPartition.None,
-            broker.replicaManager.getPartition(topicPartition),
-            s"topicPartition = $topicPartition"
-          )
+          if (HostedPartition.None == broker.replicaManager.getPartition(topicPartition)) {
+            return false
+          }
         } else {
-          assertEquals(
-            HostedPartition.None,
-            broker.replicaManager.getPartition(topicPartition),
-            s"topicPartition = $topicPartition"
-          )
+          if (HostedPartition.None != broker.replicaManager.getPartition(topicPartition)) {
+            return false
+          }
         }
       }
     }
+    true
   }
 
   private def translatePartitionInfoToSeq(partitions: util.List[TopicPartitionInfo]): Seq[Seq[Int]] = {

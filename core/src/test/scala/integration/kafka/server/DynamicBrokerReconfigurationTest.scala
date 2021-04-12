@@ -720,90 +720,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     consumer.commitSync()
   }
 
-  @Test
-  def testThreadPoolResize(): Unit = {
-    val requestHandlerPrefix = "data-plane-kafka-request-handler-"
-    val networkThreadPrefix = "data-plane-kafka-network-thread-"
-    val fetcherThreadPrefix = "ReplicaFetcherThread-"
-    // Executor threads and recovery threads are not verified since threads may not be running
-    // For others, thread count should be configuredCount * threadMultiplier * numBrokers
-    val threadMultiplier = Map(
-      requestHandlerPrefix -> 1,
-      networkThreadPrefix -> 2, // 2 endpoints
-      fetcherThreadPrefix -> (servers.size - 1)
-    )
-
-    // Tolerate threads left over from previous tests
-    def leftOverThreadCount(prefix: String, perBrokerCount: Int): Int = {
-      val count = matchingThreads(prefix).size - perBrokerCount * servers.size * threadMultiplier(prefix)
-      if (count > 0) count else 0
-    }
-
-    val leftOverThreads = Map(
-      requestHandlerPrefix -> leftOverThreadCount(requestHandlerPrefix, servers.head.config.numIoThreads),
-      networkThreadPrefix -> leftOverThreadCount(networkThreadPrefix, servers.head.config.numNetworkThreads),
-      fetcherThreadPrefix -> leftOverThreadCount(fetcherThreadPrefix, servers.head.config.numReplicaFetchers)
-    )
-
-    def maybeVerifyThreadPoolSize(propName: String, size: Int, threadPrefix: String): Unit = {
-      val ignoreCount = leftOverThreads.getOrElse(threadPrefix, 0)
-      val expectedCountPerBroker = threadMultiplier.getOrElse(threadPrefix, 0) * size
-      if (expectedCountPerBroker > 0)
-        verifyThreads(threadPrefix, expectedCountPerBroker, ignoreCount)
-    }
-
-    def reducePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
-      val newSize = if (currentSize / 2 == 0) 1 else currentSize / 2
-      resizeThreadPool(propName, newSize, threadPrefix)
-      newSize
-    }
-
-    def increasePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
-      val newSize = if (currentSize == 1) currentSize * 2 else currentSize * 2 - 1
-      resizeThreadPool(propName, newSize, threadPrefix)
-      newSize
-    }
-
-    def resizeThreadPool(propName: String, newSize: Int, threadPrefix: String): Unit = {
-      val props = new Properties
-      props.put(propName, newSize.toString)
-      reconfigureServers(props, perBrokerConfig = false, (propName, newSize.toString))
-      maybeVerifyThreadPoolSize(propName, newSize, threadPrefix)
-    }
-
-    def verifyThreadPoolResize(propName: String, currentSize: => Int, threadPrefix: String, mayReceiveDuplicates: Boolean): Unit = {
-      maybeVerifyThreadPoolSize(propName, currentSize, threadPrefix)
-      val numRetries = if (mayReceiveDuplicates) 100 else 0
-      val (producerThread, consumerThread) = startProduceConsume(retries = numRetries)
-      var threadPoolSize = currentSize
-      (1 to 2).foreach { _ =>
-        threadPoolSize = reducePoolSize(propName, threadPoolSize, threadPrefix)
-        Thread.sleep(100)
-        threadPoolSize = increasePoolSize(propName, threadPoolSize, threadPrefix)
-        Thread.sleep(100)
-      }
-      stopAndVerifyProduceConsume(producerThread, consumerThread, mayReceiveDuplicates)
-      // Verify that all threads are alive
-      maybeVerifyThreadPoolSize(propName, threadPoolSize, threadPrefix)
-    }
-
-    val config = servers.head.config
-    verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
-      requestHandlerPrefix, mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.NumReplicaFetchersProp, config.numReplicaFetchers,
-      fetcherThreadPrefix, mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
-      "kafka-scheduler-", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.NumRecoveryThreadsPerDataDirProp, config.numRecoveryThreadsPerDataDir,
-      "", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
-      networkThreadPrefix, mayReceiveDuplicates = true)
-    verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
-
-    verifyProcessorMetrics()
-    verifyMarkPartitionsForTruncation()
-  }
-
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
     mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
@@ -812,46 +728,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def clearLeftOverProcessorMetrics(): Unit = {
     val metricsFromOldTests = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
     metricsFromOldTests.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
-  }
-
-  // Verify that metrics from processors that were removed have been deleted.
-  // Since processor ids are not reused, it is sufficient to check metrics count
-  // based on the current number of processors
-  private def verifyProcessorMetrics(): Unit = {
-    val numProcessors = servers.head.config.numNetworkThreads * 2 // 2 listeners
-
-    val kafkaMetrics = servers.head.metrics.metrics().keySet.asScala
-      .filter(_.tags.containsKey(Processor.NetworkProcessorMetricTag))
-      .groupBy(_.tags.get(Processor.NetworkProcessorMetricTag))
-    assertEquals(numProcessors, kafkaMetrics.size)
-
-    KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
-      .filter(isProcessorMetric)
-      .groupBy(_.getName)
-      .foreach { case (name, set) => assertEquals(numProcessors, set.size, s"Metrics not deleted $name") }
-  }
-
-  // Verify that replicaFetcherManager.markPartitionsForTruncation uses the current fetcher thread size
-  // to obtain partition assignment
-  private def verifyMarkPartitionsForTruncation(): Unit = {
-    val leaderId = 0
-    val partitions = (0 until numPartitions).map(i => new TopicPartition(topic, i)).filter { tp =>
-      zkClient.getLeaderForPartition(tp).contains(leaderId)
-    }
-    assertTrue(partitions.nonEmpty, s"Partitions not found with leader $leaderId")
-    partitions.foreach { tp =>
-      (1 to 2).foreach { i =>
-        val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
-        val truncationOffset = tp.partition
-        replicaFetcherManager.markPartitionsForTruncation(leaderId, tp, truncationOffset)
-        val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
-        assertEquals(1, fetcherThreads.size)
-        assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
-        val thread = fetcherThreads.head._2
-        assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-        assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
-      }
-    }
   }
 
   @Test

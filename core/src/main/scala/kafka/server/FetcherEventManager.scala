@@ -1,5 +1,21 @@
-package kafka.server
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
+package kafka.server
 
 import java.util.concurrent.TimeUnit
 
@@ -89,8 +105,8 @@ class FetcherEventManager(name: String,
     future
   }
 
-  def removePartitions(topicPartitions: Set[TopicPartition]): KafkaFuture[Void] = {
-    val future = new KafkaFutureImpl[Void] {}
+  def removePartitions(topicPartitions: Set[TopicPartition]): KafkaFuture[Map[TopicPartition, PartitionFetchState]] = {
+    val future = new KafkaFutureImpl[Map[TopicPartition, PartitionFetchState]] {}
     fetcherEventBus.put(RemovePartitions(topicPartitions, future))
     future
   }
@@ -101,10 +117,20 @@ class FetcherEventManager(name: String,
     future
   }
 
-  def close(): Unit = {
+  private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] = {
+    val future = new KafkaFutureImpl[Option[PartitionFetchState]] {}
+    fetcherEventBus.put(GetPartitionState(topicPartition, future))
+    future.get()
+  }
+
+
+  def initiateShutdown(): Unit = {
+    thread.initiateShutdown()
+    fetcherEventBus.close()
+  }
+
+  def awaitShutdown(): Unit = {
     try {
-      thread.initiateShutdown()
-      fetcherEventBus.close()
       thread.awaitShutdown()
     } finally {
       removeMetric(EventQueueTimeMetricName)
@@ -115,6 +141,10 @@ class FetcherEventManager(name: String,
     processor.close()
   }
 
+  def close(): Unit = {
+    initiateShutdown()
+    awaitShutdown()
+  }
 
   class FetcherEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     logIdent = s"[FetcherEventThread fetcherId=$name] "

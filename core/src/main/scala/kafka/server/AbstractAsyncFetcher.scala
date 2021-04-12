@@ -56,7 +56,7 @@ case class AddPartitions(initialFetchStates: Map[TopicPartition, InitialFetchSta
   override def state = FetcherState.AddPartitions
 }
 
-case class RemovePartitions(topicPartitions: Set[TopicPartition], future: KafkaFutureImpl[Void]) extends FetcherEvent {
+case class RemovePartitions(topicPartitions: Set[TopicPartition], future: KafkaFutureImpl[Map[TopicPartition, PartitionFetchState]]) extends FetcherEvent {
   override def priority = 2
   override def state = FetcherState.RemovePartitions
 }
@@ -71,6 +71,10 @@ case object TruncateAndFetch extends FetcherEvent {
   override def state = FetcherState.TruncateAndFetch
 }
 
+case class GetPartitionState(topicPartition: TopicPartition, future: KafkaFutureImpl[Option[PartitionFetchState]]) extends FetcherEvent {
+  override def priority = 2
+  override def state = FetcherState.GetPartitionState
+}
 
 class DelayedFetcherEvent(delay: Long, val fetcherEvent: FetcherEvent) extends DelayedItem(delayMs = delay) {
 }
@@ -180,12 +184,13 @@ abstract class AbstractAsyncFetcher(name: String,
         addPartitions(initialFetchStates)
         future.complete(null)
       case RemovePartitions(topicPartitions, future) =>
-        removePartitions(topicPartitions)
-        future.complete(null)
+        future.complete(removePartitions(topicPartitions))
       case GetPartitionCount(future) =>
         future.complete(partitionStates.size())
       case TruncateAndFetch =>
         truncateAndFetch()
+      case GetPartitionState(topicPartition, future) =>
+        future.complete(Option(partitionStates.stateValue(topicPartition)))
     }
   }
 

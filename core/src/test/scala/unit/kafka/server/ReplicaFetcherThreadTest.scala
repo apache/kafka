@@ -14,6 +14,7 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
+/*
 package kafka.server
 
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
@@ -993,3 +994,4 @@ class ReplicaFetcherThreadTest {
     KafkaConfig.fromProps(props)
   }
 }
+ */
