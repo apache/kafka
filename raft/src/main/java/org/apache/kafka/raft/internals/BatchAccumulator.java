@@ -205,23 +205,28 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     public void appendLeaderChangeMessage(LeaderChangeMessage leaderChangeMessage, long currentTimeMs) {
-        maybeCompleteDrain();
-        ByteBuffer buffer = memoryPool.tryAllocate(256);
-        if (buffer != null) {
-            MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset, 
-                    currentTimeMs, 
-                    this.epoch, 
-                    buffer, 
-                    leaderChangeMessage);
-            completed.add(new CompletedBatch<>(
-                nextOffset,
-                Optional.empty(),
-                data,
-                memoryPool,
-                buffer
-            ));
-            nextOffset += 1;
+        appendLock.lock();
+        try {
+            maybeCompleteDrain();
+            ByteBuffer buffer = memoryPool.tryAllocate(256);
+            if (buffer != null) {
+                MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
+                        this.nextOffset, 
+                        currentTimeMs, 
+                        this.epoch, 
+                        buffer, 
+                        leaderChangeMessage);
+                completed.add(new CompletedBatch<>(
+                    nextOffset,
+                    Optional.empty(),
+                    data,
+                    memoryPool,
+                    buffer
+                ));
+                nextOffset += 1;
+            }
+        } finally {
+            appendLock.unlock();
         }
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -63,6 +64,34 @@ class BatchAccumulatorTest {
             CompressionType.NONE,
             serde
         );
+    }
+
+    @Test
+    public void testLeaderChangeMessageWritten() {
+        int leaderEpoch = 17;
+        long baseOffset = 0;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
+
+        acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertEquals(1, batches.size());
+
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        batch.release();
+        Mockito.verify(memoryPool).release(buffer);
     }
 
     @Test
@@ -354,6 +383,7 @@ class BatchAccumulatorTest {
             completedBatch.data.batches().forEach(recordBatch -> {
                 assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
         });
+        acc.close();
     }
 
     int recordSizeInBytes(String record, int numberOfRecords) {

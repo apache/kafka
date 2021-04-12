@@ -91,9 +91,6 @@ public class LeaderState<T> implements EpochState {
         List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
-        // Adding the leader to the voters as any voter always votes for itself.
-        //voters.add(new Voter().setVoterId(this.election().leaderId()));
-
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
