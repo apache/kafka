@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.Murmur3;
@@ -105,20 +106,26 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (record.value().oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
                 if (oldForeignKey == null) {
-//                    LOG.warn(
-//                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                        change.oldValue, context().topic(), context().partition(), context().offset()
-//                    );
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        record.value().oldValue,
+                        context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                        context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                        context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    );
                     droppedRecordsSensor.record();
                     return;
                 }
                 if (record.value().newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                     if (newForeignKey == null) {
-//                        LOG.warn(
-//                            "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                            change.newValue, context().topic(), context().partition(), context().offset()
-//                        );
+                        LOG.warn(
+                            "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                            record.value().newValue,
+                            context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                            context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                            context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                        );
                         droppedRecordsSensor.record();
                         return;
                     }
@@ -154,10 +161,13 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 }
                 final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                 if (newForeignKey == null) {
-//                    LOG.warn(
-//                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                        change.newValue, context().topic(), context().partition(), context().offset()
-//                    );
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        record.value().newValue,
+                        context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                        context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                        context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    );
                     droppedRecordsSensor.record();
                 } else {
                     context().forward(record.withKey(newForeignKey).withValue(new SubscriptionWrapper<>(currentHash, instruction, record.key())));

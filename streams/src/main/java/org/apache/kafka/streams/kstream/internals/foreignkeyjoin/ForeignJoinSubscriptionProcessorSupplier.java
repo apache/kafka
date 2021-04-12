@@ -90,9 +90,9 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements
                 LOG.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     record.value(),
-                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
-                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
-                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;

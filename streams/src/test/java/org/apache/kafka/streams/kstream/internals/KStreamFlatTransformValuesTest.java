@@ -24,8 +24,8 @@ import java.util.Collections;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransformValues.KStreamFlatTransformValuesProcessor;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
@@ -127,7 +127,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         EasyMock.expect(valueTransformerSupplier.get()).andReturn(valueTransformer);
         replayAll();
 
-        final Processor<Integer, Integer, Integer, String> processor = processorSupplier.get();
+        final Processor<Integer, Integer> processor = processorSupplier.getInternal();
 
         verifyAll();
         assertTrue(processor instanceof KStreamFlatTransformValuesProcessor);

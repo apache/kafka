@@ -94,9 +94,9 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 LOG.warn(
                     "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     record.value(),
-                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
-                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
-                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;

@@ -16,18 +16,19 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcessor<K1, V1, K1, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
@@ -69,11 +70,13 @@ class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcess
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
         if (mappedKey == null || record.value() == null) {
-            //TODO
-//            LOG.warn(
-//                    "Skipping record due to null join key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    key, value, context().topic(), context().partition(), context().offset()
-//            );
+            LOG.warn(
+                "Skipping record due to null join key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                record.key(), record.value(),
+                context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+            );
             droppedRecordsSensor.record();
         } else {
             final V2 value2 = getValueOrNull(valueGetter.get(mappedKey));

@@ -258,8 +258,8 @@ public abstract class TopologyTestDriverTest {
                 record.value(),
                 record.headers(),
                 record.timestamp(),
-                context.recordMetadata().map(RecordMetadata::offset).orElse(-1L),
-                context.recordMetadata().map(RecordMetadata::topic).orElse(null)
+                context().recordMetadata().map(RecordMetadata::offset).orElse(-1L),
+                context().recordMetadata().map(RecordMetadata::topic).orElse(null)
             ));
             context.forward(record);
         }

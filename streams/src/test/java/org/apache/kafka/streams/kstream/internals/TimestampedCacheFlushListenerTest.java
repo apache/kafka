@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.junit.Test;
-
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.junit.Test;
 
 public class TimestampedCacheFlushListenerTest {
 
@@ -36,13 +36,16 @@ public class TimestampedCacheFlushListenerTest {
         context.setCurrentNode(null);
         context.setCurrentNode(null);
         context.forward(
-            "key",
-            new Change<>("newValue", "oldValue"),
-            To.all().withTimestamp(42L));
+            new Record<>(
+                "key",
+                new Change<>("newValue", "oldValue"),
+                42L));
         expectLastCall();
         replay(context);
 
-        new TupleChangeCacheFlushListener<>(context).apply(
+        final TupleChangeCacheFlushListener<String, String> flushListener = new TupleChangeCacheFlushListener<>(
+            context);
+        flushListener.apply(
             "key",
             ValueAndTimestamp.make("newValue", 42L),
             ValueAndTimestamp.make("oldValue", 21L),
@@ -58,9 +61,10 @@ public class TimestampedCacheFlushListenerTest {
         context.setCurrentNode(null);
         context.setCurrentNode(null);
         context.forward(
-            "key",
-            new Change<>(null, "oldValue"),
-            To.all().withTimestamp(73L));
+            new Record<>(
+                "key",
+                new Change<>(null, "oldValue"),
+                73L));
         expectLastCall();
         replay(context);
 

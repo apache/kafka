@@ -66,7 +66,7 @@ public class KTableKTableRightJoinTest {
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
-            join.process(new Record<>(null, new Change<>("new", "old"), -3));
+            join.process(new Record<>(null, new Change<>("new", "old"), 0L));
 
             assertThat(
                 appender.getMessages(),

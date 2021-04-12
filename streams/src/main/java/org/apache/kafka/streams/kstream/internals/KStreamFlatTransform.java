@@ -39,7 +39,11 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements
 
     @Override
     public Processor<KIn, VIn, KOut, VOut> get() {
-        return ProcessorAdapter.adaptRaw(new KStreamFlatTransformProcessor<>(transformerSupplier.get()));
+        return ProcessorAdapter.adaptRaw(getInternal());
+    }
+
+    org.apache.kafka.streams.processor.Processor<KIn, VIn> getInternal() {
+        return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
     @Override

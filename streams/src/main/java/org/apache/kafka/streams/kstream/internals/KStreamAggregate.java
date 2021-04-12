@@ -67,6 +67,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
 
         @Override
         public void init(final ProcessorContext<K, Change<T>> context) {
+            super.init(context);
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -86,9 +87,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
                 LOG.warn(
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     record.key(), record.value(),
-                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
-                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
-                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;

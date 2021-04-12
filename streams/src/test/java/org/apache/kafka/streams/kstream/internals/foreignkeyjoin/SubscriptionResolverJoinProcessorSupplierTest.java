@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
 
@@ -147,8 +148,9 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue"), 0));
         final List<CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record().key(), is("lhs1"));
-        assertThat(forwarded.get(0).record().value(), is("(lhsValue,rhsValue)"));
+        final Record<? extends String, ? extends String> record = forwarded.get(0).record();
+        assertThat(record.key(), is("lhs1"));
+        assertThat(record.value(), is("(lhsValue,rhsValue)"));
     }
 
     @Test
@@ -175,8 +177,9 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
         final List<CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record().key(), is("lhs1"));
-        assertThat(forwarded.get(0).record().value(), is(null));
+        final Record<? extends String, ? extends String> record = forwarded.get(0).record();
+        assertThat(record.key(), is("lhs1"));
+        assertThat(record.value(), nullValue());
     }
 
     @Test
@@ -230,7 +233,8 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
         final List<CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record().key(), is("lhs1"));
-        assertThat(forwarded.get(0).record().value(), is(null));
+        final Record<? extends String, ? extends String> record = forwarded.get(0).record();
+        assertThat(record.key(), is("lhs1"));
+        assertThat(record.value(), nullValue());
     }
 }

@@ -40,25 +40,23 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  */
 public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     implements
-    ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>> {
+    ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> {
 
     private final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier;
 
-    public SubscriptionJoinForeignProcessorSupplier(
-        final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier) {
+    public SubscriptionJoinForeignProcessorSupplier(final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier) {
         this.foreignValueGetterSupplier = foreignValueGetterSupplier;
     }
 
     @Override
-    public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>> get() {
+    public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> get() {
 
-        return new ContextualProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>>() {
+        return new ContextualProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>>() {
 
             private KTableValueGetter<KO, VO> foreignValues;
 
             @Override
-            public void init(
-                final ProcessorContext<CombinedKey<KO, K>, SubscriptionResponseWrapper<VO>> context) {
+            public void init(final ProcessorContext<K, SubscriptionResponseWrapper<VO>> context) {
                 super.init(context);
                 foreignValues = foreignValueGetterSupplier.get();
                 foreignValues.init(context);
@@ -96,8 +94,8 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                     case DELETE_KEY_AND_PROPAGATE:
                         context().forward(
                             record
-                                .withValue(
-                                    new SubscriptionResponseWrapper<VO>(value.getHash(), null))
+                                .withKey(record.key().getPrimaryKey())
+                                .withValue(new SubscriptionResponseWrapper<VO>(value.getHash(), null))
                                 .withTimestamp(resultTimestamp)
                         );
                         break;
@@ -109,8 +107,8 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
 
                         context().forward(
                             record
-                                .withValue(
-                                    new SubscriptionResponseWrapper<>(value.getHash(), valueToSend))
+                                .withKey(record.key().getPrimaryKey())
+                                .withValue(new SubscriptionResponseWrapper<>(value.getHash(), valueToSend))
                                 .withTimestamp(resultTimestamp)
                         );
                         break;
@@ -118,9 +116,8 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                         if (foreignValueAndTime != null) {
                             context().forward(
                                 record
-                                    .withValue(
-                                        new SubscriptionResponseWrapper<>(value.getHash(),
-                                            foreignValueAndTime.value()))
+                                    .withKey(record.key().getPrimaryKey())
+                                    .withValue(new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value()))
                                     .withTimestamp(resultTimestamp)
                             );
                         }

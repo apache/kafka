@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggregateProcessorSupplier<K, Windowed<K>, V, Agg> {
-    private final static Logger LOG = LoggerFactory.getLogger(KStreamWindowAggregate.class);
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final Windows<W> windows;
@@ -87,6 +87,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
         @Override
         public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
+            super.init(context);
             final InternalProcessorContext<Windowed<K>, Change<Agg>> internalProcessorContext =
                 (InternalProcessorContext<Windowed<K>, Change<Agg>>) context;
             metrics = internalProcessorContext.metrics();
@@ -109,7 +110,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         @Override
         public void process(final Record<K, V> record) {
             if (record.key() == null) { //TODO
-                LOG.warn(
+                log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     record.value(),
                     context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
@@ -155,7 +156,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         sendOldValues ? oldAgg : null,
                         newTimestamp);
                 } else {
-                    LOG.warn(
+                    log.warn(
                         "Skipping record for expired window. " +
                             "key=[{}] " +
                             "topic=[{}] " +

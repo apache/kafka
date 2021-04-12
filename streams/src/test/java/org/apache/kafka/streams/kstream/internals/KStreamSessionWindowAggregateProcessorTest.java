@@ -47,12 +47,10 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -75,7 +73,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private static final String STORE_NAME = "session-store";
 
     private final String threadId = Thread.currentThread().getName();
-    private final ToInternal toInternal = new ToInternal();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
@@ -109,11 +106,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, metrics),
             Time.SYSTEM
         ) {
-            @SuppressWarnings("unchecked")
             @Override
-            public void forward(final Object key, final Object value, final To to) {
-                toInternal.update(to);
-                results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
+            public <K1 extends Windowed<String>, V1 extends Change<Long>> void forward(
+                final Record<K1, V1> record
+            ) {
+                results.add(
+                    new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
             }
         };
 
@@ -239,7 +237,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldHandleMultipleSessionsAndMerging() {
-        context.setTime(0);
         processor.process(new Record<>("a", "1", 0));
         processor.process(new Record<>("b", "1", 0));
         processor.process(new Record<>("c", "1", 0));
@@ -614,11 +611,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
             Time.SYSTEM
         ) {
-            @SuppressWarnings("unchecked")
             @Override
-            public void forward(final Object key, final Object value, final To to) {
-                toInternal.update(to);
-                results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
+            public <K1 extends Windowed<String>, V1 extends Change<Long>> void forward(final Record<K1, V1> record) {
+                results.add(
+                    new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
             }
         };
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);

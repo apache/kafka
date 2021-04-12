@@ -92,6 +92,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
 
         @Override
         public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
+            super.init(context);
             final InternalProcessorContext<Windowed<K>, Change<Agg>> internalProcessorContext =
                 (InternalProcessorContext<Windowed<K>, Change<Agg>>) context;
             metrics = (StreamsMetricsImpl) context.metrics();
@@ -147,7 +148,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
                 }
             }
 
-            if (mergedWindow.end() < closeTime) { //TODO
+            if (mergedWindow.end() < closeTime) {
                 LOG.warn(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
@@ -159,9 +160,9 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggregat
                         "expiration=[{}] " +
                         "streamTime=[{}]",
                     record.key(),
-                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
-                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
-                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L),
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L),
                     timestamp,
                     mergedWindow.start(),
                     mergedWindow.end(),

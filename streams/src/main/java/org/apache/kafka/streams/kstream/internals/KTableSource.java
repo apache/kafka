@@ -102,9 +102,9 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V, K, Change<V>>
             if (record.key() == null) {
                 LOG.warn(
                     "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
-                    context.recordMetadata().map(RecordMetadata::topic).orElse("<>"),
-                    context.recordMetadata().map(RecordMetadata::partition).orElse(-1),
-                    context.recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;

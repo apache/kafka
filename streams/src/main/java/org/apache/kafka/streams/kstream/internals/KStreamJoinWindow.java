@@ -40,12 +40,10 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
 
         private WindowStore<K, V> window;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, V> context) {
             super.init(context);
-
-            window = (WindowStore<K, V>) context.getStateStore(windowName);
+            window = context.getStateStore(windowName);
         }
 
         @Override

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -76,10 +77,13 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
             @Override
             public void process(final Record<KO, SubscriptionWrapper<K>> record) {
                 if (record.key() == null) {
-//                    LOG.warn(
-//                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                        value, context().topic(), context().partition(), context().offset()
-//                    );
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        record.value(),
+                        context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                        context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                        context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
+                    );
                     droppedRecordsSensor.record();
                     return;
                 }
@@ -106,10 +110,10 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 // note: key is non-nullable
                 // note: newValue is non-nullable
                 context().forward(
-                    record.withKey(
-                    new CombinedKey<>(record.key(), record.value().getPrimaryKey()))
-                    .withValue(change)
-                    .withTimestamp(newValue.timestamp())
+                    record
+                        .withKey(new CombinedKey<>(record.key(), record.value().getPrimaryKey()))
+                        .withValue(change)
+                        .withTimestamp(newValue.timestamp())
                 );
             }
         };
