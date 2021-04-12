@@ -1576,17 +1576,17 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
-        <td>The number of partitions assigned to the broker.</td>
+        <td>mostly even across brokers</td>
       </tr>
       <tr>
         <td>Offline Replica counts</td>
         <td>kafka.server:type=ReplicaManager,name=OfflineReplicaCount</td>
-        <td>The number of offline partitions assigned to the broker.</td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Leader replica counts</td>
         <td>kafka.server:type=ReplicaManager,name=LeaderCount</td>
-        <td>The number of leader partitions assigned to the broker.</td>
+        <td>mostly even across brokers</td>
       </tr>
       <tr>
         <td>ISR shrink rate</td>
@@ -1604,7 +1604,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Failed ISR update rate</td>
         <td>kafka.server:type=ReplicaManager,name=FailedIsrUpdatesPerSec</td>
-        <td>The rate of new ISR update failure.</td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Max lag in messages btw follower and leader replicas</td>
