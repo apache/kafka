@@ -380,8 +380,6 @@ public class RestServer {
     /**
      * Parses the uri and throws a more definitive error
      * when the internal node to node communication can't happen due to an invalid host name.
-     *
-     * @return
      */
     private void validateUriHost(URI uri) {
         if (uri.getHost() == null) {
