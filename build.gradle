@@ -1347,7 +1347,7 @@ project(':storage:api') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntime libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
@@ -1409,7 +1409,7 @@ project(':storage') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntime libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j
   }
 
   task createVersionFile(dependsOn: determineCommitId) {
