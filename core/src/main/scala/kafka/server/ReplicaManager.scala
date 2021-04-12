@@ -203,7 +203,7 @@ class ReplicaManager(val config: KafkaConfig,
   )
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
-  val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
+//  val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
@@ -333,9 +333,9 @@ class ReplicaManager(val config: KafkaConfig,
   // remove the partition from the partition state map. But it will not close itself even if the
   // partition state map is empty. Thus we need to call shutdownIdleReplicaAlterDirThread() periodically
   // to shutdown idle ReplicaAlterDirThread
-  def shutdownIdleReplicaAlterLogDirsThread(): Unit = {
-    replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-  }
+//  def shutdownIdleReplicaAlterLogDirsThread(): Unit = {
+//    replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+//  }
 
   def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
 
@@ -351,7 +351,7 @@ class ReplicaManager(val config: KafkaConfig,
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
-    scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
+//    scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
     // In this case, the broker receiving the request cannot determine whether it is safe to create a partition if a log directory has failed.
@@ -423,7 +423,7 @@ class ReplicaManager(val config: KafkaConfig,
         controllerEpoch = stopReplicaRequest.controllerEpoch
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
-        replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
+//        replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
         for (topicPartition <- partitions){
           try {
             stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
@@ -646,7 +646,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.Online(partition) =>
               // Stop current replica movement if the destinationDir is different from the existing destination log directory
               if (partition.futureReplicaDirChanged(destinationDir)) {
-                replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
+//                replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
               }
             case HostedPartition.Offline =>
@@ -675,9 +675,9 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
-            val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
-              partition.getLeaderEpoch, futureLog.highWatermark)
-            replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
+//            val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
+//              partition.getLeaderEpoch, futureLog.highWatermark)
+//            replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
           (topicPartition, Errors.NONE)
@@ -1352,10 +1352,10 @@ class ReplicaManager(val config: KafkaConfig,
             }
           }
         }
-        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
+//        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
-        replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+//        replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
         val responsePartitions = responseMap.iterator.map { case (tp, error) =>
           new LeaderAndIsrPartitionError()
@@ -1683,7 +1683,7 @@ class ReplicaManager(val config: KafkaConfig,
       }.toSet
 
       replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions)
-      replicaAlterLogDirsManager.removeFetcherForPartitions(newOfflinePartitions ++ partitionsWithOfflineFutureReplica.map(_.topicPartition))
+//      replicaAlterLogDirsManager.removeFetcherForPartitions(newOfflinePartitions ++ partitionsWithOfflineFutureReplica.map(_.topicPartition))
 
       partitionsWithOfflineFutureReplica.foreach(partition => partition.removeFutureLocalReplica(deleteFromLogDir = false))
       newOfflinePartitions.foreach { topicPartition =>
@@ -1721,7 +1721,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (logDirFailureHandler != null)
       logDirFailureHandler.shutdown()
     replicaFetcherManager.shutdown()
-    replicaAlterLogDirsManager.shutdown()
+//    replicaAlterLogDirsManager.shutdown()
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
@@ -1736,9 +1736,9 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
   }
 
-  protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
-    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
-  }
+//  protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
+//    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
+//  }
 
   protected def createReplicaSelector(): Option[ReplicaSelector] = {
     config.replicaSelectorClassName.map { className =>

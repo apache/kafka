@@ -36,6 +36,7 @@ import scala.collection.Seq
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
+@Ignore
 class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   val maxGroupSize = 5
 

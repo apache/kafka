@@ -58,13 +58,13 @@ class FetcherEventManagerTest {
         event match {
           case AddPartitions(initialFetchStates, future) =>
             addPartitionsProcessed += 1
-            future.asInstanceOf[KafkaFutureImpl[Void]].complete(null)
+            future.complete(null)
           case RemovePartitions(topicPartitions, future) =>
             removePartitionsProcessed += 1
-            future.asInstanceOf[KafkaFutureImpl[Void]].complete(null)
+            future.complete(null)
           case GetPartitionCount(future) =>
             getPartitionsProcessed += 1
-            future.asInstanceOf[KafkaFutureImpl[Int]].complete(1)
+            future.complete(1)
           case TruncateAndFetch =>
             truncateAndFetchProcessed += 1
         }

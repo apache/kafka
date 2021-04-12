@@ -15,6 +15,7 @@
   * limitations under the License.
   */
 
+/*
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
@@ -56,3 +57,4 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
     info("shutdown completed")
   }
 }
+*/

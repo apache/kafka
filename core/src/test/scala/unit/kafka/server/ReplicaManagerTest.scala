@@ -46,7 +46,6 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
@@ -286,20 +285,20 @@ class ReplicaManagerTest {
       val previousReplicaFolder = partition.log.get.dir.getParentFile
       // find the live and different folder
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).head
-      assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
+//      assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
       // make sure the future log is created
       replicaManager.futureLocalLogOrException(topicPartition)
-      assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
+//      assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       (1 to loopEpochChange).foreach(epoch => replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(epoch), (_, _) => ()))
       // wait for the ReplicaAlterLogDirsThread to complete
-      TestUtils.waitUntilTrue(() => {
-        replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-        replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty
-      }, s"ReplicaAlterLogDirsThread should be gone")
+//      TestUtils.waitUntilTrue(() => {
+//        replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+//        replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty
+//      }, s"ReplicaAlterLogDirsThread should be gone")
 
       // the fenced error should be recoverable
-      assertEquals(0, replicaManager.replicaAlterLogDirsManager.failedPartitions.size)
+//      assertEquals(0, replicaManager.replicaAlterLogDirsManager.failedPartitions.size)
       // the replica change is completed after retrying
       assertTrue(partition.futureLog.isEmpty)
       assertEquals(newReplicaFolder.getAbsolutePath, partition.log.get.dir.getParent)
@@ -308,7 +307,7 @@ class ReplicaManagerTest {
       assertNotEquals(0, response.size)
       response.values.foreach(assertEquals(Errors.NONE, _))
       // should succeed to invoke ReplicaAlterLogDirsThread again
-      assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
+//      assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
@@ -1431,22 +1430,18 @@ class ReplicaManagerTest {
                                                      quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
-          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
-              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): FetcherEventManager = {
+            val fetcherEventBus = new FetcherEventBus(time)
+            val threadName = s"ReplicaFetcherThread-$fetcherId"
+            val replicaFetcher = new AsyncReplicaFetcher(threadName,  fetcherId,
+              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quota.follower, fetcherEventBus, Some(blockingSend))
+            val fetcherEventManager = new FetcherEventManager(threadName, fetcherEventBus, replicaFetcher, time)
 
-              override def doWork() = {
-                // In case the thread starts before the partition is added by AbstractFetcherManager,
-                // add it here (it's a no-op if already added)
-                val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = leaderEpochInLeaderAndIsr)
-                addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
-                super.doWork()
+            val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = leaderEpochInLeaderAndIsr)
 
-                // Shut the thread down after one iteration to avoid double-counting truncations
-                initiateShutdown()
-                countDownLatch.countDown()
-              }
-            }
+            fetcherEventManager.addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
+            countDownLatch.countDown()
+            fetcherEventManager
           }
         }
       }

@@ -2532,9 +2532,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {
     val alterReplicaDirsRequest = request.body[AlterReplicaLogDirsRequest]
     val responseMap = {
+      /*
       if (authorize(request, ALTER, CLUSTER, CLUSTER_NAME))
         replicaManager.alterReplicaLogDirs(alterReplicaDirsRequest.partitionDirs.asScala)
       else
+       */
         alterReplicaDirsRequest.partitionDirs.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
     }
     sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaLogDirsResponse(requestThrottleMs, responseMap.asJava))
