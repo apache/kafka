@@ -18,11 +18,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
@@ -37,7 +38,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V, 
 
     @Override
     public Processor<K, V, K, R> get() {
-        return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
+        return ProcessorAdapter.adaptRaw(new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get()));
     }
 
     @Override
@@ -46,7 +47,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V, 
     }
 
     public static class KStreamTransformValuesProcessor<K, V, R> extends
-        ContextualProcessor<K, V, K, R> {
+        AbstractProcessor<K, V> {
 
         private final ValueTransformerWithKey<K, V, R> valueTransformer;
 
@@ -55,14 +56,14 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V, 
         }
 
         @Override
-        public void init(final ProcessorContext<K, R> context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            //TODO valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }
 
         @Override
-        public void process(Record<K, V> record) {
-            context.forward(record.withValue(valueTransformer.transform(record.key(), record.value())));
+        public void process(K key, V value) {
+            context.forward(key, valueTransformer.transform(key, value));
         }
 
         @Override

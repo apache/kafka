@@ -1337,27 +1337,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final String... stateStoreNames) {
-        //TODO
-        return null;
-//        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-//        return doTransformValues(
-//            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-//            NamedInternal.empty(),
-//            stateStoreNames);
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        return doTransformValues(
+            toValueTransformerWithKeySupplier(valueTransformerSupplier),
+            NamedInternal.empty(),
+            stateStoreNames);
     }
 
     @Override
     public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final Named named,
                                                final String... stateStoreNames) {
-        //TODO
-        return null;
-//        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-//        Objects.requireNonNull(named, "named can't be null");
-//        return doTransformValues(
-//            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-//            new NamedInternal(named),
-//            stateStoreNames);
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+        return doTransformValues(
+            toValueTransformerWithKeySupplier(valueTransformerSupplier),
+            new NamedInternal(named),
+            stateStoreNames);
     }
 
     @Override
@@ -1408,26 +1404,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final String... stateStoreNames) {
-        //TODO
-        return null;
-//        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-//        return doFlatTransformValues(
-//            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-//            NamedInternal.empty(),
-//            stateStoreNames);
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        return doFlatTransformValues(
+            toValueTransformerWithKeySupplier(valueTransformerSupplier),
+            NamedInternal.empty(),
+            stateStoreNames);
     }
 
     @Override
     public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final Named named,
                                                    final String... stateStoreNames) {
-        //TODO
-        return null;
-//        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-//        return doFlatTransformValues(
-//            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-//            named,
-//            stateStoreNames);
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        return doFlatTransformValues(
+            toValueTransformerWithKeySupplier(valueTransformerSupplier),
+            named,
+            stateStoreNames);
     }
 
     @Override

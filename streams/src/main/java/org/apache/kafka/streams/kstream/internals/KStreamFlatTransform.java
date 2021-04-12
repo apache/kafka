@@ -19,16 +19,17 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
+public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements
+    ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
     private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;
 
@@ -38,7 +39,7 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
 
     @Override
     public Processor<KIn, VIn, KOut, VOut> get() {
-        return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
+        return ProcessorAdapter.adaptRaw(new KStreamFlatTransformProcessor<>(transformerSupplier.get()));
     }
 
     @Override
@@ -47,7 +48,7 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
     }
 
     public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends
-        ContextualProcessor<KIn, VIn, KOut, VOut> {
+        AbstractProcessor<KIn, VIn> {
 
         private final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
 
@@ -56,18 +57,18 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
         }
 
         @Override
-        public void init(final ProcessorContext<KOut, VOut> context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            //TODO transformer.init(context);
+            transformer.init(context);
         }
 
         @Override
-        public void process(Record<KIn, VIn> record) {
+        public void process(KIn key, VIn value) {
             final Iterable<KeyValue<KOut, VOut>> pairs =
-                transformer.transform(record.key(), record.value());
+                transformer.transform(key, value);
             if (pairs != null) {
                 for (final KeyValue<KOut, VOut> pair : pairs) {
-                    context().forward(record.withKey(pair.key).withValue(pair.value));
+                    context().forward(pair.key, pair.value);
                 }
             }
         }

@@ -18,16 +18,18 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn, KIn, VOut> {
+public class KStreamFlatTransformValues<KIn, VIn, VOut> implements
+    ProcessorSupplier<KIn, VIn, KIn, VOut> {
 
     private final ValueTransformerWithKeySupplier<KIn, VIn, Iterable<VOut>> valueTransformerSupplier;
 
@@ -37,7 +39,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
 
     @Override
     public Processor<KIn, VIn, KIn, VOut> get() {
-        return new KStreamFlatTransformValuesProcessor<>(valueTransformerSupplier.get());
+        return ProcessorAdapter.adaptRaw(new KStreamFlatTransformValuesProcessor<>(valueTransformerSupplier.get()));
     }
 
     @Override
@@ -46,7 +48,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
     }
 
     public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> extends
-        ContextualProcessor<KIn, VIn, KIn, VOut> {
+        AbstractProcessor<KIn, VIn> {
 
         private final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer;
 
@@ -55,18 +57,18 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
         }
 
         @Override
-        public void init(final ProcessorContext<KIn, VOut> context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            // TODO valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }
 
         @Override
-        public void process(Record<KIn, VIn> record) {
+        public void process(KIn key, VIn value) {
             final Iterable<VOut> transformedValues =
-                valueTransformer.transform(record.key(), record.value());
+                valueTransformer.transform(key, value);
             if (transformedValues != null) {
                 for (final VOut transformedValue : transformedValues) {
-                    context.forward(record.withValue(transformedValue));
+                    context.forward(key, transformedValue);
                 }
             }
         }
