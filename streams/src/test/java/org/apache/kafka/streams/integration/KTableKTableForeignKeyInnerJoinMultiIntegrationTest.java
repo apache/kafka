@@ -57,7 +57,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -191,9 +193,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
 
-        streams.start();
-        streamsTwo.start();
-        streamsThree.start();
+        final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
