@@ -111,6 +111,8 @@
         <li> Overloaded <code>KStream#join, leftJoin, outerJoin</code> with <code>KStream</code> and <code>Joined</code> parameters: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>).</li>
         <li> Overloaded <code>KafkaStreams#metadataForKey</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a>).</li>
         <li> Overloaded <code>KafkaStreams#store</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a>).</li>
+        <li> <code>--zookeeper</code> flag of the application reset tool: deprecated in Kafka 1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-198%3A+Remove+ZK+dependency+from+Streams+Reset+Tool">KIP-198</a>).</li>
+        <li> <code>--execute</code> flag of the application reset tool: deprecated in Kafka 1.1 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a>).</li>
         <li> <code>WindowStore#put(K key, V value)</code>: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=115526545">KIP-474</a>).</li>
     </ul>
     <p>
@@ -120,7 +122,7 @@
         <li>Connect-json: As of Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
             Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
     </ul>
-
+    
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>
         We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in

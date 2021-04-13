@@ -101,8 +101,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
@@ -121,13 +120,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
+    public void shouldNotAllowToResetWhenInputTopicAbsent() {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
@@ -138,13 +136,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
+    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--intermediate-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--intermediate-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);

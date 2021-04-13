@@ -105,7 +105,6 @@ public class StreamsResetter {
     private static OptionSpecBuilder dryRunOption;
     private static OptionSpec<Void> helpOption;
     private static OptionSpec<Void> versionOption;
-    private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
     private static OptionSpecBuilder forceOption;
 
@@ -249,13 +248,10 @@ public class StreamsResetter {
             .describedAs("file name");
         forceOption = optionParser.accepts("force", "Force the removal of members of the consumer group (intended to remove stopped members if a long session timeout was used). " +
                 "Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
-        executeOption = optionParser.accepts("execute", "Execute the command.");
+
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
         versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
-
-        // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
-        optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");
 
         try {
             options = optionParser.parse(args);
@@ -267,10 +263,6 @@ public class StreamsResetter {
             }
         } catch (final OptionException e) {
             CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
-        }
-
-        if (options.has(executeOption) && options.has(dryRunOption)) {
-            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
