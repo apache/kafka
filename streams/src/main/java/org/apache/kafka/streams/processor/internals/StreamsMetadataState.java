@@ -46,16 +46,16 @@ import java.util.Set;
  */
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = HostInfo.unavailable();
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private List<StreamsMetadata> allMetadata = Collections.emptyList();
     private Cluster clusterMetadata;
     private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
-    public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
-        this.builder = builder;
-        this.globalStores = builder.globalStateStores().keySet();
+    public StreamsMetadataState(final TopologyMetadata topologyMetadata, final HostInfo thisHost) {
+        this.topologyMetadata = topologyMetadata;
+        this.globalStores = this.topologyMetadata.globalStateStores().keySet();
         this.thisHost = thisHost;
     }
 
@@ -92,7 +92,7 @@ public class StreamsMetadataState {
     public Collection<StreamsMetadata> getAllMetadata() {
         return Collections.unmodifiableList(allMetadata);
     }
-    
+
     /**
      * Find all of the {@link StreamsMetadata}s for a given storeName
      *
@@ -110,8 +110,8 @@ public class StreamsMetadataState {
             return allMetadata;
         }
 
-        final Collection<String> sourceTopics = builder.sourceTopicsForStore(storeName);
-        if (sourceTopics == null) {
+        final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName);
+        if (sourceTopics.isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -239,7 +239,7 @@ public class StreamsMetadataState {
         }
 
         final List<StreamsMetadata> rebuiltMetadata = new ArrayList<>();
-        final Map<String, List<String>> storeToSourceTopics = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
         Stream.concat(activePartitionHostMap.keySet().stream(), standbyPartitionHostMap.keySet().stream())
             .distinct()
             .forEach(hostInfo -> {
@@ -306,7 +306,7 @@ public class StreamsMetadataState {
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
-        final List<String> sourceTopics = new ArrayList<>(builder.sourceTopicsForStore(storeName));
+        final List<String> sourceTopics = new ArrayList<>(topologyMetadata.sourceTopicsForStore(storeName));
         if (sourceTopics.isEmpty()) {
             return null;
         }
@@ -319,7 +319,7 @@ public class StreamsMetadataState {
     }
 
     public String getStoreForChangelogTopic(final String topicName) {
-        return builder.getChangelogTopicToStore().get(topicName);
+        return topologyMetadata.getStoreForChangelogTopic(topicName);
     }
 
     private class SourceTopicsInfo {

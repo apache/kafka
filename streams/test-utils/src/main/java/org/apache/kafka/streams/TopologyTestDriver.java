@@ -68,6 +68,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -417,9 +418,7 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
 
-        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
-            (globalTopology != null && globalTopology.hasPersistentGlobalStore());
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory, builder.hasNamedTopologies());
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, new TopologyMetadata(internalTopologyBuilder));
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,
@@ -879,7 +878,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
-        for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
+        for (final String storeName : internalTopologyBuilder.allStateStoreNames()) {
             allStores.put(storeName, getStateStore(storeName, false));
         }
         return allStores;

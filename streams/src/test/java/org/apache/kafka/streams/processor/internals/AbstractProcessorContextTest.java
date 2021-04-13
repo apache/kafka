@@ -242,7 +242,7 @@ public class AbstractProcessorContextTest {
 
         @Override
         public String changelogFor(final String storeName) {
-            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
+            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().namedTopology());
         }
     }
 }

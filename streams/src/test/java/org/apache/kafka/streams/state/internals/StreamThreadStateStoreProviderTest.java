@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -153,7 +154,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true, false);
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), new TopologyMetadata(internalTopologyBuilder));
 
         taskOne = createStreamsTask(
             streamsConfig,

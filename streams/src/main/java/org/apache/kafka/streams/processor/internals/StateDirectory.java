@@ -23,34 +23,34 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.io.FileFilter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.Path;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
@@ -64,6 +64,7 @@ public class StateDirectory {
 
     private static final Pattern TASK_DIR_PATH_NAME = Pattern.compile("\\d+_\\d+");
     private static final Pattern NAMED_TOPOLOGY_DIR_PATH_NAME = Pattern.compile("__.+__"); // named topology dirs follow '__Topology-Name__'
+
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
     static final String LOCK_FILE_NAME = ".lock";
 
@@ -99,6 +100,16 @@ public class StateDirectory {
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
 
+    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
+        // TODO KAFKA-12648: Explicitly set hasNamedTopology in each test and remove this constructor
+        // Will be done in Pt. 2 as we want some of these integration tests to use named topologies
+        this(config, time, hasPersistentStores, false);
+    }
+
+    public StateDirectory(final StreamsConfig config, final Time time, final TopologyMetadata topologyMetadata) {
+        this(config, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
+    }
+
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
@@ -112,7 +123,7 @@ public class StateDirectory {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created when hasPersistentStores is enabled.
      */
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
+    StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
         this.time = time;
         this.hasPersistentStores = hasPersistentStores;
         this.hasNamedTopologies = hasNamedTopologies;
@@ -141,12 +152,6 @@ public class StateDirectory {
             configurePermissions(baseDir);
             configurePermissions(stateDir);
         }
-    }
-
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
-        // TODO KAFKA-12648: Explicitly set hasNamedTopology in each test and remove this constructor
-        // Will be done in Pt. 2 as we want some of these integration tests to use named topologies
-        this(config, time, hasPersistentStores, false);
     }
 
     private void configurePermissions(final File file) {
@@ -230,6 +235,7 @@ public class StateDirectory {
     public File getOrCreateDirectoryForTask(final TaskId taskId) {
         final File taskParentDir = getTaskDirectoryParentName(taskId);
         final File taskDir = new File(taskParentDir, StateManagerUtil.toTaskDirString(taskId));
+
         if (hasPersistentStores && !taskDir.exists()) {
             synchronized (taskDirCreationLock) {
                 // to avoid a race condition, we need to check again if the directory does not exist:
@@ -447,6 +453,7 @@ public class StateDirectory {
                 }
             }
         }
+
         // Ok to ignore returned exception as it should be swallowed
         maybeCleanEmptyNamedTopologyDirs(true);
     }

@@ -147,7 +147,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andReturn(builder).anyTimes();
+        expect(taskManager.topologyMetadata()).andReturn(new TopologyMetadata(builder)).anyTimes();
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
         expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
         builder.setApplicationId(APPLICATION_ID);

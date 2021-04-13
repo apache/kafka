@@ -463,7 +463,7 @@ public class ActiveTaskCreatorTest {
         replay(builder, stateDirectory, topology, sourceNode);
 
         activeTaskCreator = new ActiveTaskCreator(
-            builder,
+            new TopologyMetadata(builder),
             new StreamsConfig(properties),
             streamsMetrics,
             stateDirectory,

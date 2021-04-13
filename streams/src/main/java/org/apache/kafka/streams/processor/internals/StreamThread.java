@@ -297,7 +297,7 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
@@ -306,7 +306,7 @@ public class StreamThread extends Thread {
     private AtomicLong cacheResizeSize;
     private AtomicBoolean leaveGroupRequested;
 
-    public static StreamThread create(final InternalTopologyBuilder builder,
+    public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
                                       final Admin adminClient,
@@ -348,7 +348,7 @@ public class StreamThread extends Thread {
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
-            builder,
+            topologyMetadata,
             config,
             streamsMetrics,
             stateDirectory,
@@ -361,7 +361,7 @@ public class StreamThread extends Thread {
             log
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
-            builder,
+            topologyMetadata,
             config,
             streamsMetrics,
             stateDirectory,
@@ -377,7 +377,7 @@ public class StreamThread extends Thread {
             streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
-            builder,
+            topologyMetadata,
             adminClient,
             stateDirectory,
             processingMode(config)
@@ -391,7 +391,7 @@ public class StreamThread extends Thread {
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
-        if (!builder.latestResetTopicsPattern().pattern().isEmpty() || !builder.earliestResetTopicsPattern().pattern().isEmpty()) {
+        if (topologyMetadata.hasOffsetResetOverrides()) {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
@@ -410,7 +410,7 @@ public class StreamThread extends Thread {
             originalReset,
             taskManager,
             streamsMetrics,
-            builder,
+            topologyMetadata,
             threadId,
             logContext,
             referenceContainer.assignmentErrorCode,
@@ -470,7 +470,7 @@ public class StreamThread extends Thread {
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
-                        final InternalTopologyBuilder builder,
+                        final TopologyMetadata topologyMetadata,
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
@@ -514,7 +514,7 @@ public class StreamThread extends Thread {
         }
 
         this.time = time;
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
@@ -688,10 +688,10 @@ public class StreamThread extends Thread {
     }
 
     private void subscribeConsumer() {
-        if (builder.usesPatternSubscription()) {
-            mainConsumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+        if (topologyMetadata.usesPatternSubscription()) {
+            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
-            mainConsumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
+            mainConsumer.subscribe(topologyMetadata.sourceTopicCollection(), rebalanceListener);
         }
     }
 
@@ -949,18 +949,24 @@ public class StreamThread extends Thread {
         final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
-            if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
-            } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
-            } else {
-                if ("earliest".equals(originalReset)) {
-                    addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else if ("latest".equals(originalReset)) {
-                    addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
-                } else {
-                    notReset.add(partition);
-                }
+            switch (topologyMetadata.offsetResetStrategy(partition.topic())) {
+                case EARLIEST:
+                    addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
+                    break;
+                case LATEST:
+                    addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
+                    break;
+                case NONE:
+                    if ("earliest".equals(originalReset)) {
+                        addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
+                    } else if ("latest".equals(originalReset)) {
+                        addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                    } else {
+                        notReset.add(partition);
+                    }
+                    break;
+                default:
+                    throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
             }
         }
 

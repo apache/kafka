@@ -169,7 +169,7 @@ public class StreamsAssignmentScaleTest {
 
         final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andStubReturn(builder);
+        expect(taskManager.topologyMetadata()).andStubReturn(new TopologyMetadata(builder));
         expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
         final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
 

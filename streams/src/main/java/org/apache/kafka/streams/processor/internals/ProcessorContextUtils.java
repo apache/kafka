@@ -59,13 +59,13 @@ public final class ProcessorContextUtils {
     public static String changelogFor(final ProcessorContext context, final String storeName) {
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().namedTopology());
     }
 
     public static String changelogFor(final StateStoreContext context, final String storeName) {
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().namedTopology());
     }
 
     public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {

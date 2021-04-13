@@ -190,6 +190,7 @@ public class StreamsPartitionAssignorTest {
     private TaskManager taskManager;
     private Admin adminClient;
     private InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private TopologyMetadata topologyMetadata = new TopologyMetadata(builder);
     private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
@@ -240,11 +241,11 @@ public class StreamsPartitionAssignorTest {
     private void createMockTaskManager(final Set<TaskId> activeTasks,
                                        final Set<TaskId> standbyTasks) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andStubReturn(builder);
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(taskManager.getTaskOffsetSums()).andStubReturn(getTaskOffsetSums(activeTasks, standbyTasks));
         expect(taskManager.processId()).andStubReturn(UUID_1);
         builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        topologyMetadata.rewriteAndBuildTopology(new StreamsConfig(configProps()));
     }
 
     // If mockCreateInternalTopics is true the internal topic manager will report that it had to create all internal
@@ -822,7 +823,7 @@ public class StreamsPartitionAssignorTest {
     private static Set<TaskId> tasksForState(final String storeName,
                                              final List<TaskId> tasks,
                                              final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups) {
-        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName);
+        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName, null);
 
         final Set<TaskId> ids = new HashSet<>();
         for (final Map.Entry<Subtopology, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
@@ -1110,6 +1111,7 @@ public class StreamsPartitionAssignorTest {
 
         final String client = "client1";
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder);
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             asList(APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
@@ -1198,6 +1200,7 @@ public class StreamsPartitionAssignorTest {
 
         final String client = "client1";
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder);
 
         createDefaultMockTaskManager();
         EasyMock.replay(taskManager);
@@ -1439,6 +1442,7 @@ public class StreamsPartitionAssignorTest {
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream("topic1").groupByKey().count();
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder);
 
         createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
@@ -1918,6 +1922,7 @@ public class StreamsPartitionAssignorTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build(props));
+        topologyMetadata = new TopologyMetadata(builder);
 
         subscriptions.put("consumer10",
             new Subscription(
@@ -1992,6 +1997,8 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowTaskAssignmentExceptionWhenUnableToResolvePartitionCount() {
         builder = new CorruptedInternalTopologyBuilder();
+        topologyMetadata = new TopologyMetadata(builder);
+
         final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
 
         final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>());

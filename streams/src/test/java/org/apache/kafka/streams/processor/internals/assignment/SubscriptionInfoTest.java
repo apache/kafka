@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Map;
-
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
