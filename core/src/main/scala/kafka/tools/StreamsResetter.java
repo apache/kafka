@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -103,7 +105,6 @@ public class StreamsResetter {
     private static OptionSpecBuilder dryRunOption;
     private static OptionSpec<Void> helpOption;
     private static OptionSpec<Void> versionOption;
-    private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
     private static OptionSpecBuilder forceOption;
 
@@ -247,13 +248,10 @@ public class StreamsResetter {
             .describedAs("file name");
         forceOption = optionParser.accepts("force", "Force the removal of members of the consumer group (intended to remove stopped members if a long session timeout was used). " +
                 "Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
-        executeOption = optionParser.accepts("execute", "Execute the command.");
+
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
         versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
-
-        // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
-        optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");
 
         try {
             options = optionParser.parse(args);
@@ -265,10 +263,6 @@ public class StreamsResetter {
             }
         } catch (final OptionException e) {
             CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
-        }
-
-        if (options.has(executeOption) && options.has(dryRunOption)) {
-            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
@@ -492,9 +486,10 @@ public class StreamsResetter {
         resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
-    private void resetToDatetime(final Consumer<byte[], byte[]> client,
-                                 final Set<TopicPartition> inputTopicPartitions,
-                                 final Long timestamp) {
+    // visible for testing
+    public void resetToDatetime(final Consumer<byte[], byte[]> client,
+                                final Set<TopicPartition> inputTopicPartitions,
+                                final Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
@@ -503,7 +498,16 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
+            final Optional<Long> partitionOffset = Optional.ofNullable(topicPartitionsAndOffset.get(topicPartition))
+                    .map(OffsetAndTimestamp::offset)
+                    .filter(offset -> offset != ListOffsetsResponse.UNKNOWN_OFFSET);
+            if (partitionOffset.isPresent()) {
+                client.seek(topicPartition, partitionOffset.get());
+            } else {
+                client.seekToEnd(Collections.singletonList(topicPartition));
+                System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
+                        " is empty, without a committed record. Falling back to latest known offset.");
+            }
         }
     }
 
