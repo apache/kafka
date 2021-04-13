@@ -669,7 +669,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // we can respond immediately
         val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
-        System.err.println("respond immediately:" + produceResponseStatus)
+//        System.err.println("respond immediately:" + produceResponseStatus)
         responseCallback(produceResponseStatus)
       }
     } else {

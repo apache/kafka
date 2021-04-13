@@ -613,7 +613,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig);
         primary.kafka().createTopic("backup.test-topic-1", 1);
         primary.kafka().createTopic("heartbeats", 1);
+        System.err.println("creating test-topic-1");
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
+        System.err.println("complete test-topic-1");
         backup.kafka().createTopic("primary.test-topic-1", 1);
         backup.kafka().createTopic("heartbeats", 1);
     }
