@@ -381,15 +381,15 @@ public class RestServer {
      * Parses the uri and throws a more definitive error
      * when the internal node to node communication can't happen due to an invalid host name.
      */
-    private void validateUriHost(URI uri) {
+    void validateUriHost(URI uri) {
         if (uri.getHost() == null) {
             String host = Utils.getHost(uri.getAuthority());
-            String errorMsg = "Invalid host=" + host + ", in url=" + uri.toString();
+            String errorMsg = "Could not parse host from advertised URL=" + uri.toString();
             if (host != null) {
                 try {
                     IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
                 } catch (IllegalArgumentException e) {
-                    errorMsg += ", doesn't conform to RFC 1123 specification, reason=" + e.getMessage();
+                    errorMsg += ", as it doesn't conform to RFC 1123 specification, reason=" + e.getMessage();
                     throw new ConnectException(errorMsg, e);
                 }
             }

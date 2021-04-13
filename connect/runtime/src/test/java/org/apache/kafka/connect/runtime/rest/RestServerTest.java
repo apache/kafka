@@ -50,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -188,17 +189,30 @@ public class RestServerTest {
     }
 
     @Test
-    public void testAdvertisedUriInvalidHost() {
+    public void testValidateUriHost() {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
-        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
-        configMap.put(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG, "kafka_connect-0.dev-2");
-        configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
-        ConnectException exception = assertThrows(ConnectException.class, () -> server.advertisedUrl());
+        server.validateUriHost(URI.create("http://localhost:8080"));
+        server.validateUriHost(URI.create("http://172.217.2.110:80"));
+        server.validateUriHost(URI.create("http://[2607:f8b0:4006:818::2004]:80"));
+    }
+
+    @Test
+    public void testValidateUriInvalidHost() {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+
+        ConnectException exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080")));
         assertTrue(exception.getMessage().contains("RFC 1123"));
+
+        exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://:8080")));
+        assertTrue(exception.getMessage().contains("Could not parse host"));
     }
 
     @Test
