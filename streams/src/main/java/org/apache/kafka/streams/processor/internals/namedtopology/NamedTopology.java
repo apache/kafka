@@ -14,16 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.assignment;
+package org.apache.kafka.streams.processor.internals.namedtopology;
 
-public final class StreamsAssignmentProtocolVersions {
-    public static final int UNKNOWN = -1;
-    public static final int EARLIEST_PROBEABLE_VERSION = 3;
-    public static final int MIN_NAMED_TOPOLOGY_VERSION = 3;
-    public static final int LATEST_SUPPORTED_VERSION = 10;
-    // When changing the versions:
-    // 1) Update the version_probing_message and end_of_upgrade_message in streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
-    // 2) Add a unit test in SubscriptionInfoTest and/or AssignmentInfoTest
+import org.apache.kafka.streams.Topology;
 
-    private StreamsAssignmentProtocolVersions() {}
+public class NamedTopology {
+
+    private final Topology topology;
+    private final String name;
+
+    private NamedTopology(final Topology topology, final String name) {
+        this.topology = topology;
+        this.name = name;
+    }
+
+    public static NamedTopology fromTopologyWithName(final Topology topology, final String name) {
+        return new NamedTopology(topology, name);
+    }
+
+    public Topology topology() {
+        return topology;
+    }
+
+    public String name() {
+        return name;
+    }
 }

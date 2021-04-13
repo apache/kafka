@@ -19,37 +19,89 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
-import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.stream.Collectors;
+import org.junit.Test;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+@RunWith(Parameterized.class)
 public class AssignmentInfoTest {
-    private final List<TaskId> activeTasks = Arrays.asList(
+
+    private static final TaskId[] ACTIVE_TASKS = new TaskId[]{
         TASK_0_0,
         TASK_0_1,
         TASK_1_0,
-        TASK_1_0);
+        TASK_1_1
+    };
 
-    private final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(
-        mkEntry(TASK_1_0, mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
-        mkEntry(TASK_1_1, mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
-    );
+    private static final TaskId[] STANDBY_TASKS = new TaskId[]{
+        TASK_0_0,
+        TASK_0_1,
+        TASK_1_0,
+        TASK_1_1
+    };
+
+    private static final TaskId[] ACTIVE_TASKS_WITH_NAMED_TOPOLOGY = new TaskId[]{
+        NAMED_TASK_0_0,
+        NAMED_TASK_0_1,
+        NAMED_TASK_1_0,
+        NAMED_TASK_1_1
+    };
+
+    private static final TaskId[] STANDBY_TASKS_WITH_NAMED_TOPOLOGY = new TaskId[]{
+        NAMED_TASK_0_0,
+        NAMED_TASK_0_1,
+        NAMED_TASK_1_0,
+        NAMED_TASK_1_1
+    };
+
+    @Parameterized.Parameters
+    public static Collection<TaskId[][]> data() {
+        return asList(new TaskId[][][] {
+            {ACTIVE_TASKS, STANDBY_TASKS},
+            {ACTIVE_TASKS_WITH_NAMED_TOPOLOGY, STANDBY_TASKS_WITH_NAMED_TOPOLOGY}
+        });
+    }
+
+    private final List<TaskId> activeTasks;
+    private final Map<TaskId, Set<TopicPartition>> standbyTasks;
+
+    public AssignmentInfoTest(TaskId[] activeTasks, TaskId[] standbyTasks) {
+        this.activeTasks = Arrays.stream(activeTasks).collect(Collectors.toList());
+        this.standbyTasks = new HashMap<>();
+        int i = 0;
+        for (final TaskId task : standbyTasks) {
+            this.standbyTasks.put(task, mkSet(new TopicPartition("topic1", i), new TopicPartition("topic2", i)));
+            ++i;
+        }
+    }
 
     private final Map<HostInfo, Set<TopicPartition>> activeAssignment = mkMap(
         mkEntry(new HostInfo("localhost", 8088),
@@ -141,6 +193,33 @@ public class AssignmentInfoTest {
             new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
         final AssignmentInfo expectedInfo =
             new AssignmentInfo(7, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion8() {
+        final AssignmentInfo info =
+            new AssignmentInfo(8, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo =
+            new AssignmentInfo(8, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion9() {
+        final AssignmentInfo info =
+            new AssignmentInfo(9, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo =
+            new AssignmentInfo(9, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion10() {
+        final AssignmentInfo info =
+            new AssignmentInfo(10, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo =
+            new AssignmentInfo(10, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 

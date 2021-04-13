@@ -218,12 +218,19 @@ public class SubscriptionInfo {
             taskOffsetSumsCache = new HashMap<>();
             if (data.version() >= MIN_VERSION_OFFSET_SUM_SUBSCRIPTION) {
                 for (final TaskOffsetSum taskOffsetSum : data.taskOffsetSums()) {
-                    for (final PartitionToOffsetSum partitionOffsetSum : taskOffsetSum.partitionToOffsetSum()) {
+                    if (data.version() >= 10) {
                         taskOffsetSumsCache.put(
                             new TaskId(taskOffsetSum.topicGroupId(),
-                                       partitionOffsetSum.partition()),
-                            partitionOffsetSum.offsetSum()
-                        );
+                                       taskOffsetSum.partition()),
+                            taskOffsetSum.offsetSum());
+                    } else {
+                        for (final PartitionToOffsetSum partitionOffsetSum : taskOffsetSum.partitionToOffsetSum()) {
+                            taskOffsetSumsCache.put(
+                                new TaskId(taskOffsetSum.topicGroupId(),
+                                           partitionOffsetSum.partition()),
+                                partitionOffsetSum.offsetSum()
+                            );
+                        }
                     }
                 }
             } else {

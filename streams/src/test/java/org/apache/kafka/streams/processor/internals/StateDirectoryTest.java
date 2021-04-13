@@ -22,6 +22,8 @@ import java.io.BufferedWriter;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
@@ -63,6 +66,10 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -268,28 +275,24 @@ public class StateDirectoryTest {
             directory.lock(task0);
             directory.lock(task1);
 
-            final File dir0 = new File(appDir, task0.toString());
-            final File dir1 = new File(appDir, task1.toString());
-            final File dir2 = new File(appDir, task2.toString());
+            final TaskDirectory dir0 = directory.makeTaskDirectory(new File(appDir, task0.toTaskDirString()), null);
+            final TaskDirectory dir1 = directory.makeTaskDirectory(new File(appDir, task1.toTaskDirString()), null);
+            final TaskDirectory dir2 = directory.makeTaskDirectory(new File(appDir, task2.toTaskDirString()), null);
 
-            Set<File> files = Arrays.stream(
-                Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1, dir2), files);
+            List<TaskDirectory> files = directory.listAllTaskDirectories();
+            assertEquals(mkSet(dir0, dir1, dir2), new HashSet<>(files));
 
-            files = Arrays.stream(
-                Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1, dir2), files);
+            files = directory.listNonEmptyTaskDirectories();
+            assertEquals(mkSet(dir0, dir1, dir2), new HashSet<>(files));
 
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
-            files = Arrays.stream(
-                Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1, dir2), files);
+            files = directory.listAllTaskDirectories();
+            assertEquals(mkSet(dir0, dir1, dir2), new HashSet<>(files));
 
-            files = Arrays.stream(
-                Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1), files);
+            files = directory.listNonEmptyTaskDirectories();
+            assertEquals(mkSet(dir0, dir1), new HashSet<>(files));
         } finally {
             directory.unlock(task0);
             directory.unlock(task1);
@@ -304,29 +307,29 @@ public class StateDirectoryTest {
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
-        assertEquals(1, directory.listAllTaskDirectories().length);
-        assertEquals(1, directory.listNonEmptyTaskDirectories().length);
+        assertEquals(1, directory.listAllTaskDirectories().size());
+        assertEquals(1, directory.listNonEmptyTaskDirectories().size());
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
         assertTrue(dir.exists());
-        assertEquals(1, directory.listAllTaskDirectories().length);
-        assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+        assertEquals(1, directory.listAllTaskDirectories().size());
+        assertEquals(0, directory.listNonEmptyTaskDirectories().size());
     }
 
     @Test
     public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
         final File dir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0));
         assertTrue(new File(dir, "store").mkdir());
-        assertEquals(1, directory.listAllTaskDirectories().length);
-        assertEquals(1, directory.listNonEmptyTaskDirectories().length);
+        assertEquals(1, directory.listAllTaskDirectories().size());
+        assertEquals(1, directory.listNonEmptyTaskDirectories().size());
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
             assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
-            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertEquals(1, directory.listAllTaskDirectories().size());
+            assertEquals(0, directory.listNonEmptyTaskDirectories().size());
             assertThat(
                 appender.getMessages(),
                 hasItem(containsString("Deleting obsolete state directory"))
@@ -337,8 +340,8 @@ public class StateDirectoryTest {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
             assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
-            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertEquals(1, directory.listAllTaskDirectories().size());
+            assertEquals(0, directory.listNonEmptyTaskDirectories().size());
             assertThat(
                 appender.getMessages(),
                 not(hasItem(containsString("Deleting obsolete state directory")))
@@ -356,14 +359,14 @@ public class StateDirectoryTest {
     @Test
     public void shouldReturnEmptyArrayForNonPersistentApp() throws IOException {
         initializeStateDirectory(false);
-        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+        assertTrue(directory.listAllTaskDirectories().isEmpty());
     }
 
     @Test
     public void shouldReturnEmptyArrayIfStateDirDoesntExist() throws IOException {
         cleanup();
         assertFalse(stateDir.exists());
-        assertTrue(Arrays.asList(directory.listAllTaskDirectories()).isEmpty());
+        assertTrue(directory.listAllTaskDirectories().isEmpty());
     }
 
     @Test
@@ -385,29 +388,25 @@ public class StateDirectoryTest {
         assertTrue(appDir.createNewFile());
         assertTrue(appDir.exists());
         assertNull(appDir.listFiles());
-        assertEquals(0, directory.listAllTaskDirectories().length);
+        assertEquals(0, directory.listAllTaskDirectories().size());
     }
 
     @Test
     public void shouldOnlyListNonEmptyTaskDirectories() throws IOException {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
-        final File taskDir1 = directory.getOrCreateDirectoryForTask(new TaskId(0, 0));
-        final File taskDir2 = directory.getOrCreateDirectoryForTask(new TaskId(0, 1));
+        final TaskDirectory taskDir1 = directory.makeTaskDirectory(directory.getOrCreateDirectoryForTask(new TaskId(0, 0)), null);
+        final TaskDirectory taskDir2 = directory.makeTaskDirectory(directory.getOrCreateDirectoryForTask(new TaskId(0, 1)), null);
 
-        final File storeDir = new File(taskDir1, "store");
+        final File storeDir = new File(taskDir1.file(), "store");
         assertTrue(storeDir.mkdir());
 
-        assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
-            directory.listAllTaskDirectories()).collect(Collectors.toSet()));
-        assertEquals(mkSet(taskDir1), Arrays.stream(
-            directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
+        assertEquals(asList(taskDir1, taskDir2), directory.listAllTaskDirectories());
+        assertEquals(asList(taskDir1), directory.listNonEmptyTaskDirectories());
 
-        Utils.delete(taskDir1, Collections.singletonList(new File(taskDir1, LOCK_FILE_NAME)));
+        Utils.delete(taskDir1.file(), Collections.singletonList(new File(taskDir1.file(), LOCK_FILE_NAME)));
 
-        assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
-            directory.listAllTaskDirectories()).collect(Collectors.toSet()));
-        assertEquals(Collections.emptySet(), Arrays.stream(
-            directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
+        assertEquals(asList(taskDir1, taskDir2), directory.listAllTaskDirectories());
+        assertEquals(emptyList(), directory.listNonEmptyTaskDirectories());
     }
 
     @Test
@@ -511,7 +510,7 @@ public class StateDirectoryTest {
 
         directory.clean();
 
-        assertEquals(Collections.emptySet(), Arrays.stream(
+        assertEquals(emptySet(), Arrays.stream(
             Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
     }
 

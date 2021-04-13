@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Map;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+
+import java.util.Optional;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -386,6 +388,38 @@ public class SubscriptionInfoTest {
     public void shouldEncodeAndDecodeVersion9() {
         final SubscriptionInfo info =
                 new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE);
+        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion10() {
+        // In version 10 we added a field to the encoded taskID in the offset sum map
+        final Map<TaskId, Long> taskOffsetSums = mkMap(
+            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1), 0L),
+            mkEntry(new TaskId(1, 0), 10L)
+        );
+
+        final SubscriptionInfo info =
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", taskOffsetSums, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE);
+        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion10WithNamedTopologyTasks() {
+        // In version 10 we added a field to the encoded taskID in the offset sum map
+        final Map<TaskId, Long> taskOffsetSums = mkMap(
+            mkEntry(new TaskId(0, 0, "topology1"), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1, "topology1"), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 0, "topology2"), Task.LATEST_OFFSET),
+            mkEntry(new TaskId(0, 1, "topology2"), 0L),
+            mkEntry(new TaskId(1, 0, "topology2"), 10L)
+        );
+
+        final SubscriptionInfo info =
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", taskOffsetSums, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 

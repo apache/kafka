@@ -23,6 +23,15 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+
+import java.io.FileFilter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,6 +93,7 @@ public class StateDirectory {
     private final String appId;
     private final File stateDir;
     private final boolean hasPersistentStores;
+    private final boolean hasNamedTopologies;
 
     private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
 
@@ -93,6 +103,10 @@ public class StateDirectory {
     private FileChannel globalStateChannel;
     private FileLock globalStateLock;
 
+    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
+        this(config, time, hasPersistentStores, false);
+    }
+
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
@@ -101,13 +115,15 @@ public class StateDirectory {
      * @param hasPersistentStores only when the application's topology does have stores persisted on local file
      *                            system, we would go ahead and auto-create the corresponding application / task / store
      *                            directories whenever necessary; otherwise no directories would be created.
+     * @param hasNamedTopologies  whether this application is composed of independent named topologies
      *
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created when hasPersistentStores is enabled.
      */
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
+    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
         this.time = time;
         this.hasPersistentStores = hasPersistentStores;
+        this.hasNamedTopologies = hasNamedTopologies;
         this.appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
         final File baseDir = new File(stateDirName);
@@ -134,6 +150,8 @@ public class StateDirectory {
             configurePermissions(stateDir);
         }
     }
+
+
 
     private void configurePermissions(final File file) {
         final Path path = file.toPath();
@@ -214,6 +232,7 @@ public class StateDirectory {
      * @throws ProcessorStateException if the task directory does not exists and could not be created
      */
     public File getOrCreateDirectoryForTask(final TaskId taskId) {
+        // TODO set up named topology directory structure with task subdirectories
         final File taskDir = new File(stateDir, taskId.toString());
         if (hasPersistentStores && !taskDir.exists()) {
             synchronized (taskDirCreationLock) {
@@ -420,18 +439,18 @@ public class StateDirectory {
     }
 
     private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
-        for (final File taskDir : listNonEmptyTaskDirectories()) {
-            final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parse(dirName);
+        for (final TaskDirectory taskDir : listNonEmptyTaskDirectories()) {
+            final String dirName = taskDir.file().getName();
+            final TaskId id = TaskId.parseTaskDirectoryName(dirName, taskDir.namedTopology());
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
                         final long now = time.milliseconds();
-                        final long lastModifiedMs = taskDir.lastModified();
+                        final long lastModifiedMs = taskDir.file().lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs) {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
-                            Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
+                            Utils.delete(taskDir.file(), Collections.singletonList(new File(taskDir.file(), LOCK_FILE_NAME)));
                         }
                     }
                 } catch (final IOException exception) {
@@ -449,15 +468,15 @@ public class StateDirectory {
 
     private void cleanRemovedTasksCalledByUser() throws Exception {
         final AtomicReference<Exception> firstException = new AtomicReference<>();
-        for (final File taskDir : listAllTaskDirectories()) {
-            final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parse(dirName);
+        for (final TaskDirectory taskDir : listAllTaskDirectories()) {
+            final String dirName = taskDir.file().getName();
+            final TaskId id = TaskId.parseTaskDirectoryName(dirName, taskDir.namedTopology());
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
                         log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
                             logPrefix(), dirName, id);
-                        Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
+                        Utils.delete(taskDir.file(), Collections.singletonList(new File(taskDir.file(), LOCK_FILE_NAME)));
                     } else {
                         log.warn("{} Could not get lock for state directory {} for task {} as user calling cleanup.",
                             logPrefix(), dirName, id);
@@ -474,7 +493,7 @@ public class StateDirectory {
                         unlock(id);
                         // for manual user call, stream threads are not running so it is safe to delete
                         // the whole directory
-                        Utils.delete(taskDir);
+                        Utils.delete(taskDir.file());
                     } catch (final IOException exception) {
                         log.error(
                             String.format("%s Failed to release lock on state directory %s for task %s with exception:",
@@ -496,39 +515,49 @@ public class StateDirectory {
      * List all of the task directories that are non-empty
      * @return The list of all the non-empty local directories for stream tasks
      */
-    File[] listNonEmptyTaskDirectories() {
-        final File[] taskDirectories;
-        if (!hasPersistentStores || !stateDir.exists()) {
-            taskDirectories = new File[0];
-        } else {
-            taskDirectories =
-                stateDir.listFiles(pathname -> {
-                    if (!pathname.isDirectory() || !TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches()) {
-                        return false;
-                    } else {
-                        return !taskDirEmpty(pathname);
-                    }
-                });
-        }
-
-        return taskDirectories == null ? new File[0] : taskDirectories;
+    List<TaskDirectory> listNonEmptyTaskDirectories() {
+        return listTaskDirectories(pathname -> {
+            if (!pathname.isDirectory() || !TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches()) {
+                return false;
+            } else {
+                return !taskDirEmpty(pathname);
+            }
+        });
     }
 
     /**
-     * List all of the task directories
+     * List all of the task directories along with their parent directory if they belong to a named topology
      * @return The list of all the existing local directories for stream tasks
      */
-    File[] listAllTaskDirectories() {
-        final File[] taskDirectories;
-        if (!hasPersistentStores || !stateDir.exists()) {
-            taskDirectories = new File[0];
-        } else {
-            taskDirectories =
-                stateDir.listFiles(pathname -> pathname.isDirectory()
-                                                   && TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches());
+    List<TaskDirectory> listAllTaskDirectories() {
+        return listTaskDirectories(pathname -> pathname.isDirectory() && TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches());
+    }
+
+    private List<TaskDirectory> listTaskDirectories(final FileFilter filter) {
+        final List<TaskDirectory> taskDirectories = new ArrayList<>();
+        if (hasPersistentStores && stateDir.exists()) {
+            if (hasNamedTopologies) {
+                final File[] namedTopologyDirectories = stateDir.listFiles();
+                if (namedTopologyDirectories != null) {
+                    for (final File namedTopologyDir : namedTopologyDirectories) {
+                        final File[] taskDirs = namedTopologyDir.listFiles(filter);
+                        if (taskDirs != null) {
+                            taskDirectories.addAll(Arrays.stream(taskDirs)
+                                                       .map(f -> makeTaskDirectory(f, namedTopologyDir.getName())).collect(Collectors.toList()));
+                        }
+                    }
+                }
+            } else {
+                final File[] taskDirs =
+                    stateDir.listFiles(filter);
+                if (taskDirs != null) {
+                    taskDirectories.addAll(Arrays.stream(taskDirs)
+                                               .map(f -> makeTaskDirectory(f, null)).collect(Collectors.toList()));
+                }
+            }
         }
 
-        return taskDirectories == null ? new File[0] : taskDirectories;
+        return taskDirectories;
     }
 
     private FileLock tryLock(final FileChannel channel) throws IOException {
@@ -536,6 +565,51 @@ public class StateDirectory {
             return channel.tryLock();
         } catch (final OverlappingFileLockException e) {
             return null;
+        }
+    }
+
+    // Helper method to avoid passing in hasNamedTopologies all the time
+    public TaskDirectory makeTaskDirectory(final File file, final String namedTopology) {
+        return new TaskDirectory(file, namedTopology, hasNamedTopologies);
+    }
+
+    public static class TaskDirectory {
+        private final File file;
+        private final String namedTopology; // may be null if hasNamedTopologies = false
+
+        TaskDirectory(final File file, final String namedTopology, final boolean hasNamedTopologies) {
+            this.file = file;
+            this.namedTopology = namedTopology;
+            if (namedTopology == null && hasNamedTopologies) {
+                log.error("Tried to construct TaskDirectory for application with named topologies, but no named topology was passed in for {}", file.getPath());
+                throw new IllegalStateException("Task directory " + file.getPath() + " should have an associated named topology");
+            }
+        }
+
+        public File file() {
+            return file;
+        }
+
+        public String namedTopology() {
+            return namedTopology;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final TaskDirectory that = (TaskDirectory) o;
+            return file.equals(that.file) &&
+                Objects.equals(namedTopology, that.namedTopology);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(file, namedTopology);
         }
     }
 
