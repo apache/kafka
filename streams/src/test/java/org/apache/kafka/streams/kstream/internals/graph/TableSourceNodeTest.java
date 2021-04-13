@@ -67,7 +67,7 @@ public class TableSourceNodeTest {
             .withMaterializedInternal(new MaterializedInternal<>(Materialized.as(STORE_NAME)))
             .withConsumedInternal(new ConsumedInternal<>(Consumed.as("node-name")))
             .withProcessorParameters(
-                new ProcessorParameters<>(new KTableSource<>(STORE_NAME, STORE_NAME), null))
+                new ProcessorParameters<>(new KTableSource<>(STORE_NAME, STORE_NAME, false), null))
             .build();
         tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
 

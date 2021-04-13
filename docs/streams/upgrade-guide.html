@@ -122,6 +122,13 @@
         <li>Connect-json: As of Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
             Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
     </ul>
+    <p>
+      We improved the semantics of <code>StreamsBuilder.table()</code> and <code>KStream.toTable()</code> operators:
+      both operator now follow <em>timestamp order</em>, in contrast to <em>offset order</em> as previously.
+      This change implies that all out-of-order records will now be dropped by default.
+      If you want to keep the old semantics, you can use a custom timestamp extractor that returns the
+      current <code>partitionTime</code> for out-of-order records instead of their event timestamp.
+    </p>
     
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>

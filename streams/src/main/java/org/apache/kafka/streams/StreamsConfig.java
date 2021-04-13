@@ -902,6 +902,16 @@ public class StreamsConfig extends AbstractConfig {
 
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
+
+        // if users run into issues with the new semantics, we should first propose that they
+        // use a custom TimestampExtractor that returns:
+        //
+        //  long extract(ConsumerRecord<Object, Object> record, long partitionTime) {
+        //    return Math.max(record.timestamp, partitionTime);
+        // }
+        //
+        // this internal config should be the last resort if the timestamp extractor trick does not work
+        public static final String ENABLE_KTABLE_OUT_OF_ORDER_HANDLING = "__enable.ktable.out.of.order.handling__";
     }
 
     /**

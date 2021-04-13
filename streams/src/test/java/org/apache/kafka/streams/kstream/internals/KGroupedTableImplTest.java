@@ -145,13 +145,14 @@ public class KGroupedTableImplTest {
         assertEquals(ValueAndTimestamp.make(1, 10L), reducedResults.get("A"));
         assertEquals(ValueAndTimestamp.make(2, 11L), reducedResults.get("B"));
 
-        inputTopic.pipeInput("A", 2.6, 30);
-        inputTopic.pipeInput("B", 1.3, 30);
-        inputTopic.pipeInput("A", 5.7, 50);
-        inputTopic.pipeInput("B", 6.2, 20);
+        inputTopic.pipeInput("A", 2.6, 30L);
+        inputTopic.pipeInput("B", 1.3, 30L);
+        inputTopic.pipeInput("A", 5.7, 50L);
+        inputTopic.pipeInput("B", 6.2, 20L); // dropped
+        inputTopic.pipeInput("B", 6.2, 60L);
 
         assertEquals(ValueAndTimestamp.make(5, 50L), reducedResults.get("A"));
-        assertEquals(ValueAndTimestamp.make(6, 30L), reducedResults.get("B"));
+        assertEquals(ValueAndTimestamp.make(6, 60L), reducedResults.get("B"));
     }
 
     @Test
@@ -201,7 +202,6 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
@@ -230,12 +230,11 @@ public class KGroupedTableImplTest {
             {
                 final KeyValueStore<String, ValueAndTimestamp<Integer>> reduce = driver.getTimestampedKeyValueStore("reduce");
                 assertThat(reduce.get("A"), equalTo(ValueAndTimestamp.make(5, 50L)));
-                assertThat(reduce.get("B"), equalTo(ValueAndTimestamp.make(6, 30L)));
+                assertThat(reduce.get("B"), equalTo(ValueAndTimestamp.make(6, 60L)));
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
         builder
@@ -259,13 +258,12 @@ public class KGroupedTableImplTest {
             }
             {
                 final KeyValueStore<String, ValueAndTimestamp<Long>> counts = driver.getTimestampedKeyValueStore("count");
-                assertThat(counts.get("1"), equalTo(ValueAndTimestamp.make(3L, 50L)));
-                assertThat(counts.get("2"), equalTo(ValueAndTimestamp.make(2L, 60L)));
+                assertThat(counts.get("1"), equalTo(ValueAndTimestamp.make(3L, 60L)));
+                assertThat(counts.get("2"), equalTo(ValueAndTimestamp.make(2L, 80L)));
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         builder
@@ -293,17 +291,19 @@ public class KGroupedTableImplTest {
                 }
                 {
                     final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getTimestampedKeyValueStore("aggregate");
-                    assertThat(aggregate.get("1"), equalTo(ValueAndTimestamp.make("0+1+1+1", 50L)));
-                    assertThat(aggregate.get("2"), equalTo(ValueAndTimestamp.make("0+2+2", 60L)));
+                    assertThat(aggregate.get("1"), equalTo(ValueAndTimestamp.make("0+1+1+1", 60L)));
+                    assertThat(aggregate.get("2"), equalTo(ValueAndTimestamp.make("0+2+2", 80L)));
                 }
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointOnCountWhenMaterializedIsNull() {
-        assertThrows(NullPointerException.class, () -> groupedTable.count((Materialized) null));
+        assertThrows(
+            NullPointerException.class,
+            () -> groupedTable.count((Materialized<String, Long, KeyValueStore<Bytes, byte[]>>) null)
+        );
     }
 
     @Test
@@ -357,14 +357,17 @@ public class KGroupedTableImplTest {
             Materialized.as("store")));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnAggregateWhenMaterializedIsNull() {
-        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
-            MockInitializer.STRING_INIT,
-            MockAggregator.TOSTRING_ADDER,
-            MockAggregator.TOSTRING_REMOVER,
-            (Materialized) null));
+        assertThrows(
+            NullPointerException.class,
+            () -> groupedTable.aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
+                (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null
+            )
+        );
     }
 
     private void processData(final String topic,
@@ -373,8 +376,10 @@ public class KGroupedTableImplTest {
             driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "1", 10L);
         inputTopic.pipeInput("B", "1", 50L);
-        inputTopic.pipeInput("C", "1", 30L);
-        inputTopic.pipeInput("D", "2", 40L);
-        inputTopic.pipeInput("E", "2", 60L);
+        inputTopic.pipeInput("C", "1", 30L); // dropped
+        inputTopic.pipeInput("C", "1", 60L);
+        inputTopic.pipeInput("D", "2", 30L); // dropped
+        inputTopic.pipeInput("D", "2", 70L);
+        inputTopic.pipeInput("E", "2", 80L);
     }
 }

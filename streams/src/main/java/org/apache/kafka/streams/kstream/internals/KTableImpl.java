@@ -1146,7 +1146,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final KTableSource<K, VR> resultProcessorSupplier = new KTableSource<>(
             materializedInternal.storeName(),
-            materializedInternal.queryableStoreName()
+            materializedInternal.queryableStoreName(),
+            false
         );
 
         final StoreBuilder<TimestampedKeyValueStore<K, VR>> resultStore =

@@ -1235,10 +1235,10 @@ public class CogroupedKStreamImplTest {
 
             assertTrue(testOutputTopic.isEmpty());
 
-            testInputTopic3.pipeInput("k1", "C", 0L);
+            testInputTopic3.pipeInput("k1", "C", 8L);
             testInputTopic3.pipeInput("k2", "D", 10L);
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", 5L);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", 8L);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B+D", 10L);
             assertTrue(testOutputTopic.isEmpty());
         }
