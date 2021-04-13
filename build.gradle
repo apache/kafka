@@ -35,6 +35,7 @@ plugins {
   id 'idea'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '6.1.1'
+  id 'org.nosphere.apache.rat' version "0.7.0"
 
   id "com.github.spotbugs" version '4.6.0' apply false
   id 'org.gradle.test-retry' version '1.2.0' apply false
@@ -135,8 +136,11 @@ ext {
 apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
-  apply from: file('gradle/rat.gradle')
   rat {
+    verbose = true
+    reportDir.set(project.file('build/rat'))
+    stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
+
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
     def repo = Grgit.open(currentDir: project.getRootDir())
@@ -159,11 +163,13 @@ if (file('.git').exists()) {
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
         'streams/streams-scala/logs/*',
         'licenses/*',
-        '**/generated/**'
+        '**/generated/**',
+        'clients/src/test/resources/serializedData/*'
     ])
   }
+} else {
+  rat.enabled = false
 }
-
 println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 
 subprojects {
