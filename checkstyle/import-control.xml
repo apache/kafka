@@ -269,6 +269,11 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
+
+    <subpackage name="log">
+      <allow pkg="org.apache.kafka.server.log" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="shell">
