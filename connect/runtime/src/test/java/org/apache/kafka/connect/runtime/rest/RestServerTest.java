@@ -210,6 +210,9 @@ public class RestServerTest {
 
         ConnectException exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080")));
         assertTrue(exception.getMessage().contains("RFC 1123"));
+        //invalid uri with / in the end
+        exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080/")));
+        assertTrue(exception.getMessage().contains("RFC 1123"));
 
         exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://:8080")));
         assertTrue(exception.getMessage().contains("Could not parse host"));
