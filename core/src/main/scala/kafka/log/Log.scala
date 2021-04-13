@@ -2003,11 +2003,26 @@ object Log extends Logging {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val topicPartition = Log.parseTopicPartitionName(dir)
-    val logLoader = new LogLoader(dir, topicPartition, config, scheduler, time, logDirFailureChannel)
-    val logComponents = logLoader.load(logStartOffset, recoveryPoint, maxProducerIdExpirationMs, lastShutdownClean)
-    new Log(dir, config, logComponents.segments, logComponents.logStartOffset, logComponents.recoveryPoint, logComponents.nextOffsetMetadata, scheduler,
+    val segments = new LogSegments(topicPartition)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      dir,
+      topicPartition,
+      config,
+      scheduler,
+      time,
+      logDirFailureChannel,
+      lastShutdownClean,
+      segments,
+      logStartOffset,
+      recoveryPoint,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+    new Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint, offsets.nextOffsetMetadata, scheduler,
       brokerTopicStats, time, maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, topicPartition,
-      logComponents.leaderEpochCache, logComponents.producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
+      leaderEpochCache, producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
   }
 
   /**

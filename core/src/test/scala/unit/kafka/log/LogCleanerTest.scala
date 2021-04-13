@@ -104,22 +104,38 @@ class LogCleanerTest {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxProducerIdExpirationMs = 60 * 60 * 1000
-    val logLoader = new LogLoader(dir, topicPartition, config, time.scheduler, time, logDirFailureChannel)
-    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
+    val logSegments = new LogSegments(topicPartition)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      dir,
+      topicPartition,
+      config,
+      time.scheduler,
+      time,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      logSegments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+
     val log = new Log(dir,
                       config = config,
-                      segments = logComponents.segments,
-                      logStartOffset = logComponents.logStartOffset,
-                      recoveryPoint = logComponents.recoveryPoint,
-                      nextOffsetMetadata = logComponents.nextOffsetMetadata,
+                      segments = logSegments,
+                      logStartOffset = offsets.logStartOffset,
+                      recoveryPoint = offsets.recoveryPoint,
+                      nextOffsetMetadata = offsets.nextOffsetMetadata,
                       scheduler = time.scheduler,
                       brokerTopicStats = new BrokerTopicStats,
                       time,
                       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       topicPartition = topicPartition,
-                      leaderEpochCache = logComponents.leaderEpochCache,
-                      producerStateManager = logComponents.producerStateManager,
+                      leaderEpochCache = leaderEpochCache,
+                      producerStateManager = producerStateManager,
                       logDirFailureChannel = logDirFailureChannel,
                       topicId = None,
                       keepPartitionMetadataFile = true) {

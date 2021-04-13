@@ -20,7 +20,7 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
-import kafka.log.{Log, LogConfig, LogLoader, LogManager}
+import kafka.log.{LoadLogParams, Log, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.TestUtils.retry
 import org.junit.jupiter.api.Assertions._
@@ -122,12 +122,27 @@ class SchedulerTest {
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val topicPartition = Log.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
-    val logLoader = new LogLoader(logDir, topicPartition, logConfig, scheduler, mockTime, logDirFailureChannel)
-    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
-    val log = new Log(logDir, logConfig, segments = logComponents.segments, logStartOffset = logComponents.logStartOffset,
-      recoveryPoint = logComponents.recoveryPoint, nextOffsetMetadata = logComponents.nextOffsetMetadata, scheduler,
+    val segments = new LogSegments(topicPartition)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      logDir,
+      topicPartition,
+      logConfig,
+      scheduler,
+      mockTime,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+    val log = new Log(logDir, logConfig, segments = segments, logStartOffset = offsets.logStartOffset,
+      recoveryPoint = offsets.recoveryPoint, nextOffsetMetadata = offsets.nextOffsetMetadata, scheduler,
       brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
-      topicPartition, logComponents.leaderEpochCache, logComponents.producerStateManager, logDirFailureChannel,
+      topicPartition, leaderEpochCache, producerStateManager, logDirFailureChannel,
       topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()

@@ -99,21 +99,35 @@ class LogCleanerManagerTest extends Logging {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
     val maxProducerIdExpirationMs = 60 * 60 * 1000
-    val logLoader = new LogLoader(tpDir, tp, config, time.scheduler, time, logDirFailureChannel)
-    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
-    // the exception should be catched and the partition that caused it marked as uncleanable
-    class LogMock(dir: File, config: LogConfig, logComponents: LogComponents)
-      extends Log(dir, config, logComponents.segments, logComponents.logStartOffset,
-        logComponents.recoveryPoint, logComponents.nextOffsetMetadata, time.scheduler,
-        new BrokerTopicStats, time, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
-        topicPartition, logComponents.leaderEpochCache, logComponents.producerStateManager,
-        logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true) {
+    val segments = new LogSegments(tp)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      tpDir,
+      tp,
+      config,
+      time.scheduler,
+      time,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+    // the exception should be caught and the partition that caused it marked as uncleanable
+    class LogMock(dir: File, config: LogConfig, offsets: LoadedLogOffsets)
+      extends Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
+        offsets.nextOffsetMetadata, time.scheduler, new BrokerTopicStats, time, maxProducerIdExpirationMs,
+        LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
+        producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
         throw new IllegalStateException("Error!")
     }
 
-    val log: Log = new LogMock(tpDir, config, logComponents)
+    val log: Log = new LogMock(tpDir, config, offsets)
     writeRecords(log = log,
       numBatches = logSegmentsCount * 2,
       recordsPerBatch = 10,

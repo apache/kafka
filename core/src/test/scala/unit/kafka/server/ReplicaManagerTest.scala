@@ -1485,23 +1485,38 @@ class ReplicaManagerTest {
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val tp = new TopicPartition(topic, topicPartition)
     val maxProducerIdExpirationMs = 30000
-    val logLoader = new LogLoader(logDir, tp, logConfig, mockScheduler, time, mockLogDirFailureChannel)
-    val logComponents = logLoader.load(0L, 0L, maxProducerIdExpirationMs)
+    val segments = new LogSegments(tp)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      logDir,
+      tp,
+      logConfig,
+      mockScheduler,
+      time,
+      mockLogDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
     val mockLog = new Log(
       _dir = logDir,
       config = logConfig,
-      segments = logComponents.segments,
-      logStartOffset = logComponents.logStartOffset,
-      recoveryPoint = logComponents.recoveryPoint,
-      nextOffsetMetadata = logComponents.nextOffsetMetadata,
+      segments = segments,
+      logStartOffset = offsets.logStartOffset,
+      recoveryPoint = offsets.recoveryPoint,
+      nextOffsetMetadata = offsets.nextOffsetMetadata,
       scheduler = mockScheduler,
       brokerTopicStats = mockBrokerTopicStats,
       time = time,
       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = tp,
-      leaderEpochCache = logComponents.leaderEpochCache,
-      producerStateManager = logComponents.producerStateManager,
+      leaderEpochCache = leaderEpochCache,
+      producerStateManager = producerStateManager,
       logDirFailureChannel = mockLogDirFailureChannel,
       topicId = topicId,
       keepPartitionMetadataFile = true) {
