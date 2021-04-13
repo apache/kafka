@@ -190,7 +190,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
-     * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
+     * latter's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
      * adding tasks.
      *
      * @throws KafkaException if the stream thread is not specified
