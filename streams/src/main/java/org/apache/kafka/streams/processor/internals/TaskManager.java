@@ -935,6 +935,14 @@ public class TaskManager {
         return tasksToCloseDirty;
     }
 
+    public void updateCurrentAssigmentTopologyVersion(final long assignmentTopologyVersion) {
+        topologyMetadata.updateCurrentAssignmentTopologyVersion(assignmentTopologyVersion);
+    }
+
+    void maybeCreateTasksFromNewTopologies() {
+        tasks.maybeCreateTasksFromNewTopologies();
+    }
+
     Set<TaskId> activeTaskIds() {
         return activeTaskStream()
             .map(Task::id)

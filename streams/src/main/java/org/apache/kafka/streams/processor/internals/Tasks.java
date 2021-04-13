@@ -84,6 +84,14 @@ class Tasks {
         this.mainConsumer = mainConsumer;
     }
 
+    void maybeCreateTasksFromNewTopologies() {
+        final Set<String> currentNamedTopologies = topologyMetadata.namedTopologiesView();
+        createTasks(
+            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
+            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+        );
+    }
+
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                      final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {

@@ -336,13 +336,13 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public void setTopologyName(final String namedTopology) {
-        Objects.requireNonNull(namedTopology, "named topology can't be null");
+    public void setTopologyName(final String topologyName) {
+        Objects.requireNonNull(topologyName, "named topology can't be null");
         if (this.topologyName != null) {
-            log.error("Tried to reset the namedTopology to {} but it was already set to {}", namedTopology, this.topologyName);
-            throw new IllegalStateException("NamedTopology has already been set to " + this.topologyName);
+            log.error("Tried to reset the topologyName to {} but it was already set to {}", topologyName, this.topologyName);
+            throw new IllegalStateException("The topologyName has already been set to " + this.topologyName);
         }
-        this.topologyName = namedTopology;
+        this.topologyName = topologyName;
     }
 
     // public for testing only

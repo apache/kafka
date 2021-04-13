@@ -77,8 +77,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Comparator.comparingLong;
 import static java.util.UUID.randomUUID;
+
+import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsFuture;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
@@ -248,14 +249,35 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         handleRebalanceStart(topics);
         uniqueField++;
 
+        final long topologyVersion;
+        final Set<String> currentNamedTopologies;
+        final Map<TaskId, Long> taskOffsetSums;
+        try {
+            taskManager.topologyMetadata().lock();
+
+            topologyVersion = taskManager.topologyMetadata().topologyVersion();
+            currentNamedTopologies = taskManager.topologyMetadata().namedTopologiesView();
+
+            final Map<TaskId, Long> allTaskOffsetSums = taskManager.getTaskOffsetSums();
+
+            // If using NamedTopologies, filter out any that are no longer recognized/have been removed
+            taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
+                filterMap(allTaskOffsetSums, t -> currentNamedTopologies.contains(t.getKey().namedTopology())) :
+                allTaskOffsetSums;
+        } finally {
+            taskManager.topologyMetadata().unlock();
+        }
+
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskOffsetSums(),
+            taskOffsetSums,
             uniqueField,
-            assignmentErrorCode.get()
+            assignmentErrorCode.get(),
+            currentNamedTopologies,
+            topologyVersion
         ).encode();
     }
 
@@ -305,6 +327,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<TopicPartition> allOwnedPartitions = new HashSet<>();
 
+        Set<String> latestNamedTopologies = new HashSet<>();
+        long highestTopologyVersion = 0;
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
@@ -345,6 +369,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
+
+            if (info.topologyVersionNumber() > highestTopologyVersion)  {
+                latestNamedTopologies = info.supportedNamedTopologies();
+                highestTopologyVersion = info.topologyVersionNumber();
+            }
         }
 
         try {
@@ -375,8 +404,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
             for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
-                allSourceTopics.addAll(entry.getValue().sourceTopics);
-                sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
+                if (latestNamedTopologies.isEmpty() || latestNamedTopologies.contains(entry.getKey().namedTopology)) {
+                    allSourceTopics.addAll(entry.getValue().sourceTopics);
+                    sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
+                } else {
+                    log.debug("Filtered stale NamedTopology {} from tasks to be assigned", entry.getKey().namedTopology);
+                }
             }
 
             // get the tasks as partition groups from the partition grouper
@@ -798,7 +831,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskAssignment,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime
+                encodeNextProbingRebalanceTime,
+                taskManager.topologyMetadata().topologyVersion()
             );
 
             if (tasksRevoked || encodeNextProbingRebalanceTime) {
@@ -846,7 +880,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
                                          final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded) {
+                                         final boolean probingRebalanceNeeded,
+                                         final long assignmentTopologyVersion) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
@@ -886,7 +921,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskMap,
                 partitionsByHostState,
                 standbyPartitionsByHost,
-                AssignorError.NONE.code()
+                AssignorError.NONE.code(),
+                assignmentTopologyVersion
             );
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
@@ -1041,7 +1077,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             for (final String consumer : consumers) {
                 final List<TaskId> threadAssignment = assignment.get(consumer);
 
-                for (final TaskId task : getPreviousTasksByLag(state, consumer)) {
+                for (final TaskId task : state.prevTasksByLag(consumer)) {
                     if (unassignedStatefulTasks.contains(task)) {
                         if (threadAssignment.size() < minStatefulTasksPerThread) {
                             threadAssignment.add(task);
@@ -1123,12 +1159,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         return assignment;
-    }
-
-    private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
-        final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
-        prevTasksByLag.addAll(state.prevOwnedStatefulTasksByConsumer(consumer));
-        return prevTasksByLag;
     }
 
     private void validateMetadataVersions(final int receivedAssignmentMetadataVersion,
@@ -1263,6 +1293,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 8:
             case 9:
             case 10:
+            case 11:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
@@ -1291,6 +1322,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
         // since when stream thread captures it, either we close all tasks as dirty or we close thread
         taskManager.handleAssignment(activeTasks, info.standbyTasks());
+        taskManager.updateCurrentAssigmentTopologyVersion(info.assignmentTopologyVersion());
     }
 
     private void maybeScheduleFollowupRebalance(final long encodedNextScheduledRebalanceMs,

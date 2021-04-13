@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-10",
+  "validVersions": "1-11",
   "flexibleVersions": "none",
   "fields": [
     {
@@ -65,6 +65,16 @@
       "name": "errorCode",
       "versions": "9+",
       "type": "int32"
+    },
+    {
+      "name": "supportedNamedTopologies",
+      "versions": "11+",
+      "type": "[]string"
+    },
+    {
+      "name": "topologyVersionNumber",
+      "versions": "11+",
+      "type": "int64"
     }
   ],
   "commonStructs": [

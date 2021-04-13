@@ -62,6 +62,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.namedTopologiesOfTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class StreamsUpgradeTest {
@@ -164,7 +165,9 @@ public class StreamsUpgradeTest {
                     userEndPoint(),
                     taskManager.getTaskOffsetSums(),
                     uniqueField,
-                    0
+                    0,
+                    namedTopologiesOfTasks(taskManager.getTaskOffsetSums().keySet()),
+                    0L
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -265,7 +268,9 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums(),
                                 (byte) 0,
-                                0
+                                0,
+                                namedTopologiesOfTasks(taskManager().getTaskOffsetSums().keySet()),
+                                0L
                             ).encode(),
                             subscription.ownedPartitions()
                         ));

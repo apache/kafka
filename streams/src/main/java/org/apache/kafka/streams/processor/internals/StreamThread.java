@@ -259,7 +259,6 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
-    private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
@@ -301,9 +300,16 @@ public class StreamThread extends Thread {
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private final Runnable shutdownErrorHook;
+
+    private long lastSeenTopologyVersion = 0L;
+
+    // These must be Atomic references as they are shared and used to signal between the assignor and the stream thread
     private final AtomicInteger assignmentErrorCode;
-    private final AtomicLong cacheResizeSize;
-    private final AtomicBoolean leaveGroupRequested;
+    private final AtomicLong nextProbingRebalanceMs;
+
+    // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
+    private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
+    private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -479,7 +485,6 @@ public class StreamThread extends Thread {
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-        this.leaveGroupRequested = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -495,7 +500,6 @@ public class StreamThread extends Thread {
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
         this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
         this.assignmentErrorCode = assignmentErrorCode;
-        this.cacheResizeSize = new AtomicLong(-1L);
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
@@ -576,7 +580,7 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 maybeSendShutdown();
-                final Long size = cacheResizeSize.getAndSet(-1L);
+                final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
                     cacheResizer.accept(size);
                 }
@@ -716,6 +720,8 @@ public class StreamThread extends Thread {
     void runOnce() {
         final long startMs = time.milliseconds();
         now = startMs;
+
+        handleTopologyUpdatesPhase();
 
         final long pollLatency = pollPhase();
 
@@ -865,6 +871,37 @@ public class StreamThread extends Thread {
         // if there's no active restoring or standby updating it would not try to fetch any data
         changelogReader.restore(taskManager.tasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
+    }
+
+    private void handleTopologyUpdatesPhase() {
+        // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
+        // or if this is the very first topology in which case we may need to wait for it to be non-empty
+        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion() || lastSeenTopologyVersion == 0) {
+            try {
+                topologyMetadata.lock();
+
+                // TODO KAFKA-12648 (Pt. 4 - removeNamedTopology()): if we removed the last NamedTopology, we should
+                //  make sure to clean up/commit/close any remaining tasks before waiting for new ones
+
+                topologyMetadata.maybeWaitForNonEmptyTopology();
+                lastSeenTopologyVersion = topologyMetadata.topologyVersion();
+                // If this client ever rebalanced while it's topology version lagged the group leader's, it may have
+                // received tasks corresponding to a NamedTopology it did not yet know. When that happens we just
+                // stash those assigned taskIds away until we catch up on the topology changes, then create them later
+                taskManager.maybeCreateTasksFromNewTopologies();
+
+                // If this client's version is now greater than that used to assign tasks during the last rebalance,
+                // trigger a new one since there may be new tasks to assign from a #addNamedTopology or else existing
+                // tasks to remove from the assignment after a #removeNamedTopology
+                if (lastSeenTopologyVersion > topologyMetadata.assignmentTopologyVersion()) {
+                    log.info("StreamThread has detected a new update to the topology, triggering a rebalance to update the group assignment");
+                    subscribeConsumer();
+                    mainConsumer.enforceRebalance();
+                }
+            } finally {
+                topologyMetadata.unlock();
+            }
+        }
     }
 
     private long pollPhase() {
