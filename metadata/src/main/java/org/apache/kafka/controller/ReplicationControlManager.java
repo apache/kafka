@@ -71,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -1004,5 +1005,48 @@ public class ReplicationControlManager {
             heartbeatManager.fence(brokerId);
         }
         return ControllerResult.of(records, null);
+    }
+
+    class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
+        private final long epoch;
+        private final Iterator<TopicControlInfo> iterator;
+
+        ReplicationControlIterator(long epoch) {
+            this.epoch = epoch;
+            this.iterator = topics.values(epoch).iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public List<ApiMessageAndVersion> next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            TopicControlInfo topic = iterator.next();
+            List<ApiMessageAndVersion> records = new ArrayList<>();
+            records.add(new ApiMessageAndVersion(new TopicRecord().
+                setName(topic.name).
+                setTopicId(topic.id), (short) 0));
+            for (Entry<Integer, PartitionControlInfo> entry : topic.parts.entrySet(epoch)) {
+                PartitionControlInfo partition = entry.getValue();
+                records.add(new ApiMessageAndVersion(new PartitionRecord().
+                    setPartitionId(entry.getKey()).
+                    setTopicId(topic.id).
+                    setReplicas(Replicas.toList(partition.replicas)).
+                    setIsr(Replicas.toList(partition.isr)).
+                    setRemovingReplicas(Replicas.toList(partition.removingReplicas)).
+                    setAddingReplicas(Replicas.toList(partition.addingReplicas)).
+                    setLeader(partition.leader).
+                    setLeaderEpoch(partition.leaderEpoch).
+                    setPartitionEpoch(partition.partitionEpoch), (short) 0));
+            }
+            return records;
+        }
+    }
+
+    ReplicationControlIterator iterator(long epoch) {
+        return new ReplicationControlIterator(epoch);
     }
 }

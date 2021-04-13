@@ -19,7 +19,7 @@ package kafka.raft
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
-import java.util.{NoSuchElementException, Optional, Properties}
+import java.util.{Optional, Properties}
 
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
@@ -27,7 +27,7 @@ import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFa
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
@@ -220,6 +220,13 @@ final class KafkaMetadataLog private (
     topicPartition
   }
 
+  /**
+   * Return the topic ID associated with the log.
+   */
+  override def topicId(): Uuid = {
+    log.topicId.get
+  }
+
   override def createSnapshot(snapshotId: OffsetAndEpoch): RawSnapshotWriter = {
     // Do not let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
@@ -248,20 +255,20 @@ final class KafkaMetadataLog private (
   }
 
   override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
-    try {
-      Optional.of(snapshotIds.last)
-    } catch {
-      case _: NoSuchElementException =>
-        Optional.empty()
+    val descending = snapshotIds.descendingIterator
+    if (descending.hasNext) {
+      Optional.of(descending.next)
+    } else {
+      Optional.empty()
     }
   }
 
   override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
-    try {
-      Optional.of(snapshotIds.first)
-    } catch {
-      case _: NoSuchElementException =>
-        Optional.empty()
+    val ascendingIterator = snapshotIds.iterator
+    if (ascendingIterator.hasNext) {
+      Optional.of(ascendingIterator.next)
+    } else {
+      Optional.empty()
     }
   }
 
@@ -290,7 +297,7 @@ final class KafkaMetadataLog private (
    * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
   private def removeSnapshotFilesBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
-    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator()
+    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator
     while (expiredSnapshotIdsIter.hasNext) {
       val snapshotId = expiredSnapshotIdsIter.next()
       // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
@@ -300,7 +307,7 @@ final class KafkaMetadataLog private (
       val path = Snapshots.snapshotPath(log.dir.toPath, snapshotId)
       val destination = Snapshots.deleteRename(path, snapshotId)
       try {
-        Utils.atomicMoveWithFallback(path, destination)
+        Utils.atomicMoveWithFallback(path, destination, false)
       } catch {
         case e: IOException =>
           error(s"Error renaming snapshot file: $path to $destination", e)
@@ -321,6 +328,7 @@ object KafkaMetadataLog {
 
   def apply(
     topicPartition: TopicPartition,
+    topicId: Uuid,
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
@@ -345,6 +353,8 @@ object KafkaMetadataLog {
       maxProducerIdExpirationMs = Int.MaxValue,
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
+      lastShutdownClean = false,
+      topicId = Some(topicId),
       keepPartitionMetadataFile = false
     )
 

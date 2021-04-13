@@ -126,37 +126,30 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testExpiration() {
 
         long currentTime = 0;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "one");
+        windowStore.put(1, "one", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "two");
+        windowStore.put(1, "two", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "three");
+        windowStore.put(1, "three", currentTime);
 
         currentTime += RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "four");
+        windowStore.put(1, "four", currentTime);
 
         // increase current time to the full RETENTION_PERIOD to expire first record
         currentTime = currentTime + RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "five");
+        windowStore.put(1, "five", currentTime);
 
         KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
             .fetchAll(0L, currentTime);
 
         // effect of this put (expires next oldest record, adds new one) should not be reflected in the already fetched results
         currentTime = currentTime + RETENTION_PERIOD / 4;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "six");
+        windowStore.put(1, "six", currentTime);
 
         // should only have middle 4 values, as (only) the first record was expired at the time of the fetch
         // and the last was inserted after the fetch

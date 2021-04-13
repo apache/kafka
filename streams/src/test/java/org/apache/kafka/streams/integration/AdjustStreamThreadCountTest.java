@@ -20,21 +20,30 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,6 +62,7 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -61,12 +71,23 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category(IntegrationTest.class)
 public class AdjustStreamThreadCountTest {
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     @Rule
     public TestName testName = new TestName();
@@ -85,7 +106,7 @@ public class AdjustStreamThreadCountTest {
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
-        builder  = new StreamsBuilder();
+        builder = new StreamsBuilder();
         builder.stream(inputTopic);
 
         properties  = mkObjectProperties(
@@ -345,5 +366,87 @@ public class AdjustStreamThreadCountTest {
             assertNull(lastException.get());
             assertEquals(oldThreadCount, kafkaStreams.localThreadsMetadata().size());
         }
+    }
+
+    @Test
+    public void shouldResizeCacheAfterThreadRemovalTimesOut() throws InterruptedException {
+        final long totalCacheBytes = 10L;
+        final Properties props = new Properties();
+        props.putAll(properties);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class)) {
+                assertThrows(TimeoutException.class, () -> kafkaStreams.removeStreamThread(Duration.ofSeconds(0)));
+
+                for (final String log : appender.getMessages()) {
+                    // all 10 bytes should be available for remaining thread
+                    if (log.endsWith("Resizing thread cache due to thread removal, new cache size per thread is 10")) {
+                        return;
+                    }
+                }
+            }
+        }
+        fail();
+    }
+
+    @Test
+    public void shouldResizeCacheAfterThreadReplacement() throws InterruptedException {
+        final long totalCacheBytes = 10L;
+        final Properties props = new Properties();
+        props.putAll(properties);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
+
+        final AtomicBoolean injectError = new AtomicBoolean(false);
+
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<String, String> stream = builder.stream(inputTopic);
+        stream.transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
+                @Override
+                public void init(final ProcessorContext context) {
+                    context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+                        if (Thread.currentThread().getName().endsWith("StreamThread-1") && injectError.get()) {
+                            injectError.set(false);
+                            throw new RuntimeException("BOOM");
+                        }
+                    });
+                }
+
+                @Override
+                public KeyValue<String, String> transform(final String key, final String value) {
+                    return new KeyValue<>(key, value);
+                }
+
+                @Override
+                public void close() {
+                }
+            });
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
+            addStreamStateChangeListener(kafkaStreams);
+            kafkaStreams.setUncaughtExceptionHandler(e -> StreamThreadExceptionResponse.REPLACE_THREAD);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            stateTransitionHistory.clear();
+            try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+                injectError.set(true);
+                waitForCondition(() -> !injectError.get(), "StreamThread did not hit and reset the injected error");
+
+                waitForTransitionFromRebalancingToRunning();
+
+                for (final String log : appender.getMessages()) {
+                    // after we replace the thread there should be two remaining threads with 5 bytes each
+                    if (log.endsWith("Adding StreamThread-3, there will now be 2 live threads and the new cache size per thread is 5")) {
+                        return;
+                    }
+                }
+            }
+        }
+        fail();
     }
 }

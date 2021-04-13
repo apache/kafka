@@ -37,7 +37,6 @@ import org.apache.kafka.common.{KafkaException, requests}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
@@ -337,12 +336,13 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @nowarn("cat=deprecation")
   private def verifyConnection(socket: Socket): Unit = {
     val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
-    assertEquals(1, produceResponse.responses.size)
-    val (_, partitionResponse) = produceResponse.responses.asScala.head
-    assertEquals(Errors.NONE, partitionResponse.error)
+    assertEquals(1, produceResponse.data.responses.size)
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size)    
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode))
   }
 
   private def verifyMaxConnections(maxConnections: Int, connectWithFailure: () => Unit): Unit = {

@@ -52,7 +52,6 @@ public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME = "global-timestamped-window-store";
     private static final String GLOBAL_SESSION_STORE_NAME = "global-session-store";
     private static final String UNKNOWN_STORE = "unknown-store";
-    private static final String CHILD_PROCESSOR = "child";
 
     private GlobalProcessorContextImpl globalContext;
 
@@ -116,18 +115,6 @@ public class GlobalProcessorContextImplTest {
     @Test
     public void shouldFailToForwardUsingToParameter() {
         assertThrows(IllegalStateException.class, () -> globalContext.forward(null, null, To.all()));
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test
-    public void shouldNotSupportForwardingViaChildIndex() {
-        assertThrows(UnsupportedOperationException.class, () -> globalContext.forward(null, null, 0));
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test
-    public void shouldNotSupportForwardingViaChildName() {
-        assertThrows(UnsupportedOperationException.class, () -> globalContext.forward(null, null, "processorName"));
     }
 
     @Test

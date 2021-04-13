@@ -131,7 +131,7 @@ object LazyIndex {
     def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
     def renameTo(f: File): Unit = {
-      try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+      try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
       catch {
         case _: NoSuchFileException if !file.exists => ()
       }

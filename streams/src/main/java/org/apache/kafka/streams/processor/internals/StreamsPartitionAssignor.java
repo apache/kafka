@@ -173,8 +173,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
-    @SuppressWarnings("deprecation")
-    private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
+    private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
     private Time time;
@@ -191,7 +190,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
-     * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
+     * latter's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
      * adding tasks.
      *
      * @throws KafkaException if the stream thread is not specified
@@ -213,7 +212,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
-        partitionGrouper = assignorConfiguration.partitionGrouper();
+        partitionGrouper = new PartitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();

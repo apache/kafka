@@ -27,8 +27,8 @@ import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -108,9 +108,11 @@ class KafkaRaftManager[T](
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
+  topicId: Uuid,
   time: Time,
   metrics: Metrics,
-  threadNamePrefixOpt: Option[String]
+  threadNamePrefixOpt: Option[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
   private val raftConfig = new RaftConfig(config)
@@ -131,7 +133,7 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
-    val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
+    val voterAddresses: util.Map[Integer, AddressSpec] = controllerQuorumVotersFuture.get()
     for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
       voterAddressEntry.getValue match {
         case spec: InetAddressSpec =>
@@ -243,6 +245,7 @@ class KafkaRaftManager[T](
   private def buildMetadataLog(): KafkaMetadataLog = {
     KafkaMetadataLog(
       topicPartition,
+      topicId,
       dataDir,
       time,
       scheduler,
@@ -298,7 +301,6 @@ class KafkaRaftManager[T](
       config.quorumRequestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
-      ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       discoverBrokerVersions,
       new ApiVersions,

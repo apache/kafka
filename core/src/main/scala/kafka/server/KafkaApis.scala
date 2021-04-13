@@ -59,6 +59,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -1113,7 +1114,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
-        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota)
+        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
         nonExistingTopics.map { topic =>
           val error = try {
@@ -1341,7 +1342,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
-        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota)
+        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => createFindCoordinatorResponse(
           Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs))
       } else {
@@ -1849,7 +1850,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
-    val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
+    val results = new DeletableTopicResultCollection(deleteTopicRequest.numberOfTopics())
     val toDelete = mutable.Set[String]()
     if (!zkSupport.controller.isActive) {
       deleteTopicRequest.topics().forEach { topic =>
@@ -3030,37 +3031,50 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
-    if (authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = zkSupport.adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
-
-      val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
-        val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
-          new DescribeClientQuotasResponseData.EntityData()
-            .setEntityType(entityType)
-            .setEntityName(entityName)
-        }.toBuffer
-
-        val valueData = quotaValues.iterator.map { case (key, value) =>
-          new DescribeClientQuotasResponseData.ValueData()
-            .setKey(key)
-            .setValue(value)
-        }.toBuffer
-
-        new DescribeClientQuotasResponseData.EntryData()
-          .setEntity(entityData.asJava)
-          .setValues(valueData.asJava)
-      }.toBuffer
-
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setEntries(entriesData.asJava)))
-    } else {
+    if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else {
+      metadataSupport match {
+        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache) =>
+          val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
+
+          val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
+            val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
+              new DescribeClientQuotasResponseData.EntityData()
+                .setEntityType(entityType)
+                .setEntityName(entityName)
+            }.toBuffer
+
+            val valueData = quotaValues.iterator.map { case (key, value) =>
+              new DescribeClientQuotasResponseData.ValueData()
+                .setKey(key)
+                .setValue(value)
+            }.toBuffer
+
+            new DescribeClientQuotasResponseData.EntryData()
+              .setEntity(entityData.asJava)
+              .setValues(valueData.asJava)
+          }.toBuffer
+
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setEntries(entriesData.asJava)))
+        case RaftSupport(fwdMgr, metadataCache, quotaCache) =>
+          val result = quotaCache.describeClientQuotas(
+            describeClientQuotasRequest.filter().components().asScala.toSeq,
+            describeClientQuotasRequest.filter().strict())
+          val resultAsJava = new util.HashMap[ClientQuotaEntity, util.Map[String, java.lang.Double]](result.size)
+          result.foreach { case (entity, quotas) =>
+            resultAsJava.put(entity, quotas.map { case (key, quota) => key -> Double.box(quota)}.asJava)
+          }
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            DescribeClientQuotasResponse.fromQuotaEntities(resultAsJava, requestThrottleMs)
+          )
+      }
     }
   }
 
@@ -3241,22 +3255,32 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
     val describeProducersRequest = request.body[DescribeProducersRequest]
 
-    def partitionError(topicPartition: TopicPartition, error: Errors): DescribeProducersResponseData.PartitionResponse = {
+    def partitionError(
+      topicPartition: TopicPartition,
+      apiError: ApiError
+    ): DescribeProducersResponseData.PartitionResponse = {
       new DescribeProducersResponseData.PartitionResponse()
         .setPartitionIndex(topicPartition.partition)
-        .setErrorCode(error.code)
+        .setErrorCode(apiError.error.code)
+        .setErrorMessage(apiError.message)
     }
 
     val response = new DescribeProducersResponseData()
     describeProducersRequest.data.topics.forEach { topicRequest =>
       val topicResponse = new DescribeProducersResponseData.TopicResponse()
         .setName(topicRequest.name)
-      val topicError = if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name))
-        Some(Errors.TOPIC_AUTHORIZATION_FAILED)
-      else if (!metadataCache.contains(topicRequest.name))
-        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-      else
-        None
+
+      val invalidTopicError = checkValidTopic(topicRequest.name)
+
+      val topicError = invalidTopicError.orElse {
+        if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name)) {
+          Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
+        } else if (!metadataCache.contains(topicRequest.name))
+          Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+        else {
+          None
+        }
+      }
 
       topicRequest.partitionIndexes.forEach { partitionId =>
         val topicPartition = new TopicPartition(topicRequest.name, partitionId)
@@ -3274,8 +3298,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
+  private def checkValidTopic(topic: String): Option[ApiError] = {
+    try {
+      Topic.validate(topic)
+      None
+    } catch {
+      case e: Throwable => Some(ApiError.fromThrowable(e))
+    }
+  }
+
   def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
-    // This function will not be called when in self-managed quorum mode, since the
+    // This function will not be called when in KRaft mode, since the
     // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
     // manager.
     throw new UnsupportedVersionException("The broker unregistration API is not available when using " +

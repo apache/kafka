@@ -18,8 +18,7 @@
 package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
-
+import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -37,13 +36,13 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, RaftClient, RecordSerde}
+import org.apache.kafka.raft.{BatchReader, RaftClient, RaftConfig, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
 /**
  * This is an experimental server which is intended for testing the performance
- * of the Raft implementation. It uses a hard-coded `__cluster_metadata` topic.
+ * of the Raft implementation. It uses a hard-coded `__raft_performance_test` topic.
  */
 class TestRaftServer(
   val config: KafkaConfig,
@@ -52,7 +51,9 @@ class TestRaftServer(
 ) extends Logging {
   import kafka.tools.TestRaftServer._
 
-  private val partition = new TopicPartition("__cluster_metadata", 0)
+  private val partition = new TopicPartition("__raft_performance_test", 0)
+  // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for @metadata.
+  private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
@@ -74,7 +75,7 @@ class TestRaftServer(
     socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(
-      clusterId = Uuid.ZERO_UUID,
+      clusterId = Uuid.ZERO_UUID.toString,
       nodeId = config.nodeId
     )
 
@@ -83,9 +84,11 @@ class TestRaftServer(
       config,
       new ByteArraySerde,
       partition,
+      topicId,
       time,
       metrics,
-      Some(threadNamePrefix)
+      Some(threadNamePrefix),
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

@@ -29,7 +29,6 @@ import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.KafkaBroker.metricsPrefix
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.internals.Topic
@@ -45,13 +44,14 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 /**
- * A KIP-500 Kafka broker.
+ * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
                     val config: KafkaConfig,
@@ -61,7 +61,7 @@ class BrokerServer(
                     val metrics: Metrics,
                     val threadNamePrefix: Option[String],
                     val initialOfflineDirs: Seq[String],
-                    val controllerQuorumVotersFuture: CompletableFuture[util.List[String]],
+                    val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                     val supportedFeatures: util.Map[String, VersionRange]
                   ) extends KafkaBroker {
 
@@ -115,6 +115,7 @@ class BrokerServer(
   var metadataCache: RaftMetadataCache = null
 
   var quotaManagers: QuotaFactory.QuotaManagers = null
+
   var quotaCache: ClientQuotaCache = null
 
   private var _brokerTopicStats: BrokerTopicStats = null
@@ -123,7 +124,7 @@ class BrokerServer(
 
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
-  val clusterId: String = metaProps.clusterId.toString
+  val clusterId: String = metaProps.clusterId
 
   val configRepository = new CachedConfigRepository()
 
@@ -178,7 +179,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
@@ -186,10 +187,11 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "controllerForwardingChannel",
+        channelName = "forwarding",
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
+      clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
       val apiVersionManager = ApiVersionManager(
@@ -211,7 +213,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "alterisr",
+        channelName = "alterIsr",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
@@ -322,7 +324,7 @@ class BrokerServer(
 
       // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
       // and started all services that we previously delayed starting.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache)
+      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
@@ -469,7 +471,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
 
-      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(metricsPrefix, config.nodeId.toString, metrics), this)
+      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")
     } catch {
       case e: Throwable =>
