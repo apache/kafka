@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.streams.integration;
 
-//import org.apache.kafka.clients.admin.Admin;
-//import org.apache.kafka.clients.admin.AdminClientConfig;
-//import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-//import org.apache.kafka.clients.consumer.KafkaConsumer;
-//import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
-//import org.apache.kafka.common.TopicPartition;
-//import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -78,9 +78,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-//import static org.apache.kafka.common.utils.Utils.mkEntry;
-//import static org.apache.kafka.common.utils.Utils.mkMap;
-//import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -159,7 +159,6 @@ public class EosIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_THROUGH_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
     }
-
 
     @Test
     public void shouldBeAbleToRunWithEosEnabled() throws Exception {
@@ -277,7 +276,7 @@ public class EosIntegrationTest {
                             Utils.mkProperties(Collections.singletonMap(
                                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
+                        ),
                         outputTopic,
                         inputData.size()
                     );
@@ -286,7 +285,6 @@ public class EosIntegrationTest {
             }
         }
     }
-
 
     private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
                                    final List<KeyValue<Long, Long>> expectedResult,
@@ -360,7 +358,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     firstBurstOfData.size()
                 );
@@ -384,7 +382,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     secondBurstOfData.size()
                 );
@@ -494,7 +492,6 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
-        System.err.println("st");
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
         //
@@ -747,7 +744,7 @@ public class EosIntegrationTest {
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
-                + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
+                    + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final int allCommittedRecordsAfterRecoverySize = committedDataBeforeStall.size() +
@@ -853,7 +850,6 @@ public class EosIntegrationTest {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            System.err.print("res: " + key + "," + value + "," + sum);
                             state.flush();
                         }
 
@@ -899,7 +895,6 @@ public class EosIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
-
             if (uncaughtException != null || !e.getMessage().contains("Injected test exception")) {
                 e.printStackTrace(System.err);
                 hasUnexpectedError = true;
