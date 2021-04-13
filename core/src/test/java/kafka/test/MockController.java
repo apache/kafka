@@ -25,6 +25,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -41,8 +43,10 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
@@ -225,6 +229,29 @@ public class MockController implements Controller {
     public CompletableFuture<Map<ClientQuotaEntity, ApiError>>
             alterClientQuotas(Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
+            createPartitions(List<CreatePartitionsTopic> topicList) {
+        if (!active) {
+            CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
+            future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
+            return future;
+        }
+        List<CreatePartitionsTopicResult> results = new ArrayList<>();
+        for (CreatePartitionsTopic topic : topicList) {
+            if (topicNameToId.containsKey(topic.name())) {
+                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                    setErrorCode(Errors.NONE.code()).
+                    setErrorMessage(null));
+            } else {
+                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                    setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
+                    setErrorMessage("No such topic as " + topic.name()));
+            }
+        }
+        return CompletableFuture.completedFuture(results);
     }
 
     @Override
