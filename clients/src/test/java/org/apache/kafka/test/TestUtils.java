@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -534,5 +535,45 @@ public class TestUtils {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(obj, value);
+    }
+
+    /**
+     * Returns true if both iterators have same elements in the same order.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithOrder(Iterator<T> iterator1,
+                                                    Iterator<T> iterator2) {
+        while (iterator1.hasNext()) {
+            if (!iterator2.hasNext()) {
+                return false;
+            }
+
+            if (!Objects.equals(iterator1.next(), iterator2.next())) {
+                return false;
+            }
+        }
+
+        return !iterator2.hasNext();
+    }
+
+    /**
+     * Returns true if both the iterators have same set of elements irrespective of order and duplicates.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
+                                                       Iterator<T> iterator2) {
+        // Check both the iterators have the same set of elements irrespective of order and duplicates.
+        Set<T> allSegmentsSet = new HashSet<>();
+        iterator1.forEachRemaining(allSegmentsSet::add);
+        Set<T> expectedSegmentsSet = new HashSet<>();
+        iterator2.forEachRemaining(expectedSegmentsSet::add);
+
+        return allSegmentsSet.equals(expectedSegmentsSet);
     }
 }
