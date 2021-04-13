@@ -310,11 +310,13 @@ public class ClusterControlManager {
         }
     }
 
-    public List<List<Integer>> placeReplicas(int numPartitions, short numReplicas) {
+    public List<List<Integer>> placeReplicas(int startPartition,
+                                             int numPartitions,
+                                             short numReplicas) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        return heartbeatManager.placeReplicas(numPartitions, numReplicas,
+        return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
             id -> brokerRegistrations.get(id).rack(), placementPolicy);
     }
 

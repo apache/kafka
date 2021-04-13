@@ -32,6 +32,7 @@ interface ReplicaPlacementPolicy {
     /**
      * Create a new replica placement.
      *
+     * @param startPartition        The partition ID to start with.
      * @param numPartitions         The number of partitions to create placements for.
      * @param numReplicas           The number of replicas to create for each partitions.
      *                              Must be positive.
@@ -41,7 +42,9 @@ interface ReplicaPlacementPolicy {
      *
      * @throws InvalidReplicationFactorException    If too many replicas were requested.
      */
-    List<List<Integer>> createPlacement(int numPartitions, short numReplicas,
+    List<List<Integer>> createPlacement(int startPartition,
+                                        int numPartitions,
+                                        short numReplicas,
                                         Iterator<UsableBroker> iterator)
         throws InvalidReplicationFactorException;
 }
