@@ -516,6 +516,7 @@ class KafkaServer(
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
+          config.socketTcpNoDelay,
           metrics,
           time,
           "kafka-server-controlled-shutdown",

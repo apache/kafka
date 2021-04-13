@@ -96,7 +96,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
         this.channelBuilder.configure(clientConfigs());
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, METRIC_GROUP, channelBuilder, new LogContext());
+        this.selector = new Selector(5000, true, this.metrics, time, METRIC_GROUP, channelBuilder, new LogContext());
     }
 
     @AfterEach
@@ -422,7 +422,7 @@ public class SelectorTest {
             }
         };
         channelBuilder.configure(clientConfigs());
-        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        Selector selector = new Selector(5000, true, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         selector.connect("0", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         selector.connect("1", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         assertThrows(RuntimeException.class, selector::close);
@@ -441,7 +441,7 @@ public class SelectorTest {
             public void close() {
             }
         };
-        Selector selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        Selector selector = new Selector(5000, true, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         SocketChannel socketChannel = SocketChannel.open();
         socketChannel.configureBlocking(false);
         IOException e = assertThrows(IOException.class, () -> selector.register("1", socketChannel));
@@ -496,7 +496,7 @@ public class SelectorTest {
                                              String metricGrpPrefix,
                                              ChannelBuilder channelBuilder,
                                              LogContext logContext) {
-            super(connectionMaxIdleMS, metrics, time, metricGrpPrefix, channelBuilder, logContext);
+            super(connectionMaxIdleMS, true, metrics, time, metricGrpPrefix, channelBuilder, logContext);
         }
 
         @Override
@@ -689,7 +689,7 @@ public class SelectorTest {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, true, metrics, time, "MetricGroup",
             new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {

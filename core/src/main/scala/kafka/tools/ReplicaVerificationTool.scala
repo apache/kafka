@@ -458,6 +458,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       consumerConfig.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+      consumerConfig.getBoolean(ConsumerConfig.SOCKET_TCP_NODELAY_CONFIG),
       metrics,
       time,
       "replica-fetcher",

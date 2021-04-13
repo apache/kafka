@@ -167,6 +167,6 @@ public class SslVersionsTransportLayerTest {
             new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
-        return new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
+        return new Selector(100 * 5000, true, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
     }
 }

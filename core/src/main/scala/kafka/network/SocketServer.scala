@@ -283,9 +283,10 @@ class SocketServer(val config: KafkaConfig,
   }
 
   private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
+    val tcpNoDelay = config.socketTcpNoDelay
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
-    new Acceptor(endPoint, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time)
+    new Acceptor(endPoint, tcpNoDelay, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time)
   }
 
   private def addDataPlaneProcessors(acceptor: Acceptor, endpoint: EndPoint, newProcessorsPerListener: Int): Unit = {
@@ -430,6 +431,7 @@ class SocketServer(val config: KafkaConfig,
       connectionQuotas,
       config.connectionsMaxIdleMs,
       config.failedAuthenticationDelayMs,
+      config.socketTcpNoDelay,
       listenerName,
       securityProtocol,
       config,
@@ -547,6 +549,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
  * Thread that accepts and configures new connections. There is one of these per endpoint.
  */
 private[kafka] class Acceptor(val endPoint: EndPoint,
+                              val tcpNoDelay: Boolean,
                               val sendBufferSize: Int,
                               val recvBufferSize: Int,
                               nodeId: Int,
@@ -718,7 +721,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     try {
       connectionQuotas.inc(endPoint.listenerName, socketChannel.socket.getInetAddress, blockedPercentMeter)
       socketChannel.configureBlocking(false)
-      socketChannel.socket().setTcpNoDelay(true)
+      socketChannel.socket().setTcpNoDelay(tcpNoDelay)
       socketChannel.socket().setKeepAlive(true)
       if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
         socketChannel.socket().setSendBufferSize(sendBufferSize)
@@ -792,6 +795,7 @@ private[kafka] class Processor(val id: Int,
                                connectionQuotas: ConnectionQuotas,
                                connectionsMaxIdleMs: Long,
                                failedAuthenticationDelayMs: Int,
+                               tcpNoDelay: Boolean,
                                listenerName: ListenerName,
                                securityProtocol: SecurityProtocol,
                                config: KafkaConfig,
@@ -864,6 +868,7 @@ private[kafka] class Processor(val id: Int,
       maxRequestSize,
       connectionsMaxIdleMs,
       failedAuthenticationDelayMs,
+      tcpNoDelay,
       metrics,
       time,
       "socket-server",
