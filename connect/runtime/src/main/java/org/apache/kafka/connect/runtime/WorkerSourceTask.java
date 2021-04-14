@@ -489,6 +489,10 @@ class WorkerSourceTask extends WorkerTask {
     private synchronized void recordSendFailed(ProducerRecord<byte[], byte[]> record) {
         if (outstandingMessages.containsKey(record)) {
             currentBatchFailed = true;
+            if (flushing) {
+                // flush thread may be waiting on the outstanding messages to clear
+                this.notifyAll();
+            }
         } else if (outstandingMessagesBacklog.containsKey(record)) {
             backlogBatchFailed = true;
         }
@@ -522,9 +526,10 @@ class WorkerSourceTask extends WorkerTask {
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
-                    // If the task has been cancelled, no more records will be sent from the producer; in that case, if any outstanding messages remain,
-                    // we can stop flushing immediately
-                    if (isCancelled() || timeoutMs <= 0) {
+                    // If the producer has failed to send a record in the current batch with a non-retriable error, we'll never be able to clear the
+                    // outstanding messages, so we can stop flushing immediately. Similarly, if the task has been cancelled, no more records will be
+                    // sent from the producer; in that case, if any outstanding messages remain, we can also stop flushing immediately
+                    if (currentBatchFailed || isCancelled() || timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         recordCommitFailure(time.milliseconds() - started, null);
