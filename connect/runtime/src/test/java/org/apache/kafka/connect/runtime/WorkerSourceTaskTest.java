@@ -1435,7 +1435,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
                     if (sendSuccess) {
                         cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
-                            0L, 0L, 0, 0), null);
+                            0L, 0, 0), null);
                     } else {
                         cb.onCompletion(null, new TopicAuthorizationException("foo"));
                     }

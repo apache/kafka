@@ -75,6 +75,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -1111,8 +1112,10 @@ public class WorkerSinkTaskTest {
                 long timestamp = RecordBatch.NO_TIMESTAMP;
                 TimestampType timestampType = TimestampType.NO_TIMESTAMP_TYPE;
                 List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-                records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
-                records.add(new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET + recordsReturnedTp3 + 1, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, timestamp, timestampType,
+                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()));
+                records.add(new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET + recordsReturnedTp3 + 1, timestamp, timestampType,
+                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()));
                 recordsReturnedTp1 += 1;
                 recordsReturnedTp3 += 1;
                 return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
@@ -1495,9 +1498,9 @@ public class WorkerSinkTaskTest {
 
         expectConsumerPoll(Arrays.asList(
             new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
-                0L, 0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA),
+                0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA, Optional.empty()),
             new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
-                0L, 0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB)
+                0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB, Optional.empty())
         ));
 
         expectTransformation(2, null);
@@ -1614,7 +1617,8 @@ public class WorkerSinkTaskTest {
             () -> {
                 List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                 for (int i = 0; i < numMessages; i++)
-                    records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE, headers));
+                    records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType,
+                        0, 0, RAW_KEY, RAW_VALUE, headers, Optional.empty()));
                 recordsReturnedTp1 += numMessages;
                 return new ConsumerRecords<>(
                         numMessages > 0 ?
