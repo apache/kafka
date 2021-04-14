@@ -207,7 +207,7 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
-As of present, the auto-formatting configuration is working in progress. Auto-formatting is automatically invoked for the modules listed below when the 'checkstyleMain' or 'checkstyleTest' task is run.
+As of present, the auto-formatting configuration is work in progress. Auto-formatting is automatically invoked for the modules listed below when the 'checkstyleMain' or 'checkstyleTest' task is run.
 
 - (No modules specified yet)
 

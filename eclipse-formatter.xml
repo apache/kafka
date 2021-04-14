@@ -6,21 +6,10 @@
     <setting id="org.eclipse.jdt.core.formatter.blank_lines_before_imports" value="1"/>
     <setting id="org.eclipse.jdt.core.formatter.blank_lines_after_imports" value="1"/>
 
-    <!-- Line -->
-    <setting id="org.eclipse.jdt.core.formatter.lineSplit" value="120"/>
-    <setting id="org.eclipse.jdt.core.formatter.comment.line_length" value="120"/>
-
-    <!-- Brace -->
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_annotation_type_declaration" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_anonymous_type_declaration" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_array_initializer" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_block" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_constructor_declaration" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_enum_constant" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_enum_declaration" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_method_declaration" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_switch" value="insert"/>
-    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_type_declaration" value="insert"/>
+    <!-- Disable comment formatting -->
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
 
     <!-- Indentation -->
     <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
@@ -33,10 +22,9 @@
     <setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
 
     <!-- Alignment -->
+    <setting id="org.eclipse.jdt.core.formatter.alignment_for_assignment" value="16"/>
     <setting id="org.eclipse.jdt.core.formatter.alignment_for_parameters_in_constructor_declaration" value="18"/>
     <setting id="org.eclipse.jdt.core.formatter.alignment_for_parameters_in_method_declaration" value="18"/>
-    <setting id="org.eclipse.jdt.core.formatter.alignment_for_cascading_method_invocation_with_arguments" value="82"/>
-
     <setting id="org.eclipse.jdt.core.formatter.insert_space_before_colon_in_case" value="do not insert"/>
 
     <!-- Wrapping -->
