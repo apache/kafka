@@ -20,10 +20,14 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
@@ -57,6 +61,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
+import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT;
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
@@ -517,5 +523,133 @@ public class ReplicationControlManagerTest {
             new ApiError(UNKNOWN_TOPIC_OR_PARTITION))), replicationControl.findTopicIds(
                 Long.MAX_VALUE, Collections.singleton("foo")));
         assertEmptyTopicConfigs(ctx, "foo");
+    }
+
+
+    @Test
+    public void testCreatePartitions() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(3).setReplicationFactor((short) 2));
+        request.topics().add(new CreatableTopic().setName("bar").
+            setNumPartitions(4).setReplicationFactor((short) 2));
+        request.topics().add(new CreatableTopic().setName("quux").
+            setNumPartitions(2).setReplicationFactor((short) 2));
+        request.topics().add(new CreatableTopic().setName("foo2").
+            setNumPartitions(2).setReplicationFactor((short) 2));
+        registerBroker(0, ctx);
+        unfenceBroker(0, ctx);
+        registerBroker(1, ctx);
+        unfenceBroker(1, ctx);
+        ControllerResult<CreateTopicsResponseData> createTopicResult =
+            replicationControl.createTopics(request);
+        ctx.replay(createTopicResult.records());
+        List<CreatePartitionsTopic> topics = new ArrayList<>();
+        topics.add(new CreatePartitionsTopic().
+            setName("foo").setCount(5).setAssignments(null));
+        topics.add(new CreatePartitionsTopic().
+            setName("bar").setCount(3).setAssignments(null));
+        topics.add(new CreatePartitionsTopic().
+            setName("baz").setCount(3).setAssignments(null));
+        topics.add(new CreatePartitionsTopic().
+            setName("quux").setCount(2).setAssignments(null));
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult =
+            replicationControl.createPartitions(topics);
+        assertEquals(Arrays.asList(new CreatePartitionsTopicResult().
+                setName("foo").
+                setErrorCode(NONE.code()).
+                setErrorMessage(null),
+            new CreatePartitionsTopicResult().
+                setName("bar").
+                setErrorCode(INVALID_PARTITIONS.code()).
+                setErrorMessage("The topic bar currently has 4 partition(s); 3 would not be an increase."),
+            new CreatePartitionsTopicResult().
+                setName("baz").
+                setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()).
+                setErrorMessage(null),
+            new CreatePartitionsTopicResult().
+                setName("quux").
+                setErrorCode(INVALID_PARTITIONS.code()).
+                setErrorMessage("Topic already has 2 partition(s).")),
+            createPartitionsResult.response());
+        ctx.replay(createPartitionsResult.records());
+        List<CreatePartitionsTopic> topics2 = new ArrayList<>();
+        topics2.add(new CreatePartitionsTopic().
+            setName("foo").setCount(6).setAssignments(Arrays.asList(
+                new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1, 0)))));
+        topics2.add(new CreatePartitionsTopic().
+            setName("bar").setCount(5).setAssignments(Arrays.asList(
+            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1)))));
+        topics2.add(new CreatePartitionsTopic().
+            setName("quux").setCount(4).setAssignments(Arrays.asList(
+            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(1, 0)))));
+        topics2.add(new CreatePartitionsTopic().
+            setName("foo2").setCount(3).setAssignments(Arrays.asList(
+            new CreatePartitionsAssignment().setBrokerIds(Arrays.asList(2, 0)))));
+        ControllerResult<List<CreatePartitionsTopicResult>> createPartitionsResult2 =
+            replicationControl.createPartitions(topics2);
+        assertEquals(Arrays.asList(new CreatePartitionsTopicResult().
+                setName("foo").
+                setErrorCode(NONE.code()).
+                setErrorMessage(null),
+            new CreatePartitionsTopicResult().
+                setName("bar").
+                setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                setErrorMessage("The manual partition assignment includes a partition " +
+                    "with 1 replica(s), but this is not consistent with previous " +
+                    "partitions, which have 2 replica(s)."),
+            new CreatePartitionsTopicResult().
+                setName("quux").
+                setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                setErrorMessage("Attempted to add 2 additional partition(s), but only 1 assignment(s) were specified."),
+            new CreatePartitionsTopicResult().
+                setName("foo2").
+                setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                setErrorMessage("The manual partition assignment includes broker 2, but " +
+                    "no such broker is registered.")),
+            createPartitionsResult2.response());
+        ctx.replay(createPartitionsResult2.records());
+    }
+
+    @Test
+    public void testValidateGoodManualPartitionAssignments() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        registerBroker(1, ctx);
+        registerBroker(2, ctx);
+        registerBroker(3, ctx);
+        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1),
+            OptionalInt.of(1));
+        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1),
+            OptionalInt.empty());
+        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+            OptionalInt.of(3));
+        ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+            OptionalInt.empty());
+    }
+
+    @Test
+    public void testValidateBadManualPartitionAssignments() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        registerBroker(1, ctx);
+        registerBroker(2, ctx);
+        assertEquals("The manual partition assignment includes an empty replica list.",
+            assertThrows(InvalidReplicaAssignmentException.class, () ->
+                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(),
+                    OptionalInt.empty())).getMessage());
+        assertEquals("The manual partition assignment includes broker 3, but no such " +
+            "broker is registered.", assertThrows(InvalidReplicaAssignmentException.class, () ->
+                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 3),
+                    OptionalInt.empty())).getMessage());
+        assertEquals("The manual partition assignment includes the broker 2 more than " +
+            "once.", assertThrows(InvalidReplicaAssignmentException.class, () ->
+                ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2, 2),
+                    OptionalInt.empty())).getMessage());
+        assertEquals("The manual partition assignment includes a partition with 2 " +
+            "replica(s), but this is not consistent with previous partitions, which have " +
+                "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
+                    ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2),
+                        OptionalInt.of(3))).getMessage());
     }
 }

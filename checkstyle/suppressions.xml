@@ -273,7 +273,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"
-              files="KafkaEventQueue.java"/>
+              files="(KafkaEventQueue|ReplicationControlManager).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 </suppressions>
