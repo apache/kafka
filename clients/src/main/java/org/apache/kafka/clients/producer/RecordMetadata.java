@@ -41,6 +41,9 @@ public final class RecordMetadata {
     private final int serializedValueSize;
     private final TopicPartition topicPartition;
 
+    /**
+     * Creates a new instance with the provided parameters.
+     */
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, int batchIndex, long timestamp,
                           int serializedKeySize, int serializedValueSize) {
         // ignore the batchIndex if the base offset is -1, since this indicates the offset is unknown
@@ -52,7 +55,10 @@ public final class RecordMetadata {
     }
 
     /**
-     * @deprecated use constructor without `checksum` parameter.
+     * Creates a new instance with the provided parameters.
+     *
+     * @deprecated use constructor without `checksum` parameter. This constructor will be removed in
+     *             Apache Kafka 4.0 (deprecated since 3.0).
      */
     @Deprecated
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long batchIndex, long timestamp,
