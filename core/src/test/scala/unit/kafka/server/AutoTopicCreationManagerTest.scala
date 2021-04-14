@@ -17,25 +17,32 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.net.InetAddress
+import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Collections, Optional, Properties}
 
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createBroker
+import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
-import org.apache.kafka.common.message.CreateTopicsRequestData
+import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsRequestData}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq}
 
@@ -219,6 +226,118 @@ class AutoTopicCreationManagerTest {
     testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
   }
 
+  @Test
+  def testTopicCreationWithMetadataContextPassPrincipal(): Unit = {
+    val topicName = "topic"
+
+    val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+    val serializeIsCalled = new AtomicBoolean(false)
+    val principalSerde = new KafkaPrincipalSerde {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+        assertEquals(principal, userPrincipal)
+        serializeIsCalled.set(true)
+        Utils.utf8(principal.toString)
+      }
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+
+    val requestContext = initializeRequestContext(topicName, userPrincipal, Optional.of(principalSerde))
+
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+
+    assertTrue(serializeIsCalled.get())
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    Mockito.verify(brokerToController).sendRequest(
+      argumentCaptor.capture(),
+      any(classOf[ControllerRequestCompletionHandler]))
+    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
+    assertEquals(userPrincipal, SecurityUtils.parseKafkaPrincipal(Utils.utf8(capturedRequest.requestPrincipal)))
+  }
+
+  @Test
+  def testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined(): Unit = {
+    val topicName = "topic"
+
+    val requestContext = initializeRequestContext(topicName, KafkaPrincipal.ANONYMOUS, Optional.empty())
+
+    // Throw upon undefined principal serde when building the forward request
+    assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext)))
+  }
+
+  @Test
+  def testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion(): Unit = {
+    val topicName = "topic"
+
+    val principalSerde = new KafkaPrincipalSerde {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+        Utils.utf8(principal.toString)
+      }
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+
+    val requestContext = initializeRequestContext(topicName, KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+
+    // Should only trigger once
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Complete with unsupported version will not trigger a retry, but cleanup the inflight topics instead
+    val header = new RequestHeader(ApiKeys.ENVELOPE, 0, "client", 1)
+    val response = new EnvelopeResponse(ByteBuffer.allocate(0), Errors.UNSUPPORTED_VERSION)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, response)
+    argumentCaptor.getValue.asInstanceOf[RequestCompletionHandler].onComplete(clientResponse)
+    Mockito.verify(brokerToController, Mockito.times(1)).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Could do the send again as inflight topics are cleared.
+    autoTopicCreationManager.createTopics(
+      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+    Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+  }
+
+  private def initializeRequestContext(topicName: String,
+                                       kafkaPrincipal: KafkaPrincipal,
+                                       principalSerde: Optional[KafkaPrincipalSerde]): RequestContext = {
+
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      Some(brokerToController),
+      Some(adminManager),
+      Some(controller),
+      groupCoordinator,
+      transactionCoordinator)
+
+    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
+    topicsCollection.add(getNewTopic(topicName))
+    val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
+      .setApiKey(ApiKeys.CREATE_TOPICS.id)
+      .setMinVersion(0)
+      .setMaxVersion(0)
+    Mockito.when(brokerToController.controllerApiVersions())
+      .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+
+    Mockito.when(controller.isActive).thenReturn(false)
+
+    val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
+      "clientId", 0)
+    new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+      kafkaPrincipal, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false, principalSerde)
+  }
+
   private def testErrorWithCreationInZk(error: Errors,
                                         topicName: String,
                                         isInternal: Boolean,
@@ -261,9 +380,10 @@ class AutoTopicCreationManagerTest {
 
   private def createTopicAndVerifyResult(error: Errors,
                                          topicName: String,
-                                         isInternal: Boolean): Unit = {
+                                         isInternal: Boolean,
+                                         metadataContext: Option[RequestContext] = None): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota)
+      Set(topicName), UnboundedControllerMutationQuota, metadataContext)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())

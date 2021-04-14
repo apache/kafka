@@ -25,8 +25,12 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -39,15 +43,20 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 public class MockController implements Controller {
     private final static NotControllerException NOT_CONTROLLER_EXCEPTION =
         new NotControllerException("This is not the correct controller for this cluster.");
+
+    private final AtomicLong nextTopicId = new AtomicLong(1);
 
     public static class Builder {
         private final Map<String, MockTopic> initialTopics = new HashMap<>();
@@ -77,8 +86,29 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<CreateTopicsResponseData> createTopics(CreateTopicsRequestData request) {
-        throw new UnsupportedOperationException();
+    synchronized public CompletableFuture<CreateTopicsResponseData>
+            createTopics(CreateTopicsRequestData request) {
+        CreateTopicsResponseData response = new CreateTopicsResponseData();
+        for (CreatableTopic topic : request.topics()) {
+            if (topicNameToId.containsKey(topic.name())) {
+                response.topics().add(new CreatableTopicResult().
+                    setName(topic.name()).
+                    setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()));
+            } else {
+                long topicId = nextTopicId.getAndIncrement();
+                Uuid topicUuid = new Uuid(0, topicId);
+                topicNameToId.put(topic.name(), topicUuid);
+                topics.put(topicUuid, new MockTopic(topic.name(), topicUuid));
+                response.topics().add(new CreatableTopicResult().
+                    setName(topic.name()).
+                    setErrorCode(Errors.NONE.code()).
+                    setTopicId(topicUuid));
+                // For a better mock, we might want to return configs, replication factor,
+                // etc.  Right now, the tests that use MockController don't need these
+                // things.
+            }
+        }
+        return CompletableFuture.completedFuture(response);
     }
 
     @Override
@@ -198,6 +228,34 @@ public class MockController implements Controller {
     @Override
     public CompletableFuture<Map<ClientQuotaEntity, ApiError>>
             alterClientQuotas(Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
+            createPartitions(List<CreatePartitionsTopic> topicList) {
+        if (!active) {
+            CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
+            future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
+            return future;
+        }
+        List<CreatePartitionsTopicResult> results = new ArrayList<>();
+        for (CreatePartitionsTopic topic : topicList) {
+            if (topicNameToId.containsKey(topic.name())) {
+                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                    setErrorCode(Errors.NONE.code()).
+                    setErrorMessage(null));
+            } else {
+                results.add(new CreatePartitionsTopicResult().setName(topic.name()).
+                    setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
+                    setErrorMessage("No such topic as " + topic.name()));
+            }
+        }
+        return CompletableFuture.completedFuture(results);
+    }
+
+    @Override
+    public CompletableFuture<Long> beginWritingSnapshot() {
         throw new UnsupportedOperationException();
     }
 
