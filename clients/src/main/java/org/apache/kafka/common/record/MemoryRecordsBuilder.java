@@ -396,7 +396,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Append a record for message format v0 and v1, or null for v2 and above.
+     * Append a new record at the given offset.
      */
     private void appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
