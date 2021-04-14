@@ -607,15 +607,17 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     }
 
     private void createTopics() {
+        System.err.println("c...");
         // to verify topic config will be sync-ed across clusters
         Map<String, String> topicConfig = Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         // create these topics before starting the connectors so we don't need to wait for discovery
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig);
-        primary.kafka().createTopic("backup.test-topic-1", 1);
-        primary.kafka().createTopic("heartbeats", 1);
         System.err.println("creating test-topic-1");
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
         System.err.println("complete test-topic-1");
+        primary.kafka().createTopic("backup.test-topic-1", 1);
+        primary.kafka().createTopic("heartbeats", 1);
+        
         backup.kafka().createTopic("primary.test-topic-1", 1);
         backup.kafka().createTopic("heartbeats", 1);
     }
