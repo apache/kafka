@@ -2232,8 +2232,8 @@ Map<String, KStream<String, Long>> branches =
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Right-tombstones trigger the join,
+                                                        but left-tombstones don't: when an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2280,8 +2280,8 @@ Map<String, KStream<String, Long>> branches =
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table. Tombstones may trigger joins,
+                                                        depending on the content in the left and right tables. When an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2515,7 +2515,8 @@ Map<String, KStream<String, Long>> branches =
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
+                                          deletion of the key from the table. Tombstones do not
+                                          trigger the join.  When an input
                                           tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
@@ -2574,8 +2575,9 @@ Map<String, KStream<String, Long>> branches =
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
-                                          tombstone is received, then an output
+                                          deletion of the key from the table. Right-tombstones
+                                          trigger the join, but left-tombstones don't:
+                                          when an input tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
                                           corresponding key actually exists already in

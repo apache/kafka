@@ -34,6 +34,8 @@
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
             and <code>AclAuthorizer</code> instead.</li>
         <li>The <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
+        <li>The <code>Sum</code> and <code>Total</code> classes were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12584">KAFKA-12584</a>).
+            Please use <code>WindowedSum</code> and <code>CumulativeSum</code> instead.</li>
         <li>The <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code> classes were removed.
         <li>Various constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>, <code>AclBinding</code> and
             <code>AclBindingFilter</code>.</li>
@@ -59,6 +61,10 @@
         <li>The <code>ChecksumMessageFormatter</code> class was removed. It is not part of the public API, but it may have been used
             with <code>kafka-console-consumer.sh</code>. It reported the checksum of each record, which has not been supported
             since message format v2.</li>
+        <li>The <code>org.apache.kafka.clients.consumer.internals.PartitionAssignor</code> class has been removed. Please use
+            <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
+        <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
+            Dynamic quota defaults must be used instead.</li>
     </ul>
 </ul>
 

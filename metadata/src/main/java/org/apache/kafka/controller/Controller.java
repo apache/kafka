@@ -24,6 +24,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -36,6 +38,7 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -194,6 +197,15 @@ public interface Controller extends AutoCloseable {
      * @return              A future yielding the epoch of the snapshot.
      */
     CompletableFuture<Long> beginWritingSnapshot();
+
+    /**
+     * Create partitions on certain topics.
+     *
+     * @param topics            The list of topics to create partitions for.
+     * @return                  A future yielding per-topic results.
+     */
+    CompletableFuture<List<CreatePartitionsTopicResult>>
+            createPartitions(List<CreatePartitionsTopic> topics);
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
