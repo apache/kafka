@@ -1712,6 +1712,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
     System.err.println("handleCreateTopicsRequest")
+
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
@@ -1729,6 +1730,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
+
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
     if (!zkSupport.controller.isActive) {
       createTopicsRequest.data.topics.forEach { topic =>
@@ -1743,6 +1745,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val hasClusterAuthorization = authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
         logIfDenied = false)
       val topics = createTopicsRequest.data.topics.asScala.map(_.name)
+
+//      System.err.println("!!! topic:" + topics)
+//      if (topics.equals(ArrayBuffer("test-topic-1"))) {
+//        System.err.println("!!! pending")
+//        Thread.sleep(58000)
+//      }
       val authorizedTopics =
         if (hasClusterAuthorization) topics.toSet
         else authHelper.filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)

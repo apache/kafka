@@ -172,6 +172,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
         createTopics();
 
+
         warmUpConsumer(Collections.singletonMap("group.id", "consumer-group-dummy"));
 
         log.info(PRIMARY_CLUSTER_ALIAS + " REST service: {}", primary.endpointForResource("connectors"));
@@ -606,20 +607,42 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         return mm2Props;
     }
 
-    private void createTopics() {
-        System.err.println("c...");
+    private void createTopics() throws InterruptedException {
+        System.err.println("!!! c...");
         // to verify topic config will be sync-ed across clusters
         Map<String, String> topicConfig = Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         // create these topics before starting the connectors so we don't need to wait for discovery
         primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig);
+        System.err.println("creating test-topic-1 done");
+        waitForTopicCreated(primary, "test-topic-1");
+//        waitForTopicCreated(primary, "backup.test-topic-1");
         System.err.println("creating test-topic-1");
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
+        System.err.println("waiting test-topic-1");
+
+
+        waitForTopicCreated(backup, "test-topic-1");
+//        waitForTopicCreated(backup, "primary.test-topic-1");
+
         System.err.println("complete test-topic-1");
+
+
+
         primary.kafka().createTopic("backup.test-topic-1", 1);
-        primary.kafka().createTopic("heartbeats", 1);
-        
+        waitForTopicCreated(primary, "backup.test-topic-1");
+        System.err.println("waited backup.test-topic-1");
         backup.kafka().createTopic("primary.test-topic-1", 1);
+        waitForTopicCreated(primary, "primary.test-topic-1");
+        System.err.println("waited primary.test-topic-1");
+
+        primary.kafka().createTopic("heartbeats", 1);
+
+        waitForTopicCreated(primary, "heartbeats");
+
+
+//        backup.kafka().createTopic("primary.test-topic-1", 1);
         backup.kafka().createTopic("heartbeats", 1);
+        waitForTopicCreated(backup, "heartbeats");
     }
 
     /*

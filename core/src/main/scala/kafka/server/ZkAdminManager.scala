@@ -187,7 +187,7 @@ class ZkAdminManager(val config: KafkaConfig,
           assignments
         }
         trace(s"Assignments for topic $topic are $assignments ")
-        System.err.println(s"Assignments for topic $topic are $assignments ")
+//        System.err.println(s"Assignments for topic $topic are $assignments ")
 
         val configs = new Properties()
         topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
@@ -233,8 +233,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
-      System.err.println("validateonly")
+//      System.err.println("validateonly")
       val results = metadata.map { createTopicMetadata =>
+//        System.err.println("!!! createTopicMetadata.topic:" + createTopicMetadata)
         // ignore topics that already have errors
         if (createTopicMetadata.error.isSuccess && !validateOnly) {
           (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))

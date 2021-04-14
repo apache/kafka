@@ -360,7 +360,7 @@ public class EmbeddedKafkaCluster {
         newTopic.configs(topicConfig);
 
         try (final Admin adminClient = createAdminClient()) {
-            adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+            System.err.println("!!! create:" + topic + "," + adminClient.createTopics(Collections.singletonList(newTopic)).all().get());
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
