@@ -56,7 +56,7 @@ public class RocksDBTimeOrderedWindowStoreTest {
 
     @Before
     public void setup() {
-        windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
+        windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext(
@@ -116,6 +116,24 @@ public class RocksDBTimeOrderedWindowStoreTest {
     }
 
     @Test
+    public void shouldGetAllDuplicates() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        windowStore.put(0, "zero1", startTime + 0);
+        windowStore.put(0, "zero2", startTime + 0);
+        windowStore.put(0, "zero3", startTime + 0);
+
+        final KeyValue<Windowed<Integer>, String> zero1 = windowedPair(0, "zero1", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> zero2 = windowedPair(0, "zero2", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> zero3 = windowedPair(0, "zero3", startTime + 0);
+
+        assertEquals(
+            asList(zero1, zero2, zero3),
+            toList(windowStore.all())
+        );
+    }
+
+    @Test
     public void shouldGetAllNonDeletedRecords() {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
@@ -142,25 +160,50 @@ public class RocksDBTimeOrderedWindowStoreTest {
     }
 
     @Test
+    public void shouldDeleteAllDuplicates() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        windowStore.put(0, "zero1", startTime + 0);
+        windowStore.put(0, "zero2", startTime + 0);
+        windowStore.put(0, "zero3", startTime + 0);
+        windowStore.put(1, "one1", startTime + 1);
+        windowStore.put(1, "one2", startTime + 1);
+
+        windowStore.put(0, null, startTime + 0);
+
+        final KeyValue<Windowed<Integer>, String> one1 = windowedPair(1, "one1", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> one2 = windowedPair(1, "one2", startTime + 1);
+
+        assertEquals(
+            asList(one1, one2),
+            toList(windowStore.all())
+        );
+    }
+
+    @Test
     public void shouldGetAllReturnTimestampOrderedRecords() {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
         // Add some records in different order
         windowStore.put(4, "four", startTime + 4);
         windowStore.put(0, "zero", startTime + 0);
-        windowStore.put(2, "two", startTime + 2);
+        windowStore.put(2, "two1", startTime + 2);
         windowStore.put(3, "three", startTime + 3);
         windowStore.put(1, "one", startTime + 1);
+
+        // Add duplicates
+        windowStore.put(2, "two2", startTime + 2);
 
         // Only non-deleted records should appear in the all() iterator
         final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
         final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
-        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> two1 = windowedPair(2, "two1", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> two2 = windowedPair(2, "two2", startTime + 2);
         final KeyValue<Windowed<Integer>, String> three = windowedPair(3, "three", startTime + 3);
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
 
         assertEquals(
-            asList(zero, one, two, three, four),
+            asList(zero, one, two1, two2, three, four),
             toList(windowStore.all())
         );
     }

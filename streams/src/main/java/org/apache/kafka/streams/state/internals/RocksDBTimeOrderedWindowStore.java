@@ -52,10 +52,12 @@ public class RocksDBTimeOrderedWindowStore
 
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
-        // Skip if value is null and duplicates are allowed since this delete is a no-op
         if (!(value == null && retainDuplicates)) {
             maybeUpdateSeqnumForDups();
             wrapped().put(TimeOrderedKeySchema.toStoreKeyBinary(key, timestamp, seqnum), value);
+        } else {
+            // Delete all duplicates for the specified key and timestamp
+            wrapped().remove(key, timestamp);
         }
     }
 

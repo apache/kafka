@@ -49,6 +49,11 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     }
 
     @Override
+    public Bytes toBinary(final Bytes key, final long timestamp) {
+        return toStoreKeyBinary(key, timestamp);
+    }
+
+    @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         throw new UnsupportedOperationException();
     }
@@ -85,6 +90,17 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments, final long from, final long to, final boolean forward) {
         throw new UnsupportedOperationException();
+    }
+
+    public static Bytes toStoreKeyBinary(final Bytes key,
+                                         final long timestamp) {
+        final byte[] serializedKey = key.get();
+
+        final ByteBuffer buf = ByteBuffer.allocate(TIMESTAMP_SIZE + serializedKey.length);
+        buf.putLong(timestamp);
+        buf.put(serializedKey);
+
+        return Bytes.wrap(buf.array());
     }
 
     public static Bytes toStoreKeyBinary(final Bytes key,
