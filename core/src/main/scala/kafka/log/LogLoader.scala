@@ -74,20 +74,6 @@ case class LoadLogParams(dir: File,
  * This object is responsible for all activities related with recovery of log segments from disk.
  */
 object LogLoader extends Logging {
-
-  /*protected def createLogSegments(topicPartition: TopicPartition): LogSegments = new LogSegments(topicPartition)
-
-  protected def createProducerStateManager(topicPartition: TopicPartition,
-                                           dir: File,
-                                           maxProducerIdExpirationMs: Int): ProducerStateManager =
-    new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-
-  protected def maybeCreateLeaderEpochCache(dir: File,
-                                            topicPartition: TopicPartition,
-                                            logDirFailureChannel: LogDirFailureChannel,
-                                            recordVersion: RecordVersion): Option[LeaderEpochFileCache] =
-    Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion)*/
-
   /**
    * Load the log segments from the log files on disk, and return the components of the loaded log.
    * Additionally, it also suitably updates the provided LeaderEpochFileCache and ProducerStateManager

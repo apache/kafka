@@ -246,7 +246,7 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param leaderEpochCache The LeaderEpochFileCache instance (if any) containing state associated
  *                         with the provided logStartOffset and nextOffsetMetadata
  * @param producerStateManager The ProducerStateManager instance containing state associated with the provided segments
- * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure*
+ * @param logDirFailureChannel The LogDirFailureChannel instance to asynchronously handle log directory failure
  * @param topicId optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
  *                first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
