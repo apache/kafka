@@ -381,7 +381,7 @@ public class RestServer {
      * Parses the uri and throws a more definitive error
      * when the internal node to node communication can't happen due to an invalid host name.
      */
-    void validateUriHost(URI uri) {
+    static void validateUriHost(URI uri) {
         if (uri.getHost() == null) {
             String host = Utils.getHost(uri.getAuthority());
             String errorMsg = "Could not parse host from advertised URL=" + uri.toString();

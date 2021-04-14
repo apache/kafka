@@ -58,6 +58,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.RestServer.validateUriHost;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -190,31 +191,20 @@ public class RestServerTest {
 
     @Test
     public void testValidateUriHost() {
-        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
-        DistributedConfig config = new DistributedConfig(configMap);
-
-        server = new RestServer(config);
-        server.validateUriHost(URI.create("http://localhost:8080"));
-        server.validateUriHost(URI.create("http://172.217.2.110:80"));
-        server.validateUriHost(URI.create("http://[2607:f8b0:4006:818::2004]:80"));
+        validateUriHost(URI.create("http://localhost:8080"));
+        validateUriHost(URI.create("http://172.217.2.110:80"));
+        validateUriHost(URI.create("http://[2607:f8b0:4006:818::2004]:80"));
     }
 
     @Test
     public void testValidateUriInvalidHost() {
-        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
-        DistributedConfig config = new DistributedConfig(configMap);
-
-        server = new RestServer(config);
-
-        ConnectException exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080")));
+        ConnectException exception = assertThrows(ConnectException.class, () -> validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080")));
         assertTrue(exception.getMessage().contains("RFC 1123"));
         //invalid uri with / in the end
-        exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080/")));
+        exception = assertThrows(ConnectException.class, () -> validateUriHost(URI.create("http://kafka_connect-0.dev-2:8080/")));
         assertTrue(exception.getMessage().contains("RFC 1123"));
 
-        exception = assertThrows(ConnectException.class, () -> server.validateUriHost(URI.create("http://:8080")));
+        exception = assertThrows(ConnectException.class, () -> validateUriHost(URI.create("http://:8080")));
         assertTrue(exception.getMessage().contains("Could not parse host"));
     }
 
