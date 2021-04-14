@@ -386,6 +386,7 @@ public class EmbeddedKafkaCluster {
     public Admin createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "60000");
         final Object listeners = brokerConfig.get(KafkaConfig$.MODULE$.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
