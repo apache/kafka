@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+rootProject.name = 'kafka'
+
 include 'clients',
     'connect:api',
     'connect:basic-auth-extension',
@@ -51,3 +53,4 @@ include 'clients',
     'streams:upgrade-system-tests-26',
     'streams:upgrade-system-tests-27',
     'tools'
+
