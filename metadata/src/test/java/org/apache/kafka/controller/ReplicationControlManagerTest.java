@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.AlterIsrRequestData;
@@ -36,10 +37,12 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -64,6 +67,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PARTITIONS;
@@ -73,6 +77,7 @@ import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ReplicationControlManager.PartitionControlInfo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -130,7 +135,7 @@ public class ReplicationControlManagerTest {
                 setBrokerId(brokerId).setBrokerEpoch(brokerId + 100).setCurrentMetadataOffset(1).
                 setWantFence(false).setWantShutDown(false), 0);
         assertEquals(new BrokerHeartbeatReply(true, false, false, false), result.response());
-        ControllerTestUtils.replayAll(ctx.clusterControl, result.records());
+        ctx.replay(result.records());
     }
 
     @Test
@@ -162,7 +167,7 @@ public class ReplicationControlManagerTest {
             setErrorMessage(null).setErrorCode((short) 0).
             setTopicId(result2.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse2, result2.response());
-        ControllerTestUtils.replayAll(replicationControl, result2.records());
+        ctx.replay(result2.records());
         assertEquals(new PartitionControlInfo(new int[] {2, 0, 1},
             new int[] {2, 0, 1}, null, null, 2, 0, 0),
             replicationControl.getPartition(
@@ -247,7 +252,7 @@ public class ReplicationControlManagerTest {
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
         List<ApiMessageAndVersion> records = new ArrayList<>();
         replicationControl.handleNodeDeactivated(0, records);
-        ControllerTestUtils.replayAll(replicationControl, records);
+        ctx.replay(records);
         assertEquals(Collections.emptySet(), ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
     }
@@ -690,14 +695,17 @@ public class ReplicationControlManagerTest {
             createTopicsResult.response().topics().find("foo").errorCode());
         assertEquals((short) 0,
             createTopicsResult.response().topics().find("bar").errorCode());
-        ControllerTestUtils.replayAll(ctx.replicationControl, createTopicsResult.records());
+        ctx.replay(createTopicsResult.records());
         Uuid fooId = createTopicsResult.response().topics().find("foo").topicId();
         Uuid barId = createTopicsResult.response().topics().find("bar").topicId();
         // Deactivate node 0.  This will remove it from the ISR and from the leadership
         // of both topics.
         List<ApiMessageAndVersion> deactivationRecords = new ArrayList<>();
-        ctx.replicationControl.handleNodeDeactivated(0, deactivationRecords);
+        ctx.replicationControl.handleBrokerFenced(0, deactivationRecords);
         assertEquals(new HashSet<>(Arrays.asList(
+            new ApiMessageAndVersion(new FenceBrokerRecord().
+                setId(0).
+                setEpoch(100), (short) 0),
             new ApiMessageAndVersion(new PartitionChangeRecord().
                 setPartitionId(0).
                 setTopicId(fooId).
@@ -708,12 +716,15 @@ public class ReplicationControlManagerTest {
                 setTopicId(barId).
                 setIsr(Arrays.asList(1)).
                 setLeader(1), (short) 0))), new HashSet<>(deactivationRecords));
-        ControllerTestUtils.replayAll(ctx.replicationControl, deactivationRecords);
+        ctx.replay(deactivationRecords);
         List<ApiMessageAndVersion> deactivationRecords2 = new ArrayList<>();
         // Deactivate node 1.  This time, the ISR will not be changed (we never let the
         // ISR become empty).  However, the topic will now be leaderless (leader = -1).
-        ctx.replicationControl.handleNodeDeactivated(1, deactivationRecords2);
+        ctx.replicationControl.handleBrokerFenced(1, deactivationRecords2);
         assertEquals(new HashSet<>(Arrays.asList(
+            new ApiMessageAndVersion(new FenceBrokerRecord().
+                setId(1).
+                setEpoch(101), (short) 0),
             new ApiMessageAndVersion(new PartitionChangeRecord().
                 setPartitionId(0).
                 setTopicId(fooId).
@@ -722,17 +733,99 @@ public class ReplicationControlManagerTest {
                 setPartitionId(0).
                 setTopicId(barId).
                 setLeader(-1), (short) 0))), new HashSet<>(deactivationRecords2));
-        ControllerTestUtils.replayAll(ctx.replicationControl, deactivationRecords2);
+        ctx.replay(deactivationRecords2);
         // Activate node 0.  It is not in the ISR.  Topic foo will make it the leader
         // anyway, since unclean leader election is enabled for that topic.  Topic bar
         // will be unaffected.
         List<ApiMessageAndVersion> activationRecords = new ArrayList<>();
-        ctx.replicationControl.handleNodeActivated(0, activationRecords);
+        ctx.replicationControl.handleBrokerUnfenced(0, 100, activationRecords);
         assertEquals(new HashSet<>(Arrays.asList(
+            new ApiMessageAndVersion(new UnfenceBrokerRecord().
+                setId(0).
+                setEpoch(100), (short) 0),
             new ApiMessageAndVersion(new PartitionChangeRecord().
                 setPartitionId(0).
                 setTopicId(fooId).
-                setIsr(Arrays.asList(1, 0)).
+                setIsr(Arrays.asList(0)).
                 setLeader(0), (short) 0))), new HashSet<>(activationRecords));
+        ctx.replay(activationRecords);
+        // Configuring bar so that unclean leader election is enabled should trigger
+        // an immediate election.
+        ControllerResult<Map<ConfigResource, ApiError>> configResult =
+            ctx.replicationControl.incrementalAlterConfigs(Collections.singletonMap(
+                    new ConfigResource(TOPIC, "bar"), Collections.singletonMap(
+                        UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, entry(SET, "true"))));
+        assertEquals(new HashSet<>(Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).
+                setResourceName("bar").
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 0),
+            new ApiMessageAndVersion(new PartitionChangeRecord().
+                setPartitionId(0).
+                setTopicId(barId).
+                setIsr(Arrays.asList(0)).
+                setLeader(0), (short) 0))), new HashSet<>(configResult.records()));
+    }
+
+    @Test
+    public void testExamineConfigAlterations() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        // Test that changing a broker configuration that is not related to unclean leader
+        // election does not trigger any elections.
+        assertNull(ctx.replicationControl.examineConfigAlterations(Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(Type.BROKER.id()).
+                setResourceName("").
+                setName("log.cleaner.io.buffer.size").
+                setValue("9001"), (short) 0))));
+
+        // Test that changing a node configuration for a node other than the active
+        // controller does not trigger any elections.
+        assertNull(ctx.replicationControl.examineConfigAlterations(Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(Type.BROKER.id()).
+                setResourceName("1").
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 0))));
+
+        // Test that changing an unclean leader election configuration for the current
+        // node does create an election strategizer.
+        assertEquals(ctx.configurationControl.createElectionStrategizer().
+                setNodeUncleanConfig("true"),
+            ctx.replicationControl.examineConfigAlterations(Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(Type.BROKER.id()).
+                setResourceName("0").
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 0))));
+
+        // Test that changing an unclean leader election configuration for the default
+        // node does create an election strategizer.
+        assertEquals(ctx.configurationControl.createElectionStrategizer().
+                setClusterUncleanConfig("false"),
+            ctx.replicationControl.examineConfigAlterations(Arrays.asList(
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(Type.BROKER.id()).
+                    setResourceName("").
+                    setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                    setValue("false"), (short) 0))));
+
+        // Test that changing an unclean leader election configuration for some topics
+        // does create an election strategizer.
+        assertEquals(ctx.configurationControl.createElectionStrategizer().
+                setTopicUncleanOverride("foobar", "false").
+                setTopicUncleanOverride("quux", "true"),
+            ctx.replicationControl.examineConfigAlterations(Arrays.asList(
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(Type.TOPIC.id()).
+                    setResourceName("foobar").
+                    setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                    setValue("false"), (short) 0),
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(Type.TOPIC.id()).
+                    setResourceName("quux").
+                    setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                    setValue("true"), (short) 0))));
     }
 }

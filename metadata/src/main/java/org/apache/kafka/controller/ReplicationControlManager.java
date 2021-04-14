@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
@@ -49,6 +50,7 @@ import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -83,9 +85,11 @@ import java.util.OptionalInt;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ConfigurationControlManager.DEFAULT_NODE_RESOURCE;
 
 
 /**
@@ -95,7 +99,7 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
  */
 public class ReplicationControlManager {
     /**
-     * A special value used to represent the leader for a partition with no leader. 
+     * A special value used to represent the leader for a partition with no leader.
      */
     public static final int NO_LEADER = -1;
 
@@ -710,7 +714,7 @@ public class ReplicationControlManager {
 
     /**
      * Generate the appropriate records to handle a broker being fenced.
-     *
+     * <p>
      * First, we remove this broker from any non-singleton ISR. Then we generate a
      * FenceBrokerRecord.
      *
@@ -730,7 +734,7 @@ public class ReplicationControlManager {
 
     /**
      * Generate the appropriate records to handle a broker being unregistered.
-     *
+     * <p>
      * First, we remove this broker from any non-singleton ISR. Then we generate an
      * UnregisterBrokerRecord.
      *
@@ -755,6 +759,7 @@ public class ReplicationControlManager {
      * @param records               The record list to append to.
      */
     void handleNodeDeactivated(int brokerId, List<ApiMessageAndVersion> records) {
+        ElectionStrategizer strategizer = configurationControl.createElectionStrategizer();
         Iterator<TopicIdPartition> iterator = brokersToIsrs.iterator(brokerId, false);
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPartition = iterator.next();
@@ -784,7 +789,7 @@ public class ReplicationControlManager {
                 if (partition.leader == brokerId) {
                     // The fenced node will no longer be the leader.
                     int newLeader = bestLeader(partition.replicas, newIsr,
-                        configurationControl.shouldUseUncleanLeaderElection(topic.name));
+                        strategizer.shouldBeUnclean(topic.name));
                     record.setLeader(newLeader);
                 } else {
                     // Bump the partition leader epoch.
@@ -797,7 +802,7 @@ public class ReplicationControlManager {
 
     /**
      * Generate the appropriate records to handle a broker becoming unfenced.
-     *
+     * <p>
      * First, we create an UnfenceBrokerRecord. Then, we check if if there are any
      * partitions that don't currently have a leader that should be led by the newly
      * unfenced broker.
@@ -821,6 +826,7 @@ public class ReplicationControlManager {
      */
     void handleNodeActivated(int brokerId, List<ApiMessageAndVersion> records) {
         Iterator<TopicIdPartition> iterator = brokersToIsrs.noLeaderIterator();
+        ElectionStrategizer strategizer = configurationControl.createElectionStrategizer();
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPartition = iterator.next();
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
@@ -833,33 +839,35 @@ public class ReplicationControlManager {
                 throw new RuntimeException("Partition " + topicIdPartition +
                     " existed in isrMembers, but not in the partitions map.");
             }
-            boolean brokerInIsr = Replicas.contains(partition.isr, brokerId);
-            boolean shouldBecomeLeader;
-            if (configurationControl.shouldUseUncleanLeaderElection(topic.name)) {
-                shouldBecomeLeader = Replicas.contains(partition.replicas, brokerId);
+            if (strategizer.shouldBeUnclean(topic.name)) {
+                if (Replicas.contains(partition.replicas, brokerId)) {
+                    // Perform an unclean leader election.  The only entry in the new ISR
+                    // will be the current broker, since the data in the existing ISR is
+                    // not guaranteed to match with the new leader.
+                    log.info("The newly active node {} will be the leader for the " +
+                            "previously offline partition {}, after an UNCLEAN leader election.",
+                        brokerId, topicIdPartition);
+                    PartitionChangeRecord record = new PartitionChangeRecord().
+                        setPartitionId(topicIdPartition.partitionId()).
+                        setTopicId(topic.id).
+                        setLeader(brokerId).
+                        setIsr(Collections.singletonList(brokerId));
+                    records.add(new ApiMessageAndVersion(record, (short) 0));
+                }
             } else {
-                shouldBecomeLeader = brokerInIsr;
-            }
-            if (shouldBecomeLeader) {
-                if (brokerInIsr) {
+                if (Replicas.contains(partition.isr, brokerId)) {
+                    // Perform a clean leader election.
                     if (log.isDebugEnabled()) {
                         log.debug("The newly active node {} will be the leader for the " +
-                            "previously offline partition {}.",
+                                "previously offline partition {}.",
                             brokerId, topicIdPartition);
                     }
-                } else {
-                    log.info("The newly active node {} will be the leader for the " +
-                        "previously offline partition {}, after an UNCLEAN leader election.",
-                        brokerId, topicIdPartition);
+                    PartitionChangeRecord record = new PartitionChangeRecord().
+                        setPartitionId(topicIdPartition.partitionId()).
+                        setTopicId(topic.id).
+                        setLeader(brokerId);
+                    records.add(new ApiMessageAndVersion(record, (short) 0));
                 }
-                PartitionChangeRecord record = new PartitionChangeRecord().
-                    setPartitionId(topicIdPartition.partitionId()).
-                    setTopicId(topic.id).
-                    setLeader(brokerId);
-                if (!brokerInIsr) {
-                    record.setIsr(Replicas.toList(partition.isr, brokerId));
-                }
-                records.add(new ApiMessageAndVersion(record, (short) 0));
             }
         }
     }
@@ -981,7 +989,7 @@ public class ReplicationControlManager {
     int bestLeader(int[] replicas, int[] isr, boolean unclean) {
         for (int i = 0; i < replicas.length; i++) {
             int replica = replicas[i];
-            if (Replicas.contains(isr, replica)) {
+            if (Replicas.contains(isr, replica) && clusterControl.unfenced(replica)) {
                 return replica;
             }
         }
@@ -1138,6 +1146,113 @@ public class ReplicationControlManager {
                 " replica(s), but this is not consistent with previous " +
                 "partitions, which have " + replicationFactor.getAsInt() + " replica(s).");
         }
+    }
+
+    /**
+     * Handle legacy configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+            Map<ConfigResource, Map<String, String>> newConfigs) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+            configurationControl.legacyAlterConfigs(newConfigs);
+        return alterConfigs(result);
+    }
+
+    /**
+     * Handle incremental configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+            Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+            configurationControl.incrementalAlterConfigs(configChanges);
+        return alterConfigs(result);
+    }
+
+    /**
+     * If important controller configurations were changed, generate records which will
+     * apply the changes.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> alterConfigs(
+            ControllerResult<Map<ConfigResource, ApiError>> result) {
+        ElectionStrategizer strategizer = examineConfigAlterations(result.records());
+        boolean isAtomic = true;
+        List<ApiMessageAndVersion> records = result.records();
+        if (strategizer != null) {
+            records.addAll(handleLeaderElectionConfigChanges(strategizer));
+            isAtomic = false;
+        }
+        return new ControllerResult<>(records, result.response(), isAtomic);
+    }
+
+    /**
+     * Examine the configuration alteration records to see if there is something we
+     * need to do to apply the new configuration.
+     *
+     * @param records   The input records.
+     *
+     * @return          The ElectionStrategizer if we need to handle leader election
+     *                  configuration changes; null, otherwise.
+     */
+    ElectionStrategizer examineConfigAlterations(List<ApiMessageAndVersion> records) {
+        ElectionStrategizer strategizer = null;
+        for (ApiMessageAndVersion messageAndVersion : records) {
+            ConfigRecord record = (ConfigRecord) messageAndVersion.message();
+            if (record.name().equals(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)) {
+                ConfigResource resource = new ConfigResource(
+                    Type.forId(record.resourceType()), record.resourceName());
+                if (resource.equals(configurationControl.currentNodeResource())) {
+                    if (strategizer == null) {
+                        strategizer = configurationControl.createElectionStrategizer();
+                    }
+                    strategizer.setNodeUncleanConfig(record.value());
+                } else if (resource.equals(DEFAULT_NODE_RESOURCE)) {
+                    if (strategizer == null) {
+                        strategizer = configurationControl.createElectionStrategizer();
+                    }
+                    strategizer.setClusterUncleanConfig(record.value());
+                } else if (resource.type().equals(TOPIC)) {
+                    if (strategizer == null) {
+                        strategizer = configurationControl.createElectionStrategizer();
+                    }
+                    strategizer.setTopicUncleanOverride(resource.name(), record.value());
+                }
+            }
+        }
+        return strategizer;
+    }
+
+    /**
+     * Handle changes to the leader election configuration, by checking to see if
+     * any leaderless partitions can now elect a new leader via an unclean leader election.
+     */
+    List<ApiMessageAndVersion> handleLeaderElectionConfigChanges(ElectionStrategizer strategizer) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.noLeaderIterator();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        while (iterator.hasNext()) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (topic == null) {
+                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
+                    "isrMembers, but not in the topics map.");
+            }
+            PartitionControlInfo partition = topic.parts.get(topicIdPartition.partitionId());
+            if (partition == null) {
+                throw new RuntimeException("Partition " + topicIdPartition +
+                    " existed in isrMembers, but not in the partitions map.");
+            }
+            if (strategizer.shouldBeUnclean(topic.name)) {
+                int newLeader = bestLeader(partition.replicas, partition.isr, true);
+                if (newLeader != NO_LEADER) {
+                    PartitionChangeRecord record = new PartitionChangeRecord().
+                        setPartitionId(topicIdPartition.partitionId()).
+                        setTopicId(topic.id).
+                        setLeader(newLeader).
+                        setIsr(Collections.singletonList(newLeader));
+                    records.add(new ApiMessageAndVersion(record, (short) 0));
+                }
+            }
+        }
+        return records;
     }
 
     class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {

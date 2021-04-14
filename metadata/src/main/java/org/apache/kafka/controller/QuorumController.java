@@ -1014,7 +1014,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly) {
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges);
+                replicationControl.incrementalAlterConfigs(configChanges);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1031,7 +1031,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs);
+                replicationControl.legacyAlterConfigs(newConfigs);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
