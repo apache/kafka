@@ -27,6 +27,8 @@
         or updating the application not to use internal classes.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
         For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
+    <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
+        Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
     <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>core</code> and <code>tools</code> modules:</li>
     <ul>
         <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
@@ -53,11 +55,15 @@
             instead.</li>
         <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
         <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
-        <li>The deprecated <code>org.apache.kafka.clients.consumer.internals.PartitionAssignor</code> class has been removed. Please use
+        <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
+            format v2, which has been the default since 0.11, moved the checksum from the record to the record batch. As such, these methods
+            don't make sense and no replacements exist.</li>
+        <li>The <code>ChecksumMessageFormatter</code> class was removed. It is not part of the public API, but it may have been used
+            with <code>kafka-console-consumer.sh</code>. It reported the checksum of each record, which has not been supported
+            since message format v2.</li>
+        <li>The <code>org.apache.kafka.clients.consumer.internals.PartitionAssignor</code> class has been removed. Please use
             <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
-        <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
-            Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
-        <li>The deprecated <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
+        <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
             Dynamic quota defaults must be used instead.</li>
     </ul>
 </ul>

@@ -20,8 +20,6 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.PrimitiveRef.IntRef;
 import org.apache.kafka.common.utils.Utils;
@@ -33,7 +31,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 
@@ -631,14 +628,5 @@ public class DefaultRecord implements Record {
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
-    }
-
-
-    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
-        Checksum checksum = Crc32C.create();
-        Checksums.updateLong(checksum, timestamp);
-        Checksums.updateInt(checksum, serializedKeySize);
-        Checksums.updateInt(checksum, serializedValueSize);
-        return checksum.getValue();
     }
 }

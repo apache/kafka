@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Factory to create {@link ConsumerRecord consumer records} for a single single-partitioned topic with given key and
@@ -190,12 +191,12 @@ public class ConsumerRecordFactory<K, V> {
             -1L,
             timestampMs,
             TimestampType.CREATE_TIME,
-            (long) ConsumerRecord.NULL_CHECKSUM,
             serializedKey == null ? 0 : serializedKey.length,
             serializedValue == null ? 0 : serializedValue.length,
             serializedKey,
             serializedValue,
-            headers);
+            headers,
+            Optional.empty());
     }
 
     /**

@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class DefaultMessageFormatterTest {
@@ -210,12 +211,12 @@ object DefaultMessageFormatterTest {
       offset,
       timestamp,
       timestampType,
-      0L,
       0,
       0,
       if (key == null) null else key.getBytes(StandardCharsets.UTF_8),
       if (value == null) null else value.getBytes(StandardCharsets.UTF_8),
-      new RecordHeaders(headers.asJava))
+      new RecordHeaders(headers.asJava),
+      Optional.empty[Integer])
   }
 
   private def withResource[Resource <: Closeable, Result](resource: Resource)(handler: Resource => Result): Result = {

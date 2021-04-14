@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -40,6 +41,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
@@ -148,7 +150,7 @@ public class GlobalStateTaskTest {
                                   final boolean failExpected) {
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
             topic2, 1, 1, 0L, TimestampType.CREATE_TIME,
-            0L, 0, 0, key, recordValue
+            0, 0, key, recordValue, new RecordHeaders(), Optional.empty()
         );
         globalStateTask.initialize();
         try {
