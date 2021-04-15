@@ -222,7 +222,7 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *
  * @param _dir The directory in which log segments are created.
  * @param config The log configuration settings
- * @param segments The log segments, these may be non-empty when recovered from disk
+ * @param segments The non-empty log segments recovered from disk
  * @param logStartOffset The earliest offset allowed to be exposed to kafka client.
  *                       The logStartOffset can be updated by :
  *                       - user's DeleteRecordsRequest
@@ -2344,7 +2344,7 @@ object Log extends Logging {
    *
    * This method assumes that the file exists. It does not need to convert IOException
    * (thrown from changeFileSuffixes) to KafkaStorageException because it is either called before
-   * all logs are loaded or the caller will catch and handle IOException
+   * all logs are loaded or the caller will catch and handle IOException.
    *
    * @param segmentsToDelete The segments to be deleted
    * @param asyncDelete If true, the deletion of the segments is done asynchronously

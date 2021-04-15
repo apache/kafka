@@ -79,16 +79,15 @@ object LogLoader extends Logging {
    * Additionally, it also suitably updates the provided LeaderEpochFileCache and ProducerStateManager
    * to reflect the contents of the loaded log.
    *
-   * This method does not need to convert IOException to KafkaStorageException because it is only
-   * called before all logs are loaded.
+   * In the context of the calling thread, this function does not need to convert IOException to
+   * KafkaStorageException because it is only called before all logs are loaded.
    *
    * @param params The parameters for the log being loaded from disk
    *
    * @return the offsets of the Log successfully loaded from disk
    *
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that
-   *                                           overflow index offset; or when we find an unexpected
-   *                                           number of .log files with overflow
+   *                                           overflow index offset
    */
   def load(params: LoadLogParams): LoadedLogOffsets = {
     // first do a pass through the files in the log directory and remove any temporary files
@@ -128,7 +127,7 @@ object LogLoader extends Logging {
               time = params.time,
               initFileSize = params.config.initFileSize))
         }
-        (params.recoveryPointCheckpoint, 0L)
+        (0L, 0L)
       }
     }
 
