@@ -97,11 +97,10 @@ class RaftClusterTest {
       try {
         // Create a test topic
         val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
-        System.err.println("!!! before create topic")
+        System.err.println("before create topic")
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
-
-        System.err.println("!!! after create topic")
+        System.err.println("after create topic")
 
         // List created topic
         TestUtils.waitUntilTrue(() => {
@@ -169,11 +168,11 @@ class RaftClusterTest {
         newTopic.add(new NewTopic("test-topic-2", 1, 3.toShort))
         newTopic.add(new NewTopic("test-topic-3", 1, 3.toShort))
 
-        System.err.println("!!! before create topic")
+        System.err.println("before create topic")
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
 
-        System.err.println("!!! after create topic")
+        System.err.println("after create topic")
 
         // List created topic
         TestUtils.waitUntilTrue(() => {

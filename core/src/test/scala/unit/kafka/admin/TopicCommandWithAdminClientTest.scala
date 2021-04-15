@@ -245,11 +245,13 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val topic1 = "kafka.testTopic1"
     val topic2 = "kafka.testTopic2"
     val topic3 = "oooof.testTopic1"
+    println("!!! ready to create topic")
     adminClient.createTopics(
       List(new NewTopic(topic1, 2, 2.toShort),
         new NewTopic(topic2, 2, 2.toShort),
         new NewTopic(topic3, 2, 2.toShort)).asJavaCollection)
       .all().get()
+    println("!!! end to create topic")
     waitForTopicCreated(topic1)
     waitForTopicCreated(topic2)
     waitForTopicCreated(topic3)

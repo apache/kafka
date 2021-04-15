@@ -1712,7 +1712,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
     System.err.println("handleCreateTopicsRequest")
-
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 

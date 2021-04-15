@@ -243,8 +243,10 @@ public class AdminMetadataManager {
     public void update(Cluster cluster, long now) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
+            System.err.println("Setting bootstrap cluster metadata " + cluster);
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
+            System.err.println("Updating cluster metadata to " + cluster);
             this.lastMetadataUpdateMs = now;
         }
 
