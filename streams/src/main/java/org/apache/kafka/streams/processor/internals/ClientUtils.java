@@ -125,6 +125,7 @@ public class ClientUtils {
             throw timeoutException;
         } catch (final KafkaException fatal) {
             LOG.warn("The committed offsets request failed.", fatal);
+            //Named
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), fatal);
         }
 
@@ -147,6 +148,7 @@ public class ClientUtils {
             return endOffsetsFuture.get();
         } catch (final RuntimeException | InterruptedException | ExecutionException e) {
             LOG.warn("The listOffsets request failed.", e);
+            //Named
             throw new StreamsException("Unable to obtain end offsets from kafka", e);
         }
     }

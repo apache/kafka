@@ -137,6 +137,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public <S extends StateStore> S  getStateStore(final String name) {
         throwUnsupportedOperationExceptionIfStandby("getStateStore");
         if (currentNode() == null) {
+            //Named
             throw new StreamsException("Accessing from an unknown node");
         }
 
@@ -146,6 +147,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         if (!currentNode().stateStores.contains(name)) {
+            //Named
+
             throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name +
                 " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
                 "make sure to connect the added store to the processor by providing the processor name to " +
@@ -198,6 +201,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         if (previousNode == null) {
+            //Named
+
             throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
                     "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
                     " is shared. To avoid this error, make sure that your suppliers return new instances " +
@@ -234,6 +239,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             } else {
                 final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
                 if (child == null) {
+                    //Named
+
                     throw new StreamsException("Unknown downstream node: " + childName
                                                    + " either does not exist or is not connected to this processor.");
                 }

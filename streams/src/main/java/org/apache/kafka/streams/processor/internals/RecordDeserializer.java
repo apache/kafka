@@ -77,10 +77,12 @@ class RecordDeserializer {
                     "Deserialization error callback failed after deserialization error for record {}",
                     rawRecord,
                     deserializationException);
+                //Named
                 throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
             }
 
             if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
+                //Named
                 throw new StreamsException("Deserialization exception handler is set to fail upon" +
                     " a deserialization error. If you would rather have the streaming pipeline" +
                     " continue after a deserialization error, please set the " +

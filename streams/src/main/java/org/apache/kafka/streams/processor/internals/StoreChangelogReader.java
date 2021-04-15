@@ -275,6 +275,7 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final KafkaException e) {
                 // this also includes InvalidOffsetException, which should not happen under normal
                 // execution, hence it is also okay to wrap it as fatal StreamsException
+                //Named
                 throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                     " of " + partition, e);
             }
@@ -446,6 +447,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 e.partitions().forEach(partition -> corruptedTasks.add(changelogs.get(partition).stateManager.taskId()));
                 throw new TaskCorruptedException(corruptedTasks, e);
             } catch (final KafkaException e) {
+                //Named
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
 
@@ -597,6 +599,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (final Exception e) {
+                    //Named
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -615,6 +618,7 @@ public class StoreChangelogReader implements ChangelogReader {
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
             } catch (final Exception e) {
+                //Named
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
         }
@@ -679,6 +683,7 @@ public class StoreChangelogReader implements ChangelogReader {
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
             return Collections.emptyMap();
         } catch (final KafkaException e) {
+            //Named
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
         }
     }
@@ -885,6 +890,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 } catch (final KafkaException e) {
                     // this also includes InvalidOffsetException, which should not happen under normal
                     // execution, hence it is also okay to wrap it as fatal StreamsException
+                    //Named
                     throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                         " of " + partition, e);
                 }
@@ -892,6 +898,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
                 } catch (final Exception e) {
+                    //Named
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
@@ -931,6 +938,7 @@ public class StoreChangelogReader implements ChangelogReader {
         try {
             restoreConsumer.unsubscribe();
         } catch (final KafkaException e) {
+            //Named
             throw new StreamsException("Restore consumer get unexpected error unsubscribing", e);
         }
     }

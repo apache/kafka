@@ -166,6 +166,7 @@ class KStreamImplJoin {
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {
         if (!supplier.retainDuplicates()) {
+            //Named
             throw new StreamsException("The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
         }
         final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&

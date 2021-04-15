@@ -441,8 +441,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                             // that it can return immediately
 
                             // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                            //Named
                             throw new IllegalStateException(error);
                         } catch (final KafkaException fatal) {
+                            //Named
                             throw new StreamsException(fatal);
                         }
                     }
@@ -743,6 +745,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record = null;
             throw exception;
         } catch (final RuntimeException e) {
+            //Named
             final StreamsException error = new StreamsException(
                 String.format(
                     "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
@@ -822,6 +825,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final StreamsException e) {
             throw e;
         } catch (final RuntimeException e) {
+            //Named
             throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
             processorContext.setCurrentNode(null);
@@ -882,6 +886,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // re-throw to trigger `task.timeout.ms`
             throw timeoutException;
         } catch (final KafkaException e) {
+            //Named
             throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, inputPartitions()), e);
         }
     }

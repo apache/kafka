@@ -60,6 +60,7 @@ public class Record<K, V> {
         this.key = key;
         this.value = value;
         if (timestamp < 0) {
+            //Named
             throw new StreamsException(
                 "Malformed Record",
                 new IllegalArgumentException("Timestamp may not be negative. Got: " + timestamp)

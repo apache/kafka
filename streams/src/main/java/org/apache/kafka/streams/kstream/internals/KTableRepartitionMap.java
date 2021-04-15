@@ -58,6 +58,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
             @Override
             public String[] storeNames() {
+                //Named
+
                 throw new StreamsException("Underlying state store not accessible due to repartitioning.");
             }
         };
@@ -81,6 +83,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         public void process(final K key, final Change<V> change) {
             // the original key should never be null
             if (key == null) {
+                //Named
+
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
             }
 

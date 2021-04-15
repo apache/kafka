@@ -166,6 +166,7 @@ public class StreamsProducer {
                 // re-throw to trigger `task.timeout.ms`
                 throw timeoutException;
             } catch (final KafkaException exception) {
+                //Named
                 throw new StreamsException(
                     formatException("Error encountered trying to initialize transactions"),
                     exception
@@ -196,6 +197,7 @@ public class StreamsProducer {
                     error
                 );
             } catch (final KafkaException error) {
+                //Named
                 throw new StreamsException(
                     formatException("Error encountered trying to begin a new transaction"),
                     error
@@ -219,6 +221,7 @@ public class StreamsProducer {
                     uncaughtException.getCause()
                 );
             } else {
+                //Named
                 throw new StreamsException(
                     formatException(String.format("Error encountered trying to send record to topic %s", record.topic())),
                     uncaughtException
@@ -256,6 +259,7 @@ public class StreamsProducer {
             // re-throw to trigger `task.timeout.ms`
             throw timeoutException;
         } catch (final KafkaException error) {
+            //Named
             throw new StreamsException(
                 formatException("Error encountered trying to commit a transaction"),
                 error
@@ -292,6 +296,7 @@ public class StreamsProducer {
                 // since transaction already got aborted by brokers/transactional-coordinator if this happens
                 log.debug("Encountered {} while aborting the transaction; this is expected and hence swallowed", error.getMessage());
             } catch (final KafkaException error) {
+                //Named
                 throw new StreamsException(
                     formatException("Error encounter trying to abort a transaction"),
                     error

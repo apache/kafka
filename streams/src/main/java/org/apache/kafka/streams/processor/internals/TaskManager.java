@@ -589,6 +589,7 @@ public class TaskManager {
                 task.suspend();
             } catch (final RuntimeException e) {
                 log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
+                //Named
                 firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
             }
         }
@@ -1141,6 +1142,7 @@ public class TaskManager {
                         );
                         throw timeoutException;
                     } catch (final KafkaException error) {
+                        //Named
                         throw new StreamsException("Error encountered committing offsets via consumer", error);
                     }
                 }

@@ -972,6 +972,7 @@ public class StreamThread extends Thread {
                     "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
                 notResetString
             );
+            //Named
 
             if (cause == null) {
                 throw new StreamsException(format);

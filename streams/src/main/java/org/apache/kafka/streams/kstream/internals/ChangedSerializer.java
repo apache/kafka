@@ -51,7 +51,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     @Override
     public byte[] serialize(final String topic, final Headers headers, final Change<T> data) {
         final byte[] serializedKey;
-
+        //Named
         // only one of the old / new values would be not null
         if (data.newValue != null) {
             if (data.oldValue != null) {

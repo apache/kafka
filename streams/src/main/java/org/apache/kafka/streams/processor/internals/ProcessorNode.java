@@ -123,6 +123,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 createSensor
             );
         } catch (final Exception e) {
+            //Named
+
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
 
@@ -160,6 +162,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 name
             );
         } catch (final Exception e) {
+            //Named
+
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
 
@@ -179,6 +183,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         try {
             maybeMeasureLatency(() -> processor.process(record), time, processSensor);
         } catch (final ClassCastException e) {
+            //Named
+
             final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
             final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
             throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "

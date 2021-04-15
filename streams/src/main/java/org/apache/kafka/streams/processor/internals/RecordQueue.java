@@ -186,6 +186,7 @@ public class RecordQueue {
             } catch (final StreamsException internalFatalExtractorException) {
                 throw internalFatalExtractorException;
             } catch (final Exception fatalUserException) {
+                //Named
                 throw new StreamsException(
                         String.format("Fatal user code error in TimestampExtractor callback for record %s.", deserialized),
                         fatalUserException);

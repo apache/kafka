@@ -33,9 +33,24 @@ public class TaskId implements Comparable<TaskId> {
     /** The ID of the partition. */
     public final int partition;
 
+    /** The NamedTopology this task belongs to, or null if there is none */
+    public final String namedTopology;
+
+    public boolean isNamed() {
+        return namedTopology == null;
+    }
+
+    public String namedTopology() {
+        if (!isNamed()) {
+            throw new IllegalStateException("Tried to get NamedTopology of unnamed task");
+        }
+        return namedTopology;
+    }
+
     public TaskId(final int topicGroupId, final int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
+        namedTopology = "named";
     }
 
     public String toString() {
