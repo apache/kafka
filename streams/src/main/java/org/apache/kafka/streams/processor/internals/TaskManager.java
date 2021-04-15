@@ -958,8 +958,8 @@ public class TaskManager {
     }
 
     private List<Task> prioritizedListOfTasks() {
-        Collection<Task> misbehaving = tasks.misbehavingTasks().stream().filter(t -> !tasks.activeTasks().contains(t)).collect(Collectors.toList());
-        List<Task> pList = activeTaskStream().filter(t -> !misbehaving.contains(t)).collect(Collectors.toList());
+        final Collection<Task> misbehaving = tasks.misbehavingTasks().stream().filter(t -> !tasks.activeTasks().contains(t)).collect(Collectors.toList());
+        final List<Task> pList = activeTaskStream().filter(t -> !misbehaving.contains(t)).collect(Collectors.toList());
         pList.addAll(misbehaving);
         pList.removeAll(tasks.brokenTasks());
         return pList;
@@ -1346,7 +1346,7 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    public void deprioritizeNamedTopology(String name) {
+    public void deprioritizeNamedTopology(final String name) {
         tasks.deprioritizeNamedTopology(name);
     }
 }

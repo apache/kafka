@@ -20,17 +20,17 @@ public class NamedTopologyStreamsException extends StreamsException {
 
     private final String topologyName;
 
-    public NamedTopologyStreamsException(String message, String topologyName) {
+    public NamedTopologyStreamsException(final String message, final String topologyName) {
         super(message);
         this.topologyName = topologyName;
     }
 
-    public NamedTopologyStreamsException(String message, Throwable throwable, String topologyName) {
+    public NamedTopologyStreamsException(final String message, final Throwable throwable, final String topologyName) {
         super(message, throwable);
         this.topologyName = topologyName;
     }
 
-    public NamedTopologyStreamsException(Throwable throwable, String topologyName) {
+    public NamedTopologyStreamsException(final Throwable throwable, final String topologyName) {
         super(throwable);
         this.topologyName = topologyName;
     }

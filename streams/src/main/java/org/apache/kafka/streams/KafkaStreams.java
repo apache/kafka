@@ -473,7 +473,7 @@ public class KafkaStreams implements AutoCloseable {
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         if (throwable instanceof NamedTopologyStreamsException) {
-            String name = ((NamedTopologyStreamsException) throwable).getTopologyName();
+            final String name = ((NamedTopologyStreamsException) throwable).getTopologyName();
             ((StreamThread) Thread.currentThread()).deprioritizeNamedTopology(name);
         }
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);

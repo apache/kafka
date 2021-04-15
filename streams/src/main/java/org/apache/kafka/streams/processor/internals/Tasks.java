@@ -315,13 +315,13 @@ class Tasks {
         allTasksPerId.put(task.id(), task);
     }
 
-    public void deprioritizeNamedTopology(String name) {
-        for (Task task: readOnlyTasks) {
-            if (task.id().namedTopology().equals(name)){
+    public void deprioritizeNamedTopology(final String name) {
+        for (final Task task: readOnlyTasks) {
+            if (task.id().namedTopology().equals(name)) {
                 misbehavingTasks.add(task);
             }
         }
-        for (Task task: misbehavingTasks) {
+        for (final Task task: misbehavingTasks) {
             misbehavingTasks.remove(task);
             taskJail.add(task);
             task.suspend();
@@ -330,7 +330,7 @@ class Tasks {
 
     public void reprioritizeTasks() {
         misbehavingTasks.clear();
-        for (Task task: taskJail) {
+        for (final Task task: taskJail) {
             task.resume();
             misbehavingTasks.add(task);
             taskJail.remove(task);

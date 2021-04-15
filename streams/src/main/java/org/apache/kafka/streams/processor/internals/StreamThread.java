@@ -833,7 +833,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void deprioritizeNamedTopology(String name) {
+    public void deprioritizeNamedTopology(final String name) {
         taskManager.deprioritizeNamedTopology(name);
     }
 
