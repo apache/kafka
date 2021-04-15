@@ -1516,7 +1516,7 @@ public class Fetcher<K, V> implements Closeable {
         private void maybeEnsureValid(Record record) {
             if (checkCrcs) {
                 try {
-                    Record.ensureValid(record);
+                    record.ensureValid();
                 } catch (CorruptRecordException e) {
                     throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
                             + " is invalid, cause: " + e.getMessage());

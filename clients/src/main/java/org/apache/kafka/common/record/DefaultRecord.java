@@ -121,6 +121,16 @@ public class DefaultRecord implements Record {
     }
 
     @Override
+    public boolean isValid() {
+        // new versions of the message format (2 and above) do not contain an individual record checksum;
+        // instead they are validated with the checksum at the log entry level
+        return true;
+    }
+
+    @Override
+    public void ensureValid() {}
+
+    @Override
     public int keySize() {
         return key == null ? -1 : key.remaining();
     }
