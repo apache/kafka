@@ -954,7 +954,14 @@ public class TaskManager {
     }
 
     List<Task> activeTaskIterable() {
-        return activeTaskStream().collect(Collectors.toList());
+        return prioritizedListOfTasks();
+    }
+
+    private List<Task> prioritizedListOfTasks() {
+        Collection<Task> misbehaving = tasks.misbehavingTasks().stream().filter(t -> !tasks.activeTasks().contains(t)).collect(Collectors.toList());
+        List<Task> pList = activeTaskStream().filter(t -> !misbehaving.contains(t)).collect(Collectors.toList());
+        pList.addAll(misbehaving);
+        return pList;
     }
 
     private Stream<Task> activeTaskStream() {
@@ -1332,5 +1339,9 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    public void deprioritizeNamedTopology(String name) {
+        tasks.deprioritizeNamedTopology(name);
     }
 }
