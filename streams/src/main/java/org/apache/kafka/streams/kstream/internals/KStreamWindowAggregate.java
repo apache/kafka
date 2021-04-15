@@ -109,7 +109,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
         @Override
         public void process(final Record<K, V> record) {
-            if (record.key() == null) { //TODO
+            if (record.key() == null) {
                 log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     record.value(),
