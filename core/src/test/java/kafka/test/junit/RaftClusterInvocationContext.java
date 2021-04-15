@@ -68,7 +68,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[Quorum %d] %s", invocationIndex, clusterDesc);
+        return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
     }
 
     @Override
@@ -77,7 +77,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             (BeforeTestExecutionCallback) context -> {
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
                     new TestKitNodes.Builder().
-                        setNumKip500BrokerNodes(clusterConfig.numBrokers()).
+                        setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build());
 
                 // Copy properties into the TestKit builder

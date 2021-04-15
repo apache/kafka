@@ -43,6 +43,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -1092,6 +1094,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<List<CreatePartitionsTopicResult>>
+            createPartitions(List<CreatePartitionsTopic> topics) {
+        if (topics.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyList());
+        }
+        return appendWriteEvent("createPartitions", () ->
+            replicationControl.createPartitions(topics));
     }
 
     @Override

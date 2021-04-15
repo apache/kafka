@@ -59,6 +59,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
@@ -3030,37 +3031,50 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
-    if (authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = zkSupport.adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
-
-      val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
-        val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
-          new DescribeClientQuotasResponseData.EntityData()
-            .setEntityType(entityType)
-            .setEntityName(entityName)
-        }.toBuffer
-
-        val valueData = quotaValues.iterator.map { case (key, value) =>
-          new DescribeClientQuotasResponseData.ValueData()
-            .setKey(key)
-            .setValue(value)
-        }.toBuffer
-
-        new DescribeClientQuotasResponseData.EntryData()
-          .setEntity(entityData.asJava)
-          .setValues(valueData.asJava)
-      }.toBuffer
-
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setEntries(entriesData.asJava)))
-    } else {
+    if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else {
+      metadataSupport match {
+        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache) =>
+          val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
+
+          val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
+            val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
+              new DescribeClientQuotasResponseData.EntityData()
+                .setEntityType(entityType)
+                .setEntityName(entityName)
+            }.toBuffer
+
+            val valueData = quotaValues.iterator.map { case (key, value) =>
+              new DescribeClientQuotasResponseData.ValueData()
+                .setKey(key)
+                .setValue(value)
+            }.toBuffer
+
+            new DescribeClientQuotasResponseData.EntryData()
+              .setEntity(entityData.asJava)
+              .setValues(valueData.asJava)
+          }.toBuffer
+
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setEntries(entriesData.asJava)))
+        case RaftSupport(fwdMgr, metadataCache, quotaCache) =>
+          val result = quotaCache.describeClientQuotas(
+            describeClientQuotasRequest.filter().components().asScala.toSeq,
+            describeClientQuotasRequest.filter().strict())
+          val resultAsJava = new util.HashMap[ClientQuotaEntity, util.Map[String, java.lang.Double]](result.size)
+          result.foreach { case (entity, quotas) =>
+            resultAsJava.put(entity, quotas.map { case (key, quota) => key -> Double.box(quota)}.asJava)
+          }
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            DescribeClientQuotasResponse.fromQuotaEntities(resultAsJava, requestThrottleMs)
+          )
+      }
     }
   }
 
