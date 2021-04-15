@@ -270,11 +270,7 @@ object DumpLogSegments {
 
             var prefix = s"${RecordIndent} "
             if (!skipRecordMetadata) {
-              val checksum = record match {
-                case r: AbstractLegacyRecordBatch => r.checksum().toString
-                case _ => "null"
-              }
-              print(s"${prefix}offset: ${record.offset} isValid: ${record.isValid} crc: $checksum" +
+              print(s"${prefix}offset: ${record.offset}" +
                   s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
                   s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
                   s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch}" +
@@ -283,8 +279,10 @@ object DumpLogSegments {
 
               if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
                 print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
-              } else {
-                print(s" crc: $checksum isvalid: ${record.isValid}")
+              }
+              record match {
+                case r: AbstractLegacyRecordBatch => print(s" crc: ${r.checksum}}")
+                case _ =>
               }
 
               if (batch.isControlBatch) {

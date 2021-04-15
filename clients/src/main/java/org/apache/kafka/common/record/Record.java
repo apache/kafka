@@ -53,12 +53,6 @@ public interface Record {
     long timestamp();
 
     /**
-     * Check whether the record has a valid checksum.
-     * @return true if the record has a valid checksum, false otherwise
-     */
-    boolean isValid();
-
-    /**
      * Raise a {@link org.apache.kafka.common.errors.CorruptRecordException} if the record does not have a valid checksum.
      */
     void ensureValid();
