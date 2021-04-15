@@ -1058,8 +1058,8 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
         if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
-            consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
-                    Serdes.serdeFrom(innerClass).getClass().getName());
+            consumerProperties.setProperty(StreamsConfig.WINDOWED_INNER_CLASS_SERDE,
+                Serdes.serdeFrom(innerClass).getClass().getName());
         }
         return IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(
                 consumerProperties,
@@ -1081,7 +1081,7 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
         if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
-            consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
+            consumerProperties.setProperty(StreamsConfig.WINDOWED_INNER_CLASS_SERDE,
                 Serdes.serdeFrom(innerClass).getClass().getName());
         }
         return IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(
@@ -1113,7 +1113,7 @@ public class KStreamAggregationIntegrationTest {
                 "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
                 "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
                 "--property", "key.separator=" + keySeparator,
-                "--property", "key.deserializer." + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "=" + Serdes.serdeFrom(innerClass).getClass().getName(),
+                "--property", "key.deserializer." + StreamsConfig.WINDOWED_INNER_CLASS_SERDE + "=" + Serdes.serdeFrom(innerClass).getClass().getName(),
                 "--property", "key.deserializer.window.size.ms=500",
             };
 
