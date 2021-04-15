@@ -94,9 +94,7 @@ public class DefaultRecordBatchTest {
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) assertTrue(Record.isValid(record));
         }
     }
 
@@ -124,9 +122,7 @@ public class DefaultRecordBatchTest {
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(baseSequence + 1, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) assertTrue(Record.isValid(record));
         }
     }
 

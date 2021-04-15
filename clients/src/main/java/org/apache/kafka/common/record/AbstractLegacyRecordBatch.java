@@ -57,12 +57,17 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return offset();
     }
 
-    @Override
+    /**
+     * Check whether the record has a valid checksum.
+     * @return true if the record has a valid checksum, false otherwise
+     */
     public boolean isValid() {
         return outerRecord().isValid();
     }
 
-    @Override
+    /**
+     * Raise a {@link org.apache.kafka.common.errors.CorruptRecordException} if the record does not have a valid checksum.
+     */
     public void ensureValid() {
         outerRecord().ensureValid();
     }

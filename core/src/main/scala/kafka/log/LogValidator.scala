@@ -197,9 +197,8 @@ private[log] object LogValidator extends Logging {
     // so we depend on the batch-level CRC check in Log.analyzeAndValidateRecords(). For magic v2 and above,
     // there is no record-level CRC to check.
     if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed) {
-      try {
-        record.ensureValid()
-      } catch {
+      try Record.ensureValid(record)
+      catch {
         case e: InvalidRecordException =>
           brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
           throw new CorruptRecordException(e.getMessage + s" in topic partition $topicPartition.")
