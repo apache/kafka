@@ -780,8 +780,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
          */
         createWorkerTask();
 
-        createWorkerTask();
-
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
@@ -816,8 +814,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             5. The first offset commit fails even though first record has been sent successfully, (possibly from failure to produce offsets to Kafka)
             6. No further offset commits are attempted as the new record batch contains the second record, which has failed with a non-retriable error
          */
-        createWorkerTask();
-
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);

@@ -123,7 +123,7 @@ public class OffsetStorageWriter {
     /**
      * @return whether there's anything to flush right now.
      */
-    public boolean willFlush() {
+    public synchronized boolean willFlush() {
         return !data.isEmpty();
     }
 
