@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
+class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, V1, V2, R> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableKTableInnerJoin.class);
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
