@@ -259,6 +259,10 @@ class Tasks {
         return Collections.unmodifiableCollection(misbehavingTasks);
     }
 
+    Collection<Task> brokenTasks() {
+        return Collections.unmodifiableCollection(taskJail);
+    }
+
     Set<TaskId> activeTaskIds() {
         return readOnlyActiveTaskIds;
     }

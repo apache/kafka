@@ -961,6 +961,7 @@ public class TaskManager {
         Collection<Task> misbehaving = tasks.misbehavingTasks().stream().filter(t -> !tasks.activeTasks().contains(t)).collect(Collectors.toList());
         List<Task> pList = activeTaskStream().filter(t -> !misbehaving.contains(t)).collect(Collectors.toList());
         pList.addAll(misbehaving);
+        pList.removeAll(tasks.brokenTasks());
         return pList;
     }
 
