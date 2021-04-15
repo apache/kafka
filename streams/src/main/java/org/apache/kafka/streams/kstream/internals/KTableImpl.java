@@ -484,14 +484,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TOSTREAM_NAME);
         final KStreamMapValues<K, Change<V>, V> kStreamMapValues = new KStreamMapValues<>((key, change) -> change.newValue);
-        final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
-            new ProcessorParameters<>(kStreamMapValues, name)
-        );
+        final ProcessorParameters<K, Change<V>, K, V> processorParameters = new ProcessorParameters<>(
+            kStreamMapValues,
+            name);
 
-        final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
+        final ProcessorGraphNode<K, Change<V>> toStreamNode = new ProcessorGraphNode<>(
             name,
-            processorParameters
-        );
+            processorParameters);
 
         builder.addGraphNode(this.graphNode, toStreamNode);
 
@@ -790,7 +789,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String selectName = new NamedInternal(groupedInternal.name()).orElseGenerateWithPrefix(builder, SELECT_NAME);
 
         final KTableChangeProcessorSupplier<K, V, KeyValue<K1, V1>, K1, V1> selectSupplier = new KTableRepartitionMap<>(this, selector);
-        final ProcessorParameters<K, Change<V>, ?, ?> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
+        final ProcessorParameters<K, Change<V>, K1, Change<V1>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
         final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
