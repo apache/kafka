@@ -51,7 +51,7 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
         rootDeserializer = (topic, data) -> deserialize(data);
     }
 
-    private Map<Byte, RemoteLogMetadataSerdes> createInternalSerde() {
+    private static Map<Byte, RemoteLogMetadataSerdes> createInternalSerde() {
         Map<Byte, RemoteLogMetadataSerdes> map = new HashMap<>();
         map.put(REMOTE_LOG_SEGMENT_METADATA_API_KEY, new RemoteLogSegmentMetadataSerdes());
         map.put(REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY, new RemoteLogSegmentMetadataUpdateSerdes());
@@ -62,14 +62,14 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
     private byte[] serialize(RemoteLogMetadataContext remoteLogMetadataContext) {
         RemoteLogMetadataSerdes serdes = keyToSerdes.get(remoteLogMetadataContext.apiKey());
         if (serdes == null) {
-            throw new IllegalArgumentException("Serializer for apikey: " + remoteLogMetadataContext.apiKey() +
+            throw new IllegalArgumentException("Serializer for apiKey: " + remoteLogMetadataContext.apiKey() +
                                                " does not exist.");
         }
 
         @SuppressWarnings("unchecked")
         Message message = serdes.serialize(remoteLogMetadataContext.payload());
 
-        return transformToBytes(message, remoteLogMetadataContext.apiKey(), remoteLogMetadataContext.version());
+        return toBytes(message, remoteLogMetadataContext.apiKey(), remoteLogMetadataContext.version());
     }
 
     private RemoteLogMetadataContext deserialize(byte[] data) {
@@ -85,7 +85,7 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
         return new RemoteLogMetadataContext(apiKey, version, deserializedObj);
     }
 
-    private byte[] transformToBytes(Message message, byte apiKey, byte apiVersion) {
+    private byte[] toBytes(Message message, byte apiKey, byte apiVersion) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
 
         // Add header containing apiKey and apiVersion,

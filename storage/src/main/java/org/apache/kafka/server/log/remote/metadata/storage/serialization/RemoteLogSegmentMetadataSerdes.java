@@ -28,35 +28,41 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataSerdes implements RemoteLogMetadataSerdes<RemoteLogSegmentMetadata> {
 
     public Message serialize(RemoteLogSegmentMetadata data) {
-        RemoteLogSegmentMetadataRecord record = new RemoteLogSegmentMetadataRecord()
-                .setRemoteLogSegmentId(
-                        new RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry()
-                                .setTopicIdPartition(new RemoteLogSegmentMetadataRecord.TopicIdPartitionEntry()
-                                        .setId(data.remoteLogSegmentId().topicIdPartition().topicId())
-                                        .setName(data.remoteLogSegmentId().topicIdPartition().topicPartition()
-                                                .topic())
-                                        .setPartition(data.remoteLogSegmentId().topicIdPartition().topicPartition()
-                                                .partition()))
-                                .setId(data.remoteLogSegmentId().id()))
+        return new RemoteLogSegmentMetadataRecord()
+                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
                 .setStartOffset(data.startOffset())
                 .setEndOffset(data.endOffset())
                 .setBrokerId(data.brokerId())
                 .setEventTimestampMs(data.eventTimestampMs())
                 .setMaxTimestampMs(data.maxTimestampMs())
                 .setSegmentSizeInBytes(data.segmentSizeInBytes())
-                .setSegmentLeaderEpochs(data.segmentLeaderEpochs().entrySet().stream()
-                        .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
-                                .setLeaderEpoch(entry.getKey())
-                                .setOffset(entry.getValue())).collect(Collectors.toList()))
+                .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(data))
                 .setRemoteLogSegmentState(data.state().id());
+    }
 
-        return record;
+    private List<RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry> createSegmentLeaderEpochsEntry(RemoteLogSegmentMetadata data) {
+        return data.segmentLeaderEpochs().entrySet().stream()
+                   .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
+                           .setLeaderEpoch(entry.getKey())
+                           .setOffset(entry.getValue()))
+                   .collect(Collectors.toList());
+    }
+
+    private RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadata data) {
+        return new RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry()
+                .setTopicIdPartition(
+                        new RemoteLogSegmentMetadataRecord.TopicIdPartitionEntry()
+                                .setId(data.remoteLogSegmentId().topicIdPartition().topicId())
+                                .setName(data.remoteLogSegmentId().topicIdPartition().topicPartition().topic())
+                                .setPartition(data.remoteLogSegmentId().topicIdPartition().topicPartition().partition()))
+                .setId(data.remoteLogSegmentId().id());
     }
 
     @Override
@@ -69,6 +75,7 @@ public class RemoteLogSegmentMetadataSerdes implements RemoteLogMetadataSerdes<R
         for (RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry segmentLeaderEpoch : record.segmentLeaderEpochs()) {
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
+
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId,
                 record.startOffset(), record.endOffset(), record.maxTimestampMs(), record.brokerId(),
                 record.eventTimestampMs(), record.segmentSizeInBytes(), segmentLeaderEpochs);

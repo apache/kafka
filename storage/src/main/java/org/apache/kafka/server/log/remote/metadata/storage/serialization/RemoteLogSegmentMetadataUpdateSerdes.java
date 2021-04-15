@@ -30,17 +30,20 @@ import java.nio.ByteBuffer;
 public class RemoteLogSegmentMetadataUpdateSerdes implements RemoteLogMetadataSerdes<RemoteLogSegmentMetadataUpdate> {
 
     public Message serialize(RemoteLogSegmentMetadataUpdate data) {
-        RemoteLogSegmentMetadataUpdateRecord recordUpdate = new RemoteLogSegmentMetadataUpdateRecord()
-                .setRemoteLogSegmentId(new RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry()
-                        .setId(data.remoteLogSegmentId().id())
-                        .setTopicIdPartition(new RemoteLogSegmentMetadataUpdateRecord.TopicIdPartitionEntry()
-                                .setName(data.remoteLogSegmentId().topicIdPartition().topicPartition().topic())
-                                .setPartition(
-                                        data.remoteLogSegmentId().topicIdPartition().topicPartition().partition())
-                                .setId(data.remoteLogSegmentId().topicIdPartition().topicId())))
+        return new RemoteLogSegmentMetadataUpdateRecord()
+                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
                 .setEventTimestampMs(data.eventTimestampMs())
                 .setRemoteLogSegmentState(data.state().id());
-        return recordUpdate;
+    }
+
+    private RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadataUpdate data) {
+        return new RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry()
+                .setId(data.remoteLogSegmentId().id())
+                .setTopicIdPartition(
+                        new RemoteLogSegmentMetadataUpdateRecord.TopicIdPartitionEntry()
+                                .setName(data.remoteLogSegmentId().topicIdPartition().topicPartition().topic())
+                                .setPartition(data.remoteLogSegmentId().topicIdPartition().topicPartition().partition())
+                                .setId(data.remoteLogSegmentId().topicIdPartition().topicId()));
     }
 
     public RemoteLogSegmentMetadataUpdate deserialize(byte version, ByteBuffer byteBuffer) {

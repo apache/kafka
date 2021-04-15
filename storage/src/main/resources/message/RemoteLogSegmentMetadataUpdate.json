@@ -18,7 +18,7 @@
   "type": "data",
   "name": "RemoteLogSegmentMetadataUpdateRecord",
   "validVersions": "0",
-  "flexibleVersions": "none",
+  "flexibleVersions": "0+",
   "fields": [
     {
       "name": "RemoteLogSegmentId",
