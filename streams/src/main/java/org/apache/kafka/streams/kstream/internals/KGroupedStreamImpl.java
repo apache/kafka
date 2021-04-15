@@ -235,7 +235,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     private <T> KTable<K, T> doAggregate(
-        final KStreamAggregateProcessorSupplier<K, K, V, T> aggregateSupplier,
+        final KStreamAggregateProcessorSupplier<K, V, K, T> aggregateSupplier,
         final String functionName,
         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(

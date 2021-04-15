@@ -41,7 +41,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggregateProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggregateProcessorSupplier<K, V, Windowed<K>, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;

@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K, K, V, V> {
+public class KStreamReduce<K, V> implements KStreamAggregateProcessorSupplier<K, V, K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamReduce.class);
 
     private final String storeName;

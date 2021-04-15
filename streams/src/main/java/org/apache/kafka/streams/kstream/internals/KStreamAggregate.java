@@ -33,24 +33,24 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSupplier<K, K, V, T> {
+public class KStreamAggregate<K, V, Agg> implements KStreamAggregateProcessorSupplier<K, V, K, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final Initializer<Agg> initializer;
+    private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
     KStreamAggregate(final String storeName,
-                     final Initializer<T> initializer,
-                     final Aggregator<? super K, ? super V, T> aggregator) {
+                     final Initializer<Agg> initializer,
+                     final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
     }
 
     @Override
-    public Processor<K, V, K, Change<T>> get() {
+    public Processor<K, V, K, Change<Agg>> get() {
         return new KStreamAggregateProcessor();
     }
 
@@ -60,13 +60,13 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
     }
 
 
-    private class KStreamAggregateProcessor extends ContextualProcessor<K, V, K, Change<T>> {
-        private TimestampedKeyValueStore<K, T> store;
+    private class KStreamAggregateProcessor extends ContextualProcessor<K, V, K, Change<Agg>> {
+        private TimestampedKeyValueStore<K, Agg> store;
         private Sensor droppedRecordsSensor;
-        private TupleChangeForwarder<K, T> tupleForwarder;
+        private TupleChangeForwarder<K, Agg> tupleForwarder;
 
         @Override
-        public void init(final ProcessorContext<K, Change<T>> context) {
+        public void init(final ProcessorContext<K, Change<Agg>> context) {
             super.init(context);
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
@@ -95,10 +95,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
                 return;
             }
 
-            final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(record.key());
-            T oldAgg = getValueOrNull(oldAggAndTimestamp);
+            final ValueAndTimestamp<Agg> oldAggAndTimestamp = store.get(record.key());
+            Agg oldAgg = getValueOrNull(oldAggAndTimestamp);
 
-            final T newAgg;
+            final Agg newAgg;
             final long newTimestamp;
 
             if (oldAgg == null) {
@@ -117,10 +117,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
     }
 
     @Override
-    public KTableValueGetterSupplier<K, T> view() {
-        return new KTableValueGetterSupplier<K, T>() {
+    public KTableValueGetterSupplier<K, Agg> view() {
+        return new KTableValueGetterSupplier<K, Agg>() {
 
-            public KTableValueGetter<K, T> get() {
+            public KTableValueGetter<K, Agg> get() {
                 return new KStreamAggregateValueGetter();
             }
 
@@ -132,8 +132,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
     }
 
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
-        private TimestampedKeyValueStore<K, T> store;
+    private class KStreamAggregateValueGetter implements KTableValueGetter<K, Agg> {
+        private TimestampedKeyValueStore<K, Agg> store;
 
 
         @Override
@@ -142,7 +142,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggregateProcessorSuppl
         }
 
         @Override
-        public ValueAndTimestamp<T> get(final K key) {
+        public ValueAndTimestamp<Agg> get(final K key) {
             return store.get(key);
         }
     }

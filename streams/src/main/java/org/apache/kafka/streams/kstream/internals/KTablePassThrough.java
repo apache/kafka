@@ -26,7 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import java.util.Collection;
 
 public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V> {
-    private final Collection<KStreamAggregateProcessorSupplier> parents; //TODO change to aggregationprocessor
+    private final Collection<KStreamAggregateProcessorSupplier> parents;
     private final String storeName;
 
 
