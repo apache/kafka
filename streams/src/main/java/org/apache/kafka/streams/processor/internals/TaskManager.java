@@ -964,6 +964,10 @@ public class TaskManager {
         return pList;
     }
 
+    private void reprioritizeTasks() {
+        tasks.reprioritizeTasks();
+    }
+
     private Stream<Task> activeTaskStream() {
         return tasks.allTasks().stream().filter(Task::isActive);
     }
@@ -1206,7 +1210,7 @@ public class TaskManager {
                 task.recordProcessBatchTime(now - then);
             }
         }
-
+        reprioritizeTasks();
         return totalProcessed;
     }
 

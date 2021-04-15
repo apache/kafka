@@ -44,6 +44,7 @@ class Tasks {
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
     private final Collection<Task> misbehavingTasks = new HashSet<>();
+    private final Collection<Task> taskJail = new HashSet<>();
 
     // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
@@ -315,6 +316,20 @@ class Tasks {
             if (task.id().namedTopology().equals(name)){
                 misbehavingTasks.add(task);
             }
+        }
+        for (Task task: misbehavingTasks) {
+            misbehavingTasks.remove(task);
+            taskJail.add(task);
+            task.suspend();
+        }
+    }
+
+    public void reprioritizeTasks() {
+        misbehavingTasks.clear();
+        for (Task task: taskJail) {
+            task.resume();
+            misbehavingTasks.add(task);
+            taskJail.remove(task);
         }
     }
 }
