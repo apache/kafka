@@ -93,7 +93,8 @@ public class KTableImplTest {
         final MockOldProcessorSupplier<String, Object> supplier = new MockOldProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
+        final KTable<String, Integer> table2 = table1
+            .mapValues((ValueMapper<String, Integer>) Integer::valueOf);
         table2.toStream().process(supplier);
 
         final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);

@@ -32,17 +32,17 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, V1, V2, VOut> {
+class KTableKTableOuterJoin<K, V, V1, VOut> extends KTableKTableAbstractJoin<K, V, V1, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableKTableOuterJoin.class);
 
-    KTableKTableOuterJoin(final KTableImpl<K, ?, V1> table1,
-                          final KTableImpl<K, ?, V2> table2,
-                          final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
+    KTableKTableOuterJoin(final KTableImpl<K, ?, V> table1,
+                          final KTableImpl<K, ?, V1> table2,
+                          final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner) {
         super(table1, table2, joiner);
     }
 
     @Override
-    public Processor<K, Change<V1>, K, Change<VOut>> get() {
+    public Processor<K, Change<V>, K, Change<VOut>> get() {
         return new KTableKTableOuterJoinProcessor(valueGetterSupplier2.get());
     }
 
@@ -51,10 +51,10 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         return new KTableKTableOuterJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
     }
 
-    private class KTableKTableOuterJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, VOut, V1, V2> {
+    private class KTableKTableOuterJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, V, V1, VOut> {
 
-        KTableKTableOuterJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
-                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableOuterJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V1> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -63,13 +63,13 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         }
     }
 
-    private class KTableKTableOuterJoinProcessor extends ContextualProcessor<K, Change<V1>, K, Change<VOut>> {
+    private class KTableKTableOuterJoinProcessor extends ContextualProcessor<K, Change<V>, K, Change<VOut>> {
 
-        private final KTableValueGetter<K, V2> valueGetter;
+        private final KTableValueGetter<K, V1> valueGetter;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
-        KTableKTableOuterJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+        KTableKTableOuterJoinProcessor(final KTableValueGetter<K, V1> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
@@ -82,7 +82,7 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         }
 
         @Override
-        public void process(final Record<K, Change<V1>> record) {
+        public void process(final Record<K, Change<V>> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             if (record.key() == null) {
                 LOG.warn(
@@ -100,8 +100,8 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             final long resultTimestamp;
             VOut oldValue = null;
 
-            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.get(record.key());
-            final V2 value2 = getValueOrNull(valueAndTimestamp2);
+            final ValueAndTimestamp<V1> valueAndTimestamp2 = valueGetter.get(record.key());
+            final V1 value2 = getValueOrNull(valueAndTimestamp2);
             if (value2 == null) {
                 if (record.value().newValue == null && record.value().oldValue == null) {
                     return;
@@ -131,11 +131,11 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
 
     private class KTableKTableOuterJoinValueGetter implements KTableValueGetter<K, VOut> {
 
-        private final KTableValueGetter<K, V1> valueGetter1;
-        private final KTableValueGetter<K, V2> valueGetter2;
+        private final KTableValueGetter<K, V> valueGetter1;
+        private final KTableValueGetter<K, V1> valueGetter2;
 
-        KTableKTableOuterJoinValueGetter(final KTableValueGetter<K, V1> valueGetter1,
-                                         final KTableValueGetter<K, V2> valueGetter2) {
+        KTableKTableOuterJoinValueGetter(final KTableValueGetter<K, V> valueGetter1,
+                                         final KTableValueGetter<K, V1> valueGetter2) {
             this.valueGetter1 = valueGetter1;
             this.valueGetter2 = valueGetter2;
         }
@@ -150,8 +150,8 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         public ValueAndTimestamp<VOut> get(final K key) {
             VOut newValue = null;
 
-            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
-            final V1 value1;
+            final ValueAndTimestamp<V> valueAndTimestamp1 = valueGetter1.get(key);
+            final V value1;
             final long timestamp1;
             if (valueAndTimestamp1 == null) {
                 value1 = null;
@@ -161,8 +161,8 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
                 timestamp1 = valueAndTimestamp1.timestamp();
             }
 
-            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
-            final V2 value2;
+            final ValueAndTimestamp<V1> valueAndTimestamp2 = valueGetter2.get(key);
+            final V1 value2;
             final long timestamp2;
             if (valueAndTimestamp2 == null) {
                 value2 = null;

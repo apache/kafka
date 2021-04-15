@@ -18,31 +18,31 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
-abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements KTableChangeProcessorSupplier<K, V1, VOut, K, VOut> {
+abstract class KTableKTableAbstractJoin<K, V, V1, VOut> implements KTableChangeProcessorSupplier<K, V, VOut, K, VOut> {
 
-    private final KTableImpl<K, ?, V1> table1;
-    private final KTableImpl<K, ?, V2> table2;
-    final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
-    final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner;
+    private final KTableImpl<K, ?, V> table;
+    private final KTableImpl<K, ?, V1> other;
+    final KTableValueGetterSupplier<K, V> valueGetterSupplier1;
+    final KTableValueGetterSupplier<K, V1> valueGetterSupplier2;
+    final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner;
 
     boolean sendOldValues = false;
 
-    KTableKTableAbstractJoin(final KTableImpl<K, ?, V1> table1,
-                             final KTableImpl<K, ?, V2> table2,
-                             final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
-        this.table1 = table1;
-        this.table2 = table2;
-        this.valueGetterSupplier1 = table1.valueGetterSupplier();
-        this.valueGetterSupplier2 = table2.valueGetterSupplier();
+    KTableKTableAbstractJoin(final KTableImpl<K, ?, V> table,
+                             final KTableImpl<K, ?, V1> other,
+                             final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner) {
+        this.table = table;
+        this.other = other;
+        this.valueGetterSupplier1 = table.valueGetterSupplier();
+        this.valueGetterSupplier2 = other.valueGetterSupplier();
         this.joiner = joiner;
     }
 
     @Override
     public final boolean enableSendingOldValues(final boolean forceMaterialization) {
         // Table-table joins require upstream materialization:
-        table1.enableSendingOldValues(true);
-        table2.enableSendingOldValues(true);
+        table.enableSendingOldValues(true);
+        other.enableSendingOldValues(true);
         sendOldValues = true;
         return true;
     }

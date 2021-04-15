@@ -18,9 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
-public interface KTableChangeProcessorSupplier<KIn, VIn, T, KOut, VOut> extends ProcessorSupplier<KIn, Change<VIn>, KOut, Change<VOut>> {
+public interface KTableChangeProcessorSupplier<KIn, VIn, VT, KOut, VOut> extends ProcessorSupplier<KIn, Change<VIn>, KOut, Change<VOut>> {
 
-    KTableValueGetterSupplier<KIn, T> view();
+    KTableValueGetterSupplier<KIn, VT> view();
 
     /**
      * Potentially enables sending old values.

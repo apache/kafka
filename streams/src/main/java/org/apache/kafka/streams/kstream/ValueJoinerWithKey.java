@@ -25,10 +25,10 @@ package org.apache.kafka.streams.kstream;
  * record-pair of a {@link KStream}-{@link KStream}, {@link KStream}-{@link KTable}, or {@link KTable}-{@link KTable}
  * join.
  *
- * @param <K1> key value type
- * @param <V1> first value type
- * @param <V2> second value type
- * @param <VR> joined value type
+ * @param <K> key value type
+ * @param <V> first value type
+ * @param <V1> second value type
+ * @param <VOut> joined value type
  * @see KStream#join(KStream, ValueJoinerWithKey, JoinWindows)
  * @see KStream#join(KStream, ValueJoinerWithKey, JoinWindows, StreamJoined)
  * @see KStream#leftJoin(KStream, ValueJoinerWithKey, JoinWindows)
@@ -44,7 +44,7 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey, Named)
  */
-public interface ValueJoinerWithKey<K1, V1, V2, VR> {
+public interface ValueJoinerWithKey<K, V, V1, VOut> {
 
     /**
      * Return a joined value consisting of {@code readOnlyKey}, {@code value1} and {@code value2}.
@@ -54,5 +54,5 @@ public interface ValueJoinerWithKey<K1, V1, V2, VR> {
      * @param value2 the second value for joining
      * @return the joined value
      */
-    VR apply(final K1 readOnlyKey, final V1 value1, final V2 value2);
+    VOut apply(final K readOnlyKey, final V value1, final V1 value2);
 }

@@ -23,10 +23,10 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.Map;
 
-public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
+public class StreamJoinedInternal<K, V, V1> extends StreamJoined<K, V, V1> {
 
     //Needs to be public for testing
-    public StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
+    public StreamJoinedInternal(final StreamJoined<K, V, V1> streamJoined) {
         super(streamJoined);
     }
 
@@ -34,11 +34,11 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
         return keySerde;
     }
 
-    public Serde<V1> valueSerde() {
+    public Serde<V> valueSerde() {
         return valueSerde;
     }
 
-    public Serde<V2> otherValueSerde() {
+    public Serde<V1> otherValueSerde() {
         return otherValueSerde;
     }
 

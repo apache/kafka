@@ -143,7 +143,7 @@ public abstract class AbstractStream<K, V> {
         };
     }
 
-    static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> toValueJoinerWithKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
+    static <K, V, V1, VOut> ValueJoinerWithKey<K, V, V1, VOut> toValueJoinerWithKey(final ValueJoiner<V, V1, VOut> valueJoiner) {
         Objects.requireNonNull(valueJoiner, "joiner can't be null");
         return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
     }

@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
+class KStreamKStreamJoin<K, V, V1, VOut> implements ProcessorSupplier<K, V, K, VOut> {
 
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
@@ -41,13 +41,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long joinBeforeMs;
     private final long joinAfterMs;
 
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner;
     private final boolean outer;
 
     KStreamKStreamJoin(final String otherWindowName,
                        final long joinBeforeMs,
                        final long joinAfterMs,
-                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
+                       final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner,
                        final boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
@@ -57,13 +57,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     }
 
     @Override
-    public Processor<K, V1, K, VOut> get() {
+    public Processor<K, V, K, VOut> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
+    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V, K, VOut> {
 
-        private WindowStore<K, V2> otherWindow;
+        private WindowStore<K, V1> otherWindow;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
@@ -77,7 +77,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         }
 
         @Override
-        public void process(final Record<K, V1> record) {
+        public void process(final Record<K, V> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             //
             // we also ignore the record if value is null, because in a key-value data model a null-value indicates
@@ -102,11 +102,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
-            try (final WindowStoreIterator<V2> iter = otherWindow
+            try (final WindowStoreIterator<V1> iter = otherWindow
                 .fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    final KeyValue<Long, V2> otherRecord = iter.next();
+                    final KeyValue<Long, V1> otherRecord = iter.next();
                     context().forward(
                         record
                             .withValue(

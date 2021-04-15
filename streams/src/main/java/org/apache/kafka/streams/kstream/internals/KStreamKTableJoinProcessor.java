@@ -30,19 +30,19 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcessor<K1, V1, K1, VOut> {
+class KStreamKTableJoinProcessor<K, V, K1, V1, VOut> extends ContextualProcessor<K, V, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
-    private final KTableValueGetter<K2, V2> valueGetter;
-    private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
-    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner;
+    private final KTableValueGetter<K1, V1> valueGetter;
+    private final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper;
+    private final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner;
     private final boolean leftJoin;
     private StreamsMetricsImpl metrics;
     private Sensor droppedRecordsSensor;
 
-    KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
-                               final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
-                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
+    KStreamKTableJoinProcessor(final KTableValueGetter<K1, V1> valueGetter,
+                               final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
+                               final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner,
                                final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
@@ -51,7 +51,7 @@ class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcess
     }
 
     @Override
-    public void init(final ProcessorContext<K1, VOut> context) {
+    public void init(final ProcessorContext<K, VOut> context) {
         super.init(context);
         metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
@@ -59,7 +59,7 @@ class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcess
     }
 
     @Override
-    public void process(final Record<K1, V1> record) {
+    public void process(final Record<K, V> record) {
         // we do join iff the join keys are equal, thus, if {@code keyMapper} returns {@code null} we
         // cannot join and just ignore the record. Note for KTables, this is the same as having a null key
         // since keyMapper just returns the key, but for GlobalKTables we can have other keyMappers
@@ -68,7 +68,7 @@ class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcess
         // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-        final K2 mappedKey = keyMapper.apply(record.key(), record.value());
+        final K1 mappedKey = keyMapper.apply(record.key(), record.value());
         if (mappedKey == null || record.value() == null) {
             LOG.warn(
                 "Skipping record due to null join key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
@@ -79,7 +79,7 @@ class KStreamKTableJoinProcessor<K1, V1, K2, V2, VOut> extends ContextualProcess
             );
             droppedRecordsSensor.record();
         } else {
-            final V2 value2 = getValueOrNull(valueGetter.get(mappedKey));
+            final V1 value2 = getValueOrNull(valueGetter.get(mappedKey));
             if (leftJoin || value2 != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), value2)));
             }
