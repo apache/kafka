@@ -146,7 +146,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
                              "There is not enough available capacity. You should " +
-                             "increase the number of threads and/or application instances " +
+                             "increase the number of application instances " +
                              "to maintain the requested number of standby replicas.",
                          numRemainingStandbys, numStandbyReplicas, task);
             }

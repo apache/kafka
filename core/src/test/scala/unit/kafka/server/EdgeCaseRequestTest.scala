@@ -34,10 +34,10 @@ import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, requests}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
-import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
@@ -110,13 +110,12 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val plainSocket = connect()
     try {
       sendRequest(plainSocket, requestHeaderBytes(-1, 0))
-      assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
+      assertEquals(-1, plainSocket.getInputStream.read(), "The server should disconnect")
     } finally {
       plainSocket.close()
     }
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
@@ -152,13 +151,14 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
     val produceResponse = ProduceResponse.parse(responseBuffer, version)
 
-    assertEquals("The response should parse completely", 0, responseBuffer.remaining)
-    assertEquals("The correlationId should match request", correlationId, responseHeader.correlationId)
-    assertEquals("One partition response should be returned", 1, produceResponse.responses.size)
-
-    val partitionResponse = produceResponse.responses.get(topicPartition)
-    assertNotNull(partitionResponse)
-    assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
+    assertEquals(0, responseBuffer.remaining, "The response should parse completely")
+    assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")
+    assertEquals(1, produceResponse.data.responses.size, "One topic response should be returned")
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size, "One partition response should be returned")    
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    assertNotNull(partitionProduceResponse)
+    assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
   @Test

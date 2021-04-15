@@ -362,8 +362,8 @@ public abstract class AbstractResetIntegrationTest {
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
                     "--bootstrap-servers", cluster.bootstrapServers(),
-                    "--input-topics", INPUT_TOPIC,
-                    "--execute"));
+                    "--input-topics", INPUT_TOPIC
+            ));
         if (withIntermediateTopics) {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);

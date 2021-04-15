@@ -334,7 +334,7 @@
                 generic functions where users could specify the input and output data types.</p>
             <p>Some KStream transformations may generate one or more KStream objects, for example:
                 - <code class="docutils literal"><span class="pre">filter</span></code> and <code class="docutils literal"><span class="pre">map</span></code> on a KStream will generate another KStream
-                - <code class="docutils literal"><span class="pre">branch</span></code> on KStream can generate multiple KStreams</p>
+                - <code class="docutils literal"><span class="pre">split</span></code> on KStream can generate multiple KStreams</p>
             <p>Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of <a class="reference internal" href="../core-concepts.html#streams_concepts_aggregations"><span class="std std-ref">out-of-order records</span></a> after it
                 has already been produced to the downstream transformation operators.</p>
             <p>All KTable transformation operations can only generate another KTable. However, the Kafka Streams DSL does provide a special function
@@ -366,24 +366,28 @@
                         </ul>
                     </td>
                         <td><p class="first">Branch (or split) a <code class="docutils literal"><span class="pre">KStream</span></code> based on the supplied predicates into one or more <code class="docutils literal"><span class="pre">KStream</span></code> instances.
-                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#branch-org.apache.kafka.streams.kstream.Predicate...-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split">details</a>)</p>
                             <p>Predicates are evaluated in order.  A record is placed to one and only one output stream on the first match:
                                 if the n-th predicate evaluates to true, the record is placed to n-th stream.  If no predicate matches, the
                                 the record is dropped.</p>
                             <p>Branching is useful, for example, to route records to different downstream topics.</p>
-                            <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;[]</span> <span class="n">branches</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">branch</span><span class="o">(</span>
-    <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">key</span><span class="o">.</span><span class="na">startsWith</span><span class="o">(</span><span class="s">&quot;A&quot;</span><span class="o">),</span> <span class="cm">/* first predicate  */</span>
-    <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">key</span><span class="o">.</span><span class="na">startsWith</span><span class="o">(</span><span class="s">&quot;B&quot;</span><span class="o">),</span> <span class="cm">/* second predicate */</span>
-    <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="kc">true</span>                 <span class="cm">/* third predicate  */</span>
-  <span class="o">);</span>
+                            <pre class="brush: java;">
+KStream<String, Long> stream = ...;
+Map<String, KStream<String, Long>> branches =
+    stream.split(Named.as("Branch-"))
+        .branch((key, value) -> key.startsWith("A"),  /* first predicate  */
+             Branched.as("A"))
+        .branch((key, value) -> key.startsWith("B"),  /* second predicate */
+             Branched.as("B"))
+.defaultBranch(Branched.as("C"))
+);
 
-<span class="c1">// KStream branches[0] contains all records whose keys start with &quot;A&quot;</span>
-<span class="c1">// KStream branches[1] contains all records whose keys start with &quot;B&quot;</span>
-<span class="c1">// KStream branches[2] contains all other records</span>
+// KStream branches.get("Branch-A") contains all records whose keys start with "A"
+// KStream branches.get("Branch-B") contains all records whose keys start with "B"
+// KStream branches.get("Branch-C") contains all other records
 
-<span class="c1">// Java 7 example: cf. `filter` for how to create `Predicate` instances</span></code></pre></div>
-                            </div>
+// Java 7 example: cf. `filter` for how to create `Predicate` instances     
+                            </pre>
                         </td>
                     </tr>
                     <tr class="row-odd"><td><p class="first"><strong>Filter</strong></p>
@@ -2228,8 +2232,8 @@
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Right-tombstones trigger the join,
+                                                        but left-tombstones don't: when an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2276,8 +2280,8 @@
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table. Tombstones may trigger joins,
+                                                        depending on the content in the left and right tables. When an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2511,7 +2515,8 @@
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
+                                          deletion of the key from the table. Tombstones do not
+                                          trigger the join.  When an input
                                           tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
@@ -2570,8 +2575,9 @@
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
-                                          tombstone is received, then an output
+                                          deletion of the key from the table. Right-tombstones
+                                          trigger the join, but left-tombstones don't:
+                                          when an input tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
                                           corresponding key actually exists already in
@@ -3654,15 +3660,10 @@ groupedTable
                         <p>Another variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to dynamically choose which topic to send to for each record via a <code class="docutils literal"><span class="pre">TopicNameExtractor</span></code>
                             instance.</p>
                         <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
-
 
 <span class="c1">// Write the stream to the output topic, using the configured default key</span>
 <span class="c1">// and value serdes.</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">);</span>
-
-<span class="c1">// Same for table</span>
-<span class="n">table</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-table-output-topic&quot;</span><span class="o">);</span>
 
 <span class="c1">// Write the stream to the output topic, using explicit key and value serdes,</span>
 <span class="c1">// (thus overriding the defaults in the config properties).</span>

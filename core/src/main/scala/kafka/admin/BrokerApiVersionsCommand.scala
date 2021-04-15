@@ -40,7 +40,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
 import scala.jdk.CollectionConverters._
@@ -108,7 +108,7 @@ object BrokerApiVersionsCommand {
                             val client: ConsumerNetworkClient,
                             val bootstrapBrokers: List[Node]) extends Logging {
 
-    @volatile var running: Boolean = true
+    @volatile var running = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
     val networkThread = new KafkaThread("admin-client-network-thread", () => {
@@ -135,7 +135,7 @@ object BrokerApiVersionsCommand {
     private def send(target: Node,
                      api: ApiKeys,
                      request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
-      val future: RequestFuture[ClientResponse] = client.send(target, request)
+      val future = client.send(target, request)
       pendingFutures.add(future)
       future.awaitDone(Long.MaxValue, TimeUnit.MILLISECONDS)
       pendingFutures.remove(future)
@@ -159,7 +159,7 @@ object BrokerApiVersionsCommand {
       throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
     }
 
-    private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
+    private def getApiVersions(node: Node): ApiVersionCollection = {
       val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
       Errors.forCode(response.data.errorCode).maybeThrow()
       response.data.apiKeys
@@ -226,8 +226,7 @@ object BrokerApiVersionsCommand {
         .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
           Type.STRING,
           ClientDnsLookup.USE_ALL_DNS_IPS.toString,
-          in(ClientDnsLookup.DEFAULT.toString,
-            ClientDnsLookup.USE_ALL_DNS_IPS.toString,
+          in(ClientDnsLookup.USE_ALL_DNS_IPS.toString,
             ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString),
           Importance.MEDIUM,
           CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
@@ -315,7 +314,6 @@ object BrokerApiVersionsCommand {
         requestTimeoutMs,
         connectionSetupTimeoutMs,
         connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         new ApiVersions,

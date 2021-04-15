@@ -186,6 +186,7 @@ class StreamsUpgradeTest(Test):
         processor.stop()
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
+    @cluster(num_nodes=6)
     @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
     @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
     def test_metadata_upgrade(self, from_version, to_version):
@@ -238,6 +239,7 @@ class StreamsUpgradeTest(Test):
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
+    @cluster(num_nodes=6)
     def test_version_probing_upgrade(self):
         """
         Starts 3 KafkaStreams instances, and upgrades one-by-one to "future version"

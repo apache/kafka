@@ -53,7 +53,7 @@ class TestDowngrade(EndToEndTest):
             self.wait_until_rejoin()
 
     def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
-        self.create_zookeeper()
+        self.create_zookeeper_if_necessary()
         self.zk.start()
 
         self.create_kafka(num_nodes=3,
@@ -120,11 +120,19 @@ class TestDowngrade(EndToEndTest):
         self.setup_services(kafka_version, compression_types, security_protocol, static_membership)
         self.await_startup()
 
+        start_topic_id = self.kafka.topic_id(self.topic)
+
         self.logger.info("First pass bounce - rolling upgrade")
         self.upgrade_from(kafka_version)
         self.run_validation()
 
+        upgrade_topic_id = self.kafka.topic_id(self.topic)
+        assert start_topic_id == upgrade_topic_id
+
         self.logger.info("Second pass bounce - rolling downgrade")
         self.downgrade_to(kafka_version)
         self.run_validation()
+
+        downgrade_topic_id = self.kafka.topic_id(self.topic)
+        assert upgrade_topic_id == downgrade_topic_id
         assert self.kafka.check_protocol_errors(self)

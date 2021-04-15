@@ -18,20 +18,19 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsNull.nullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
 
@@ -60,9 +59,8 @@ public class SerializationTest {
         for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals("Should get the original " + test.getKey().getSimpleName() +
-                                    " after serialization and deserialization", value,
-                            serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)));
+                    assertEquals(value, serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)),
+                        "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
                 }
             }
         }
@@ -72,10 +70,10 @@ public class SerializationTest {
     public void allSerdesShouldSupportNull() {
         for (Class<?> cls : testData.keySet()) {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
-                assertThat("Should support null in " + cls.getSimpleName() + " serialization",
-                        serde.serializer().serialize(topic, null), nullValue());
-                assertThat("Should support null in " + cls.getSimpleName() + " deserialization",
-                        serde.deserializer().deserialize(topic, null), nullValue());
+                assertNull(serde.serializer().serialize(topic, null),
+                    "Should support null in " + cls.getSimpleName() + " serialization");
+                assertNull(serde.deserializer().deserialize(topic, null),
+                    "Should support null in " + cls.getSimpleName() + " deserialization");
             }
         }
     }
@@ -95,15 +93,15 @@ public class SerializationTest {
     @Test
     public void stringSerdeShouldSupportDifferentEncodings() {
         String str = "my string";
-        List<String> encodings = Arrays.asList("UTF8", "UTF-16");
+        List<String> encodings = Arrays.asList(StandardCharsets.UTF_8.name(), StandardCharsets.UTF_16.name());
 
         for (String encoding : encodings) {
             try (Serde<String> serDeser = getStringSerde(encoding)) {
 
                 Serializer<String> serializer = serDeser.serializer();
                 Deserializer<String> deserializer = serDeser.deserializer();
-                assertEquals("Should get the original string after serialization and deserialization with encoding " + encoding,
-                        str, deserializer.deserialize(topic, serializer.serialize(topic, str)));
+                assertEquals(str, deserializer.deserialize(topic, serializer.serialize(topic, str)),
+                    "Should get the original string after serialization and deserialization with encoding " + encoding);
             }
         }
     }
@@ -141,10 +139,10 @@ public class SerializationTest {
             // Because of NaN semantics we must assert based on the raw int bits.
             Float roundtrip = serde.deserializer().deserialize(topic,
                     serde.serializer().serialize(topic, someNaN));
-            assertThat(Float.floatToRawIntBits(roundtrip), equalTo(someNaNAsIntBits));
+            assertEquals(someNaNAsIntBits, Float.floatToRawIntBits(roundtrip));
             Float otherRoundtrip = serde.deserializer().deserialize(topic,
                     serde.serializer().serialize(topic, anotherNaN));
-            assertThat(Float.floatToRawIntBits(otherRoundtrip), equalTo(anotherNaNAsIntBits));
+            assertEquals(anotherNaNAsIntBits, Float.floatToRawIntBits(otherRoundtrip));
         }
     }
 

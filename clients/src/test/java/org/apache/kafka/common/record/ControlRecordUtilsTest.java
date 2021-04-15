@@ -19,13 +19,15 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ControlRecordUtilsTest {
 
@@ -33,7 +35,7 @@ public class ControlRecordUtilsTest {
     public void testInvalidControlRecordType() {
         IllegalArgumentException thrown = assertThrows(
             IllegalArgumentException.class, () -> testDeserializeRecord(ControlRecordType.COMMIT));
-        Assert.assertEquals("Expected LEADER_CHANGE control record type(3), but found COMMIT", thrown.getMessage());
+        assertEquals("Expected LEADER_CHANGE control record type(3), but found COMMIT", thrown.getMessage());
     }
 
     @Test
@@ -50,7 +52,7 @@ public class ControlRecordUtilsTest {
                                                new Voter().setVoterId(voterId)));
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(256);
-        data.toStruct(data.highestSupportedVersion()).writeTo(valueBuffer);
+        data.write(new ByteBufferAccessor(valueBuffer), new ObjectSerializationCache(), data.highestSupportedVersion());
         valueBuffer.flip();
 
         byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType.type};
@@ -61,8 +63,8 @@ public class ControlRecordUtilsTest {
 
         LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
 
-        Assert.assertEquals(leaderId, deserializedData.leaderId());
-        Assert.assertEquals(Collections.singletonList(
+        assertEquals(leaderId, deserializedData.leaderId());
+        assertEquals(Collections.singletonList(
             new Voter().setVoterId(voterId)), deserializedData.voters());
     }
 }

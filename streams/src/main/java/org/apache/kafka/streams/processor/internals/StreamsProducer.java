@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -236,7 +237,7 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                            final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
@@ -300,7 +301,10 @@ public class StreamsProducer {
         }
     }
 
-    List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
+    /**
+     * Cf {@link KafkaProducer#partitionsFor(String)}
+     */
+    List<PartitionInfo> partitionsFor(final String topic) {
         return producer.partitionsFor(topic);
     }
 

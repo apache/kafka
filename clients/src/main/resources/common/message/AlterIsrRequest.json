@@ -16,6 +16,7 @@
 {
   "apiKey": 56,
   "type": "request",
+  "listeners": ["zkBroker", "controller"],
   "name": "AlterIsrRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
@@ -32,7 +33,7 @@
           "about": "The partition index" },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch of this partition" },
-        { "name": "NewIsr", "type": "[]int32", "versions": "0+",
+        { "name": "NewIsr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The ISR for this partition"},
         { "name": "CurrentIsrVersion", "type": "int32", "versions": "0+",
           "about": "The expected version of ISR which is being updated"}

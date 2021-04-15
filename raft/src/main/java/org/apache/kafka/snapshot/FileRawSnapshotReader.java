@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.file.Path;
-import java.util.Iterator;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Iterator;
 
 public final class FileRawSnapshotReader implements RawSnapshotReader {
     private final FileRecords fileRecords;
@@ -49,9 +50,8 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
         return Utils.covariantCast(fileRecords.batchIterator());
     }
 
-    @Override
-    public int read(ByteBuffer buffer, long position) throws IOException {
-        return fileRecords.channel().read(buffer, position);
+    public UnalignedRecords read(long position, int size) {
+        return fileRecords.sliceUnaligned(Math.toIntExact(position), size);
     }
 
     @Override

@@ -69,10 +69,6 @@ Generate coverage for a single module, i.e.:
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
-The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
-
-    ./gradlew clean releaseTarGz -x signArchives
-
 The release file can be found inside `./core/build/distributions/`.
 
 ### Building auto generated messages ###
@@ -80,6 +76,15 @@ Sometimes it is only necessary to rebuild the RPC auto-generated message data wh
 fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
+
+### Running a Kafka broker in ZooKeeper mode
+
+    ./bin/zookeeper-server-start.sh config/zookeeper.properties
+    ./bin/kafka-server-start.sh config/server.properties
+
+### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
+
+See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -125,6 +130,12 @@ build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory an
 to avoid known issues with this configuration.
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
+The recommended command is:
+
+    ./gradlewAll publish
+
+For backwards compatibility, the following also works:
+
     ./gradlewAll uploadArchives
 
 Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
@@ -167,6 +178,12 @@ Please note for this to work you should create/update user maven settings (typic
 
 
 ### Installing the jars to the local Maven repository ###
+The recommended command is:
+
+    ./gradlewAll publishToMavenLocal
+
+For backwards compatibility, the following also works:
+
     ./gradlewAll install
 
 ### Building the test jar ###
@@ -221,6 +238,13 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
 varies, but 15-20% is a reasonable estimate).
+* `scalaOptimizerMode`: configures the optimizing behavior of the scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
+`inline-scala` (the default is `inline-kafka`). `none` is the scala compiler default, which only eliminates unreachable code. `method` also
+includes method-local optimizations. `inline-kafka` adds inlining of methods within the kafka packages. Finally, `inline-scala` also
+includes inlining of methods within the scala library (which avoids lambda allocations for methods like `Option.exists`). `inline-scala` is
+only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
+may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
+default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
 
 ### Dependency Analysis ###
 

@@ -27,8 +27,8 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.log4j.Logger
-import org.junit.{After, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -43,7 +43,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     this.metrics.close()
@@ -86,8 +86,8 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
     TestUtils.waitUntilTrue(() => Option(exceptionThrown.get()).isDefined, "handleIllegalState did not throw an exception")
-    assertTrue(s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown",
-      exceptionThrown.get.isInstanceOf[IllegalStateException])
+    assertTrue(exceptionThrown.get.isInstanceOf[IllegalStateException],
+      s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown")
 
     TestUtils.waitUntilTrue(() => {
       servers.exists { server =>

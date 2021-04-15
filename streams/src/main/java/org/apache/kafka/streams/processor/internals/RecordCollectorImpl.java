@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -111,13 +113,18 @@ public class RecordCollectorImpl implements RecordCollector {
             final List<PartitionInfo> partitions;
             try {
                 partitions = streamsProducer.partitionsFor(topic);
-            } catch (final KafkaException e) {
-                // TODO: KIP-572 need to handle `TimeoutException`
-                // -> should we throw a `TaskCorruptedException` for this case to reset the task and retry (including triggering `task.timeout.ms`) ?
+            } catch (final TimeoutException timeoutException) {
+                log.warn("Could not get partitions for topic {}, will retry", topic);
+
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
+            } catch (final KafkaException fatal) {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + e.toString());
+                    "' for task " + taskId + " due to " + fatal.toString(),
+                    fatal
+                );
             }
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
@@ -207,27 +214,24 @@ public class RecordCollectorImpl implements RecordCollector {
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
-            // TODO: KIP-572 handle `TimeoutException extends RetriableException`
-            // is seems inappropriate to pass `TimeoutException` into the `ProductionExceptionHander`
-            // -> should we add `TimeoutException` as `isFatalException` above (maybe not) ?
-            // -> maybe we should try to reset the task by throwing a `TaskCorruptedException` (including triggering `task.timeout.ms`) ?
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-            }
-
-            if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
-                errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
-                sendException.set(new StreamsException(errorMessage, exception));
+                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
-                droppedRecordsSensor.record();
+                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                    errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
+                    sendException.set(new StreamsException(errorMessage, exception));
+                } else {
+                    errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
+                    droppedRecordsSensor.record();
+                }
             }
         }
 
-        log.error(errorMessage);
+        log.error(errorMessage, exception);
     }
 
     private boolean isFatalException(final Exception exception) {

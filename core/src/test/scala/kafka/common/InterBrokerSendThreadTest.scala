@@ -16,17 +16,18 @@
  */
 package kafka.common
 
-import java.util
-
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.errors.AuthenticationException
+import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
 import org.easymock.EasyMock
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+import org.mockito.{ArgumentMatchers, Mockito}
 
+import java.util
 import scala.collection.mutable
 
 class InterBrokerSendThreadTest {
@@ -35,8 +36,9 @@ class InterBrokerSendThreadTest {
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
 
-  class TestInterBrokerSendThread(
-  ) extends InterBrokerSendThread("name", networkClient, requestTimeoutMs, time) {
+  class TestInterBrokerSendThread(networkClient: NetworkClient = networkClient,
+                                  exceptionCallback: Throwable => Unit = t => throw t)
+    extends InterBrokerSendThread("name", networkClient, requestTimeoutMs, time) {
     private val queue = mutable.Queue[RequestAndCompletionHandler]()
 
     def enqueue(request: RequestAndCompletionHandler): Unit = {
@@ -50,6 +52,26 @@ class InterBrokerSendThreadTest {
         Some(queue.dequeue())
       }
     }
+    override def pollOnce(maxTimeoutMs: Long): Unit = {
+      try super.pollOnce(maxTimeoutMs)
+      catch {
+        case e: Throwable => exceptionCallback(e)
+      }
+    }
+
+  }
+
+  @Test
+  def shutdownThreadShouldNotCauseException(): Unit = {
+    val networkClient = Mockito.mock(classOf[NetworkClient])
+    // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
+    // can throw DisconnectException when thread is running
+    Mockito.when(networkClient.poll(ArgumentMatchers.anyLong, ArgumentMatchers.anyLong)).thenThrow(new DisconnectException())
+    var exception: Throwable = null
+    val thread = new TestInterBrokerSendThread(networkClient, e => exception = e)
+    thread.shutdown()
+    thread.pollOnce(100)
+    assertNull(exception)
   }
 
   @Test
@@ -65,7 +87,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -100,7 +122,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -142,7 +164,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
+    assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -191,8 +213,8 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(sendThread.hasUnsentRequests)
-    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(sendThread.hasUnsentRequests)
+    assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
   private class StubRequestBuilder extends AbstractRequest.Builder(ApiKeys.END_TXN) {

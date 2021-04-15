@@ -157,13 +157,6 @@ public class MeteredWindowStore<K, V>
         return false;
     }
 
-    @Deprecated
-    @Override
-    public void put(final K key,
-                    final V value) {
-        put(key, value, context != null ? context.timestamp() : 0L);
-    }
-
     @Override
     public void put(final K key,
                     final V value,

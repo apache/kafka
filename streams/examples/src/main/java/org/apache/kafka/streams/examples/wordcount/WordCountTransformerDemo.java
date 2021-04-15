@@ -93,7 +93,7 @@ public final class WordCountTransformerDemo {
 
                 @Override
                 public KeyValue<String, String> transform(final String dummy, final String line) {
-                    final String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
+                    final String[] words = line.toLowerCase(Locale.getDefault()).split("\\W+");
 
                     for (final String word : words) {
                         final Integer oldValue = this.kvStore.get(word);

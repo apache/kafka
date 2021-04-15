@@ -280,61 +280,6 @@ public class ProcessorTopologyTest {
         assertTrue(outputTopic1.isEmpty());
     }
 
-
-    @Test
-    public void testDrivingMultiplexingTopology() {
-        driver = new TopologyTestDriver(createMultiplexingTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
-        final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
-        final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
-        inputTopic.pipeInput("key1", "value1");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key1", "value1(2)");
-
-        inputTopic.pipeInput("key2", "value2");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2(2)");
-
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key4", "value4");
-        inputTopic.pipeInput("key5", "value5");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key3", "value3(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key4", "value4(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key5", "value5(2)");
-    }
-
-    @Test
-    public void testDrivingMultiplexByNameTopology() {
-        driver = new TopologyTestDriver(createMultiplexByNameTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
-        inputTopic.pipeInput("key1", "value1");
-        final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
-        final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
-        assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key1", "value1(2)");
-
-        inputTopic.pipeInput("key2", "value2");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2(2)");
-
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key4", "value4");
-        inputTopic.pipeInput("key5", "value5");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key3", "value3(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key4", "value4(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key5", "value5(2)");
-    }
-
     @Test
     public void testDrivingStatefulTopology() {
         final String storeName = "entries";
@@ -747,43 +692,25 @@ public class ProcessorTopologyTest {
     private Topology createSimpleTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source")
+            .addProcessor("processor", ForwardingProcessor::new, "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "source")
+            .addProcessor("processor", TimestampProcessor::new, "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new FanOutTimestampProcessor("child1", "child2"), "source")
-            .addProcessor("child1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "processor")
-            .addProcessor("child2", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "processor")
+            .addProcessor("processor", () -> new FanOutTimestampProcessor("child1", "child2"), "source")
+            .addProcessor("child1", ForwardingProcessor::new, "processor")
+            .addProcessor("child2", TimestampProcessor::new, "processor")
             .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
-    }
-
-    @Deprecated // testing old PAPI
-    private Topology createMultiplexingTopology() {
-        return topology
-            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new MultiplexingProcessor(2)), "source")
-            .addSink("sink1", OUTPUT_TOPIC_1, "processor")
-            .addSink("sink2", OUTPUT_TOPIC_2, "processor");
-    }
-
-    @Deprecated // testing old PAPI
-    private Topology createMultiplexByNameTopology() {
-        return topology
-            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new MultiplexByNameProcessor(2)), "source")
-            .addSink("sink0", OUTPUT_TOPIC_1, "processor")
-            .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
     @Deprecated // testing old PAPI
@@ -819,7 +746,7 @@ public class ProcessorTopologyTest {
 
     private Topology createInternalRepartitioningWithValueTimestampTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
-                .addProcessor("processor", () -> (Processor<String, String, String, String>) new ValueTimestampProcessor(), "source")
+                .addProcessor("processor", ValueTimestampProcessor::new, "source")
                 .addSink("sink0", THROUGH_TOPIC_1, "processor")
                 .addSource("source1", THROUGH_TOPIC_1)
                 .addSink("sink1", OUTPUT_TOPIC_1, "source1");
@@ -840,16 +767,16 @@ public class ProcessorTopologyTest {
 
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-1")
+                .addProcessor("processor-1", ForwardingProcessor::new, "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-                .addProcessor("processor-2", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-2")
+                .addProcessor("processor-2", ForwardingProcessor::new, "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new AddHeaderProcessor(), "source-1")
+                .addProcessor("processor-1", AddHeaderProcessor::new, "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, "processor-1");
     }
 
@@ -948,45 +875,6 @@ public class ProcessorTopologyTest {
     }
 
     /**
-     * A processor that forwards slightly-modified messages to each child.
-     */
-    protected static class MultiplexingProcessor extends AbstractProcessor<String, String> {
-        private final int numChildren;
-
-        MultiplexingProcessor(final int numChildren) {
-            this.numChildren = numChildren;
-        }
-
-        @SuppressWarnings("deprecation") // need to test deprecated code until removed
-        @Override
-        public void process(final String key, final String value) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")", i);
-            }
-        }
-    }
-
-    /**
-     * A processor that forwards slightly-modified messages to each named child.
-     * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
-     */
-    protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String> {
-        private final int numChildren;
-
-        MultiplexByNameProcessor(final int numChildren) {
-            this.numChildren = numChildren;
-        }
-
-        @SuppressWarnings("deprecation") // need to test deprecated code until removed
-        @Override
-        public void process(final String key, final String value) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
-            }
-        }
-    }
-
-    /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
     protected static class OldAPIStatefulProcessor extends AbstractProcessor<String, String> {
@@ -998,10 +886,9 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<String, String>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

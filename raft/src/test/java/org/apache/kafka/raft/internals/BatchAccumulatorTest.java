@@ -17,8 +17,13 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -28,6 +33,8 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -163,10 +170,85 @@ class BatchAccumulatorTest {
 
     @Test
     public void testSingleBatchAccumulation() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            time.sleep(lingerMs);
+            assertTrue(acc.needsDrain(time.milliseconds()));
+
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+            assertEquals(1, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records);
+            assertEquals(baseOffset, batch.baseOffset);
+        });
+    }
+
+    @Test
+    public void testMultipleBatchAccumulation() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 256;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            // Append entries until we have 4 batches to drain (3 completed, 1 building)
+            while (acc.numCompletedBatches() < 3) {
+                appender.call(acc, leaderEpoch, singletonList("foo"));
+            }
+
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+            assertEquals(4, batches.size());
+            assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
+        });
+    }
+
+    @Test
+    public void testRecordsAreSplit() {
         int leaderEpoch = 17;
         long baseOffset = 157;
         int lingerMs = 50;
-        int maxBatchSize = 512;
+        String record = "a";
+        int numberOfRecords = 9;
+        int recordsPerBatch = 2;
+        int batchHeaderSize = AbstractRecords.recordBatchHeaderSizeInBytes(
+            RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE
+        );
+        int maxBatchSize = batchHeaderSize + recordsPerBatch * recordSizeInBytes(record, recordsPerBatch);
 
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(ByteBuffer.allocate(maxBatchSize));
@@ -178,50 +260,19 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
-        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1)));
-        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3)));
-        assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6)));
-        assertEquals(baseOffset + 7, acc.append(leaderEpoch, records.subList(6, 8)));
-        assertEquals(baseOffset + 8, acc.append(leaderEpoch, records.subList(8, 9)));
+        List<String> records = Stream
+            .generate(() -> record)
+            .limit(numberOfRecords)
+            .collect(Collectors.toList());
+        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records));
 
         time.sleep(lingerMs);
         assertTrue(acc.needsDrain(time.milliseconds()));
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-        assertEquals(1, batches.size());
-        assertFalse(acc.needsDrain(time.milliseconds()));
-        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
-
-        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-        assertEquals(records, batch.records);
-        assertEquals(baseOffset, batch.baseOffset);
-    }
-
-    @Test
-    public void testMultipleBatchAccumulation() {
-        int leaderEpoch = 17;
-        long baseOffset = 157;
-        int lingerMs = 50;
-        int maxBatchSize = 256;
-
-        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-            .thenReturn(ByteBuffer.allocate(maxBatchSize));
-
-        BatchAccumulator<String> acc = buildAccumulator(
-            leaderEpoch,
-            baseOffset,
-            lingerMs,
-            maxBatchSize
-        );
-
-        // Append entries until we have 4 batches to drain (3 completed, 1 building)
-        while (acc.numCompletedBatches() < 3) {
-            acc.append(leaderEpoch, singletonList("foo"));
-        }
-
-        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-        assertEquals(4, batches.size());
+        // ceilingDiv(records.size(), recordsPerBatch)
+        int expectedBatches = (records.size() + recordsPerBatch - 1) / recordsPerBatch;
+        assertEquals(expectedBatches, batches.size());
         assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
     }
 
@@ -277,8 +328,11 @@ class BatchAccumulatorTest {
             releaseLockLatch.await();
             writable.writeByteArray(Utils.utf8("b"));
             return null;
-        }).when(serde)
-            .write(Mockito.eq("b"), Mockito.eq(null), Mockito.any(Writable.class));
+        }).when(serde).write(
+            Mockito.eq("b"),
+            Mockito.any(ObjectSerializationCache.class),
+            Mockito.any(Writable.class)
+        );
 
         Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b")));
         appendThread.start();
@@ -296,6 +350,41 @@ class BatchAccumulatorTest {
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        drained.stream().forEach(completedBatch -> {
+            completedBatch.data.batches().forEach(recordBatch -> {
+                assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
+        });
     }
 
+    int recordSizeInBytes(String record, int numberOfRecords) {
+        int serdeSize = serde.recordSize("a", new ObjectSerializationCache());
+
+        int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
+            numberOfRecords,
+            0,
+            -1,
+            serdeSize,
+            DefaultRecord.EMPTY_HEADERS
+        );
+
+        return ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+    }
+
+    static interface Appender {
+        Long call(BatchAccumulator<String> acc, int epoch, List<String> records);
+    }
+
+    static final Appender APPEND_ATOMIC = new Appender() {
+        @Override
+        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
+            return acc.appendAtomic(epoch, records);
+        }
+    };
+
+    static final Appender APPEND = new Appender() {
+        @Override
+        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
+            return acc.append(epoch, records);
+        }
+    };
 }

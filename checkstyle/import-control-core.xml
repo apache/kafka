@@ -43,6 +43,19 @@
   <disallow class="com.yammer.metrics.Metrics" />
   <allow pkg="com.yammer.metrics"/>
 
+  <subpackage name="testkit">
+    <allow pkg="kafka.metrics"/>
+    <allow pkg="kafka.raft"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.tools"/>
+    <allow pkg="org.apache.kafka.clients"/>
+    <allow pkg="org.apache.kafka.controller"/>
+    <allow pkg="org.apache.kafka.raft"/>
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.metalog" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
@@ -58,4 +71,24 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
+  <subpackage name="test">
+    <allow pkg="org.apache.kafka.controller"/>
+    <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="kafka.test.annotation"/>
+    <allow pkg="kafka.test.junit"/>
+    <allow pkg="kafka.network"/>
+    <allow pkg="kafka.api"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="integration.kafka.server" class="IntegrationTestHelper"/>
+    <subpackage name="annotation">
+      <allow pkg="kafka.test"/>
+    </subpackage>
+    <subpackage name="junit">
+      <allow pkg="kafka.test"/>
+      <allow pkg="kafka.testkit"/>
+      <allow pkg="org.apache.kafka.clients"/>
+      <allow pkg="org.apache.kafka.metadata" />
+    </subpackage>
+  </subpackage>
 </import-control>

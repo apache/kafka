@@ -23,8 +23,8 @@ import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class ReplicaTest {
 
@@ -34,7 +34,7 @@ class ReplicaTest {
   val brokerTopicStats = new BrokerTopicStats
   var log: Log = _
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
@@ -50,10 +50,12 @@ class ReplicaTest {
       time = time,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     log.close()
     brokerTopicStats.close()
