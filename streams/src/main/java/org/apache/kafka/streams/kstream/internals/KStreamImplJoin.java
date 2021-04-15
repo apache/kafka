@@ -144,7 +144,7 @@ class KStreamImplJoin {
 
         Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
         if (leftOuter || rightOuter) {
-            final String outerJoinSuffix = "-shared-outer-join-store";
+            final String outerJoinSuffix = "-shared-outer-join";
 
             // Get the suffix index of the joinThisGeneratedName to build the outer join store name.
             final String outerJoinStoreGeneratedName = KStreamImpl.OUTERSHARED_NAME
@@ -155,7 +155,7 @@ class KStreamImplJoin {
 
             final String outerJoinStoreName = userProvidedBaseStoreName == null ? outerJoinStoreGeneratedName : userProvidedBaseStoreName + outerJoinSuffix;
 
-            outerJoinWindowStore = Optional.of(outerJoinWindowStoreBuilder(outerJoinStoreName, windows, streamJoinedInternal));
+            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(outerJoinStoreName, windows, streamJoinedInternal));
         }
 
         // Time shared between joins to keep track of the maximum stream time
@@ -264,17 +264,25 @@ class KStreamImplJoin {
     }
 
     @SuppressWarnings("unchecked")
-    private static <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinWindowStoreBuilder(final String storeName,
-                                                                                                                                  final JoinWindows windows,
-                                                                                                                                  final StreamJoinedInternal<K, V1, V2> streamJoinedInternal) {
+    private static <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final String storeName,
+                                                                                                                                        final JoinWindows windows,
+                                                                                                                                        final StreamJoinedInternal<K, V1, V2> streamJoinedInternal) {
+        final Serde keySerde = streamJoinedInternal.keySerde();
+        final Serde valueSerde = streamJoinedInternal.valueSerde();
+        final Serde otherValueSerde = streamJoinedInternal.otherValueSerde();
+
         final StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder = new TimeOrderedWindowStoreBuilder<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>(
             persistentTimeOrderedWindowStore(
                 storeName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                 Duration.ofMillis(windows.size())
             ),
-            new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde()),
-            new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde()),
+            keySerde == null
+                ? null
+                : new KeyAndJoinSideSerde<>(keySerde),
+            valueSerde == null || otherValueSerde == null
+                ? null
+                : new LeftOrRightValueSerde(valueSerde, otherValueSerde),
             Time.SYSTEM
         );
         if (streamJoinedInternal.loggingEnabled()) {

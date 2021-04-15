@@ -29,6 +29,12 @@ public class LeftOrRightValue<V1, V2> {
     private final V2 rightValue;
 
     private LeftOrRightValue(final V1 leftValue, final V2 rightValue) {
+        if (leftValue != null && rightValue != null) {
+            throw new IllegalArgumentException("Only one value cannot be null");
+        } else if (leftValue == null && rightValue == null) {
+            throw new NullPointerException("Only one value can be null");
+        }
+
         this.leftValue = leftValue;
         this.rightValue = rightValue;
     }
@@ -42,7 +48,6 @@ public class LeftOrRightValue<V1, V2> {
      * @return a new {@link LeftOrRightValue} instance
      */
     public static <V1, V2> LeftOrRightValue<V1, V2> makeLeftValue(final V1 leftValue) {
-        Objects.requireNonNull(leftValue, "leftValue is null");
         return new LeftOrRightValue<>(leftValue, null);
     }
 
@@ -55,21 +60,20 @@ public class LeftOrRightValue<V1, V2> {
      * @return a new {@link LeftOrRightValue} instance
      */
     public static <V1, V2> LeftOrRightValue<V1, V2> makeRightValue(final V2 rightValue) {
-        Objects.requireNonNull(rightValue, "rightValue is null");
         return new LeftOrRightValue<>(null, rightValue);
     }
 
     /**
      * Create a new {@link LeftOrRightValue} instance with the V value as {@code leftValue} if
-     * {@code isLeftJoin} is True; otherwise {@code rightValue} if {@code isLeftJoin} is False.
+     * {@code isLeftSide} is True; otherwise {@code rightValue} if {@code isLeftSide} is False.
      *
      * @param value the V value (either V1 or V2 type)
      * @param <V>   the type of the value
      * @return a new {@link LeftOrRightValue} instance
      */
-    public static <V> LeftOrRightValue make(final boolean isLeftJoin, final V value) {
+    public static <V> LeftOrRightValue make(final boolean isLeftSide, final V value) {
         Objects.requireNonNull(value, "value is null");
-        return isLeftJoin
+        return isLeftSide
             ? LeftOrRightValue.makeLeftValue(value)
             : LeftOrRightValue.makeRightValue(value);
     }

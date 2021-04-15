@@ -28,27 +28,27 @@ import java.util.Objects;
  */
 public class KeyAndJoinSide<K> {
     private final K key;
-    private final boolean leftJoin;
+    private final boolean leftSide;
 
-    private KeyAndJoinSide(final boolean leftJoin, final K key) {
-        this.key = Objects.requireNonNull(key, "key is null");
-        this.leftJoin = leftJoin;
+    private KeyAndJoinSide(final boolean leftSide, final K key) {
+        this.key = Objects.requireNonNull(key, "key cannot be null");
+        this.leftSide = leftSide;
     }
 
     /**
      * Create a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
      *
-     * @param leftJoin True if the key is part of the left topic; False if it is from the right topic
+     * @param leftSide True if the key is part of the left join side; False if it is from the right join side
      * @param key      the key
      * @param <K>      the type of the key
      * @return a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}
      */
-    public static <K> KeyAndJoinSide<K> make(final boolean leftJoin, final K key) {
-        return new KeyAndJoinSide<>(leftJoin, key);
+    public static <K> KeyAndJoinSide<K> make(final boolean leftSide, final K key) {
+        return new KeyAndJoinSide<>(leftSide, key);
     }
 
-    public boolean isLeftJoin() {
-        return leftJoin;
+    public boolean isLeftSide() {
+        return leftSide;
     }
 
     public K getKey() {
@@ -57,7 +57,7 @@ public class KeyAndJoinSide<K> {
 
     @Override
     public String toString() {
-        final String joinSide = leftJoin ? "left" : "right";
+        final String joinSide = leftSide ? "left" : "right";
         return "<" + joinSide + "," + key + ">";
     }
 
@@ -70,12 +70,12 @@ public class KeyAndJoinSide<K> {
             return false;
         }
         final KeyAndJoinSide<?> that = (KeyAndJoinSide<?>) o;
-        return leftJoin == that.leftJoin &&
+        return leftSide == that.leftSide &&
             Objects.equals(key, that.key);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leftJoin, key);
+        return Objects.hash(leftSide, key);
     }
 }

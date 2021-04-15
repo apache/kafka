@@ -40,7 +40,7 @@ public class KeyAndJoinSideSerializer<K> implements Serializer<KeyAndJoinSide<K>
 
     @Override
     public byte[] serialize(final String topic, final KeyAndJoinSide<K> data) {
-        final byte boolByte = (byte) (data.isLeftJoin() ? 1 : 0);
+        final byte boolByte = (byte) (data.isLeftSide() ? 1 : 0);
         final byte[] keyBytes = keySerializer.serialize(topic, data.getKey());
 
         return ByteBuffer
