@@ -130,6 +130,9 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
+    /** <code>li.client.software.name.and.commit</code> */
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG;
+
     /** <code>send.buffer.bytes</code> */
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
 
@@ -285,6 +288,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, Integer.MAX_VALUE, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG, Type.STRING, "li-oss-producer-java", Importance.LOW, CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,

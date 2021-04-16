@@ -31,28 +31,54 @@ import java.nio.ByteBuffer;
 public class ApiVersionsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
-        private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
+        private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "linkedin-kafka-java";
 
-        private static final ApiVersionsRequestData DATA = new ApiVersionsRequestData()
-            .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
-            .setClientSoftwareVersion(AppInfoParser.getVersion());
+        private final ApiVersionsRequestData apiVersionsRequestData;
 
         public Builder() {
             super(ApiKeys.API_VERSIONS);
+            apiVersionsRequestData = new ApiVersionsRequestData()
+                .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
+                .setClientSoftwareVersion(AppInfoParser.getVersion());
         }
 
         public Builder(short version) {
             super(ApiKeys.API_VERSIONS, version);
+            apiVersionsRequestData = new ApiVersionsRequestData()
+                .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
+                .setClientSoftwareVersion(AppInfoParser.getVersion());
+        }
+
+        public Builder(String clientName) {
+            super(ApiKeys.API_VERSIONS);
+            if (clientName != null) {
+                apiVersionsRequestData = new ApiVersionsRequestData().setClientSoftwareName(clientName).setClientSoftwareVersion(AppInfoParser.getVersion());
+            } else {
+                apiVersionsRequestData = new ApiVersionsRequestData()
+                    .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
+                    .setClientSoftwareVersion(AppInfoParser.getVersion());
+            }
+        }
+
+        public Builder(short version, String clientName) {
+            super(ApiKeys.API_VERSIONS, version);
+            if (clientName != null) {
+                apiVersionsRequestData = new ApiVersionsRequestData().setClientSoftwareName(clientName).setClientSoftwareVersion(AppInfoParser.getVersion());
+            } else {
+                apiVersionsRequestData = new ApiVersionsRequestData()
+                    .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
+                    .setClientSoftwareVersion(AppInfoParser.getVersion());
+            }
         }
 
         @Override
         public ApiVersionsRequest build(short version) {
-            return new ApiVersionsRequest(DATA, version);
+            return new ApiVersionsRequest(apiVersionsRequestData, version);
         }
 
         @Override
         public String toString() {
-            return DATA.toString();
+            return apiVersionsRequestData.toString();
         }
     }
 

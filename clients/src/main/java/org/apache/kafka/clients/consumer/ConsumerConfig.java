@@ -161,6 +161,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     /**
+     * <code>li.client.software.name.and.commit</code>
+     * */
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG;
+
+    /**
      * <code>client.rack</code>
      */
     public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
@@ -345,6 +350,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         "",
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG,
+                                        Type.STRING,
+                                        "li-oss-consumer-java",
+                                        Importance.LOW,
+                                        CommonClientConfigs.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC)
                                 .define(CLIENT_RACK_CONFIG,
                                         Type.STRING,
                                         "",

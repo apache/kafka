@@ -63,6 +63,9 @@ public class CommonClientConfigs {
     public static final String CLIENT_ID_CONFIG = "client.id";
     public static final String CLIENT_ID_DOC = "An id string to pass to the server when making requests. The purpose of this is to be able to track the source of requests beyond just ip/port by allowing a logical application name to be included in server-side request logging.";
 
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG = "li.client.software.name.and.commit";
+    public static final String LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_DOC = "A name string to indicate client software name and corresponding commit hash. The purpose of this is to be able to track/analyze clients beyond just client id";
+
     public static final String CLIENT_RACK_CONFIG = "client.rack";
     public static final String CLIENT_RACK_DOC = "A rack identifier for this client. This can be any string value which indicates where this client is physically located. It corresponds with the broker config 'broker.rack'";
 
