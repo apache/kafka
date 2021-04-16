@@ -236,8 +236,8 @@ public class CachingPersistentWindowStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldPutFetchFromCache() {
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
-        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         assertThat(cachingStore.fetch(bytesKey("a"), 10), equalTo(bytesValue("a")));
         assertThat(cachingStore.fetch(bytesKey("b"), 10), equalTo(bytesValue("b")));
@@ -275,8 +275,8 @@ public class CachingPersistentWindowStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldPutFetchRangeFromCache() {
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
-        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
             cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10));
@@ -293,16 +293,15 @@ public class CachingPersistentWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldGetAllFromCache() {
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
-        cachingStore.put(bytesKey("b"), bytesValue("b"));
-        cachingStore.put(bytesKey("c"), bytesValue("c"));
-        cachingStore.put(bytesKey("d"), bytesValue("d"));
-        cachingStore.put(bytesKey("e"), bytesValue("e"));
-        cachingStore.put(bytesKey("f"), bytesValue("f"));
-        cachingStore.put(bytesKey("g"), bytesValue("g"));
-        cachingStore.put(bytesKey("h"), bytesValue("h"));
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("f"), bytesValue("f"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("g"), bytesValue("g"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("h"), bytesValue("h"), DEFAULT_TIMESTAMP);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.all();
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
@@ -318,14 +317,14 @@ public class CachingPersistentWindowStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldGetAllBackwardFromCache() {
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
-        cachingStore.put(bytesKey("b"), bytesValue("b"));
-        cachingStore.put(bytesKey("c"), bytesValue("c"));
-        cachingStore.put(bytesKey("d"), bytesValue("d"));
-        cachingStore.put(bytesKey("e"), bytesValue("e"));
-        cachingStore.put(bytesKey("f"), bytesValue("f"));
-        cachingStore.put(bytesKey("g"), bytesValue("g"));
-        cachingStore.put(bytesKey("h"), bytesValue("h"));
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("d"), bytesValue("d"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("e"), bytesValue("e"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("f"), bytesValue("f"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("g"), bytesValue("g"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("h"), bytesValue("h"), DEFAULT_TIMESTAMP);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardAll();
         final String[] array = {"h", "g", "f", "e", "d", "c", "b", "a"};
@@ -343,8 +342,7 @@ public class CachingPersistentWindowStoreTest {
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
-            context.setTime(i);
-            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]), i);
         }
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
@@ -386,8 +384,7 @@ public class CachingPersistentWindowStoreTest {
     public void shouldFetchAllBackwardWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
-            context.setTime(i);
-            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]), i);
         }
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
@@ -444,7 +441,7 @@ public class CachingPersistentWindowStoreTest {
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
@@ -462,24 +459,24 @@ public class CachingPersistentWindowStoreTest {
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
-        cachingStore.put(bytesKey("1"), bytesValue("c"));
+        cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
-        cachingStore.put(bytesKey("1"), null);
+        cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
-        cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.put(bytesKey("1"), bytesValue("b"));
-        cachingStore.put(bytesKey("1"), null);
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
@@ -490,23 +487,23 @@ public class CachingPersistentWindowStoreTest {
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
-        cachingStore.put(bytesKey("1"), bytesValue("c"));
+        cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
-        cachingStore.put(bytesKey("1"), null);
+        cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
-        cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.put(bytesKey("1"), bytesValue("b"));
-        cachingStore.put(bytesKey("1"), null);
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
         cachingStore.flush();
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
@@ -619,7 +616,7 @@ public class CachingPersistentWindowStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldClearNamespaceCacheOnClose() {
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("a"), bytesValue("a"), 0L);
         assertEquals(1, cache.size());
         cachingStore.close();
         assertEquals(0, cache.size());
@@ -641,7 +638,7 @@ public class CachingPersistentWindowStoreTest {
     @SuppressWarnings("deprecation")
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
-        assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a")));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a"), 0L));
     }
 
     @Test
@@ -789,13 +786,13 @@ public class CachingPersistentWindowStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue")));
+        assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue"), 0L));
     }
 
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
-        cachingStore.put(bytesKey("a"), null);
+        cachingStore.put(bytesKey("a"), null, 0L);
     }
 
     @Test
@@ -919,13 +916,12 @@ public class CachingPersistentWindowStoreTest {
             bytesValue(value));
     }
 
-    @SuppressWarnings("deprecation")
     private int addItemsToCache() {
         int cachedSize = 0;
         int i = 0;
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
-            cachingStore.put(bytesKey(kv), bytesValue(kv));
+            cachingStore.put(bytesKey(kv), bytesValue(kv), DEFAULT_TIMESTAMP);
             cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC) +
                 8 + // timestamp
                 4; // sequenceNumber

@@ -18,13 +18,20 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 public class ControllerTestUtils {
@@ -47,5 +54,49 @@ public class ControllerTestUtils {
             set.add(iterator.next());
         }
         return set;
+    }
+
+    public static void assertBatchIteratorContains(List<List<ApiMessageAndVersion>> batches,
+                                                   Iterator<List<ApiMessageAndVersion>> iterator) throws Exception {
+        List<List<ApiMessageAndVersion>> actual = new ArrayList<>();
+        while (iterator.hasNext()) {
+            actual.add(new ArrayList<>(iterator.next()));
+        }
+        deepSortRecords(actual);
+        List<List<ApiMessageAndVersion>> expected = new ArrayList<>();
+        for (List<ApiMessageAndVersion> batch : batches) {
+            expected.add(new ArrayList<>(batch));
+        }
+        deepSortRecords(expected);
+        assertEquals(expected, actual);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void deepSortRecords(Object o) throws Exception {
+        if (o == null) {
+            return;
+        } else if (o instanceof List) {
+            List<?> list = (List<?>) o;
+            for (Object entry : list) {
+                if (entry != null) {
+                    if (Number.class.isAssignableFrom(entry.getClass())) {
+                        return;
+                    }
+                    deepSortRecords(entry);
+                }
+            }
+            list.sort(Comparator.comparing(Object::toString));
+        } else if (o instanceof ImplicitLinkedHashCollection) {
+            ImplicitLinkedHashCollection<?> coll = (ImplicitLinkedHashCollection<?>) o;
+            for (Object entry : coll) {
+                deepSortRecords(entry);
+            }
+            coll.sort(Comparator.comparing(Object::toString));
+        } else if (o instanceof Message || o instanceof ApiMessageAndVersion) {
+            for (Field field : o.getClass().getDeclaredFields()) {
+                field.setAccessible(true);
+                deepSortRecords(field.get(o));
+            }
+        }
     }
 }
