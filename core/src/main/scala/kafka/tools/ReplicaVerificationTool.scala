@@ -419,11 +419,6 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     if (fetchResponse != null) {
       fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion()).forEach { (tp, partitionData) =>
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
-      // TODO: fix -- should we change the above to use this?
-      //fetchResponse.data.responses.forEach(topicResponse =>
-        //topicResponse.partitions.forEach(partitionResponse =>
-          //replicaBuffer.addFetchedData(new TopicPartition(topicResponse.topic, partitionResponse.partitionIndex),
-            //sourceBroker.id, partitionResponse)))
       }
     } else {
       for (topicAndPartition <- topicPartitions)
