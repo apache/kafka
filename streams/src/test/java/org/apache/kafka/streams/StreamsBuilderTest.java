@@ -714,7 +714,7 @@ public class StreamsBuilderTest {
         assertNamesForStateStore(topology.stateStores(),
             STREAM_OPERATION_NAME + "-this-join-store",
             STREAM_OPERATION_NAME + "-outer-other-join-store",
-            STREAM_OPERATION_NAME + "-shared-outer-join-store"
+            STREAM_OPERATION_NAME + "-shared-left-outer-join-store"
         );
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
@@ -807,7 +807,7 @@ public class StreamsBuilderTest {
         assertNamesForStateStore(topology.stateStores(),
                                  STREAM_OPERATION_NAME + "-outer-this-join-store",
                                  STREAM_OPERATION_NAME + "-outer-other-join-store",
-                                 STREAM_OPERATION_NAME + "-shared-outer-join-store");
+                                 STREAM_OPERATION_NAME + "-shared-left-outer-join-store");
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
                                 "KSTREAM-SOURCE-0000000001",

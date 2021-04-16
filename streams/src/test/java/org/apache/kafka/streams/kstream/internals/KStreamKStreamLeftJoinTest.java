@@ -216,6 +216,207 @@ public class KStreamKStreamLeftJoinTest {
         }
     }
 
+
+    @Test
+    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheLeftProcessor() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            final long windowStart = 0;
+
+            // No joins detected; No null-joins emitted
+            inputTopic1.pipeInput(0, "A0", windowStart + 1);
+            inputTopic1.pipeInput(1, "A1", windowStart + 2);
+            inputTopic1.pipeInput(0, "A0-0", windowStart + 3);
+            processor.checkAndClearProcessResult();
+
+            // Join detected; No null-joins emitted
+            inputTopic2.pipeInput(1, "a1", windowStart + 3);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(1, "A1+a1", windowStart + 3));
+
+            // Dummy record in left topic will emit expired non-joined records from the left topic
+            inputTopic1.pipeInput(2, "dummy", windowStart + 401);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
+
+            // Flush internal non-joined state store by joining the dummy record
+            inputTopic2.pipeInput(2, "dummy", windowStart + 401);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 401));
+        }
+    }
+
+    @Test
+    public void testLeftExpiredNonJoinedRecordsAreEmittedByTheRightProcessor() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            final long windowStart = 0;
+
+            // No joins detected; No null-joins emitted
+            inputTopic1.pipeInput(0, "A0", windowStart + 1);
+            inputTopic1.pipeInput(1, "A1", windowStart + 2);
+            inputTopic1.pipeInput(0, "A0-0", windowStart + 3);
+            processor.checkAndClearProcessResult();
+
+            // Join detected; No null-joins emitted
+            inputTopic2.pipeInput(1, "a1", windowStart + 3);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(1, "A1+a1", windowStart + 3));
+
+            // Dummy record in right topic will emit expired non-joined records from the left topic
+            inputTopic2.pipeInput(2, "dummy", windowStart + 401);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", windowStart + 1),
+                new KeyValueTimestamp<>(0, "A0-0+null", windowStart + 3));
+
+            // Flush internal non-joined state store by joining the dummy record
+            inputTopic1.pipeInput(2, "dummy", windowStart + 402);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402));
+        }
+    }
+
+    @Test
+    public void testRightNonJoinedRecordsAreNeverEmittedByTheLeftProcessor() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            final long windowStart = 0;
+
+            // No joins detected; No null-joins emitted
+            inputTopic2.pipeInput(0, "A0", windowStart + 1);
+            inputTopic2.pipeInput(1, "A1", windowStart + 2);
+            inputTopic2.pipeInput(0, "A0-0", windowStart + 3);
+            processor.checkAndClearProcessResult();
+
+            // Join detected; No null-joins emitted
+            inputTopic1.pipeInput(1, "a1", windowStart + 3);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(1, "a1+A1", windowStart + 3));
+
+            // Dummy record in left topic will not emit records
+            inputTopic1.pipeInput(2, "dummy", windowStart + 401);
+            processor.checkAndClearProcessResult();
+
+            // Process the dummy joined record
+            inputTopic2.pipeInput(2, "dummy", windowStart + 402);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402));
+        }
+    }
+
+    @Test
+    public void testRightNonJoinedRecordsAreNeverEmittedByTheRightProcessor() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+        joined = stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            final long windowStart = 0;
+
+            // No joins detected; No null-joins emitted
+            inputTopic2.pipeInput(0, "A0", windowStart + 1);
+            inputTopic2.pipeInput(1, "A1", windowStart + 2);
+            inputTopic2.pipeInput(0, "A0-0", windowStart + 3);
+            processor.checkAndClearProcessResult();
+
+            // Join detected; No null-joins emitted
+            inputTopic1.pipeInput(1, "a1", windowStart + 3);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(1, "a1+A1", windowStart + 3));
+
+            // Dummy record in right topic will not emit records
+            inputTopic2.pipeInput(2, "dummy", windowStart + 401);
+            processor.checkAndClearProcessResult();
+
+            // Process the dummy joined record
+            inputTopic1.pipeInput(2, "dummy", windowStart + 402);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402));
+        }
+    }
+
     @Test
     public void testLeftJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -316,7 +517,6 @@ public class KStreamKStreamLeftJoinTest {
     @Test
     public void testOrdering() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -417,7 +617,7 @@ public class KStreamKStreamLeftJoinTest {
             processor.checkAndClearProcessResult();
 
             // push a dummy item to the other stream after the window is closed; this should only produced the expired non-joined records, but
-            // not the joined records because the window has ended
+            // not the joined records because the window has closed
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
