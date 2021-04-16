@@ -30,7 +30,10 @@ import java.util.List;
 
 /**
  * A {@link RocksDBSegmentedBytesStore.KeySchema} to serialize/deserialize a RocksDB store
- * key into a schema combined of (time,key,seq).
+ * key into a schema combined of (time,key,seq). Since key is variable length while time/seq is
+ * fixed length, when formatting in this order, varying time range query would be very inefficient
+ * since we'd need to be very conservative in picking the from / to boundaries; however for now
+ * we do not expect any varying time range access at all, only fixed time range only.
  */
 public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     private static final Logger LOG = LoggerFactory.getLogger(TimeOrderedKeySchema.class);
@@ -49,8 +52,8 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     }
 
     @Override
-    public Bytes toBinary(final Bytes key, final long timestamp) {
-        return toStoreKeyBinary(key, timestamp);
+    public Bytes toStoreBinaryKeyPrefix(final Bytes key, final long timestamp) {
+        return toStoreKeyBinaryPrefix(key, timestamp);
     }
 
     @Override
@@ -92,7 +95,7 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
         throw new UnsupportedOperationException();
     }
 
-    public static Bytes toStoreKeyBinary(final Bytes key,
+    public static Bytes toStoreKeyBinaryPrefix(final Bytes key,
                                          final long timestamp) {
         final byte[] serializedKey = key.get();
 

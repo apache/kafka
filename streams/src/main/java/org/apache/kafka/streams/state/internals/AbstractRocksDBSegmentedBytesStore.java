@@ -198,7 +198,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public void remove(final Bytes key, final long timestamp) {
-        final Bytes keyBytes = keySchema.toBinary(key, timestamp);
+        final Bytes keyBytes = keySchema.toStoreBinaryKeyPrefix(key, timestamp);
         final S segment = segments.getSegmentForTimestamp(timestamp);
         if (segment != null) {
             segment.deleteRange(keyBytes, keyBytes);
