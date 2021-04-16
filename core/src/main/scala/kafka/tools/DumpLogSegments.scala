@@ -281,7 +281,7 @@ object DumpLogSegments {
                 print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
               }
               record match {
-                case r: AbstractLegacyRecordBatch => print(s" crc: ${r.checksum}}")
+                case r: AbstractLegacyRecordBatch => print(s" isValid: ${r.isValid} crc: ${r.checksum}}")
                 case _ =>
               }
 
