@@ -149,7 +149,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
             return null;
         }
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders(name);
         if (inner == null) {
             return null;
         }
@@ -157,6 +157,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         return pluginLoader instanceof PluginClassLoader
                ? (PluginClassLoader) pluginLoader
                : null;
+    }
+
+    //visible for testing
+    SortedMap<PluginDesc<?>, ClassLoader> pluginLoaders(String name) {
+        return pluginLoaders.get(name);
     }
 
     public ClassLoader connectorLoader(Connector connector) {
@@ -187,17 +192,23 @@ public class DelegatingClassLoader extends URLClassLoader {
         );
     }
 
-    private <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
+    <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
             SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(pluginClassName);
+            boolean pluginConflict = false;
             if (inner == null) {
                 inner = new TreeMap<>();
                 pluginLoaders.put(pluginClassName, inner);
                 // TODO: once versioning is enabled this line should be moved outside this if branch
                 log.info("Added plugin '{}'", pluginClassName);
+            } else {
+                pluginConflict = true;
             }
             inner.put(plugin, loader);
+            if (pluginConflict) {
+                log.error("Detected multiple copies of plugin '{}', one of these will be used '{}'", pluginClassName, inner.keySet());
+            }
         }
     }
 

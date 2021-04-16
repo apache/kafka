@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.connect.connector.Connector;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -24,8 +25,11 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.SortedMap;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -128,5 +132,33 @@ public class DelegatingClassLoaderTest {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
         }
+    }
+
+    @Test
+    public void testAddMultiplePluginsWithSameClass() {
+        DelegatingClassLoader delegatingClassLoader = new DelegatingClassLoader(Collections.emptyList());
+        Class<Connector> klass = Connector.class;
+        PluginDesc<Connector> connectorDesc1 = new PluginDesc<>(
+                klass,
+                "1.0.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        PluginDesc<Connector> connectorDesc2 = new PluginDesc<>(
+                klass,
+                "1.1.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        PluginDesc<Connector> connectorDesc3 = new PluginDesc<>(
+                klass,
+                "1.0.1",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Arrays.asList(connectorDesc1, connectorDesc2), ClassLoader.getSystemClassLoader());
+        SortedMap<PluginDesc<?>, ClassLoader> pluginLoaders = delegatingClassLoader.pluginLoaders(klass.getName());
+        assertEquals(2, pluginLoaders.size());
+
+        delegatingClassLoader.addPlugins(Arrays.asList(connectorDesc3), ClassLoader.getSystemClassLoader());
+        assertEquals(3, pluginLoaders.size());
+
     }
 }
