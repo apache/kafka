@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -156,7 +157,8 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
     public ApiResult<TopicPartition, PartitionProducerState> handleResponse(
         int brokerId,
         Set<TopicPartition> keys,
-        AbstractResponse abstractResponse
+        AbstractResponse abstractResponse,
+        Node node
     ) {
         DescribeProducersResponse response = (DescribeProducersResponse) abstractResponse;
         Map<TopicPartition, PartitionProducerState> completed = new HashMap<>();

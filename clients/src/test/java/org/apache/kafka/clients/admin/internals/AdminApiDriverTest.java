@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -321,7 +322,7 @@ class AdminApiDriverTest {
         assertEquals(1, retryLookupSpecs.size());
 
         RequestSpec<String> retryLookupSpec = retryLookupSpecs.get(0);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retryLookupSpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retryLookupSpec.nextAllowedTryMs);
         assertEquals(1, retryLookupSpec.tries);
     }
 
@@ -417,7 +418,7 @@ class AdminApiDriverTest {
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs);
     }
 
     @Test
@@ -433,7 +434,7 @@ class AdminApiDriverTest {
         RequestSpec<String> requestSpec = requestSpecs.get(0);
         assertEquals(0, requestSpec.tries);
         assertEquals(0L, requestSpec.nextAllowedTryMs);
-        ctx.assertResponse(requestSpec, emptyFulfillment);
+        ctx.assertResponse(requestSpec, emptyFulfillment, Node.noNode());
 
         List<RequestSpec<String>> retrySpecs = ctx.driver.poll();
         assertEquals(1, retrySpecs.size());
@@ -580,7 +581,7 @@ class AdminApiDriverTest {
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
 
             result.mappedKeys.forEach((key, brokerId) -> {
                 assertMappedKey(this, key, brokerId);
@@ -593,7 +594,8 @@ class AdminApiDriverTest {
 
         private void assertResponse(
             RequestSpec<String> requestSpec,
-            ApiResult<String, Long> result
+            ApiResult<String, Long> result,
+            Node node
         ) {
             int brokerId = requestSpec.scope.destinationBrokerId().orElseThrow(() ->
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
@@ -606,7 +608,7 @@ class AdminApiDriverTest {
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
 
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, node);
 
             result.unmappedKeys.forEach(key -> {
                 assertUnmappedKey(this, key);
@@ -649,7 +651,7 @@ class AdminApiDriverTest {
                     assertLookupResponse(requestSpec, result);
                 } else if (expectedRequests.containsKey(keys)) {
                     ApiResult<String, Long> result = expectedRequests.get(keys);
-                    assertResponse(requestSpec, result);
+                    assertResponse(requestSpec, result, Node.noNode());
                 } else {
                     fail("Unexpected request for keys " + keys);
                 }
@@ -723,7 +725,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response) {
+        public ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response, Node node) {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );

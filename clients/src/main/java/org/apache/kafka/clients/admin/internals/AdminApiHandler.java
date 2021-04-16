@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -63,7 +64,7 @@ public interface AdminApiHandler<K, V> {
      *
      * @return result indicating key completion, failure, and unmapping
      */
-    ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response);
+    ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response, Node node);
 
     /**
      * Get the lookup strategy that is responsible for finding the brokerId

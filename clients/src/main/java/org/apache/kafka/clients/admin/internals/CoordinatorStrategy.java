@@ -17,20 +17,34 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKey> {
+
+    private static final ApiRequestScope GROUP_REQUEST_SCOPE = new ApiRequestScope() { };
+    private static final ApiRequestScope TXN_REQUEST_SCOPE = new ApiRequestScope() { };
+
     private final Logger log;
+    private boolean batch = true;
+    private FindCoordinatorRequest.CoordinatorType type;
+    private Set<CoordinatorKey> unrepresentableKeys = Collections.emptySet();
 
     public CoordinatorStrategy(
         LogContext logContext
@@ -40,19 +54,39 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
     @Override
     public ApiRequestScope lookupScope(CoordinatorKey key) {
-        // The `FindCoordinator` API does not support batched lookups, so we use a
-        // separate lookup context for each coordinator key we need to lookup
-        return new LookupRequestScope(key);
+        if (batch) {
+            if (key.type == CoordinatorType.GROUP) {
+                return GROUP_REQUEST_SCOPE;
+            } else {
+                return TXN_REQUEST_SCOPE;
+            }
+        } else {
+            // If the `FindCoordinator` API does not support batched lookups, we use a
+            // separate lookup context for each coordinator key we need to lookup
+            return new LookupRequestScope(key);
+        }
     }
 
     @Override
     public FindCoordinatorRequest.Builder buildRequest(Set<CoordinatorKey> keys) {
-        CoordinatorKey key = requireSingleton(keys);
-        return new FindCoordinatorRequest.Builder(
-            new FindCoordinatorRequestData()
-                .setKey(key.idValue)
-                .setKeyType(key.type.id())
-        );
+        unrepresentableKeys = keys.stream().filter(k -> !isRepresentableKey(k.idValue)).collect(Collectors.toSet());
+        keys = keys.stream().filter(k -> isRepresentableKey(k.idValue)).collect(Collectors.toSet());
+        if (batch) {
+            keys = requireSameType(keys);
+            type = keys.iterator().next().type;
+            FindCoordinatorRequestData data = new FindCoordinatorRequestData()
+                    .setKeyType(type.id())
+                    .setCoordinatorKeys(keys.stream().map(k -> k.idValue).collect(Collectors.toList()));
+            return new FindCoordinatorRequest.Builder(data);
+        } else {
+            CoordinatorKey key = requireSingleton(keys);
+            type = key.type;
+            return new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKey(key.idValue)
+                    .setKeyType(key.type.id())
+            );
+        }
     }
 
     @Override
@@ -60,32 +94,32 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         Set<CoordinatorKey> keys,
         AbstractResponse abstractResponse
     ) {
-        CoordinatorKey key = requireSingleton(keys);
-        FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
-        Errors error = response.error();
+        Map<CoordinatorKey, Integer> mappedKeys = new HashMap<>();
+        Map<CoordinatorKey, Throwable> failedKeys = new HashMap<>();
 
-        switch (error) {
-            case NONE:
-                return LookupResult.mapped(key, response.data().nodeId());
-
-            case COORDINATOR_NOT_AVAILABLE:
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                log.debug("FindCoordinator request for key {} returned topic-level error {}. Will retry",
-                    key, error);
-                return LookupResult.empty();
-
-            case GROUP_AUTHORIZATION_FAILED:
-                return LookupResult.failed(key, new GroupAuthorizationException("FindCoordinator request for groupId " +
-                    "`" + key + "` failed due to authorization failure", key.idValue));
-
-            case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
-                return LookupResult.failed(key, new TransactionalIdAuthorizationException("FindCoordinator request for " +
-                    "transactionalId `" + key + "` failed due to authorization failure"));
-
-            default:
-                return LookupResult.failed(key, error.exception("FindCoordinator request for key " +
-                    "`" + key + "` failed due to an unexpected error"));
+        for (CoordinatorKey key : unrepresentableKeys) {
+            failedKeys.put(key, new InvalidGroupIdException("The given group id '" +
+                            key.idValue + "' cannot be represented in a request."));
         }
+        FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+        if (batch) {
+            for (Coordinator coordinator : response.data().coordinators()) {
+                handleError(Errors.forCode(coordinator.errorCode()),
+                            new CoordinatorKey(coordinator.key(), type),
+                            coordinator.nodeId(),
+                            mappedKeys,
+                            failedKeys);
+            }
+        } else {
+            CoordinatorKey key = requireSingleton(keys);
+            Errors error = response.error();
+            handleError(error, key, response.node().id(), mappedKeys, failedKeys);
+        }
+        return new LookupResult<>(failedKeys, mappedKeys);
+    }
+
+    public void disableBatch() {
+        batch = false;
     }
 
     private static CoordinatorKey requireSingleton(Set<CoordinatorKey> keys) {
@@ -93,6 +127,41 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
             throw new IllegalArgumentException("Unexpected lookup key set");
         }
         return keys.iterator().next();
+    }
+
+    private static Set<CoordinatorKey> requireSameType(Set<CoordinatorKey> keys) {
+        if (keys.stream().map(k -> k.type).collect(Collectors.toSet()).size() != 1) {
+            throw new IllegalArgumentException("Unexpected lookup key set");
+        }
+        return keys;
+    }
+
+    private static boolean isRepresentableKey(String groupId) {
+        return groupId != null;
+    }
+
+    private void handleError(Errors error, CoordinatorKey key, int nodeId, Map<CoordinatorKey, Integer> mappedKeys, Map<CoordinatorKey, Throwable> failedKeys) {
+        switch (error) {
+            case NONE:
+                mappedKeys.put(key, nodeId);
+                break;
+            case COORDINATOR_NOT_AVAILABLE:
+            case COORDINATOR_LOAD_IN_PROGRESS:
+                log.debug("FindCoordinator request for key {} returned topic-level error {}. Will retry",
+                    key, error);
+                break;
+            case GROUP_AUTHORIZATION_FAILED:
+                failedKeys.put(key, new GroupAuthorizationException("FindCoordinator request for groupId " +
+                    "`" + key + "` failed due to authorization failure", key.idValue));
+                break;
+            case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
+                failedKeys.put(key, new TransactionalIdAuthorizationException("FindCoordinator request for " +
+                    "transactionalId `" + key + "` failed due to authorization failure"));
+                break;
+            default:
+                failedKeys.put(key, error.exception("FindCoordinator request for key " +
+                    "`" + key + "` failed due to an unexpected error"));
+        }
     }
 
     private static class LookupRequestScope implements ApiRequestScope {

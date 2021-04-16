@@ -49,7 +49,7 @@ public class ConsumerGroupDescription {
         this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
     }
 
-    ConsumerGroupDescription(String groupId,
+    public ConsumerGroupDescription(String groupId,
                              boolean isSimpleConsumerGroup,
                              Collection<MemberDescription> members,
                              String partitionAssignor,

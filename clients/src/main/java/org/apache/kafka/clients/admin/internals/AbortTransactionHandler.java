@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -95,7 +96,8 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
     public ApiResult<TopicPartition, Void> handleResponse(
         int brokerId,
         Set<TopicPartition> topicPartitions,
-        AbstractResponse abstractResponse
+        AbstractResponse abstractResponse,
+        Node node
     ) {
         validateTopicPartitions(topicPartitions);
 

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy.BrokerKey;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
@@ -89,7 +90,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         ListTransactionsResponse response = sampleListTransactionsResponse1();
         ApiResult<BrokerKey, Collection<TransactionListing>> result = handler.handleResponse(
-            brokerId, singleton(brokerKey), response);
+            brokerId, singleton(brokerKey), response, Node.noNode());
         assertEquals(singleton(brokerKey), result.completedKeys.keySet());
         assertExpectedTransactions(response.data().transactionStates(), result.completedKeys.get(brokerKey));
     }
@@ -134,7 +135,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsResponse response = new ListTransactionsResponse(
             new ListTransactionsResponseData().setErrorCode(error.code())
         );
-        return handler.handleResponse(brokerId, singleton(brokerKey), response);
+        return handler.handleResponse(brokerId, singleton(brokerKey), response, Node.noNode());
     }
 
     private ListTransactionsResponse sampleListTransactionsResponse1() {

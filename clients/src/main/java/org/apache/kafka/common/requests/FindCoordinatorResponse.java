@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Map;
 
 
@@ -86,7 +87,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return version >= 2;
     }
 
-    public static FindCoordinatorResponse prepareResponse(Errors error, Node node) {
+    public static FindCoordinatorResponse prepareOldResponse(Errors error, Node node) {
         FindCoordinatorResponseData data = new FindCoordinatorResponseData();
         data.setErrorCode(error.code())
             .setErrorMessage(error.message())
@@ -94,5 +95,22 @@ public class FindCoordinatorResponse extends AbstractResponse {
             .setHost(node.host())
             .setPort(node.port());
         return new FindCoordinatorResponse(data);
+    }
+
+    public static FindCoordinatorResponse prepareResponse(Errors error, String key, Node node) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        data.setCoordinators(Collections.singletonList(
+                new FindCoordinatorResponseData.Coordinator()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setKey(key)
+                .setHost(node.host())
+                .setPort(node.port())
+                .setNodeId(node.id())));
+        return new FindCoordinatorResponse(data);
+    }
+
+    public static boolean isBatch(RequestHeader header) {
+        return header.apiVersion() >= 4;
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -74,7 +75,7 @@ public class DescribeTransactionsHandlerTest {
             .setTransactionStates(asList(transactionState1, transactionState2)));
 
         ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(
-            brokerId, keys, response);
+            brokerId, keys, response, Node.noNode());
 
         assertEquals(keys, result.completedKeys.keySet());
         assertMatchingTransactionState(brokerId, transactionState1,
@@ -147,7 +148,7 @@ public class DescribeTransactionsHandlerTest {
         DescribeTransactionsResponse response = new DescribeTransactionsResponse(new DescribeTransactionsResponseData()
             .setTransactionStates(singletonList(transactionState)));
 
-        ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(brokerId, keys, response);
+        ApiResult<CoordinatorKey, TransactionDescription> result = handler.handleResponse(brokerId, keys, response, Node.noNode());
         assertEquals(emptyMap(), result.completedKeys);
         return result;
     }

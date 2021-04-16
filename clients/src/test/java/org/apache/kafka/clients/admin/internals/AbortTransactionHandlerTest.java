@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -80,11 +81,11 @@ public class AbortTransactionHandlerTest {
         AbortTransactionHandler handler = new AbortTransactionHandler(abortSpec, logContext);
         WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            emptySet(), new WriteTxnMarkersResponse(response)));
+            emptySet(), new WriteTxnMarkersResponse(response), Node.noNode()));
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            mkSet(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
+            mkSet(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response), Node.noNode()));
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(1,
-            mkSet(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
+            mkSet(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response), Node.noNode()));
     }
 
     @Test
@@ -93,43 +94,43 @@ public class AbortTransactionHandlerTest {
 
         WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerResult markerResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerResult();
         response.markers().add(markerResponse);
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         markerResponse.setProducerId(abortSpec.producerId());
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult topicResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult();
         markerResponse.topics().add(topicResponse);
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         topicResponse.setName(abortSpec.topicPartition().topic());
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult partitionResponse =
             new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult();
         topicResponse.partitions().add(partitionResponse);
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         partitionResponse.setPartitionIndex(abortSpec.topicPartition().partition());
         topicResponse.setName(abortSpec.topicPartition().topic() + "random");
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
 
         topicResponse.setName(abortSpec.topicPartition().topic());
         markerResponse.setProducerId(abortSpec.producerId() + 1);
         assertFailed(KafkaException.class, topicPartition, handler.handleResponse(1, singleton(topicPartition),
-            new WriteTxnMarkersResponse(response)));
+            new WriteTxnMarkersResponse(response), Node.noNode()));
     }
 
     @Test
@@ -182,7 +183,7 @@ public class AbortTransactionHandlerTest {
         response.markers().add(markerResponse);
 
         return handler.handleResponse(1, singleton(abortSpec.topicPartition()),
-            new WriteTxnMarkersResponse(response));
+            new WriteTxnMarkersResponse(response), Node.noNode());
     }
 
     private void assertUnmapped(

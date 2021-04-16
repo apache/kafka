@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -42,6 +43,10 @@ public class FindCoordinatorRequest extends AbstractRequest {
             if (version < 1 && data.keyType() == CoordinatorType.TRANSACTION.id()) {
                 throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
                         "because we require features supported only in 2 or later.");
+            }
+            if (version < 4 && !data.coordinatorKeys().isEmpty()) {
+                throw new UnsupportedBatchLookupException("Cannot create a v" + version + " FindCoordinator request " +
+                        "because we require features supported only in 4 or later.");
             }
             return new FindCoordinatorRequest(data, version);
         }
@@ -70,7 +75,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         Errors error = Errors.forException(e);
-        return FindCoordinatorResponse.prepareResponse(error, Node.noNode());
+        return FindCoordinatorResponse.prepareOldResponse(error, Node.noNode());
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {

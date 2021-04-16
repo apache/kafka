@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.UnsupportedBatchLookupException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -204,7 +206,8 @@ public class AdminApiDriver<K, V> {
     public void onResponse(
         long currentTimeMs,
         RequestSpec<K> spec,
-        AbstractResponse response
+        AbstractResponse response,
+        Node node
     ) {
         clearInflightRequest(currentTimeMs, spec);
 
@@ -213,7 +216,8 @@ public class AdminApiDriver<K, V> {
             AdminApiHandler.ApiResult<K, V> result = handler.handleResponse(
                 brokerId,
                 spec.keys,
-                response
+                response,
+                node
             );
             complete(result.completedKeys);
             completeExceptionally(result.failedKeys);
@@ -250,6 +254,13 @@ public class AdminApiDriver<K, V> {
                 .filter(future.lookupKeys()::contains)
                 .collect(Collectors.toSet());
             retryLookup(keysToUnmap);
+
+        } else if (t instanceof UnsupportedBatchLookupException) {
+            ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
+            Set<K> keysToUnmap = spec.keys.stream()
+                .filter(future.lookupKeys()::contains)
+                .collect(Collectors.toSet());
+            retryLookup(keysToUnmap);
         } else {
             Map<K, Throwable> errors = spec.keys.stream().collect(Collectors.toMap(
                 Function.identity(),
@@ -267,7 +278,11 @@ public class AdminApiDriver<K, V> {
     private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {
         RequestState requestState = requestStates.get(spec.scope);
         if (requestState != null) {
-            requestState.clearInflight(currentTimeMs);
+            if (spec.scope instanceof FulfillmentScope) {
+                requestState.clearInflight(currentTimeMs + retryBackoffMs);
+            } else {
+                requestState.clearInflight(currentTimeMs);
+            }
         }
     }
 
@@ -384,9 +399,9 @@ public class AdminApiDriver<K, V> {
             return inflightRequest.isPresent();
         }
 
-        public void clearInflight(long currentTimeMs) {
+        public void clearInflight(long nextAllowedRetryMs) {
             this.inflightRequest = Optional.empty();
-            this.nextAllowedRetryMs = currentTimeMs + retryBackoffMs;
+            this.nextAllowedRetryMs = nextAllowedRetryMs;
         }
 
         public void setInflight(RequestSpec<K> spec) {

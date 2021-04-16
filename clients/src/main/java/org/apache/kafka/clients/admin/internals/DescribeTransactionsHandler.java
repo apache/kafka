@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -95,7 +96,8 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
     public ApiResult<CoordinatorKey, TransactionDescription> handleResponse(
         int brokerId,
         Set<CoordinatorKey> keys,
-        AbstractResponse abstractResponse
+        AbstractResponse abstractResponse,
+        Node node
     ) {
         DescribeTransactionsResponse response = (DescribeTransactionsResponse) abstractResponse;
         Map<CoordinatorKey, TransactionDescription> completed = new HashMap<>();
