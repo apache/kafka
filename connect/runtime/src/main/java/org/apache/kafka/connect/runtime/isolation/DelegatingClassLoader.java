@@ -192,6 +192,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         );
     }
 
+    //visible for testing
     <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
