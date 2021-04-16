@@ -77,6 +77,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -315,6 +316,19 @@ public class MeteredTimestampedKeyValueStoreTest {
         final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make("value", 98L);
         assertFalse(metered.putIfDifferentValues(KEY, newValueAndTimestamp, encodedOldValue));
         verify(inner);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfDifferentValuesIfKeyIsNull() {
+        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
+        final byte[] encodedOldValue = stringSerde.serializer().serialize("TOPIC", VALUE_AND_TIMESTAMP);
+        final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make("value", 98L);
+        assertThrows(NullPointerException.class, () -> metered.putIfDifferentValues(null, newValueAndTimestamp, encodedOldValue));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnGetWithBinaryIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.getWithBinary(null));
     }
 
     @SuppressWarnings("resource")

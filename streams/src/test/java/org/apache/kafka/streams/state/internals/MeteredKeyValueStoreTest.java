@@ -436,6 +436,26 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
+    public void shouldThrowNullPointerOnGetIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.get(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.put(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfAbsentIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putIfAbsent(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnDeleteIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.delete(null));
+    }
+
+    @Test
     public void shouldGetRecordsWithPrefixKey() {
         final StringSerializer stringSerializer = new StringSerializer();
         expect(inner.prefixScan(KEY, stringSerializer))

@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import java.util.Objects;
+
 /**
  * A Metered {@link TimestampedKeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
@@ -59,6 +61,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(() -> { 
                 final byte[] serializedValue = wrapped().get(keyBytes(key));
@@ -73,6 +76,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     public boolean putIfDifferentValues(final K key,
                                         final ValueAndTimestamp<V> newValue,
                                         final byte[] oldSerializedValue) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(
                 () -> {
