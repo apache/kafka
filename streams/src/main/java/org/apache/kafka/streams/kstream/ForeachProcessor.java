@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.streams.kstream;
 
-/**
- * A {@link SampledStat} that maintains the sum of what it has seen.
- * This is a sampled version of {@link CumulativeSum}.
- *
- * See also {@link WindowedCount} if you want to increment the value by 1 on each recording.
- *
- * @deprecated since 2.4 . Use {@link WindowedSum} instead
- */
-@Deprecated
-public class Sum extends WindowedSum {
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
+
+public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
+
+    private final ForeachAction<K, V> action;
+
+    public ForeachProcessor(final ForeachAction<K, V> action) {
+        this.action = action;
+    }
+
+    @Override
+    public void process(final Record<K, V> record) {
+        action.apply(record.key(), record.value());
+    }
 }

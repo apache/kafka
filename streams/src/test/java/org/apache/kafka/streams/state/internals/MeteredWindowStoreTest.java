@@ -290,7 +290,6 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
@@ -298,7 +297,7 @@ public class MeteredWindowStoreTest {
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
-        store.put("a", "a");
+        store.put("a", "a", context.timestamp());
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(1.0, getMetricByNameFilterByTags(
