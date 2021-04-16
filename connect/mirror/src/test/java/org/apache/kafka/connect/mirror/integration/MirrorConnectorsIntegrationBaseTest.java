@@ -162,13 +162,23 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             .maskExitProcedures(false)
             .build();
 
+
         primary.start();
         primary.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
             "Workers of " + PRIMARY_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
 
+        waitForTopicCreated(primary, "mm2-status.backup.internal");
+        waitForTopicCreated(primary, "mm2-offsets.backup.internal");
+        waitForTopicCreated(primary, "mm2-configs.backup.internal");
+
+
         backup.start();
         backup.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
             "Workers of " + BACKUP_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
+
+        waitForTopicCreated(backup, "mm2-status.primary.internal");
+        waitForTopicCreated(backup, "mm2-offsets.primary.internal");
+        waitForTopicCreated(backup, "mm2-configs.primary.internal");
 
         createTopics();
 

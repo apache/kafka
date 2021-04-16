@@ -79,10 +79,13 @@ class DelayedCreatePartitions(delayMs: Long,
     trace(s"Completing operation for $createMetadata")
     val results = createMetadata.map { metadata =>
       // ignore topics that already have errors
-      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.partitions) > 0)
+      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.partitions) > 0) {
+        System.err.println("topic:" + metadata.topic + "timeout")
         (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
-      else
+      } else {
+        System.err.println("topic:" + metadata.topic + metadata.error)
         (metadata.topic, metadata.error)
+      }
     }.toMap
     responseCallback(results)
   }

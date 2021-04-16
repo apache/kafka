@@ -151,7 +151,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
-    System.err.println("zkcreateTopics:" + toCreate + timeout)
+    System.err.println("zkcreateTopics:" + toCreate.keySet + "," + timeout)
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
     val metadata = toCreate.values.map(topic =>
