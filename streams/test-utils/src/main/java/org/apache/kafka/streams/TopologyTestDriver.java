@@ -1264,10 +1264,21 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
+        public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
         public WindowStoreIterator<V> backwardFetch(final K key,
                                                     final long timeFrom,
                                                     final long timeTo) {
             return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom,
+                                                      long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
         }
 
         @Override
@@ -1276,6 +1287,11 @@ public class TopologyTestDriver implements Closeable {
                                                               final long timeFrom,
                                                               final long timeTo) {
             return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
         }
 
         @Override
