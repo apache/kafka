@@ -15,12 +15,12 @@
   * limitations under the License.
   */
 
-package unit.kafka.tools
+package kafka.tools
 
 import java.io.{ByteArrayOutputStream, Closeable, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.util
-import kafka.tools.DefaultMessageFormatter
+
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.{RecordHeader, RecordHeaders}
@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
 
 class DefaultMessageFormatterTest {
   import DefaultMessageFormatterTest._
-
 
   @ParameterizedTest
   @MethodSource(Array("parameters"))
@@ -142,7 +141,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "key.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "key.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:v1,h2:v2\tSOMEKEY\tsomeValue\n"),
       Arguments.of(
         "print value with custom deserializer",
@@ -150,7 +149,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "value.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "value.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:v1,h2:v2\tsomeKey\tSOMEVALUE\n"),
       Arguments.of(
         "print headers with custom deserializer",
@@ -158,7 +157,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "headers.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "headers.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:V1,h2:V2\tsomeKey\tsomeValue\n"),
       Arguments.of(
         "print key and value",
