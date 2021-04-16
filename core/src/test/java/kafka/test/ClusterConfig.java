@@ -119,8 +119,8 @@ public class ClusterConfig {
     public Map<String, String> nameTags() {
         Map<String, String> tags = new LinkedHashMap<>(3);
         name().ifPresent(name -> tags.put("Name", name));
-        tags.put("security", securityProtocol.name());
-        listenerName().ifPresent(listener -> tags.put("listener", listener));
+        tags.put("Security", securityProtocol.name());
+        listenerName().ifPresent(listener -> tags.put("Listener", listener));
         return tags;
     }
 

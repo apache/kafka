@@ -39,7 +39,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 public class RepartitionTopicNamingTest {
 
     private final KeyValueMapper<String, String, String> kvMapper = (k, v) -> k + v;
@@ -208,11 +207,12 @@ public class RepartitionTopicNamingTest {
             final KStream<String, String> stream3 = builder.<String, String>stream("topic3").selectKey((k, v) -> k);
 
             final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2,
-                                                                JoinWindows.of(Duration.ofMillis(30L)),
-                                                                Joined.named("join-repartition"));
+                JoinWindows.of(Duration.ofMillis(30L)),
+                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
             joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(30L)),
-                                                      Joined.named("join-repartition"));
+                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
+
             builder.build();
             fail("Should not build re-using repartition topic name");
         } catch (final TopologyException te) {
@@ -446,8 +446,8 @@ public class RepartitionTopicNamingTest {
         }
 
         final String joinRepartitionTopicName = "my-join";
-        updatedStreamOne.join(updatedStreamTwo, (v1, v2) -> v1 + v2,
-                JoinWindows.of(Duration.ofMillis(1000L)), Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), joinRepartitionTopicName));
+        updatedStreamOne.join(updatedStreamTwo, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(1000L)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(joinRepartitionTopicName));
 
         return builder.build().describe().toString();
     }

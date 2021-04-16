@@ -159,6 +159,18 @@ do
   CLASSPATH="$CLASSPATH:$dir/*"
 done
 
+for file in "$base_dir"/trogdor/build/libs/trogdor-*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for dir in "$base_dir"/trogdor/build/dependant-libs-${SCALA_VERSION}*;
+do
+  CLASSPATH="$CLASSPATH:$dir/*"
+done
+
 for cc_pkg in "api" "transforms" "runtime" "file" "mirror" "mirror-client" "json" "tools" "basic-auth-extension"
 do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;

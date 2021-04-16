@@ -778,7 +778,6 @@ class ReplicaManagerTest {
       assertTrue(tp0Log.isDefined)
       assertEquals(1, tp0Log.get.highWatermark, "hw should be incremented")
 
-      replicaManager.localLog(tp1)
       val tp1Replica = replicaManager.localLog(tp1)
       assertTrue(tp1Replica.isDefined)
       assertEquals(0, tp1Replica.get.highWatermark, "hw should not be incremented")

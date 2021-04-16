@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -33,7 +32,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, RaftMetadataCache}
+import kafka.server.metadata.{CachedConfigRepository, ClientQuotaCache, ConfigRepository, RaftMetadataCache}
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -108,6 +107,7 @@ class KafkaApisTest {
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
     clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
+  private val quotaCache = new ClientQuotaCache()
   private val fetchManager: FetchManager = EasyMock.createNiceMock(classOf[FetchManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
@@ -150,7 +150,7 @@ class KafkaApisTest {
       // with a RaftMetadataCache instance
       metadataCache match {
         case raftMetadataCache: RaftMetadataCache =>
-          RaftSupport(forwardingManager, raftMetadataCache)
+          RaftSupport(forwardingManager, raftMetadataCache, quotaCache)
         case _ => throw new IllegalStateException("Test must set an instance of RaftMetadataCache")
       }
     } else {
@@ -892,7 +892,7 @@ class KafkaApisTest {
 
     val capturedResponse = expectNoThrottling(request)
 
-    verifyTopicCreation(topicName, true, true, request)
+    val capturedRequest = verifyTopicCreation(topicName, true, true, request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       autoTopicCreationManager, forwardingManager, controller, clientControllerQuotaManager, groupCoordinator, txnCoordinator)
@@ -902,6 +902,8 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[FindCoordinatorResponse]
     assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.error())
+
+    assertTrue(capturedRequest.getValue.isEmpty)
 
     verify(authorizer, autoTopicCreationManager)
   }
@@ -993,7 +995,7 @@ class KafkaApisTest {
 
     val capturedResponse = expectNoThrottling(request)
 
-    verifyTopicCreation(topicName, enableAutoTopicCreation, isInternal, request)
+    val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation, isInternal, request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       autoTopicCreationManager, forwardingManager, clientControllerQuotaManager, groupCoordinator, txnCoordinator)
@@ -1011,26 +1013,34 @@ class KafkaApisTest {
 
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
+    if (enableAutoTopicCreation) {
+      assertTrue(capturedRequest.getValue.isDefined)
+      assertEquals(request.context, capturedRequest.getValue.get)
+    }
+
     verify(authorizer, autoTopicCreationManager)
   }
 
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: RequestChannel.Request) = {
+                                  request: RequestChannel.Request): Capture[Option[RequestContext]] = {
+    val capturedRequest = EasyMock.newCapture[Option[RequestContext]]()
     if (enableAutoTopicCreation) {
       EasyMock.expect(clientControllerQuotaManager.newPermissiveQuotaFor(EasyMock.eq(request)))
         .andReturn(UnboundedControllerMutationQuota)
 
       EasyMock.expect(autoTopicCreationManager.createTopics(
         EasyMock.eq(Set(topicName)),
-        EasyMock.eq(UnboundedControllerMutationQuota))).andReturn(
+        EasyMock.eq(UnboundedControllerMutationQuota),
+        EasyMock.capture(capturedRequest))).andReturn(
         Seq(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
         .setIsInternal(isInternal)
         .setName(topicName))
       ).once()
     }
+    capturedRequest
   }
 
   private def setupBrokerMetadata(hasEnoughLiveBrokers: Boolean, numBrokersNeeded: Int): Unit = {
