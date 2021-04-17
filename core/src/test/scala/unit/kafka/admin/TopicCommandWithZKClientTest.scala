@@ -442,6 +442,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(3, rows.size)
+    assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
   }
 
   @Test
