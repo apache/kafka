@@ -22,7 +22,8 @@ import org.apache.kafka.streams.kstream.{
   SlidingWindows,
   Window,
   Windows,
-  CogroupedKStream => CogroupedKStreamJ}
+  CogroupedKStream => CogroupedKStreamJ
+}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFromFunction, InitializerFromFunction}
 
 /**

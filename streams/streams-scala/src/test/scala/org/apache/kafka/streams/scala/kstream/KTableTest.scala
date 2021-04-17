@@ -23,7 +23,8 @@ import org.apache.kafka.streams.kstream.{
   SessionWindows,
   TimeWindows,
   Windowed,
-  Suppressed => JSuppressed}
+  Suppressed => JSuppressed
+}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
