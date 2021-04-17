@@ -17,7 +17,13 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
-import org.apache.kafka.streams.kstream.{Named, SessionWindows, SlidingWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
+import org.apache.kafka.streams.kstream.{
+  Named,
+  SlidingWindows,
+  SessionWindows,
+  TimeWindows,
+  Windowed,
+  Suppressed => JSuppressed}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
@@ -213,7 +219,7 @@ class KTableTest extends TestDriver {
   }
 
   @Test
-  def testCorrectlyGroupBySlidingWindow(): Unit = {
+  def testCorrectlyGroupByKeyWindowedBySlidingWindow(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"

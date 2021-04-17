@@ -17,7 +17,12 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{SessionWindows, SlidingWindows, Window, Windows, CogroupedKStream => CogroupedKStreamJ}
+import org.apache.kafka.streams.kstream.{
+  SessionWindows,
+  SlidingWindows,
+  Window,
+  Windows,
+  CogroupedKStream => CogroupedKStreamJ}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFromFunction, InitializerFromFunction}
 
 /**
@@ -83,13 +88,13 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
     new TimeWindowedCogroupedKStream(inner.windowedBy(windows))
 
   /**
-   * Create a new [[TimeWindowedCogroupedKStream]] instance that can be used to perform windowed aggregations.
+   * Create a new [[TimeWindowedCogroupedKStream]] instance that can be used to perform sliding windowed aggregations.
    *
    * @param windows the specification of the aggregation `SlidingWindows`
    * @return an instance of [[TimeWindowedCogroupedKStream]]
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#windowedBy`
    */
-  def windowedBy[W <: Window](windows: SlidingWindows): TimeWindowedCogroupedKStream[KIn, VOut] =
+  def windowedBy(windows: SlidingWindows): TimeWindowedCogroupedKStream[KIn, VOut] =
     new TimeWindowedCogroupedKStream(inner.windowedBy(windows))
 
   /**
