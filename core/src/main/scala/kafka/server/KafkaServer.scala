@@ -78,6 +78,39 @@ object KafkaServer {
       Some(clientConfig)
     }
 
+  private[server] def createInitializedZkClient(time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig, logger: Logging): KafkaZkClient = {
+    logger.info(s"Connecting to zookeeper on ${config.zkConnect}")
+
+    def createZkClient(zkConnect: String, isSecure: Boolean) = {
+      KafkaZkClient(zkConnect, isSecure, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+        config.zkMaxInFlightRequests, time, name = Some("Kafka server"), zkClientConfig = Some(zkClientConfig))
+    }
+
+    val chrootIndex = config.zkConnect.indexOf("/")
+    val chrootOption = {
+      if (chrootIndex > 0) Some(config.zkConnect.substring(chrootIndex))
+      else None
+    }
+
+    val secureAclsEnabled = config.zkEnableSecureAcls
+    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled() || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+
+    if (secureAclsEnabled && !isZkSecurityEnabled)
+      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least ${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and ${KafkaConfig.ZkSslKeyStoreLocationProp} was not present and the " +
+        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
+
+    // make sure chroot path exists
+    chrootOption.foreach { chroot =>
+      val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
+      val zkClient = createZkClient(zkConnForChrootCreation, secureAclsEnabled)
+      zkClient.makeSurePersistentPathExists(chroot)
+      logger.info(s"Created zookeeper path $chroot")
+      zkClient.close()
+    }
+
+    createZkClient(config.zkConnect, secureAclsEnabled)
+  }
+
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
 
@@ -189,7 +222,8 @@ class KafkaServer(
         brokerState = BrokerState.STARTING
 
         /* setup zookeeper */
-        initZkClient(time)
+        _zkClient = KafkaServer.createInitializedZkClient(time, config, zkClientConfig, this)
+        _zkClient.createTopLevelPaths()
         configRepository = new ZkConfigRepository(new AdminZkClient(zkClient))
 
         /* initialize features */
@@ -368,7 +402,7 @@ class KafkaServer(
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         /* start processing requests */
-        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
+        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache, config)
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
           autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
@@ -423,40 +457,6 @@ class KafkaServer(
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     new ReplicaManager(config, metrics, time, Some(zkClient), kafkaScheduler, logManager, isShuttingDown, quotaManagers,
       brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, configRepository)
-  }
-
-  private def initZkClient(time: Time): Unit = {
-    info(s"Connecting to zookeeper on ${config.zkConnect}")
-
-    def createZkClient(zkConnect: String, isSecure: Boolean) = {
-      KafkaZkClient(zkConnect, isSecure, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-        config.zkMaxInFlightRequests, time, name = Some("Kafka server"), zkClientConfig = Some(zkClientConfig))
-    }
-
-    val chrootIndex = config.zkConnect.indexOf("/")
-    val chrootOption = {
-      if (chrootIndex > 0) Some(config.zkConnect.substring(chrootIndex))
-      else None
-    }
-
-    val secureAclsEnabled = config.zkEnableSecureAcls
-    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled() || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
-
-    if (secureAclsEnabled && !isZkSecurityEnabled)
-      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
-        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
-
-    // make sure chroot path exists
-    chrootOption.foreach { chroot =>
-      val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
-      val zkClient = createZkClient(zkConnForChrootCreation, secureAclsEnabled)
-      zkClient.makeSurePersistentPathExists(chroot)
-      info(s"Created zookeeper path $chroot")
-      zkClient.close()
-    }
-
-    _zkClient = createZkClient(config.zkConnect, secureAclsEnabled)
-    _zkClient.createTopLevelPaths()
   }
 
   private def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {

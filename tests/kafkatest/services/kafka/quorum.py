@@ -15,20 +15,20 @@
 
 # the types of metadata quorums we support
 zk = 'ZK' # ZooKeeper, used before/during the KIP-500 bridge release(s)
-colocated_raft = 'COLOCATED_RAFT' # co-located Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
-remote_raft = 'REMOTE_RAFT' # separate Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
+colocated_kraft = 'COLOCATED_KRAFT' # co-located Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
+remote_kraft = 'REMOTE_KRAFT' # separate Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
 
 # How we will parameterize tests that exercise all quorum styles
-#   [“ZK”, “REMOTE_RAFT”, "COLOCATED_RAFT"] during the KIP-500 bridge release(s)
-#   [“REMOTE_RAFT”, "COLOCATED_RAFT”] after the KIP-500 bridge release(s)
-all = [zk, remote_raft, colocated_raft]
+#   [“ZK”, “REMOTE_KRAFT”, "COLOCATED_KRAFT"] during the KIP-500 bridge release(s)
+#   [“REMOTE_KRAFT”, "COLOCATED_KRAFT”] after the KIP-500 bridge release(s)
+all = [zk, remote_kraft, colocated_kraft]
 # How we will parameterize tests that exercise all KRaft quorum styles
-all_raft = [remote_raft, colocated_raft]
+all_kraft = [remote_kraft, colocated_kraft]
 # How we will parameterize tests that are unrelated to upgrades:
 #   [“ZK”] before the KIP-500 bridge release(s)
-#   [“ZK”, “REMOTE_RAFT”] during the KIP-500 bridge release(s) and in preview releases
-#   [“REMOTE_RAFT”] after the KIP-500 bridge release(s)
-all_non_upgrade = [zk, remote_raft]
+#   [“ZK”, “REMOTE_KRAFT”] during the KIP-500 bridge release(s) and in preview releases
+#   [“REMOTE_KRAFT”] after the KIP-500 bridge release(s)
+all_non_upgrade = [zk, remote_kraft]
 
 def for_test(test_context):
     # A test uses ZooKeeper if it doesn't specify a metadata quorum or if it explicitly specifies ZooKeeper
@@ -48,9 +48,9 @@ class ServiceQuorumInfo:
     the same JVM or remote in separate JVMs.  The choice is made via
     the 'metadata_quorum' parameter defined for the system test: if it
     is not explicitly defined, or if it is set to 'ZK', then ZooKeeper
-    is used.  If it is explicitly set to 'COLOCATED_RAFT' then KRaft
+    is used.  If it is explicitly set to 'COLOCATED_KRAFT' then KRaft
     controllers will be co-located with the brokers; the value
-    `REMOTE_RAFT` indicates remote controllers.
+    `REMOTE_KRAFT` indicates remote controllers.
 
     Attributes
     ----------
@@ -59,23 +59,23 @@ class ServiceQuorumInfo:
         The service for which this instance exposes quorum-related
         information
     quorum_type : str
-        COLOCATED_RAFT, REMOTE_RAFT, or ZK
+        COLOCATED_KRAFT, REMOTE_KRAFT, or ZK
     using_zk : bool
         True iff quorum_type==ZK
-    using_raft : bool
+    using_kraft : bool
         False iff quorum_type==ZK
     has_brokers : bool
         Whether there is at least one node with process.roles
-        containing 'broker'.  True iff using_raft and the Kafka
+        containing 'broker'.  True iff using_kraft and the Kafka
         service doesn't itself have a remote Kafka service (meaning
         it is not a remote controller quorum).
     has_controllers : bool
         Whether there is at least one node with process.roles
         containing 'controller'.  True iff quorum_type ==
-        COLOCATED_RAFT or the Kafka service itself has a remote Kafka
+        COLOCATED_KRAFT or the Kafka service itself has a remote Kafka
         service (meaning it is a remote controller quorum).
     has_brokers_and_controllers :
-        True iff quorum_type==COLOCATED_RAFT
+        True iff quorum_type==COLOCATED_KRAFT
     """
 
     def __init__(self, kafka, context):
@@ -90,17 +90,17 @@ class ServiceQuorumInfo:
         """
 
         quorum_type = for_test(context)
-        if quorum_type != zk and kafka.zk:
-            raise Exception("Cannot use ZooKeeper while specifying a Raft metadata quorum (should not happen)")
-        if kafka.remote_kafka and quorum_type != remote_raft:
-            raise Exception("Cannot specify a remote Kafka service unless using a remote Raft metadata quorum (should not happen)")
+        if quorum_type != zk and kafka.zk and not kafka.allow_zk_with_kraft:
+            raise Exception("Cannot use ZooKeeper while specifying a KRaft metadata quorum unless explicitly allowing it")
+        if kafka.remote_kafka and quorum_type != remote_kraft:
+            raise Exception("Cannot specify a remote Kafka service unless using a remote KRaft metadata quorum (should not happen)")
         self.kafka = kafka
         self.quorum_type = quorum_type
         self.using_zk = quorum_type == zk
-        self.using_raft = not self.using_zk
-        self.has_brokers = self.using_raft and not kafka.remote_kafka
-        self.has_controllers = quorum_type == colocated_raft or kafka.remote_kafka
-        self.has_brokers_and_controllers = quorum_type == colocated_raft
+        self.using_kraft = not self.using_zk
+        self.has_brokers = self.using_kraft and not kafka.remote_kafka
+        self.has_controllers = quorum_type == colocated_kraft or kafka.remote_kafka
+        self.has_brokers_and_controllers = quorum_type == colocated_kraft
 
 class NodeQuorumInfo:
     """
@@ -112,10 +112,10 @@ class NodeQuorumInfo:
         The quorum information about the service to which the node
         belongs
     has_broker_role : bool
-        True iff using_raft and the Kafka service doesn't itself have
+        True iff using_kraft and the Kafka service doesn't itself have
         a remote Kafka service (meaning it is not a remote controller)
     has_controller_role : bool
-        True iff quorum_type==COLOCATED_RAFT and the node is one of
+        True iff quorum_type==COLOCATED_KRAFT and the node is one of
         the first N in the cluster where N is the number of nodes
         that have a controller role; or the Kafka service itself has a
         remote Kafka service (meaning it is a remote controller

@@ -111,8 +111,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
 
-  metadataSupport.ensureConsistentWith(config)
-
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
@@ -2416,7 +2414,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    metadataSupport.requireZkAuthorizerOrThrow(KafkaApis.shouldAlwaysForward(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val createAclsRequest = request.body[CreateAclsRequest]
 
@@ -2468,7 +2466,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    metadataSupport.requireZkAuthorizerOrThrow(KafkaApis.shouldAlwaysForward(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val deleteAclsRequest = request.body[DeleteAclsRequest]
     authorizer match {
@@ -3038,7 +3036,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
       metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache) =>
+        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, config) =>
           val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
 
           val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
@@ -3063,7 +3061,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setEntries(entriesData.asJava)))
-        case RaftSupport(fwdMgr, metadataCache, quotaCache) =>
+        case RaftSupport(fwdMgr, metadataCache, quotaCache, config) =>
           val result = quotaCache.describeClientQuotas(
             describeClientQuotasRequest.filter().components().asScala.toSeq,
             describeClientQuotasRequest.filter().strict())

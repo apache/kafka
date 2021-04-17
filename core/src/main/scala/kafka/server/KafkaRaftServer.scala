@@ -23,6 +23,7 @@ import kafka.common.{InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -30,6 +31,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.metadata.ApiMessageAndVersion
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
+import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.Seq
 
@@ -110,6 +112,16 @@ class KafkaRaftServer(
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
     raftManager.startup()
+    // We need ZooKeeper with KRaft until we implement a KRaft-enabled authorizer.
+    // Create any ZooKeeper chroot path if we have a non-empty zookeeper.connect value and AclAuthorizer is defined.
+    if (config.zkConnect != null && config.zkConnect != "" && classOf[AclAuthorizer].getName == config.getString(KafkaConfig.AuthorizerClassNameProp)) {
+      KafkaServer.createInitializedZkClient(
+        time,
+        config,
+        KafkaServer.zkClientConfigFromKafkaConfig(config).getOrElse(new ZKClientConfig()),
+        this
+      ).close() // close the client immediately since we don't need it here
+    }
     controller.foreach(_.startup())
     broker.foreach(_.startup())
     AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())

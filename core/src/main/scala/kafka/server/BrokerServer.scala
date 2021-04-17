@@ -324,7 +324,7 @@ class BrokerServer(
 
       // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
       // and started all services that we previously delayed starting.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
+      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache, config)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,

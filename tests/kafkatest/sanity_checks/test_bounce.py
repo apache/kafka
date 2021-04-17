@@ -33,7 +33,7 @@ class TestBounce(Test):
         self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
-                                  controller_num_nodes_override=3 if quorum.for_test(test_context) == quorum.remote_raft else 1)
+                                  controller_num_nodes_override=3 if quorum.for_test(test_context) == quorum.remote_kraft else 1)
         self.num_messages = 1000
 
     def create_producer(self):
@@ -45,9 +45,9 @@ class TestBounce(Test):
             self.zk.start()
 
     @cluster(num_nodes=6)
-    @parametrize(metadata_quorum=quorum.remote_raft)
+    @parametrize(metadata_quorum=quorum.remote_kraft)
     @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.colocated_raft)
+    @parametrize(metadata_quorum=quorum.colocated_kraft)
     @cluster(num_nodes=4)
     @parametrize(metadata_quorum=quorum.zk)
     def test_simple_run(self, metadata_quorum):
@@ -67,6 +67,6 @@ class TestBounce(Test):
             assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
             if first_time:
                 self.producer.stop()
-                if self.kafka.quorum_info.using_raft and self.kafka.remote_controller_quorum:
+                if self.kafka.quorum_info.using_kraft and self.kafka.remote_controller_quorum:
                     self.kafka.remote_controller_quorum.restart_cluster()
                 self.kafka.restart_cluster()

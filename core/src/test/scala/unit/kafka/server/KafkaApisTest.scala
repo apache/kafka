@@ -139,6 +139,7 @@ class KafkaApisTest {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
+    val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)
       Some(this.forwardingManager)
@@ -150,13 +151,13 @@ class KafkaApisTest {
       // with a RaftMetadataCache instance
       metadataCache match {
         case raftMetadataCache: RaftMetadataCache =>
-          RaftSupport(forwardingManager, raftMetadataCache, quotaCache)
+          RaftSupport(forwardingManager, raftMetadataCache, quotaCache, config)
         case _ => throw new IllegalStateException("Test must set an instance of RaftMetadataCache")
       }
     } else {
       metadataCache match {
         case zkMetadataCache: ZkMetadataCache =>
-          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache)
+          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache, config)
         case _ => throw new IllegalStateException("Test must set an instance of ZkMetadataCache")
       }
     }
@@ -176,7 +177,7 @@ class KafkaApisTest {
       txnCoordinator,
       autoTopicCreationManager,
       brokerId,
-      new KafkaConfig(properties),
+      config,
       configRepository,
       metadataCache,
       metrics,
