@@ -453,6 +453,43 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assign(partitionsPerTopic, subscriptions);
     }
 
+    @Timeout(30)
+    @Test
+    public void testLargeAssignmentAndGroupWithNonEqualSubscription() {
+        // 1 million partitions!
+        int topicCount = 500;
+        int partitionCount = 2_000;
+        int consumerCount = 2_000;
+
+        List<String> topics = new ArrayList<>();
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        for (int i = 0; i < topicCount; i++) {
+            String topicName = getTopicName(i, topicCount);
+            topics.add(topicName);
+            partitionsPerTopic.put(topicName, partitionCount);
+        }
+        for (int i = 0; i < consumerCount; i++) {
+            if (i == consumerCount - 1) {
+                subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics.subList(0, 1)));
+            } else {
+                subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics));
+            }
+        }
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        for (int i = 1; i < consumerCount; i++) {
+            String consumer = getConsumerName(i, consumerCount);
+            if (i == consumerCount - 1) {
+                subscriptions.put(consumer, buildSubscription(topics.subList(0, 1), assignment.get(consumer)));
+            } else {
+                subscriptions.put(consumer, buildSubscription(topics, assignment.get(consumer)));
+            }
+        }
+
+        assignor.assign(partitionsPerTopic, subscriptions);
+    }
+
     @Test
     public void testLargeAssignmentWithMultipleConsumersLeavingAndRandomSubscription() {
         Random rand = new Random();
