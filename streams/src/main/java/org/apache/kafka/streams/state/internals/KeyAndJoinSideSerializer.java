@@ -17,20 +17,32 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
+
 /**
  * Serializes a {@link KeyAndJoinSide}. The serialized bytes starts with a byte that references
  * to the join side of the key followed by the key in bytes.
  */
-public class KeyAndJoinSideSerializer<K> implements Serializer<KeyAndJoinSide<K>> {
-    private final Serializer<K> keySerializer;
+public class KeyAndJoinSideSerializer<K> implements WrappingNullableSerializer<KeyAndJoinSide<K>, K, Void> {
+    private Serializer<K> keySerializer;
 
     KeyAndJoinSideSerializer(final Serializer<K> keySerializer) {
-        this.keySerializer = Objects.requireNonNull(keySerializer, "keySerializer is null");
+        this.keySerializer = keySerializer;
+    }
+
+    @Override
+    public void setIfUnset(final Serializer<K> defaultKeySerializer, final Serializer<Void> defaultValueSerializer) {
+        if (keySerializer == null) {
+            keySerializer = Objects.requireNonNull(defaultKeySerializer, "defaultKeySerializer cannot be null");
+        }
+
+        initNullableSerializer(keySerializer, defaultKeySerializer, defaultValueSerializer);
     }
 
     @Override

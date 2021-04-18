@@ -17,17 +17,35 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 
 import java.util.Map;
 import java.util.Objects;
 
-public class LeftOrRightValueDeserializer<V1, V2> implements Deserializer<LeftOrRightValue<V1, V2>> {
-    public final Deserializer<V1> leftDeserializer;
-    public final Deserializer<V2> rightDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
+
+public class LeftOrRightValueDeserializer<V1, V2> implements WrappingNullableDeserializer<LeftOrRightValue<V1, V2>, Void, Object> {
+    public Deserializer<V1> leftDeserializer;
+    public Deserializer<V2> rightDeserializer;
 
     public LeftOrRightValueDeserializer(final Deserializer<V1> leftDeserializer, final Deserializer<V2> rightDeserializer) {
-        this.leftDeserializer = Objects.requireNonNull(leftDeserializer);
-        this.rightDeserializer = Objects.requireNonNull(rightDeserializer);
+        this.leftDeserializer = leftDeserializer;
+        this.rightDeserializer = rightDeserializer;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<Object> defaultValueDeserializer) {
+        if (leftDeserializer == null) {
+            leftDeserializer = (Deserializer<V1>) Objects.requireNonNull(defaultValueDeserializer, "defaultValueDeserializer cannot be null");
+        }
+
+        if (rightDeserializer == null) {
+            rightDeserializer = (Deserializer<V2>) Objects.requireNonNull(defaultValueDeserializer, "defaultValueDeserializer cannot be null");
+        }
+
+        initNullableDeserializer(leftDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
+        initNullableDeserializer(rightDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
     }
 
     @Override

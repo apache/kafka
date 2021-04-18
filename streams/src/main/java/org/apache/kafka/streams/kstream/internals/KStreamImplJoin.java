@@ -267,22 +267,14 @@ class KStreamImplJoin {
     private static <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final String storeName,
                                                                                                                                         final JoinWindows windows,
                                                                                                                                         final StreamJoinedInternal<K, V1, V2> streamJoinedInternal) {
-        final Serde keySerde = streamJoinedInternal.keySerde();
-        final Serde valueSerde = streamJoinedInternal.valueSerde();
-        final Serde otherValueSerde = streamJoinedInternal.otherValueSerde();
-
         final StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder = new TimeOrderedWindowStoreBuilder<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>(
             persistentTimeOrderedWindowStore(
                 storeName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                 Duration.ofMillis(windows.size())
             ),
-            keySerde == null
-                ? null
-                : new KeyAndJoinSideSerde<>(keySerde),
-            valueSerde == null || otherValueSerde == null
-                ? null
-                : new LeftOrRightValueSerde(valueSerde, otherValueSerde),
+            new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde()),
+            new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde()),
             Time.SYSTEM
         );
         if (streamJoinedInternal.loggingEnabled()) {
@@ -327,7 +319,7 @@ class KStreamImplJoin {
             retentionMs,
             segmentInterval,
             windowSizeMs,
-            false,
+            true,
             RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIME_ORDERED_WINDOW_STORE);
     }
 

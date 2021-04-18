@@ -17,19 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 
-import static java.util.Objects.requireNonNull;
-
-public class LeftOrRightValueSerde<V1, V2> extends Serdes.WrapperSerde<LeftOrRightValue<V1, V2>> {
+public class LeftOrRightValueSerde<V1, V2> extends WrappingNullableSerde<LeftOrRightValue<V1, V2>, Void, Object> {
     public LeftOrRightValueSerde(final Serde<V1> leftValueSerde, final Serde<V2> rightValueSerde) {
         super(
             new LeftOrRightValueSerializer<>(
-                requireNonNull(leftValueSerde, "leftValueSerde was null").serializer(),
-                requireNonNull(rightValueSerde, "leftValueSerde was null").serializer()),
+                leftValueSerde != null ? leftValueSerde.serializer() : null,
+                rightValueSerde != null ? rightValueSerde.serializer() : null),
             new LeftOrRightValueDeserializer<>(
-                requireNonNull(leftValueSerde, "rightValueSerde was null").deserializer(),
-                requireNonNull(rightValueSerde, "rightValueSerde was null").deserializer())
+                leftValueSerde != null ? leftValueSerde.deserializer() : null,
+                rightValueSerde != null ? rightValueSerde.deserializer() : null)
         );
     }
 }

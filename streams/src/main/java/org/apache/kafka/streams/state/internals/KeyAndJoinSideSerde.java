@@ -17,17 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 
-import static java.util.Objects.requireNonNull;
-
-public class KeyAndJoinSideSerde<K> extends Serdes.WrapperSerde<KeyAndJoinSide<K>> {
+public class KeyAndJoinSideSerde<K> extends WrappingNullableSerde<KeyAndJoinSide<K>, K, Void> {
     public KeyAndJoinSideSerde(final Serde<K> keySerde) {
         super(
-            new KeyAndJoinSideSerializer<>(
-                requireNonNull(keySerde, "keySerde was null").serializer()),
-            new KeyAndJoinSideDeserializer<>(
-                requireNonNull(keySerde, "keySerde was null").deserializer())
+            new KeyAndJoinSideSerializer<>(keySerde != null ? keySerde.serializer() : null),
+            new KeyAndJoinSideDeserializer<>(keySerde != null ? keySerde.deserializer() : null)
         );
     }
 }

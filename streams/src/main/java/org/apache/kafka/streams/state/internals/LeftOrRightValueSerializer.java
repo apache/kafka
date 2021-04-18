@@ -17,21 +17,46 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.Objects;
+
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
 
 /**
  * Serializes a {@link LeftOrRightValue}. The serialized bytes starts with a byte that references
  * to whether the value is V1 or V2.
  */
-public class LeftOrRightValueSerializer<V1, V2> implements Serializer<LeftOrRightValue<V1, V2>> {
-    private final Serializer<V1> leftSerializer;
-    private final Serializer<V2> rightSerializer;
+public class LeftOrRightValueSerializer<V1, V2> implements WrappingNullableSerializer<LeftOrRightValue<V1, V2>, Void, Object> {
+    private Serializer<V1> leftSerializer;
+    private Serializer<V2> rightSerializer;
 
     public LeftOrRightValueSerializer(final Serializer<V1> leftSerializer, final Serializer<V2> rightSerializer) {
-        this.leftSerializer = Objects.requireNonNull(leftSerializer);
-        this.rightSerializer = Objects.requireNonNull(rightSerializer);
+        this.leftSerializer = leftSerializer;
+        this.rightSerializer = rightSerializer;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<Object> defaultValueSerializer) {
+        if (leftSerializer == null) {
+            leftSerializer = (Serializer<V1>) Objects.requireNonNull(defaultValueSerializer, "defaultValueSerializer cannot be null");
+        }
+
+        if (rightSerializer == null) {
+            rightSerializer = (Serializer<V2>) Objects.requireNonNull(defaultValueSerializer, "defaultValueSerializer cannot be null");
+        }
+
+        initNullableSerializer(leftSerializer, defaultKeySerializer, defaultValueSerializer);
+        initNullableSerializer(rightSerializer, defaultKeySerializer, defaultValueSerializer);
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+        leftSerializer.configure(configs, isKey);
+        rightSerializer.configure(configs, isKey);
     }
 
     @Override

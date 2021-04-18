@@ -17,15 +17,27 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 
 import java.util.Map;
 import java.util.Objects;
 
-public class KeyAndJoinSideDeserializer<K> implements Deserializer<KeyAndJoinSide<K>> {
-    private final Deserializer<K> keyDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
+
+public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializer<KeyAndJoinSide<K>, K, Void> {
+    private Deserializer<K> keyDeserializer;
 
     KeyAndJoinSideDeserializer(final Deserializer<K> keyDeserializer) {
-        this.keyDeserializer = Objects.requireNonNull(keyDeserializer, "keyDeserializer is null");
+        this.keyDeserializer = keyDeserializer;
+    }
+
+    @Override
+    public void setIfUnset(final Deserializer<K> defaultKeyDeserializer, final Deserializer<Void> defaultValueDeserializer) {
+        if (keyDeserializer == null) {
+            keyDeserializer = Objects.requireNonNull(defaultKeyDeserializer, "defaultKeyDeserializer cannot be null");
+        }
+
+        initNullableDeserializer(keyDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
     }
 
     @Override
