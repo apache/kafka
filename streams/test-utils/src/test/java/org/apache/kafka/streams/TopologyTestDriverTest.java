@@ -158,7 +158,12 @@ public abstract class TopologyTestDriverTest {
 
         @Override
         public String toString() {
-            return "key: " + key + ", value: " + value + ", timestamp: " + timestamp + ", offset: " + offset + ", topic: " + topic;
+            return "key: " + key +
+                   ", value: " + value +
+                   ", timestamp: " + timestamp +
+                   ", offset: " + offset +
+                   ", topic: " + topic +
+                   ", num.headers: " + (headers == null ? "null" : headers.toArray().length);
         }
 
         @Override
@@ -590,7 +595,7 @@ public abstract class TopologyTestDriverTest {
         assertEquals(1, processedRecords2.size());
 
         record = processedRecords2.get(0);
-        expectedResult = new TTDTestRecord(key2, value2, null, timestamp2, 0L, SOURCE_TOPIC_2);
+        expectedResult = new TTDTestRecord(key2, value2, new RecordHeaders((Iterable<Header>) null), timestamp2, 0L, SOURCE_TOPIC_2);
         assertThat(record, equalTo(expectedResult));
     }
 
