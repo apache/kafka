@@ -30,62 +30,40 @@ import java.util.List;
 
 /**
  * A {@link RocksDBSegmentedBytesStore.KeySchema} to serialize/deserialize a RocksDB store
- * key into a schema combined of (time,seq,key). This key schema is more efficient when doing
- * range queries between a time interval. For key range queries better use {@link WindowKeySchema}.
+ * key into a schema combined of (time,key,seq). Since key is variable length while time/seq is
+ * fixed length, when formatting in this order, varying time range query would be very inefficient
+ * since we'd need to be very conservative in picking the from / to boundaries; however for now
+ * we do not expect any varying time range access at all, only fixed time range only.
  */
 public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     private static final Logger LOG = LoggerFactory.getLogger(TimeOrderedKeySchema.class);
 
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SEQNUM_SIZE = 4;
-    private static final int PREFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
 
-    /**
-     * {@inheritdoc}
-     *
-     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
-     * range queries may be slower. If better performance on key range queries are necessary, then
-     * use the {@link WindowKeySchema}.
-     */
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        return toStoreKeyBinary(key.get(), to, Integer.MAX_VALUE);
+        throw new UnsupportedOperationException();
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
-     * range queries may be slower. If better performance on key range queries are necessary, then
-     * use the {@link WindowKeySchema}.
-     */
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        return toStoreKeyBinary(key.get(), from, 0);
+        throw new UnsupportedOperationException();
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
-     * range queries may be slower. If better performance on key range queries are necessary, then
-     * use the {@link WindowKeySchema}.
-     */
+    @Override
+    public Bytes toStoreBinaryKeyPrefix(final Bytes key, final long timestamp) {
+        return toStoreKeyBinaryPrefix(key, timestamp);
+    }
+
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        return toStoreKeyBinary(key, to, Integer.MAX_VALUE);
+        throw new UnsupportedOperationException();
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * Queries using the {@link TimeOrderedKeySchema} are optimized for time range queries only. Key
-     * range queries may be slower. If better performance on key range queries are necessary, then
-     * use the {@link WindowKeySchema}.
-     */
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        return toStoreKeyBinary(key, Math.max(0, from), 0);
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -96,31 +74,36 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     /**
      * {@inheritdoc}
      *
-     * This method is not optimized for {@link TimeOrderedKeySchema}. The method may do unnecessary
-     * checks to find the next record.
+     * This method is optimized for {@link RocksDBTimeOrderedWindowStore#all()} only. Key and time
+     * range queries are not supported.
      */
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
-        return iterator -> {
-            while (iterator.hasNext()) {
-                final Bytes bytes = iterator.peekNextKey();
-                final Bytes keyBytes = Bytes.wrap(extractStoreKeyBytes(bytes.get()));
-                final long time = extractStoreTimestamp(bytes.get());
-                if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
-                    && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
-                    && time >= from
-                    && time <= to) {
-                    return true;
-                }
-                iterator.next();
-            }
-            return false;
-        };
+        if (binaryKeyFrom != null || binaryKeyTo != null) {
+            throw new IllegalArgumentException("binaryKeyFrom/binaryKeyTo keys cannot be non-null. Key and time range queries are not supported.");
+        }
+
+        if (from != 0 && to != Long.MAX_VALUE) {
+            throw new IllegalArgumentException("from/to time ranges should be 0 to Long.MAX_VALUE. Key and time range queries are not supported.");
+        }
+
+        return iterator -> iterator.hasNext();
     }
 
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments, final long from, final long to, final boolean forward) {
-        return segments.segments(from, to, forward);
+        throw new UnsupportedOperationException();
+    }
+
+    public static Bytes toStoreKeyBinaryPrefix(final Bytes key,
+                                         final long timestamp) {
+        final byte[] serializedKey = key.get();
+
+        final ByteBuffer buf = ByteBuffer.allocate(TIMESTAMP_SIZE + serializedKey.length);
+        buf.putLong(timestamp);
+        buf.put(serializedKey);
+
+        return Bytes.wrap(buf.array());
     }
 
     public static Bytes toStoreKeyBinary(final Bytes key,
@@ -149,22 +132,15 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
                                   final int seqnum) {
         final ByteBuffer buf = ByteBuffer.allocate(TIMESTAMP_SIZE + serializedKey.length + SEQNUM_SIZE);
         buf.putLong(timestamp);
-        buf.putInt(seqnum);
         buf.put(serializedKey);
+        buf.putInt(seqnum);
         return Bytes.wrap(buf.array());
     }
 
     static byte[] extractStoreKeyBytes(final byte[] binaryKey) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
-        System.arraycopy(binaryKey, PREFIX_SIZE, bytes, 0, bytes.length);
+        System.arraycopy(binaryKey, TIMESTAMP_SIZE, bytes, 0, bytes.length);
         return bytes;
-    }
-
-    static <K> K extractStoreKey(final byte[] binaryKey,
-                                 final StateSerdes<K, ?> serdes) {
-        final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
-        System.arraycopy(binaryKey, PREFIX_SIZE, bytes, 0, bytes.length);
-        return serdes.keyFrom(bytes);
     }
 
     static long extractStoreTimestamp(final byte[] binaryKey) {
@@ -172,7 +148,7 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
     }
 
     static int extractStoreSequence(final byte[] binaryKey) {
-        return ByteBuffer.wrap(binaryKey).getInt(TIMESTAMP_SIZE);
+        return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
 
     static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
@@ -202,8 +178,8 @@ public class TimeOrderedKeySchema implements RocksDBSegmentedBytesStore.KeySchem
      * Safely construct a time window of the given size,
      * taking care of bounding endMs to Long.MAX_VALUE if necessary
      */
-    static TimeWindow timeWindowForSize(final long startMs,
-                                        final long windowSize) {
+    private static TimeWindow timeWindowForSize(final long startMs,
+                                                final long windowSize) {
         long endMs = startMs + windowSize;
 
         if (endMs < 0) {

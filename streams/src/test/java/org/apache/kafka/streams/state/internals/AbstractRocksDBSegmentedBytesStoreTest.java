@@ -93,7 +93,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     @Parameters(name = "{0}")
     public static Object[] getKeySchemas() {
-        return new Object[] {new SessionKeySchema(), new WindowKeySchema(), new TimeOrderedKeySchema()};
+        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
     }
 
     @Before

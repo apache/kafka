@@ -349,6 +349,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         return oldValue;
     }
 
+    void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+
+        validateStoreOpen();
+
+        // End of key is exclusive, so we increment it by 1 byte to make keyTo inclusive
+        dbAccessor.deleteRange(keyFrom.get(), Bytes.increment(keyTo).get());
+    }
+
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                               final Bytes to) {
@@ -524,6 +534,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                               final Bytes to,
                                               final boolean forward);
 
+        /**
+         * Deletes keys entries in the range ['from', 'to'], including 'from' and excluding 'to'.
+         */
+        void deleteRange(final byte[] from,
+                         final byte[] to);
+
         KeyValueIterator<Bytes, byte[]> all(final boolean forward);
 
         KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
@@ -601,6 +617,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 forward,
                 true
             );
+        }
+
+        @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(columnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
         }
 
         @Override
