@@ -16,13 +16,10 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
-import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataContext;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataContext;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemotePartitionDeleteMetadataRecord;
@@ -41,12 +38,12 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
     public static final byte REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY = (byte) new RemoteLogSegmentMetadataUpdateRecord().apiKey();
     public static final byte REMOTE_PARTITION_DELETE_API_KEY = (byte) new RemotePartitionDeleteMetadataRecord().apiKey();
 
-    private final Map<Byte, RemoteLogMetadataSerdes> keyToSerdes;
+    private static final Map<Byte, RemoteLogMetadataSerdes> KEY_TO_SERDES = createInternalSerde();
+
     private final Deserializer<RemoteLogMetadataContext> rootDeserializer;
     private final Serializer<RemoteLogMetadataContext> rootSerializer;
 
     public RemoteLogMetadataContextSerdes() {
-        keyToSerdes = createInternalSerde();
         rootSerializer = (topic, data) -> serialize(data);
         rootDeserializer = (topic, data) -> deserialize(data);
     }
@@ -60,14 +57,14 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
     }
 
     private byte[] serialize(RemoteLogMetadataContext remoteLogMetadataContext) {
-        RemoteLogMetadataSerdes serdes = keyToSerdes.get(remoteLogMetadataContext.apiKey());
+        RemoteLogMetadataSerdes serdes = KEY_TO_SERDES.get(remoteLogMetadataContext.apiKey());
         if (serdes == null) {
             throw new IllegalArgumentException("Serializer for apiKey: " + remoteLogMetadataContext.apiKey() +
                                                " does not exist.");
         }
 
         @SuppressWarnings("unchecked")
-        Message message = serdes.serialize(remoteLogMetadataContext.payload());
+        ByteBuffer message = serdes.serialize(remoteLogMetadataContext.version(), remoteLogMetadataContext.payload());
 
         return toBytes(message, remoteLogMetadataContext.apiKey(), remoteLogMetadataContext.version());
     }
@@ -76,7 +73,7 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
         ByteBuffer byteBuffer = ByteBuffer.wrap(data);
         byte apiKey = byteBuffer.get();
         byte version = byteBuffer.get();
-        RemoteLogMetadataSerdes serdes = keyToSerdes.get(apiKey);
+        RemoteLogMetadataSerdes serdes = KEY_TO_SERDES.get(apiKey);
         if (serdes == null) {
             throw new IllegalArgumentException("Deserializer for apikey: " + apiKey + " does not exist.");
         }
@@ -85,23 +82,21 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
         return new RemoteLogMetadataContext(apiKey, version, deserializedObj);
     }
 
-    private byte[] toBytes(Message message, byte apiKey, byte apiVersion) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-
+    private byte[] toBytes(ByteBuffer message, byte apiKey, byte apiVersion) {
         // Add header containing apiKey and apiVersion,
         // headerSize is 1 byte for apiKey and 1 byte for apiVersion
         int headerSize = 1 + 1;
-        int messageSize = message.size(cache, apiVersion);
-        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
+        int messageSize = message.capacity();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(headerSize + messageSize);
 
         // Write apiKey and apiVersion
-        writable.writeByte(apiKey);
-        writable.writeByte(apiVersion);
+        byteBuffer.put(apiKey);
+        byteBuffer.put(apiVersion);
 
         // Write the message
-        message.write(writable, cache, apiVersion);
+        byteBuffer.put(message);
 
-        return writable.buffer().array();
+        return byteBuffer.array();
     }
 
     @Override
@@ -112,5 +107,17 @@ public class RemoteLogMetadataContextSerdes implements Serde<RemoteLogMetadataCo
     @Override
     public Deserializer<RemoteLogMetadataContext> deserializer() {
         return rootDeserializer;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        rootSerializer.configure(configs, isKey);
+        rootDeserializer.configure(configs, isKey);
+    }
+
+    @Override
+    public void close() {
+        rootSerializer.close();
+        rootDeserializer.close();
     }
 }

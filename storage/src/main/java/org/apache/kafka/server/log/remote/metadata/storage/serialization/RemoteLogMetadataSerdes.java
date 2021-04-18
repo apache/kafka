@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
-import org.apache.kafka.common.protocol.Message;
-
 import java.nio.ByteBuffer;
 
 /**
@@ -41,16 +39,16 @@ public interface RemoteLogMetadataSerdes<T> {
     /**
      * Returns the message serialized for the given {@code metadata} object.
      *
-     * @param metadata object to be serialized.
+     * @param metadata metadata object to be serialized.
      */
-    Message serialize(T metadata);
+    ByteBuffer serialize(byte version, T metadata);
 
     /**
      * Return the deserialized object for the given payload and the version.
      *
-     * @param version version of the message payload.
-     * @param data    data payload.
+     * @param version         version of the message payload.
+     * @param metadataPayload metadata payload.
      */
-    T deserialize(byte version, ByteBuffer data);
+    T deserialize(byte version, ByteBuffer metadataPayload);
 
 }

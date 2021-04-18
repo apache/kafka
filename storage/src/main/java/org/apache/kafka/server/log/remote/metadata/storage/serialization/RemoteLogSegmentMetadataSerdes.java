@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -34,8 +35,8 @@ import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataSerdes implements RemoteLogMetadataSerdes<RemoteLogSegmentMetadata> {
 
-    public Message serialize(RemoteLogSegmentMetadata data) {
-        return new RemoteLogSegmentMetadataRecord()
+    public ByteBuffer serialize(byte version, RemoteLogSegmentMetadata data) {
+        Message message = new RemoteLogSegmentMetadataRecord()
                 .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
                 .setStartOffset(data.startOffset())
                 .setEndOffset(data.endOffset())
@@ -45,6 +46,12 @@ public class RemoteLogSegmentMetadataSerdes implements RemoteLogMetadataSerdes<R
                 .setSegmentSizeInBytes(data.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(data))
                 .setRemoteLogSegmentState(data.state().id());
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int messageSize = message.size(cache, version);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
+        message.write(writable, cache, version);
+        writable.flip();
+        return writable.buffer();
     }
 
     private List<RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry> createSegmentLeaderEpochsEntry(RemoteLogSegmentMetadata data) {
@@ -66,9 +73,9 @@ public class RemoteLogSegmentMetadataSerdes implements RemoteLogMetadataSerdes<R
     }
 
     @Override
-    public RemoteLogSegmentMetadata deserialize(byte version, ByteBuffer byteBuffer) {
+    public RemoteLogSegmentMetadata deserialize(byte version, ByteBuffer metadataPayload) {
         RemoteLogSegmentMetadataRecord record = new RemoteLogSegmentMetadataRecord(
-                new ByteBufferAccessor(byteBuffer), version);
+                new ByteBufferAccessor(metadataPayload), version);
 
         RemoteLogSegmentId remoteLogSegmentId = buildRemoteLogSegmentId(record.remoteLogSegmentId());
         Map<Integer, Long> segmentLeaderEpochs = new HashMap<>();
