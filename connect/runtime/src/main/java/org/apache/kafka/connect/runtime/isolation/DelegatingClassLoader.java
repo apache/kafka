@@ -51,7 +51,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -157,26 +156,26 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
-        ClassLoader pluginLoader = inner.get(pluginDescInUse(inner));
+        ClassLoader pluginLoader = inner.get(usedPluginDesc(inner));
         return pluginLoader instanceof PluginClassLoader
                ? (PluginClassLoader) pluginLoader
                : null;
     }
 
     //visible for testing
-    PluginDesc<?> pluginDescInUse(String name) {
+    PluginDesc<?> usedPluginDesc(String name) {
         SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
         if (inner == null) {
             return null;
         }
-        return pluginDescInUse(inner);
+        return usedPluginDesc(inner);
     }
 
-    private PluginDesc<?> pluginDescInUse(SortedMap<PluginDesc<?>, ClassLoader> inner) {
+    private PluginDesc<?> usedPluginDesc(SortedMap<PluginDesc<?>, ClassLoader> inner) {
         return inner.lastKey();
     }
 
-        public ClassLoader connectorLoader(Connector connector) {
+    public ClassLoader connectorLoader(Connector connector) {
         return connectorLoader(connector.getClass().getName());
     }
 
@@ -214,10 +213,9 @@ public class DelegatingClassLoader extends URLClassLoader {
                 pluginLoaders.put(pluginClassName, inner);
                 // TODO: once versioning is enabled this line should be moved outside this if branch
                 log.info("Added plugin '{}'", pluginClassName);
-                allAddedPlugins.put(pluginClassName, new ArrayList<>());
             }
             inner.put(plugin, loader);
-            allAddedPlugins.get(pluginClassName).add(plugin);
+            allAddedPlugins.computeIfAbsent(pluginClassName, n -> new ArrayList<>()).add(plugin);
         }
     }
 
@@ -233,17 +231,14 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     //visible for testing
     Set<String> reportPluginConflicts() {
-        Set<String> conflictPluginClasses = new HashSet<>();
-        for (Map.Entry<String, List<PluginDesc<?>>> entry : allAddedPlugins.entrySet()) {
-            String pluginClassName = entry.getKey();
-            List<PluginDesc<?>> pluginDescriptors = entry.getValue();
-            if (pluginDescriptors.size() > 1) {
-                PluginDesc<?> pluginDescInUse = pluginDescInUse(pluginClassName);
-                log.error("For plugin '{}', detected multiple copies '{}', this copy '{}' will be used.", pluginClassName, pluginDescriptors, pluginDescInUse);
-                conflictPluginClasses.add(pluginClassName);
-            }
-        }
-        return conflictPluginClasses;
+        return allAddedPlugins.entrySet().stream().filter(e -> e.getValue().size() > 1).map(e -> {
+            String pluginClassName = e.getKey();
+            PluginDesc<?> usedPluginDesc = usedPluginDesc(pluginClassName);
+            List<PluginDesc<?>> ignoredPlugins = new ArrayList<>(e.getValue());
+            ignoredPlugins.remove(usedPluginDesc);
+            log.error("Detected multiple plugins contain '{}'; using {} and ignoring {}", pluginClassName, usedPluginDesc, ignoredPlugins);
+            return pluginClassName;
+        }).collect(Collectors.toSet());
     }
 
     private void initPluginLoader(String path) {

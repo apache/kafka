@@ -175,7 +175,7 @@ public class DelegatingClassLoaderTest {
         delegatingClassLoader.addPlugins(Arrays.asList(connectorDesc2), ClassLoader.getSystemClassLoader());
         String pluginClassName = klass.getName();
         assertTrue(delegatingClassLoader.reportPluginConflicts().contains(pluginClassName));
-        assertEquals(delegatingClassLoader.pluginDescInUse(pluginClassName), connectorDesc1);
+        assertEquals(delegatingClassLoader.usedPluginDesc(pluginClassName), connectorDesc1);
 
         PluginDesc<Connector> connectorDesc3 = new PluginDesc<>(
                 klass,
@@ -184,6 +184,6 @@ public class DelegatingClassLoaderTest {
         );
         delegatingClassLoader.addPlugins(Arrays.asList(connectorDesc3), ClassLoader.getSystemClassLoader());
         assertTrue(delegatingClassLoader.reportPluginConflicts().contains(pluginClassName));
-        assertEquals(delegatingClassLoader.pluginDescInUse(pluginClassName), connectorDesc3);
+        assertEquals(delegatingClassLoader.usedPluginDesc(pluginClassName), connectorDesc3);
     }
 }
