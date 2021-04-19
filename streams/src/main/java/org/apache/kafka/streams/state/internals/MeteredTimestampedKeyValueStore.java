@@ -94,8 +94,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     static class RawAndDeserializedValue<ValueType> {
-        public final byte[] serializedValue;
-        public final ValueAndTimestamp<ValueType> value;
+        final byte[] serializedValue;
+        final ValueAndTimestamp<ValueType> value;
         RawAndDeserializedValue(final byte[] serializedValue, final ValueAndTimestamp<ValueType> value) {
             this.serializedValue = serializedValue;
             this.value = value;
