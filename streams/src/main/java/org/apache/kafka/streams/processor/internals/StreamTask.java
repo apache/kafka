@@ -667,8 +667,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
-
-        return partitionGroup.readyToProcess(wallClockTime);
+        boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+        if (!readyToProcess) {
+            if (!timeCurrentIdlingStarted.isPresent()) {
+                timeCurrentIdlingStarted = Optional.of(wallClockTime);
+            }
+        } else {
+            timeCurrentIdlingStarted = Optional.empty();
+        }
+        return readyToProcess;
     }
 
     /**
