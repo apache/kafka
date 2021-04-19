@@ -58,7 +58,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
 
-    public RawAndDeserializedValue<V> getWithBinary(final K key) {
+    RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
             return maybeMeasureLatency(() -> { 
                 final byte[] serializedValue = wrapped().get(keyBytes(key));
