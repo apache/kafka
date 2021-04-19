@@ -17,27 +17,32 @@
 
 package kafka.admin
 
+import java.io.PrintStream
+import java.io.IOException
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
+
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils}
 import kafka.utils.Implicits._
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
+import kafka.utils.Logging
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
-import org.apache.kafka.clients._
-import org.apache.kafka.common.Node
 import org.apache.kafka.common.config.ConfigDef.ValidString._
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.ClusterResourceListeners
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
+import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.Node
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
-import java.io.{IOException, PrintStream}
-import java.util.Properties
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
