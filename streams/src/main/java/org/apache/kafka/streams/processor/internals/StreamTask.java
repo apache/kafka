@@ -699,6 +699,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 return false;
             }
         }
+        timeCurrentIdlingStarted = Optional.empty();
 
 
         try {
