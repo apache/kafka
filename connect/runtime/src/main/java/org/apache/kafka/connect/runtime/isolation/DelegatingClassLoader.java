@@ -157,7 +157,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
-        ClassLoader pluginLoader = inner.get(inner.lastKey());
+        ClassLoader pluginLoader = inner.get(pluginDescInUse(inner));
         return pluginLoader instanceof PluginClassLoader
                ? (PluginClassLoader) pluginLoader
                : null;
@@ -169,10 +169,14 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
+        return pluginDescInUse(inner);
+    }
+
+    private PluginDesc<?> pluginDescInUse(SortedMap<PluginDesc<?>, ClassLoader> inner) {
         return inner.lastKey();
     }
 
-    public ClassLoader connectorLoader(Connector connector) {
+        public ClassLoader connectorLoader(Connector connector) {
         return connectorLoader(connector.getClass().getName());
     }
 
