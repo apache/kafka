@@ -151,4 +151,5 @@ LATEST_2_5 = V_2_5_1
 
 # 2.6.x versions
 V_2_6_0 = KafkaVersion("2.6.0")
-LATEST_2_6 = V_2_6_0
+V_2_6_1 = KafkaVersion("2.6.1")
+LATEST_2_6 = V_2_6_1
