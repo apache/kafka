@@ -52,7 +52,7 @@ jobs:
         run: ./gradlew cleanTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
       - name: Upload archive
         env:
-          BINTRAY_USER: gitlw
-          BINTRAY_KEY: ${{ secrets.BINTRAY_KEY }}
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
         run: |
           ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon
