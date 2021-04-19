@@ -406,7 +406,7 @@ public class StateDirectory {
             }
 
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
-            if (locks.isEmpty()) {
+            if (!locks.isEmpty()) {
                 log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", locks);
             }
             if (globalStateLock != null) {
