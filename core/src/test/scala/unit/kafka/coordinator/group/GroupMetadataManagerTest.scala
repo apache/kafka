@@ -36,6 +36,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.WindowedCount
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -1045,7 +1046,7 @@ class GroupMetadataManagerTest {
 
     val e = assertThrows(classOf[IllegalStateException],
       () => GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecordValue, time))
-    assertEquals(s"Unknown group metadata message version: ${unsupportedVersion}", e.getMessage)
+    assertEquals(s"Unknown group metadata message version: $unsupportedVersion", e.getMessage)
   }
 
   @Test
@@ -1245,6 +1246,10 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
+    val sensor = groupMetadataManager.offsetCommitsSensor
+    val offsetCommitCount = new WindowedCount()
+    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
+
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1260,6 +1265,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
 
@@ -1277,6 +1283,8 @@ class GroupMetadataManagerTest {
     assertEquals(offset, partitionResponse.offset)
 
     EasyMock.verify(replicaManager)
+    // Will update sensor after commit
+    assertEquals(1, offsetCommitCount.current(time.milliseconds()).eventCount)
   }
 
   @Test
@@ -1447,6 +1455,10 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
+    val sensor = groupMetadataManager.offsetCommitsSensor
+    val offsetCommitCount = new WindowedCount()
+    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
+
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1462,6 +1474,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1476,6 +1489,97 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
 
     EasyMock.verify(replicaManager)
+    // Will not update sensor if failed
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+  }
+
+  @Test
+  def testCommitOffsetPartialFailure(): Unit = {
+    EasyMock.reset(replicaManager)
+
+    val memberId = ""
+    val topicPartition = new TopicPartition("foo", 0)
+    val topicPartitionFailed = new TopicPartition("foo", 1)
+    val offset = 37
+
+    val sensor = groupMetadataManager.offsetCommitsSensor
+    val offsetCommitCount = new WindowedCount()
+    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsets = immutable.Map(
+      topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()),
+      // This will failed
+      topicPartitionFailed -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds())
+    )
+
+    val capturedResponseCallback = appendAndCaptureCallback()
+    EasyMock.replay(replicaManager)
+
+    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
+    assertTrue(group.hasOffsets)
+    capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
+      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+
+    assertFalse(commitErrors.isEmpty)
+    assertEquals(Some(Errors.NONE), commitErrors.get.get(topicPartition))
+    assertEquals(Some(Errors.OFFSET_METADATA_TOO_LARGE), commitErrors.get.get(topicPartitionFailed))
+    assertTrue(group.hasOffsets)
+
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition, topicPartitionFailed)))
+    assertEquals(Some(offset), cachedOffsets.get(topicPartition).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartitionFailed).map(_.offset))
+
+    EasyMock.verify(replicaManager)
+    assertEquals(1, offsetCommitCount.current(time.milliseconds()).eventCount)
+  }
+
+  @Test
+  def testOffsetMetadataTooLarge(): Unit = {
+    val memberId = ""
+    val topicPartition = new TopicPartition("foo", 0)
+    val offset = 37
+
+    val sensor = groupMetadataManager.offsetCommitsSensor
+    val offsetCommitCount = new WindowedCount()
+    sensor.add(metrics.metricName("commit-count", "unit-test", "offset commit count"), offsetCommitCount)
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsets = immutable.Map(
+      topicPartition -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds())
+    )
+
+    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
+    assertFalse(group.hasOffsets)
+
+    assertFalse(commitErrors.isEmpty)
+    val maybeError = commitErrors.get.get(topicPartition)
+    assertEquals(Some(Errors.OFFSET_METADATA_TOO_LARGE), maybeError)
+    assertFalse(group.hasOffsets)
+
+    val cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition)))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
+
+    assertEquals(0, offsetCommitCount.current(time.milliseconds()).eventCount)
   }
 
   @Test
@@ -1900,7 +2004,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(Errors.NONE), commitErrors.get.get(topicPartition1))
 
     // do not expire offsets while within retention period since commit timestamp
-    val expiryTimestamp = offsets.get(topicPartition1).get.commitTimestamp + defaultOffsetRetentionMs
+    val expiryTimestamp = offsets(topicPartition1).commitTimestamp + defaultOffsetRetentionMs
     time.sleep(expiryTimestamp - time.milliseconds() - 1)
 
     groupMetadataManager.cleanupGroupMetadata()
@@ -2074,7 +2178,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadOffsetFromOldCommit() = {
+  def testLoadOffsetFromOldCommit(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val generation = 935
     val protocolType = "consumer"
@@ -2116,7 +2220,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadOffsetWithExplicitRetention() = {
+  def testLoadOffsetWithExplicitRetention(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val generation = 935
     val protocolType = "consumer"
@@ -2391,7 +2495,7 @@ class GroupMetadataManagerTest {
       EasyMock.anyObject(),
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedCallback.getValue.apply(
+      override def answer: Unit = capturedCallback.getValue.apply(
         Map(groupTopicPartition ->
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
