@@ -273,6 +273,48 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     ))
     assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
+
+  @Test
+  def testElectionResultOutput(): Unit = {
+    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+      val topic = "non-preferred-topic"
+      val partition0 = 0
+      val partition1 = 1
+      val assignment0 = Seq(broker2, broker3)
+      val assignment1 = Seq(broker3, broker2)
+
+      TestUtils.createTopic(zkClient, topic, Map(partition0 -> assignment0, partition1 -> assignment1), servers)
+
+      val topicPartition0 = new TopicPartition(topic, partition0)
+      val topicPartition1 = new TopicPartition(topic, partition1)
+
+      TestUtils.assertLeader(client, topicPartition0, broker2)
+      TestUtils.assertLeader(client, topicPartition1, broker3)
+
+      servers(broker2).shutdown()
+      TestUtils.assertLeader(client, topicPartition0, broker3)
+      servers(broker2).startup()
+      TestUtils.waitForBrokersInIsr(client, topicPartition0, Set(broker2))
+      TestUtils.waitForBrokersInIsr(client, topicPartition1, Set(broker2))
+
+      val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition0, topicPartition1))
+      val output = TestUtils.grabConsoleOutput(
+        LeaderElectionCommand.main(
+          Array(
+            "--bootstrap-server", bootstrapServers(servers),
+            "--election-type", "preferred",
+            "--path-to-json-file", topicPartitionPath.toString
+          )
+        )
+      )
+
+      val electionResultOutputIter = output.split("\n").iterator
+      assertTrue(electionResultOutputIter.hasNext)
+      assertTrue(electionResultOutputIter.next().contains(s"Successfully completed leader election (PREFERRED) for partitions $topicPartition0"))
+      assertTrue(electionResultOutputIter.hasNext)
+      assertTrue(electionResultOutputIter.next().contains(s"Valid replica already elected for partitions $topicPartition1"))
+    }
+  }
 }
 
 object LeaderElectionCommandTest {
