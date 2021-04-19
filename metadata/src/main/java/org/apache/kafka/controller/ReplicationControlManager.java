@@ -723,7 +723,8 @@ public class ReplicationControlManager {
         if (brokerRegistration == null) {
             throw new RuntimeException("Can't find broker registration for broker " + brokerId);
         }
-        handleNodeDeactivated(brokerId, records);
+        generateLeaderAndIsrUpdates("handleBrokerFenced", true, records,
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(brokerId).setEpoch(brokerRegistration.epoch()), (short) 0));
     }
@@ -740,58 +741,10 @@ public class ReplicationControlManager {
      */
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
-        handleNodeDeactivated(brokerId, records);
+        generateLeaderAndIsrUpdates("handleBrokerUnregistered", true, records,
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch), (short) 0));
-    }
-
-    /**
-     * Handle a broker being deactivated. This means we remove it from any ISR that has
-     * more than one element. We do not remove the broker from ISRs where it is the only
-     * member since this would preclude clean leader election in the future.
-     * It is removed as the leader for all partitions it leads.
-     *
-     * @param brokerId              The broker id.
-     * @param records               The record list to append to.
-     */
-    void handleNodeDeactivated(int brokerId, List<ApiMessageAndVersion> records) {
-        Iterator<TopicIdPartition> iterator = brokersToIsrs.iterator(brokerId, false);
-        while (iterator.hasNext()) {
-            TopicIdPartition topicIdPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
-            if (topic == null) {
-                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
-                    "isrMembers, but not in the topics map.");
-            }
-            PartitionControlInfo partition = topic.parts.get(topicIdPartition.partitionId());
-            if (partition == null) {
-                throw new RuntimeException("Partition " + topicIdPartition +
-                    " existed in isrMembers, but not in the partitions map.");
-            }
-            PartitionChangeRecord record = new PartitionChangeRecord().
-                setPartitionId(topicIdPartition.partitionId()).
-                setTopicId(topic.id);
-            int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);
-            if (newIsr.length == 0) {
-                // We don't want to shrink the ISR to size 0. So, leave the node in the ISR.
-                if (record.leader() != NO_LEADER) {
-                    // The partition is now leaderless, so set its leader to -1.
-                    record.setLeader(-1);
-                    records.add(new ApiMessageAndVersion(record, (short) 0));
-                }
-            } else {
-                record.setIsr(Replicas.toList(newIsr));
-                if (partition.leader == brokerId) {
-                    // The fenced node will no longer be the leader.
-                    int newLeader = bestLeader(partition.replicas, newIsr, false);
-                    record.setLeader(newLeader);
-                } else {
-                    // Bump the partition leader epoch.
-                    record.setLeader(partition.leader);
-                }
-                records.add(new ApiMessageAndVersion(record, (short) 0));
-            }
-        }
     }
 
     /**
@@ -808,39 +761,8 @@ public class ReplicationControlManager {
     void handleBrokerUnfenced(int brokerId, long brokerEpoch, List<ApiMessageAndVersion> records) {
         records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
             setId(brokerId).setEpoch(brokerEpoch), (short) 0));
-        handleNodeActivated(brokerId, records);
-    }
-
-    /**
-     * Handle a broker being activated. This means we check if it can become the leader
-     * for any partition that currently has no leader (aka offline partition).
-     *
-     * @param brokerId      The broker id.
-     * @param records       The record list to append to.
-     */
-    void handleNodeActivated(int brokerId, List<ApiMessageAndVersion> records) {
-        Iterator<TopicIdPartition> iterator = brokersToIsrs.noLeaderIterator();
-        while (iterator.hasNext()) {
-            TopicIdPartition topicIdPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
-            if (topic == null) {
-                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
-                    "isrMembers, but not in the topics map.");
-            }
-            PartitionControlInfo partition = topic.parts.get(topicIdPartition.partitionId());
-            if (partition == null) {
-                throw new RuntimeException("Partition " + topicIdPartition +
-                    " existed in isrMembers, but not in the partitions map.");
-            }
-            // TODO: if this partition is configured for unclean leader election,
-            // check the replica set rather than the ISR.
-            if (Replicas.contains(partition.isr, brokerId)) {
-                records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
-                    setPartitionId(topicIdPartition.partitionId()).
-                    setTopicId(topic.id).
-                    setLeader(brokerId), (short) 0));
-            }
-        }
+        generateLeaderAndIsrUpdates("handleBrokerUnfenced", false, records,
+            brokersToIsrs.partitionsWithNoLeader());
     }
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
@@ -909,8 +831,8 @@ public class ReplicationControlManager {
             setPartitionId(partitionId).
             setTopicId(topicId);
         if (unclean && !Replicas.contains(partitionInfo.isr, newLeader)) {
-            // If the election was unclean, we may have to forcibly add the replica to
-            // the ISR.  This can result in data loss!
+            // If the election was unclean, we have to forcibly set the ISR to just the
+            // new leader.  This can result in data loss!
             record.setIsr(Collections.singletonList(newLeader));
         }
         record.setLeader(newLeader);
@@ -936,10 +858,8 @@ public class ReplicationControlManager {
                     handleBrokerUnfenced(brokerId, brokerEpoch, records);
                     break;
                 case CONTROLLED_SHUTDOWN:
-                    // Note: we always bump the leader epoch of each partition that the
-                    // shutting down broker is in here.  This prevents the broker from
-                    // getting re-added to the ISR later.
-                    handleNodeDeactivated(brokerId, records);
+                    generateLeaderAndIsrUpdates("processBrokerControlledShutdown", true, records,
+                        brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
                     break;
                 case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
@@ -1117,6 +1037,77 @@ public class ReplicationControlManager {
                 " replica(s), but this is not consistent with previous " +
                 "partitions, which have " + replicationFactor.getAsInt() + " replica(s).");
         }
+    }
+
+    void generateLeaderAndIsrUpdates(String context,
+                                     boolean excludeCurrentLeaderFromIsr,
+                                     List<ApiMessageAndVersion> records,
+                                     Iterator<TopicIdPartition> iterator) {
+        while (iterator.hasNext()) {
+            TopicIdPartition topicIdPart = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPart.topicId());
+            if (topic == null) {
+                throw new RuntimeException("Topic ID " + topicIdPart.topicId() + " existed in " +
+                    "isrMembers, but not in the topics map.");
+            }
+            PartitionControlInfo partition = topic.parts.get(topicIdPart.partitionId());
+            if (partition == null) {
+                throw new RuntimeException("Partition " + topicIdPart +
+                    " existed in isrMembers, but not in the partitions map.");
+            }
+            int[] newIsr = partition.isr;
+            if (excludeCurrentLeaderFromIsr) {
+                newIsr = Replicas.copyWithout(partition.isr, partition.leader);
+            }
+            int newLeader = bestLeader(partition.replicas, newIsr, false);
+            boolean unclean = newLeader != NO_LEADER && !Replicas.contains(newIsr, newLeader);
+            if (unclean) {
+                // After an unclean leader election, the ISR is reset to just the new leader.
+                newIsr = new int[] {newLeader};
+            } else if (newIsr.length == 0) {
+                // We never want to shrink the ISR to size 0.
+                newIsr = partition.isr;
+            }
+            PartitionChangeRecord record = new PartitionChangeRecord();
+            if (newLeader != partition.leader) {
+                record.setLeader(newLeader);
+            }
+            if (!Arrays.equals(newIsr, partition.isr)) {
+                record.setIsr(Replicas.toList(newIsr));
+            }
+            if (record.leader() != NO_LEADER_CHANGE || record.isr() != null) {
+                record.setPartitionId(topicIdPart.partitionId()).setTopicId(topic.id);
+                if (unclean) {
+                    log.info("{}: UNCLEANLY {}", context,
+                        leaderAndIsrUpdateLogMessage(topicIdPart, partition, record));
+                } else if (log.isDebugEnabled()) {
+                    log.debug("{}: {}", context,
+                        leaderAndIsrUpdateLogMessage(topicIdPart, partition, record));
+                }
+                records.add(new ApiMessageAndVersion(record, (short) 0));
+            }
+        }
+    }
+
+    // VisibleForTesting
+    String leaderAndIsrUpdateLogMessage(TopicIdPartition topicIdPart,
+                                        PartitionControlInfo partition,
+                                        PartitionChangeRecord record) {
+        StringBuilder b = new StringBuilder();
+        b.append(" updating ");
+        b.append(topicIdPart);
+        String prefix = "";
+        if (record.leader() != NO_LEADER_CHANGE) {
+            b.append(" leader from ").append(partition.leader).
+                append(" to ").append(record.leader());
+            prefix = " and";
+        }
+        if (record.isr() != null) {
+            b.append(prefix).append(" isr from ").
+                append(Replicas.toList(partition.isr)).append(" to ").
+                append(record.isr());
+        }
+        return b.toString();
     }
 
     class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
