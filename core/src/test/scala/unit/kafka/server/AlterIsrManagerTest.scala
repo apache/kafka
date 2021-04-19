@@ -70,8 +70,10 @@ class AlterIsrManagerTest {
   @Test
   def testOverwriteWithinBatch(): Unit = {
     val capture = EasyMock.newCapture[AbstractRequest.Builder[AlterIsrRequest]]()
+    val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
+
     EasyMock.expect(brokerToController.start())
-    EasyMock.expect(brokerToController.sendRequest(EasyMock.capture(capture), EasyMock.anyObject())).once()
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.capture(capture), EasyMock.capture(callbackCapture))).times(2)
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
@@ -81,11 +83,21 @@ class AlterIsrManagerTest {
     // Only send one ISR update for a given topic+partition
     assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0)))
     assertFalse(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0)))
+
+    // Simulate response
+    val alterIsrResp = partitionResponse(tp0, Errors.NONE)
+    val resp = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
+    callbackCapture.getValue.onComplete(resp)
+
+    // Now we can submit this partition again
+    assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1), 10), _ => {}, 0)))
     EasyMock.verify(brokerToController)
 
+    // Make sure we sent the right request ISR={1}
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
-    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 3)
+    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 1)
   }
 
   @Test
