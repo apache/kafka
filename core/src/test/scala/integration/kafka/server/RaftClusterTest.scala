@@ -22,14 +22,16 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{Disabled, Test, Timeout}
 import org.junit.jupiter.api.Assertions._
-
 import java.util
 import java.util.Collections
+
 import scala.jdk.CollectionConverters._
 
-@Timeout(120000)
+// Should remove the "Disabled" tag after KAFKA-12677 got fixed
+@Disabled
+@Timeout(120)
 class RaftClusterTest {
 
   @Test
