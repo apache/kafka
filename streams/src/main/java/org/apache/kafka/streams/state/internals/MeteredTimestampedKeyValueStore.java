@@ -70,9 +70,9 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    public boolean putIfDifferentValues(final K key,
-                                        final ValueAndTimestamp<V> newValue,
-                                        final byte[] oldSerializedValue) {
+    boolean putIfDifferentValues(final K key,
+                                 final ValueAndTimestamp<V> newValue,
+                                 final byte[] oldSerializedValue) {
         try {
             return maybeMeasureLatency(
                 () -> {
