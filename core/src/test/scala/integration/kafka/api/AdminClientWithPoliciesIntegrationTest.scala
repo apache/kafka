@@ -107,23 +107,23 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     createTopic(topic3, 1, 1)
 
     val topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.MinInSyncReplicasProp, "2") // policy doesn't allow this
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "2"), AlterConfigOp.OpType.SET) // policy doesn't allow this
     ).asJava
 
-    var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.8")).asJava
+    var topicConfigEntries2 = Seq(new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.8"), AlterConfigOp.OpType.SET)).asJava
 
-    val topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1")).asJava
+    val topicConfigEntries3 = Seq(new AlterConfigOp(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1"), AlterConfigOp.OpType.SET)).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
+    val brokerConfigEntries = Seq(new AlterConfigOp(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313"), AlterConfigOp.OpType.SET)).asJava
 
     // Alter configs: second is valid, the others are invalid
-    var alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      topicResource3 -> new Config(topicConfigEntries3),
-      brokerResource -> new Config(brokerConfigEntries)
+    var alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1,
+      topicResource2 -> topicConfigEntries2,
+      topicResource3 -> topicConfigEntries3,
+      brokerResource -> brokerConfigEntries
     ).asJava)
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
