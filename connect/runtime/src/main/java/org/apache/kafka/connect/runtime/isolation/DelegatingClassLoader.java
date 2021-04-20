@@ -231,7 +231,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             List<PluginDesc<?>> ignoredPlugins = new ArrayList<>(e.getValue());
             ignoredPlugins.remove(usedPluginDesc);
             log.warn("Detected multiple plugins contain '{}'; using plugin {} and ignoring {} plugins ({}). "
-                            + "Check the installation on all workers and if possible remove all but one of these duplicated plugins.",
+                    + "Check the installation on all workers and if possible remove all but one of these duplicated plugins.",
                     pluginClassName, usedPluginDesc, ignoredPlugins.size(), ignoredPlugins);
             return pluginClassName;
         }).collect(Collectors.toSet());
