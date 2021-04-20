@@ -58,7 +58,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
 
-    RawAndDeserializedValue<V> getWithBinary(final K key) {
+    public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
             return maybeMeasureLatency(() -> { 
                 final byte[] serializedValue = wrapped().get(keyBytes(key));
@@ -70,9 +70,9 @@ public class MeteredTimestampedKeyValueStore<K, V>
         }
     }
 
-    boolean putIfDifferentValues(final K key,
-                                 final ValueAndTimestamp<V> newValue,
-                                 final byte[] oldSerializedValue) {
+    public boolean putIfDifferentValues(final K key,
+                                        final ValueAndTimestamp<V> newValue,
+                                        final byte[] oldSerializedValue) {
         try {
             return maybeMeasureLatency(
                 () -> {
