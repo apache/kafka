@@ -80,7 +80,7 @@ class StandbyTaskCreator {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     Task.TaskType.STANDBY,
-                    StreamThread.eosEnabled(config),
+                    config.eosEnabled(),
                     getLogContext(taskId),
                     stateDirectory,
                     storeChangelogReader,

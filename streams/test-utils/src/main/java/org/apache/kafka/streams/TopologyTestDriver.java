@@ -114,7 +114,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -320,7 +320,7 @@ public class TopologyTestDriver implements Closeable {
 
         logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
-        processingMode = StreamThread.processingMode(streamsConfig);
+        processingMode = streamsConfig.processingMode();
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);
@@ -481,7 +481,7 @@ public class TopologyTestDriver implements Closeable {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
                 Task.TaskType.ACTIVE,
-                StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                streamsConfig.eosEnabled(),
                 logContext,
                 stateDirectory,
                 new MockChangelogRegister(),
@@ -610,7 +610,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_BETA) {
+        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
         } else {
             consumer.commitSync(offsets);

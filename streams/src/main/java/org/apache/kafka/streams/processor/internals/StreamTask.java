@@ -140,7 +140,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = StreamThread.eosEnabled(config);
+        eosEnabled = config.eosEnabled();
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;

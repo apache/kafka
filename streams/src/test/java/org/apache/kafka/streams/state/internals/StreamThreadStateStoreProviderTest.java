@@ -403,7 +403,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            StreamThread.eosEnabled(streamsConfig),
+            streamsConfig.eosEnabled(),
             logContext,
             stateDirectory,
             new StoreChangelogReader(

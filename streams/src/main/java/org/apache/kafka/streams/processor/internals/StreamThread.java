@@ -63,8 +63,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -304,9 +302,7 @@ public class StreamThread extends Thread {
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong cacheResizeSize;
-    private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
-
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -382,7 +378,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            StreamThread.processingMode(config)
+            config.processingMode()
         );
         referenceContainer.taskManager = taskManager;
 
@@ -430,29 +426,13 @@ public class StreamThread extends Thread {
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
 
-        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA");
+        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
 
         public final String name;
 
         ProcessingMode(final String name) {
             this.name = name;
         }
-    }
-
-    public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
-        } else {
-            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
-        }
-    }
-
-    public static boolean eosEnabled(final StreamsConfig config) {
-        final ProcessingMode processingMode = processingMode(config);
-        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
     }
 
     public StreamThread(final Time time,
@@ -494,7 +474,6 @@ public class StreamThread extends Thread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
-        this.processingMode = processingMode(config);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -603,7 +582,7 @@ public class StreamThread extends Thread {
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
                               "Setting {}=\"{}\" requires broker version 2.5 or higher.",
                           StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          EXACTLY_ONCE_BETA);
+                          StreamsConfig.EXACTLY_ONCE_V2);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);

@@ -91,6 +91,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final int DEFAULT_TIMEOUT = 100;
     private static long lastRecordedTimestamp = -2L;
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
