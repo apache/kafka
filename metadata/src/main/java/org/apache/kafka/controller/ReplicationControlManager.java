@@ -75,6 +75,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
@@ -172,45 +173,56 @@ public class ReplicationControlManager {
             StringBuilder builder = new StringBuilder();
             String prefix = "";
             if (!Arrays.equals(replicas, prev.replicas)) {
-                builder.append(prefix).append("oldReplicas=").append(Arrays.toString(prev.replicas));
+                builder.append(prefix).append("replicas: ").
+                    append(Arrays.toString(prev.replicas)).
+                    append(" -> ").append(Arrays.toString(replicas));
                 prefix = ", ";
-                builder.append(prefix).append("newReplicas=").append(Arrays.toString(replicas));
             }
             if (!Arrays.equals(isr, prev.isr)) {
-                builder.append(prefix).append("oldIsr=").append(Arrays.toString(prev.isr));
+                builder.append(prefix).append("isr: ").
+                    append(Arrays.toString(prev.isr)).
+                    append(" -> ").append(Arrays.toString(isr));
                 prefix = ", ";
-                builder.append(prefix).append("newIsr=").append(Arrays.toString(isr));
             }
             if (!Arrays.equals(removingReplicas, prev.removingReplicas)) {
-                builder.append(prefix).append("oldRemovingReplicas=").
-                    append(Arrays.toString(prev.removingReplicas));
+                builder.append(prefix).append("removingReplicas: ").
+                    append(Arrays.toString(prev.removingReplicas)).
+                    append(" -> ").append(Arrays.toString(removingReplicas));
                 prefix = ", ";
-                builder.append(prefix).append("newRemovingReplicas=").
-                    append(Arrays.toString(removingReplicas));
             }
             if (!Arrays.equals(addingReplicas, prev.addingReplicas)) {
-                builder.append(prefix).append("oldAddingReplicas=").
-                    append(Arrays.toString(prev.addingReplicas));
+                builder.append(prefix).append("addingReplicas: ").
+                    append(Arrays.toString(prev.addingReplicas)).
+                    append(" -> ").append(Arrays.toString(addingReplicas));
                 prefix = ", ";
-                builder.append(prefix).append("newAddingReplicas=").
-                    append(Arrays.toString(addingReplicas));
             }
             if (leader != prev.leader) {
-                builder.append(prefix).append("oldLeader=").append(prev.leader);
+                builder.append(prefix).append("leader: ").
+                    append(prev.leader).append(" -> ").append(leader);
                 prefix = ", ";
-                builder.append(prefix).append("newLeader=").append(leader);
             }
             if (leaderEpoch != prev.leaderEpoch) {
-                builder.append(prefix).append("oldLeaderEpoch=").append(prev.leaderEpoch);
+                builder.append(prefix).append("leaderEpoch: ").
+                    append(prev.leaderEpoch).append(" -> ").append(leaderEpoch);
                 prefix = ", ";
-                builder.append(prefix).append("newLeaderEpoch=").append(leaderEpoch);
             }
             if (partitionEpoch != prev.partitionEpoch) {
-                builder.append(prefix).append("oldPartitionEpoch=").append(prev.partitionEpoch);
-                prefix = ", ";
-                builder.append(prefix).append("newPartitionEpoch=").append(partitionEpoch);
+                builder.append(prefix).append("partitionEpoch: ").
+                    append(prev.partitionEpoch).append(" -> ").append(partitionEpoch);
             }
             return builder.toString();
+        }
+
+        boolean wasCleanlyDerivedFrom(PartitionControlInfo prev) {
+            return leader == NO_LEADER || Replicas.contains(prev.isr, leader);
+        }
+
+        void maybeLogPartitionChange(Logger log, String topicPart, PartitionControlInfo prev) {
+            if (!wasCleanlyDerivedFrom(prev)) {
+                log.info("UNCLEAN partition change for {}: {}", topicPart, diff(prev));
+            } else if (log.isDebugEnabled()) {
+                log.debug("partition change for {}: {}", topicPart, diff(prev));
+            }
         }
 
         boolean hasLeader() {
@@ -231,7 +243,13 @@ public class ReplicationControlManager {
         public boolean equals(Object o) {
             if (!(o instanceof PartitionControlInfo)) return false;
             PartitionControlInfo other = (PartitionControlInfo) o;
-            return diff(other).isEmpty();
+            return Arrays.equals(replicas, other.replicas) &&
+                Arrays.equals(isr, other.isr) &&
+                Arrays.equals(removingReplicas, other.removingReplicas) &&
+                Arrays.equals(addingReplicas, other.addingReplicas) &&
+                leader == other.leader &&
+                leaderEpoch == other.leaderEpoch &&
+                partitionEpoch == other.partitionEpoch;
         }
 
         @Override
@@ -321,22 +339,17 @@ public class ReplicationControlManager {
         }
         PartitionControlInfo newPartInfo = new PartitionControlInfo(record);
         PartitionControlInfo prevPartInfo = topicInfo.parts.get(record.partitionId());
+        String topicPart = topicInfo.name + "-" + record.partitionId();
         if (prevPartInfo == null) {
-            log.info("Created partition {}:{} with {}.", record.topicId(),
-                record.partitionId(), newPartInfo.toString());
+            log.info("Created partition {} with {}.", topicPart, newPartInfo.toString());
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
-        } else {
-            String diff = newPartInfo.diff(prevPartInfo);
-            if (!diff.isEmpty()) {
-                log.info("Modified partition {}:{}: {}.", record.topicId(),
-                    record.partitionId(), diff);
-                topicInfo.parts.put(record.partitionId(), newPartInfo);
-                brokersToIsrs.update(record.topicId(), record.partitionId(),
-                    prevPartInfo.isr, newPartInfo.isr, prevPartInfo.leader,
-                    newPartInfo.leader);
-            }
+        } else if (!newPartInfo.equals(prevPartInfo)) {
+            newPartInfo.maybeLogPartitionChange(log, topicPart, prevPartInfo);
+            topicInfo.parts.put(record.partitionId(), newPartInfo);
+            brokersToIsrs.update(record.topicId(), record.partitionId(), prevPartInfo.isr,
+                newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
         }
     }
 
@@ -356,7 +369,8 @@ public class ReplicationControlManager {
         brokersToIsrs.update(record.topicId(), record.partitionId(),
             prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.leader,
             newPartitionInfo.leader);
-        log.debug("Applied ISR change record: {}", record.toString());
+        String topicPart = topicInfo.name + "-" + record.partitionId();
+        newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
     }
 
     public void replay(RemoveTopicRecord record) {
@@ -723,7 +737,7 @@ public class ReplicationControlManager {
         if (brokerRegistration == null) {
             throw new RuntimeException("Can't find broker registration for broker " + brokerId);
         }
-        generateLeaderAndIsrUpdates("handleBrokerFenced", true, records,
+        generateLeaderAndIsrUpdates("handleBrokerFenced", brokerId, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(brokerId).setEpoch(brokerRegistration.epoch()), (short) 0));
@@ -741,7 +755,7 @@ public class ReplicationControlManager {
      */
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
-        generateLeaderAndIsrUpdates("handleBrokerUnregistered", true, records,
+        generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch), (short) 0));
@@ -761,7 +775,7 @@ public class ReplicationControlManager {
     void handleBrokerUnfenced(int brokerId, long brokerEpoch, List<ApiMessageAndVersion> records) {
         records.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
             setId(brokerId).setEpoch(brokerEpoch), (short) 0));
-        generateLeaderAndIsrUpdates("handleBrokerUnfenced", false, records,
+        generateLeaderAndIsrUpdates("handleBrokerUnfenced", NO_LEADER, records,
             brokersToIsrs.partitionsWithNoLeader());
     }
 
@@ -858,8 +872,8 @@ public class ReplicationControlManager {
                     handleBrokerUnfenced(brokerId, brokerEpoch, records);
                     break;
                 case CONTROLLED_SHUTDOWN:
-                    generateLeaderAndIsrUpdates("processBrokerControlledShutdown", true, records,
-                        brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+                    generateLeaderAndIsrUpdates("enterControlledShutdown[" + brokerId + "]",
+                        brokerId, records, brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
                     break;
                 case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
@@ -1040,9 +1054,10 @@ public class ReplicationControlManager {
     }
 
     void generateLeaderAndIsrUpdates(String context,
-                                     boolean excludeCurrentLeaderFromIsr,
+                                     int brokerToRemoveFromIsr,
                                      List<ApiMessageAndVersion> records,
                                      Iterator<TopicIdPartition> iterator) {
+        int oldSize = records.size();
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPart = iterator.next();
             TopicControlInfo topic = topics.get(topicIdPart.topicId());
@@ -1055,10 +1070,7 @@ public class ReplicationControlManager {
                 throw new RuntimeException("Partition " + topicIdPart +
                     " existed in isrMembers, but not in the partitions map.");
             }
-            int[] newIsr = partition.isr;
-            if (excludeCurrentLeaderFromIsr) {
-                newIsr = Replicas.copyWithout(partition.isr, partition.leader);
-            }
+            int[] newIsr = Replicas.copyWithout(partition.isr, brokerToRemoveFromIsr);
             int newLeader = bestLeader(partition.replicas, newIsr, false);
             boolean unclean = newLeader != NO_LEADER && !Replicas.contains(newIsr, newLeader);
             if (unclean) {
@@ -1068,46 +1080,32 @@ public class ReplicationControlManager {
                 // We never want to shrink the ISR to size 0.
                 newIsr = partition.isr;
             }
-            PartitionChangeRecord record = new PartitionChangeRecord();
-            if (newLeader != partition.leader) {
-                record.setLeader(newLeader);
-            }
-            if (!Arrays.equals(newIsr, partition.isr)) {
-                record.setIsr(Replicas.toList(newIsr));
-            }
+            PartitionChangeRecord record = new PartitionChangeRecord().
+                setPartitionId(topicIdPart.partitionId()).
+                setTopicId(topic.id);
+            if (newLeader != partition.leader) record.setLeader(newLeader);
+            if (!Arrays.equals(newIsr, partition.isr)) record.setIsr(Replicas.toList(newIsr));
             if (record.leader() != NO_LEADER_CHANGE || record.isr() != null) {
-                record.setPartitionId(topicIdPart.partitionId()).setTopicId(topic.id);
-                if (unclean) {
-                    log.info("{}: UNCLEANLY {}", context,
-                        leaderAndIsrUpdateLogMessage(topicIdPart, partition, record));
-                } else if (log.isDebugEnabled()) {
-                    log.debug("{}: {}", context,
-                        leaderAndIsrUpdateLogMessage(topicIdPart, partition, record));
-                }
                 records.add(new ApiMessageAndVersion(record, (short) 0));
             }
         }
-    }
-
-    // VisibleForTesting
-    String leaderAndIsrUpdateLogMessage(TopicIdPartition topicIdPart,
-                                        PartitionControlInfo partition,
-                                        PartitionChangeRecord record) {
-        StringBuilder b = new StringBuilder();
-        b.append(" updating ");
-        b.append(topicIdPart);
-        String prefix = "";
-        if (record.leader() != NO_LEADER_CHANGE) {
-            b.append(" leader from ").append(partition.leader).
-                append(" to ").append(record.leader());
-            prefix = " and";
+        if (records.size() != oldSize) {
+            if (log.isDebugEnabled()) {
+                StringBuilder bld = new StringBuilder();
+                String prefix = "";
+                for (ListIterator<ApiMessageAndVersion> iter = records.listIterator(oldSize);
+                     iter.hasNext(); ) {
+                    ApiMessageAndVersion apiMessageAndVersion = iter.next();
+                    PartitionChangeRecord record = (PartitionChangeRecord) apiMessageAndVersion.message();
+                    bld.append(prefix).append(topics.get(record.topicId()).name).append("-").
+                        append(record.partitionId());
+                    prefix = ", ";
+                }
+                log.debug("{}: changing {}", context, bld.toString());
+            } else if (log.isInfoEnabled()) {
+                log.info("{}: changing {} partition(s)", context, records.size() - oldSize);
+            }
         }
-        if (record.isr() != null) {
-            b.append(prefix).append(" isr from ").
-                append(Replicas.toList(partition.isr)).append(" to ").
-                append(record.isr());
-        }
-        return b.toString();
     }
 
     class ReplicationControlIterator implements Iterator<List<ApiMessageAndVersion>> {

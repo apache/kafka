@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -649,5 +650,29 @@ public class ReplicationControlManagerTest {
                 "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
                     ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2),
                         OptionalInt.of(3))).getMessage());
+    }
+
+    @Test
+    public void testPartitionControlInfo() {
+        PartitionControlInfo a = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{1, 2}, null, null, 1, 0, 0);
+        PartitionControlInfo b = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{3}, null, null, 3, 1, 1);
+        PartitionControlInfo c = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{3}, null, 2, 1, 1);
+        PartitionControlInfo d = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{1}, null, null, 1, 0, 1);
+        assertTrue(a.wasCleanlyDerivedFrom(c));
+        assertTrue(c.wasCleanlyDerivedFrom(a));
+        assertTrue(a.wasCleanlyDerivedFrom(d));
+        assertTrue(d.wasCleanlyDerivedFrom(a));
+        assertFalse(b.wasCleanlyDerivedFrom(a));
+        assertFalse(a.wasCleanlyDerivedFrom(b));
+        assertEquals(b, a.merge(new PartitionChangeRecord().
+            setLeader(3).setIsr(Arrays.asList(3))));
+        assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
+            b.diff(a));
+        assertEquals("isr: [1, 2] -> [1], partitionEpoch: 0 -> 1",
+            d.diff(a));
     }
 }
