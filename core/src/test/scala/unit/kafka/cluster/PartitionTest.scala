@@ -41,10 +41,12 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
-
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
+
+import kafka.server.epoch.LeaderEpochFileCache
+
 import scala.jdk.CollectionConverters._
 
 class PartitionTest extends AbstractPartitionTest {
@@ -232,7 +234,25 @@ class PartitionTest extends AbstractPartitionTest {
 
       override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
-        new SlowLog(log, mockTime, appendSemaphore)
+        val logDirFailureChannel = new LogDirFailureChannel(1)
+        val segments = new LogSegments(log.topicPartition)
+        val leaderEpochCache = Log.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.messageFormatVersion.recordVersion)
+        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, log.maxProducerIdExpirationMs)
+        val offsets = LogLoader.load(LoadLogParams(
+          log.dir,
+          log.topicPartition,
+          log.config,
+          mockTime.scheduler,
+          mockTime,
+          logDirFailureChannel,
+          hadCleanShutdown = true,
+          segments,
+          0L,
+          0L,
+          log.maxProducerIdExpirationMs,
+          leaderEpochCache,
+          producerStateManager))
+        new SlowLog(log, segments, offsets, leaderEpochCache, producerStateManager, mockTime, logDirFailureChannel, appendSemaphore)
       }
     }
 
@@ -1934,19 +1954,31 @@ class PartitionTest extends AbstractPartitionTest {
     }
   }
 
-  private class SlowLog(log: Log, mockTime: MockTime, appendSemaphore: Semaphore) extends Log(
+  private class SlowLog(
+    log: Log,
+    segments: LogSegments,
+    offsets: LoadedLogOffsets,
+    leaderEpochCache: Option[LeaderEpochFileCache],
+    producerStateManager: ProducerStateManager,
+    mockTime: MockTime,
+    logDirFailureChannel: LogDirFailureChannel,
+    appendSemaphore: Semaphore
+  ) extends Log(
     log.dir,
     log.config,
-    log.logStartOffset,
-    log.recoveryPoint,
+    segments,
+    offsets.logStartOffset,
+    offsets.recoveryPoint,
+    offsets.nextOffsetMetadata,
     mockTime.scheduler,
     new BrokerTopicStats,
-    log.time,
+    mockTime,
     log.maxProducerIdExpirationMs,
     log.producerIdExpirationCheckIntervalMs,
     log.topicPartition,
-    log.producerStateManager,
-    new LogDirFailureChannel(1),
+    leaderEpochCache,
+    producerStateManager,
+    logDirFailureChannel,
     topicId = None,
     keepPartitionMetadataFile = true) {
 
