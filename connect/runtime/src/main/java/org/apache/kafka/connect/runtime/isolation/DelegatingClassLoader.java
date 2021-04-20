@@ -165,10 +165,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     //visible for testing
     PluginDesc<?> usedPluginDesc(String name) {
         SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
-        if (inner == null) {
-            return null;
-        }
-        return usedPluginDesc(inner);
+        return inner == null ? null : usedPluginDesc(inner);
     }
 
     private PluginDesc<?> usedPluginDesc(SortedMap<PluginDesc<?>, ClassLoader> inner) {
@@ -233,7 +230,9 @@ public class DelegatingClassLoader extends URLClassLoader {
             PluginDesc<?> usedPluginDesc = usedPluginDesc(pluginClassName);
             List<PluginDesc<?>> ignoredPlugins = new ArrayList<>(e.getValue());
             ignoredPlugins.remove(usedPluginDesc);
-            log.error("Detected multiple plugins contain '{}'; using {} and ignoring {}", pluginClassName, usedPluginDesc, ignoredPlugins);
+            log.error("Detected multiple plugins contain '{}'; using plugin {} and ignoring {} plugins ({}). "
+                            + "Check the installation and remove duplicate plugins from all workers.",
+                    pluginClassName, usedPluginDesc, ignoredPlugins.size(), ignoredPlugins);
             return pluginClassName;
         }).collect(Collectors.toSet());
     }
