@@ -17,12 +17,13 @@
 
 package org.apache.kafka.controller;
 
-
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
+    private int topicCount;
 
     public MockControllerMetrics() {
         this.active = false;
+        this.topicCount = 0;
     }
 
     @Override
@@ -43,5 +44,20 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
+    }
+
+    @Override
+    public int topicCount() {
+        return this.topicCount;
+    }
+
+    @Override
+    public void incTopicCount() {
+        this.topicCount++;
+    }
+
+    @Override
+    public void decTopicCount() {
+        this.topicCount--;    
     }
 }

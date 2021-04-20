@@ -275,6 +275,11 @@ public class ReplicationControlManager {
     private final ClusterControlManager clusterControl;
 
     /**
+     * A reference to the controller's metrics registry.
+     */
+    private final ControllerMetrics controllerMetrics;
+
+    /**
      * Maps topic names to topic UUIDs.
      */
     private final TimelineHashMap<String, Uuid> topicsByName;
@@ -294,12 +299,14 @@ public class ReplicationControlManager {
                               short defaultReplicationFactor,
                               int defaultNumPartitions,
                               ConfigurationControlManager configurationControl,
-                              ClusterControlManager clusterControl) {
+                              ClusterControlManager clusterControl,
+                              ControllerMetrics controllerMetrics) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.configurationControl = configurationControl;
+        this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -310,6 +317,7 @@ public class ReplicationControlManager {
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
+        controllerMetrics.incTopicCount();
         log.info("Created topic {} with ID {}.", record.name(), record.topicId());
     }
 
@@ -378,7 +386,7 @@ public class ReplicationControlManager {
             }
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
-
+        controllerMetrics.decTopicCount();
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 

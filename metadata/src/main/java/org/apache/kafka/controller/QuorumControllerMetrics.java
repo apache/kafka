@@ -30,11 +30,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
+    private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
+        "kafka.controller", "ReplicationControlManager", "GlobalTopicCount", null);
+    
 
     private volatile boolean active;
     private final Gauge<Integer> activeControllerCount;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
+    private int topicCount;
+    private final Gauge<Integer> globalTopicCount;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
@@ -46,6 +51,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
+        this.topicCount = 0;
+        this.globalTopicCount = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return topicCount;
+            }
+        });
     }
 
     @Override
@@ -66,5 +78,20 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueTime.update(durationMs);
+    }
+
+    @Override
+    public int topicCount() {
+        return topicCount;
+    }
+
+    @Override
+    public void incTopicCount() {
+        topicCount++;
+    }
+
+    @Override
+    public void decTopicCount() {
+        topicCount--;
     }
 }

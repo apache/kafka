@@ -26,4 +26,10 @@ public interface ControllerMetrics {
     void updateEventQueueTime(long durationMs);
 
     void updateEventQueueProcessingTime(long durationMs);
+
+    int topicCount();
+
+    void incTopicCount();
+
+    void decTopicCount();
 }

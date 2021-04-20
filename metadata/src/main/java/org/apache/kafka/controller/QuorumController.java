@@ -928,7 +928,7 @@ public final class QuorumController implements Controller {
         this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
-            configurationControl, clusterControl);
+            configurationControl, clusterControl, controllerMetrics);
         this.logManager = logManager;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1L;
