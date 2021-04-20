@@ -194,6 +194,7 @@ public class RestServerTest {
         validateUriHost(URI.create("http://localhost:8080"));
         validateUriHost(URI.create("http://172.217.2.110:80"));
         validateUriHost(URI.create("http://[2607:f8b0:4006:818::2004]:80"));
+        validateUriHost(URI.create("http://kafka-connect-0.dev-2:8080"));
     }
 
     @Test

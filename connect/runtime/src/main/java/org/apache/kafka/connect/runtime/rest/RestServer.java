@@ -382,14 +382,17 @@ public class RestServer {
      * when the internal node to node communication can't happen due to an invalid host name.
      */
     static void validateUriHost(URI uri) {
+        //java URI parsing will fail silently returning null in the host if the host name contains invalid characters like _
+        //this bubbles up later when the Herder tries to communicate on the advertised url and the current HttpClient fails with an ambiguous message
+        //we need to revisit this when we upgrade to a better HttpClient that can communicate with such host names or throws a better error message
         if (uri.getHost() == null) {
-            String host = Utils.getHost(uri.getAuthority());
-            String errorMsg = "Could not parse host from advertised URL=" + uri.toString();
+            String errorMsg = "Could not parse host '"  + uri.toString() + "' from advertised URL";
+            String host = uri.getAuthority() != null ? Utils.getHost(uri.getAuthority()) : null;
             if (host != null) {
                 try {
                     IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
                 } catch (IllegalArgumentException e) {
-                    errorMsg += ", as it doesn't conform to RFC 1123 specification, reason=" + e.getMessage();
+                    errorMsg += ", as it doesn't conform to RFC 1123 specification:" + e.getMessage();
                     throw new ConnectException(errorMsg, e);
                 }
             }
