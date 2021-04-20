@@ -18,30 +18,31 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
-import java.nio.ByteBuffer;
+public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataUpdate> {
 
-public class RemoteLogSegmentMetadataUpdateSerdes implements RemoteLogMetadataSerdes<RemoteLogSegmentMetadataUpdate> {
-
-    public ByteBuffer serialize(byte version, RemoteLogSegmentMetadataUpdate data) {
-        Message message = new RemoteLogSegmentMetadataUpdateRecord()
+    public ApiMessageAndVersion toApiMessageAndVersion(RemoteLogSegmentMetadataUpdate data) {
+        RemoteLogSegmentMetadataUpdateRecord record = new RemoteLogSegmentMetadataUpdateRecord()
                 .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
                 .setEventTimestampMs(data.eventTimestampMs())
                 .setRemoteLogSegmentState(data.state().id());
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int messageSize = message.size(cache, version);
-        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
-        message.write(writable, cache, version);
-        writable.flip();
-        return writable.buffer();
 
+        return new ApiMessageAndVersion(record, record.highestSupportedVersion());
+    }
+
+    public RemoteLogSegmentMetadataUpdate fromApiMessageAndVersion(ApiMessageAndVersion apiMessageAndVersion) {
+        RemoteLogSegmentMetadataUpdateRecord record = (RemoteLogSegmentMetadataUpdateRecord) apiMessageAndVersion.message();
+        RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry entry = record.remoteLogSegmentId();
+        TopicIdPartition topicIdPartition = new TopicIdPartition(entry.topicIdPartition().id(),
+                new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
+
+        return new RemoteLogSegmentMetadataUpdate(new RemoteLogSegmentId(topicIdPartition, entry.id()),
+                record.eventTimestampMs(), RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId());
     }
 
     private RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadataUpdate data) {
@@ -54,14 +55,4 @@ public class RemoteLogSegmentMetadataUpdateSerdes implements RemoteLogMetadataSe
                                 .setId(data.remoteLogSegmentId().topicIdPartition().topicId()));
     }
 
-    public RemoteLogSegmentMetadataUpdate deserialize(byte version, ByteBuffer metadataPayload) {
-        RemoteLogSegmentMetadataUpdateRecord record = new RemoteLogSegmentMetadataUpdateRecord(
-                new ByteBufferAccessor(metadataPayload), version);
-        RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry entry = record.remoteLogSegmentId();
-        TopicIdPartition topicIdPartition = new TopicIdPartition(entry.topicIdPartition().id(),
-                new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
-
-        return new RemoteLogSegmentMetadataUpdate(new RemoteLogSegmentId(topicIdPartition, entry.id()),
-                record.eventTimestampMs(), RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId());
-    }
 }

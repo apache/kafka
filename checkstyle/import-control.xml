@@ -271,6 +271,7 @@
 
     <subpackage name="log">
       <allow pkg="org.apache.kafka.server.log" />
+      <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
   </subpackage>
 
