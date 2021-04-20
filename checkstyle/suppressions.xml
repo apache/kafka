@@ -281,6 +281,10 @@
     <suppress checks="(ImportOrder|AvoidStarImport)"
               files="tools[\\/]src[\\/](main|test)[\\/].+.java$"/>
 
+    <!-- Trogdor -->
+    <suppress checks="(ImportOrder|AvoidStarImport)"
+              files="trogdor[\\/]src[\\/](main|test)[\\/].+.java$"/>
+
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"
               files="(GlobComponent).java"/>
