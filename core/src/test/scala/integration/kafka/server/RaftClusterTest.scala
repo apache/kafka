@@ -29,8 +29,6 @@ import java.util.Collections
 
 import scala.jdk.CollectionConverters._
 
-// Should remove the "Disabled" tag after KAFKA-12677 got fixed
-@Disabled
 @Timeout(120)
 class RaftClusterTest {
 
@@ -73,6 +71,7 @@ class RaftClusterTest {
     }
   }
 
+  @Disabled
   @Test
   def testCreateClusterAndCreateListDeleteTopic(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -131,6 +130,7 @@ class RaftClusterTest {
     }
   }
 
+  @Disabled
   @Test
   def testCreateClusterAndCreateAndManyTopics(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -174,6 +174,7 @@ class RaftClusterTest {
     }
   }
 
+  @Disabled
   @Test
   def testCreateClusterAndCreateAndManyTopicsWithManyPartitions(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
