@@ -392,7 +392,7 @@ public class RestServer {
                 try {
                     IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
                 } catch (IllegalArgumentException e) {
-                    errorMsg += ", as it doesn't conform to RFC 1123 specification:" + e.getMessage();
+                    errorMsg += ", as it doesn't conform to RFC 1123 specification: " + e.getMessage();
                     throw new ConnectException(errorMsg, e);
                 }
             }
