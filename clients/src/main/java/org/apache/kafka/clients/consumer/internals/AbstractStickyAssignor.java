@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -165,7 +164,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 partitionsPerTopic, consumerToOwnedPartitions));
         }
 
-        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
+        List<TopicPartition> sortedAllPartitions = getTopicPartitions(partitionsPerTopic);
 
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
@@ -173,7 +172,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         List<String> unfilledMembers = new LinkedList<>();
 
         int numberOfConsumers = consumerToOwnedPartitions.size();
-        int totalPartitionsCount = unassignedPartitions.size();
+        int totalPartitionsCount = sortedAllPartitions.size();
 
         int minQuota = (int) Math.floor(((double) totalPartitionsCount) / numberOfConsumers);
         int maxQuota = (int) Math.ceil(((double) totalPartitionsCount) / numberOfConsumers);
@@ -186,6 +185,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
             consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(maxQuota))));
 
+        List<TopicPartition> toBeRemovedPartitions = new ArrayList<>();
         // Reassign as many previously owned partitions as possible
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
@@ -198,23 +198,34 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // and put this member into unfilled member list
                 if (ownedPartitions.size() > 0) {
                     consumerAssignment.addAll(ownedPartitions);
-                    unassignedPartitions.removeAll(ownedPartitions);
+                    toBeRemovedPartitions.addAll(ownedPartitions);
                 }
                 unfilledMembers.add(consumer);
             } else if (ownedPartitions.size() >= maxQuota && numMaxCapacityMembers++ <= numExpectedMaxCapacityMembers) {
                 // consumer owned the "maxQuota" of partitions or more, and we still under the number of expected max capacity members
                 // so keep "maxQuota" of the owned partitions, and revoke the rest of the partitions
                 consumerAssignment.addAll(ownedPartitions.subList(0, maxQuota));
-                unassignedPartitions.removeAll(ownedPartitions.subList(0, maxQuota));
+                toBeRemovedPartitions.addAll(ownedPartitions.subList(0, maxQuota));
                 allRevokedPartitions.addAll(ownedPartitions.subList(maxQuota, ownedPartitions.size()));
             } else {
                 // consumer owned the "minQuota" of partitions or more
                 // so keep "minQuota" of the owned partitions, and revoke the rest of the partitions
                 consumerAssignment.addAll(ownedPartitions.subList(0, minQuota));
-                unassignedPartitions.removeAll(ownedPartitions.subList(0, minQuota));
+                toBeRemovedPartitions.addAll(ownedPartitions.subList(0, minQuota));
                 allRevokedPartitions.addAll(ownedPartitions.subList(minQuota, ownedPartitions.size()));
             }
         }
+
+        List<TopicPartition> unassignedPartitions;
+        if (!toBeRemovedPartitions.isEmpty()) {
+            Collections.sort(toBeRemovedPartitions,
+                Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+            unassignedPartitions = getUnassignedPartitions(sortedAllPartitions, toBeRemovedPartitions);
+            sortedAllPartitions = null;
+        } else {
+            unassignedPartitions = sortedAllPartitions;
+        }
+        toBeRemovedPartitions = null;
 
         if (log.isDebugEnabled()) {
             log.debug(String.format(
@@ -234,22 +245,27 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 List<TopicPartition> consumerAssignment = assignment.get(consumer);
 
                 int expectedAssignedCount = numMaxCapacityMembers < numExpectedMaxCapacityMembers ? maxQuota : minQuota;
+                int currentAssignedCount = consumerAssignment.size();
                 if (unassignedPartitionsIter.hasNext()) {
                     TopicPartition tp = unassignedPartitionsIter.next();
                     consumerAssignment.add(tp);
-                    unassignedPartitionsIter.remove();
+                    currentAssignedCount++;
                     // We already assigned all possible ownedPartitions, so we know this must be newly to this consumer
                     if (allRevokedPartitions.contains(tp))
                         partitionsTransferringOwnership.put(tp, consumer);
                 } else {
-                    // Should not enter here since we have calculated the exact number to assign to each consumer
-                    log.warn(String.format(
-                        "No more partitions to be assigned. consumer: [%s] with current size: %d, but expected size is %d",
-                        consumer, consumerAssignment.size(), expectedAssignedCount));
+                    // This will only happen when current consumer has minQuota of partitions, and in previous round,
+                    // the expectedAssignedCount is maxQuota, so, still in unfilledMembers list.
+                    // But now, expectedAssignedCount is minQuota, we can remove it.
+                    if (currentAssignedCount != minQuota) {
+                        // Should not enter here since we have calculated the exact number to assign to each consumer
+                        log.warn(String.format(
+                            "No more partitions to be assigned. consumer: [%s] with current size: %d, but expected size is %d",
+                            consumer, currentAssignedCount, expectedAssignedCount));
+                    }
+                    unfilledConsumerIter.remove();
                     break;
                 }
-
-                int currentAssignedCount = consumerAssignment.size();
 
                 if (currentAssignedCount == expectedAssignedCount) {
                     if (currentAssignedCount == maxQuota) {
@@ -263,16 +279,59 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         if (log.isDebugEnabled()) {
             log.debug("final assignment: " + assignment);
         }
-
+        
         return assignment;
     }
 
-    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
-        SortedSet<TopicPartition> allPartitions =
-            new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
-        for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
-            String topic = entry.getKey();
-            for (int i = 0; i < entry.getValue(); ++i) {
+    /**
+     * get the unassigned partition list by computing the difference set of the sortedPartitions(all partitions)
+     * and sortedToBeRemovedPartitions. We use two pointers technique here:
+     *
+     * We loop the sortedPartition, and compare the ith element in sorted toBeRemovedPartitions(i start from 0):
+     *   - if not equal to the ith element, add to unassignedPartitions
+     *   - if equal to the the ith element, get next element from sortedToBeRemovedPartitions
+     *
+     * @param sortedPartitions: sorted all partitions
+     * @param sortedToBeRemovedPartitions: sorted partitions, all are included in the sortedPartitions
+     * @return the partitions don't assign to any current consumers
+     */
+    private List<TopicPartition> getUnassignedPartitions(List<TopicPartition> sortedPartitions,
+                                                         List<TopicPartition> sortedToBeRemovedPartitions) {
+        List<TopicPartition> unassignedPartitions = new ArrayList<>(
+            sortedPartitions.size() - sortedToBeRemovedPartitions.size());
+
+        int index = 0;
+        boolean shouldAddDirectly = false;
+        int sizeToBeRemovedPartitions = sortedToBeRemovedPartitions.size();
+        TopicPartition nextPartition = sortedToBeRemovedPartitions.get(index);
+        for (TopicPartition topicPartition : sortedPartitions) {
+            if (shouldAddDirectly || !nextPartition.equals(topicPartition)) {
+                unassignedPartitions.add(topicPartition);
+            } else {
+                // equal case, don't add to unassignedPartitions, just get next partition
+                if (index < sizeToBeRemovedPartitions - 1) {
+                    nextPartition = sortedToBeRemovedPartitions.get(++index);
+                } else {
+                    // add the remaining directly since there is no more toBeRemovedPartitions
+                    shouldAddDirectly = true;
+                }
+            }
+        }
+        return unassignedPartitions;
+    }
+
+
+    private List<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
+        List<TopicPartition> allPartitions = new ArrayList<>(
+            partitionsPerTopic.values().stream().reduce(0, Integer::sum));
+
+        List<String> allTopics = new ArrayList<>(partitionsPerTopic.keySet());
+        // sort all topics first, then we can have sorted all topic partitions by adding partitions starting from 0
+        Collections.sort(allTopics);
+
+        for (String topic: allTopics) {
+            int partitionCount = partitionsPerTopic.get(topic);
+            for (int i = 0; i < partitionCount; ++i) {
                 allPartitions.add(new TopicPartition(topic, i));
             }
         }
