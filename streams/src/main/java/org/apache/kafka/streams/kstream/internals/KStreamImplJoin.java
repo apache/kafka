@@ -143,8 +143,8 @@ class KStreamImplJoin {
         builder.addGraphNode(otherGraphNode, otherWindowedStreamsNode);
 
         Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
-        if (leftOuter || rightOuter) {
-            final String outerJoinSuffix = leftOuter ? "-shared-left-outer-join" : "-shared-outer-join";
+        if (leftOuter) {
+            final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
 
             // Get the suffix index of the joinThisGeneratedName to build the outer join store name.
             final String outerJoinStoreGeneratedName = KStreamImpl.OUTERSHARED_NAME
