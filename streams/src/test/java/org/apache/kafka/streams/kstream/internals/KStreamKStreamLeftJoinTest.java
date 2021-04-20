@@ -74,12 +74,12 @@ public class KStreamKStreamLeftJoinTest {
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
-        props.put(StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 5);
+        props.put(StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 5);
 
         final StreamsException e = assertThrows(StreamsException.class,
             () -> new TopologyTestDriver(builder.build(), props));
 
-        assertEquals("Invalid value (5) on '" + StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX
+        assertEquals("Invalid value (5) on '" + StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX
             + "' configuration. Please specify a true/false value.", e.getCause().getMessage());
     }
 
@@ -109,7 +109,7 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        props.put(StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
+        props.put(StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -167,6 +167,7 @@ public class KStreamKStreamLeftJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
+            // verifies non-joined duplicates are emitted when window has closed
             inputTopic1.pipeInput(0, "A0", 0);
             inputTopic1.pipeInput(0, "A0-0", 0);
             inputTopic2.pipeInput(1, "a0", 111);
@@ -174,6 +175,21 @@ public class KStreamKStreamLeftJoinTest {
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0),
                 new KeyValueTimestamp<>(0, "A0-0+null", 0));
+
+            // verifies joined duplicates are emitted
+            inputTopic1.pipeInput(2, "A2", 200);
+            inputTopic1.pipeInput(2, "A2-0", 200);
+            inputTopic2.pipeInput(2, "a2", 201);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "A2+a2", 201),
+                new KeyValueTimestamp<>(2, "A2-0+a2", 201));
+
+            // this record should expired non-joined records, but because A2 and A2-0 are joined and
+            // emitted already, then they won't be emitted again
+            inputTopic2.pipeInput(3, "a3", 315);
+
+            processor.checkAndClearProcessResult();
         }
     }
 
@@ -195,7 +211,7 @@ public class KStreamKStreamLeftJoinTest {
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
-        props.put(StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
+        props.put(StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =

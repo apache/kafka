@@ -86,7 +86,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         private final Predicate<Windowed<KeyAndJoinSide<K>>> recordWindowHasClosed =
             windowedKey -> windowedKey.window().start() + joinAfterMs + joinGraceMs < maxObservedStreamTime.get();
 
-        private WindowStore<K, V2> otherWindow;
+        private WindowStore<K, V2> otherWindowStore;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
         private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
@@ -97,7 +97,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
-            otherWindow = context.getStateStore(otherWindowName);
+            otherWindowStore = context.getStateStore(otherWindowName);
 
             if (internalOuterJoinFixEnabled(context.appConfigs())) {
                 outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
@@ -105,7 +105,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
 
         private boolean internalOuterJoinFixEnabled(final Map<String, Object> configs) {
-            final String configName = StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+            final String configName = StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
             final Object value = configs.get(configName);
             if (value == null) {
                 return true;
@@ -114,7 +114,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             if (value instanceof Boolean) {
                 return (Boolean) value;
             } else if (value instanceof String) {
-                return Boolean.valueOf((String) value);
+                return Boolean.parseBoolean((String) value);
             } else {
                 throw new StreamsException(
                     "Invalid value (" + value + ") on '" + configName + "' configuration. "
@@ -152,7 +152,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 outerJoinWindowStore.ifPresent(store -> emitNonJoinedOuterRecords(store));
             }
 
-            try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
                     final KeyValue<Long, V2> otherRecord = iter.next();
@@ -205,23 +205,26 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 while (it.hasNext()) {
                     final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> record = it.next();
 
-                    // Skip next records if the emit condition is false
-                    if (!recordWindowHasClosed.test(record.key)) {
+                    final Windowed<KeyAndJoinSide<K>> windowedKey = record.key;
+                    final LeftOrRightValue value = record.value;
+
+                    // Skip next records if window has not closed
+                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
                         break;
                     }
 
-                    final K key = record.key.key().getKey();
-                    final long time = record.key.window().start();
+                    final K key = windowedKey.key().getKey();
+                    final long time = windowedKey.window().start();
 
                     final R nullJoinedValue;
                     if (isLeftSide) {
                         nullJoinedValue = joiner.apply(key,
-                            (V1) record.value.getLeftValue(),
-                            (V2) record.value.getRightValue());
+                            (V1) value.getLeftValue(),
+                            (V2) value.getRightValue());
                     } else {
                         nullJoinedValue = joiner.apply(key,
-                            (V1) record.value.getRightValue(),
-                            (V2) record.value.getLeftValue());
+                            (V1) value.getRightValue(),
+                            (V2) value.getLeftValue());
                     }
 
                     context().forward(key, nullJoinedValue, To.all().withTimestamp(time));

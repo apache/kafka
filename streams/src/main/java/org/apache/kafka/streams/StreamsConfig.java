@@ -904,7 +904,7 @@ public class StreamsConfig extends AbstractConfig {
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
 
         // Private API used to enable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
-        public static final String INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "internal.enable.streams.outer.join.spurious.results.fix";
+        public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
     }
 
     /**

@@ -79,17 +79,36 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
+            // verifies non-joined duplicates are emitted when window has closed
             inputTopic1.pipeInput(0, "A0", 0);
             inputTopic1.pipeInput(0, "A0-0", 0);
-            inputTopic2.pipeInput(1, "b1", 0);
-            inputTopic2.pipeInput(1, "b1-1", 0);
+            inputTopic2.pipeInput(1, "a1", 0);
+            inputTopic2.pipeInput(1, "a1-0", 0);
             inputTopic2.pipeInput(1, "a0", 111);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+b1", 0),
-                new KeyValueTimestamp<>(1, "null+b1-1", 0),
+                new KeyValueTimestamp<>(1, "null+a1", 0),
+                new KeyValueTimestamp<>(1, "null+a1-0", 0),
                 new KeyValueTimestamp<>(0, "A0+null", 0),
                 new KeyValueTimestamp<>(0, "A0-0+null", 0));
+
+            // verifies joined duplicates are emitted
+            inputTopic1.pipeInput(2, "A2", 200);
+            inputTopic1.pipeInput(2, "A2-0", 200);
+            inputTopic2.pipeInput(2, "a2", 201);
+            inputTopic2.pipeInput(2, "a2-0", 201);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(2, "A2+a2", 201),
+                new KeyValueTimestamp<>(2, "A2-0+a2", 201),
+                new KeyValueTimestamp<>(2, "A2+a2-0", 201),
+                new KeyValueTimestamp<>(2, "A2-0+a2-0", 201));
+
+            // this record should expired non-joined records; only null+a0 will be emitted because
+            // it did not have a join
+            inputTopic2.pipeInput(3, "a3", 315);
+
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "null+a0", 111));
         }
     }
 
@@ -111,7 +130,7 @@ public class KStreamKStreamOuterJoinTest {
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
-        props.put(StreamsConfig.InternalConfig.INTERNAL_ENABLE_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
+        props.put(StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -335,6 +354,53 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(2, "dummy", windowStart + 402);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(2, "dummy+dummy", windowStart + 402));
+        }
+    }
+
+    @Test
+    public void testOrdering() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // push two items to the primary stream; the other window is empty; this should not produce any item yet
+            // w1 = {}
+            // w2 = {}
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // --> w2 = {}
+            inputTopic1.pipeInput(0, "A0", 0);
+            inputTopic1.pipeInput(1, "A1", 100);
+            processor.checkAndClearProcessResult();
+
+            // push one item to the other window that has a join; this should produce non-joined records with a closed window first, then
+            // the joined records
+            // by the time they were produced before
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // w2 = { }
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
+            // --> w2 = { 0:a0 (ts: 100) }
+            inputTopic2.pipeInput(1, "a1", 110);
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
+                new KeyValueTimestamp<>(1, "A1+a1", 110));
         }
     }
 
