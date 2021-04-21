@@ -464,26 +464,27 @@ class KafkaServer(
   }
 
   def createBrokerInfo: BrokerInfo = {
-    val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
+
+    val advertisedListeners = config.advertisedListeners.map(endpoint =>
+      if (Utils.isBlank(endpoint.host))
+        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
+      else
+        endpoint
+    )
+
+    val endPoints = advertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
       require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
-    val listeners = config.advertisedListeners.map { endpoint =>
+    val updatedEndpoints = advertisedListeners.map { endpoint =>
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
       else
         endpoint
     }
-
-    val updatedEndpoints = listeners.map(endpoint =>
-      if (Utils.isBlank(endpoint.host))
-        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-      else
-        endpoint
-    )
 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
     BrokerInfo(
