@@ -191,6 +191,8 @@ public class RestServerTest {
 
     @Test
     public void testMaybeThrowInvalidHostNameException() {
+        maybeThrowInvalidHostNameException(URI.create("http://localhost:8080"), null);
+
         ConnectException exception = assertThrows(ConnectException.class, () -> maybeThrowInvalidHostNameException(URI.create("http://kafka_connect-0.dev-2:8080"), "kafka_connect-0.dev-2"));
         assertTrue(exception.getMessage().contains("RFC 1123"));
 
