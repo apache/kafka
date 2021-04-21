@@ -32,6 +32,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
     private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
         "kafka.controller", "ReplicationControlManager", "GlobalTopicCount", null);
+    private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
+        "kafka.controller", "ReplicationControlManager", "GlobalPartitionCount", null);
     
 
     private volatile boolean active;
@@ -40,6 +42,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Histogram eventQueueProcessingTime;
     private int topicCount;
     private final Gauge<Integer> globalTopicCount;
+    private int partitionCount;
+    private final Gauge<Integer> globalPartitionCount;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
@@ -56,6 +60,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return topicCount;
+            }
+        });
+        this.globalPartitionCount = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return partitionCount;
             }
         });
     }
@@ -93,5 +103,20 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public void decTopicCount() {
         topicCount--;
+    }
+
+    @Override
+    public int partitionCount() {
+        return partitionCount;
+    }
+
+    @Override
+    public void incPartitionCount() {
+        partitionCount++;
+    }
+
+    @Override
+    public void decPartitionCount() {
+        partitionCount--;
     }
 }

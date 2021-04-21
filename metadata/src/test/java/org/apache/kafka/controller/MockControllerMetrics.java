@@ -20,10 +20,12 @@ package org.apache.kafka.controller;
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
     private int topicCount;
+    private int partitionCount;
 
     public MockControllerMetrics() {
         this.active = false;
         this.topicCount = 0;
+        this.partitionCount = 0;
     }
 
     @Override
@@ -59,5 +61,20 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void decTopicCount() {
         this.topicCount--;    
+    }
+
+    @Override
+    public int partitionCount() {
+        return this.partitionCount;
+    }
+
+    @Override
+    public void incPartitionCount() {
+        partitionCount++;
+    }
+
+    @Override
+    public void decPartitionCount() {
+        partitionCount--;
     }
 }

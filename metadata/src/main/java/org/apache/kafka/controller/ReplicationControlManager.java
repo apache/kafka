@@ -346,6 +346,7 @@ public class ReplicationControlManager {
                     newPartInfo.leader);
             }
         }
+        controllerMetrics.incPartitionCount();
     }
 
     public void replay(PartitionChangeRecord record) {
@@ -384,6 +385,7 @@ public class ReplicationControlManager {
             for (int i = 0; i < partition.isr.length; i++) {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
+            controllerMetrics.decPartitionCount();
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
         controllerMetrics.decTopicCount();

@@ -32,4 +32,10 @@ public interface ControllerMetrics {
     void incTopicCount();
 
     void decTopicCount();
+
+    int partitionCount();
+
+    void incPartitionCount();
+
+    void decPartitionCount();
 }
