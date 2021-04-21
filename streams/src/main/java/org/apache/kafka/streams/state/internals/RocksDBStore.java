@@ -104,9 +104,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    // visible for testing
-    volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
-
     protected volatile boolean open = false;
 
     RocksDBStore(final String name,
@@ -239,11 +236,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
@@ -252,11 +248,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
