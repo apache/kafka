@@ -21,6 +21,7 @@ import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+import java.net.InetAddress
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
@@ -272,7 +273,7 @@ class BrokerServer(
       val networkListeners = new ListenerCollection()
       config.advertisedListeners.foreach { ep =>
         networkListeners.add(new Listener().
-          setHost(ep.host).
+          setHost(if (ep.host == null || ep.host.trim.isEmpty) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
           setName(ep.listenerName.value()).
           setPort(socketServer.boundPort(ep.listenerName)).
           setSecurityProtocol(ep.securityProtocol.id))
