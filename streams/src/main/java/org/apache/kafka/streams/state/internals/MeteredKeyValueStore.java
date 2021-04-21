@@ -39,6 +39,8 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -223,6 +225,13 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
+        List<KeyValue<K, V>> possiblyNullKeys = entries
+                .stream()
+                .filter(entry -> entry.key == null)
+                .collect(Collectors.toList());
+        if (!possiblyNullKeys.isEmpty()) {
+            Objects.requireNonNull(possiblyNullKeys.get(0).key, "key cannot be null");
+        }
         maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
     }
 
@@ -239,13 +248,15 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
-
+        Objects.requireNonNull(prefix, "key cannot be null");
         return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> range(final K from,
                                         final K to) {
+        Objects.requireNonNull(from, "keyFrom cannot be null");
+        Objects.requireNonNull(to, "keyTo cannot be null");
         return new MeteredKeyValueIterator(
             wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeSensor
@@ -255,6 +266,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public KeyValueIterator<K, V> reverseRange(final K from,
                                                final K to) {
+        Objects.requireNonNull(from, "keyFrom cannot be null");
+        Objects.requireNonNull(to, "keyTo cannot be null");
         return new MeteredKeyValueIterator(
             wrapped().reverseRange(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeSensor
@@ -295,7 +308,6 @@ public class MeteredKeyValueStore<K, V>
     }
 
     protected Bytes keyBytes(final K key) {
-        Objects.requireNonNull(key, "key cannot be null");
         return Bytes.wrap(serdes.rawKey(key));
     }
 

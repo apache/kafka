@@ -61,7 +61,6 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
-        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(() -> { 
                 final byte[] serializedValue = wrapped().get(keyBytes(key));
@@ -76,7 +75,6 @@ public class MeteredTimestampedKeyValueStore<K, V>
     public boolean putIfDifferentValues(final K key,
                                         final ValueAndTimestamp<V> newValue,
                                         final byte[] oldSerializedValue) {
-        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(
                 () -> {

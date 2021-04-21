@@ -478,6 +478,11 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
+    public void shouldThrowNullPointerOnFetchSessionIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetchSession(null, 0, Long.MAX_VALUE));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
         assertThrows(NullPointerException.class, () -> store.fetch(null, "to"));
     }
@@ -485,6 +490,21 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
         assertThrows(NullPointerException.class, () -> store.fetch("from", null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null));
     }
 
     @Test
@@ -500,6 +520,21 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfToIsNull() {
         assertThrows(NullPointerException.class, () -> store.findSessions("a", null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, "a", 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions("a", null, 0, 0));
     }
 
     private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }

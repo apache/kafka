@@ -318,19 +318,6 @@ public class MeteredTimestampedKeyValueStoreTest {
         verify(inner);
     }
 
-    @Test
-    public void shouldThrowNullPointerOnPutIfDifferentValuesIfKeyIsNull() {
-        final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String());
-        final byte[] encodedOldValue = stringSerde.serializer().serialize("TOPIC", VALUE_AND_TIMESTAMP);
-        final ValueAndTimestamp<String> newValueAndTimestamp = ValueAndTimestamp.make("value", 98L);
-        assertThrows(NullPointerException.class, () -> metered.putIfDifferentValues(null, newValueAndTimestamp, encodedOldValue));
-    }
-
-    @Test
-    public void shouldThrowNullPointerOnGetWithBinaryIfKeyIsNull() {
-        assertThrows(NullPointerException.class, () -> metered.getWithBinary(null));
-    }
-
     @SuppressWarnings("resource")
     @Test
     public void shouldPutIfOutOfOrder() {

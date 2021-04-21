@@ -456,6 +456,38 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
+    public void shouldThrowNullPointerOnPutAllIfAnyKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
+        final StringSerializer stringSerializer = new StringSerializer();
+
+        assertThrows(NullPointerException.class, () -> metered.prefixScan(null , stringSerializer));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range("from", null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
+    }
+
+    @Test
     public void shouldGetRecordsWithPrefixKey() {
         final StringSerializer stringSerializer = new StringSerializer();
         expect(inner.prefixScan(KEY, stringSerializer))
