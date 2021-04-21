@@ -33,14 +33,13 @@
     //
     // Version 9 is the first flexible version.
     //
-    // Version 10 adds topicId.
+    // Version 10 is the same as version 9.
     //
     // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
     // by the DescribeCluster API (KIP-700).
     { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
       "about": "The topics to fetch metadata for.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "nullableVersions": "10+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." }
     ]},
     { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
