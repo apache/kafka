@@ -166,6 +166,7 @@ libs += [
   kafkaStreams_23: "org.apache.kafka:kafka-streams:$versions.kafka_23",
   kafkaStreams_24: "org.apache.kafka:kafka-streams:$versions.kafka_24",
   kafkaStreams_25: "org.apache.kafka:kafka-streams:$versions.kafka_25",
+  kafkaStreams_26: "org.apache.kafka:kafka-streams:$versions.kafka_26",
   log4j: "log4j:log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
