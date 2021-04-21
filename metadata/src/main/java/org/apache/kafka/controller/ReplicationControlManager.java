@@ -843,13 +843,13 @@ public class ReplicationControlManager {
         }
         PartitionChangeRecord record = new PartitionChangeRecord().
             setPartitionId(partitionId).
-            setTopicId(topicId);
-        if (unclean && !Replicas.contains(partitionInfo.isr, newLeader)) {
+            setTopicId(topicId).
+            setLeader(newLeader);
+        if (!Replicas.contains(partitionInfo.isr, newLeader)) {
             // If the election was unclean, we have to forcibly set the ISR to just the
             // new leader.  This can result in data loss!
             record.setIsr(Collections.singletonList(newLeader));
         }
-        record.setLeader(newLeader);
         records.add(new ApiMessageAndVersion(record, (short) 0));
         return ApiError.NONE;
     }
@@ -1071,7 +1071,8 @@ public class ReplicationControlManager {
                     " existed in isrMembers, but not in the partitions map.");
             }
             int[] newIsr = Replicas.copyWithout(partition.isr, brokerToRemoveFromIsr);
-            int newLeader = bestLeader(partition.replicas, newIsr, false);
+            int newLeader = Replicas.contains(newIsr, partition.leader) ? partition.leader :
+                bestLeader(partition.replicas, newIsr, false);
             boolean unclean = newLeader != NO_LEADER && !Replicas.contains(newIsr, newLeader);
             if (unclean) {
                 // After an unclean leader election, the ISR is reset to just the new leader.
@@ -1101,7 +1102,7 @@ public class ReplicationControlManager {
                         append(record.partitionId());
                     prefix = ", ";
                 }
-                log.debug("{}: changing {}", context, bld.toString());
+                log.debug("{}: changing partition(s): {}", context, bld.toString());
             } else if (log.isInfoEnabled()) {
                 log.info("{}: changing {} partition(s)", context, records.size() - oldSize);
             }
