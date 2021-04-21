@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -99,7 +100,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
