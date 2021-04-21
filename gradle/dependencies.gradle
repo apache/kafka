@@ -94,7 +94,7 @@ versions += [
   kafka_23: "2.3.1",
   kafka_24: "2.4.1",
   kafka_25: "2.5.1",
-  kafka_26: "2.6.1",
+  kafka_26: "2.6.2",
   kafka_27: "2.7.0",
   lz4: "1.7.1",
   mavenArtifact: "3.6.3",
