@@ -653,26 +653,40 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testPartitionControlInfo() {
+    public void testElectionWasClean() {
+        assertTrue(ReplicationControlManager.electionWasClean(1, new int[] {1, 2}));
+        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {0, 2}));
+        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {}));
+        assertTrue(ReplicationControlManager.electionWasClean(3, new int[] {1,2,3,4,5,6}));
+    }
+
+    @Test
+    public void testPartitionControlInfoMergeAndDiff() {
         PartitionControlInfo a = new PartitionControlInfo(
             new int[]{1, 2, 3}, new int[]{1, 2}, null, null, 1, 0, 0);
         PartitionControlInfo b = new PartitionControlInfo(
             new int[]{1, 2, 3}, new int[]{3}, null, null, 3, 1, 1);
         PartitionControlInfo c = new PartitionControlInfo(
-            new int[]{1, 2, 3}, new int[]{1, 2}, new int[]{3}, null, 2, 1, 1);
-        PartitionControlInfo d = new PartitionControlInfo(
             new int[]{1, 2, 3}, new int[]{1}, null, null, 1, 0, 1);
-        assertTrue(a.wasCleanlyDerivedFrom(c));
-        assertTrue(c.wasCleanlyDerivedFrom(a));
-        assertTrue(a.wasCleanlyDerivedFrom(d));
-        assertTrue(d.wasCleanlyDerivedFrom(a));
-        assertFalse(b.wasCleanlyDerivedFrom(a));
-        assertFalse(a.wasCleanlyDerivedFrom(b));
         assertEquals(b, a.merge(new PartitionChangeRecord().
             setLeader(3).setIsr(Arrays.asList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
             b.diff(a));
         assertEquals("isr: [1, 2] -> [1], partitionEpoch: 0 -> 1",
-            d.diff(a));
+            c.diff(a));
+    }
+
+    @Test
+    public void testBestLeader() {
+        assertEquals(2, ReplicationControlManager.bestLeader(
+            new int[]{1, 2, 3, 4}, new int[]{4, 2, 3}, false, __ -> true));
+        assertEquals(3, ReplicationControlManager.bestLeader(
+            new int[]{3, 2, 1, 4}, new int[]{4, 2, 3}, false, __ -> true));
+        assertEquals(4, ReplicationControlManager.bestLeader(
+            new int[]{3, 2, 1, 4}, new int[]{4, 2, 3}, false, r -> r == 4));
+        assertEquals(-1, ReplicationControlManager.bestLeader(
+            new int[]{3, 4, 5}, new int[]{1, 2}, false, r -> r == 4));
+        assertEquals(4, ReplicationControlManager.bestLeader(
+            new int[]{3, 4, 5}, new int[]{1, 2}, true, r -> r == 4));
     }
 }
