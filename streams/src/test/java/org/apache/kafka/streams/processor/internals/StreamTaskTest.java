@@ -1243,6 +1243,10 @@ public class StreamTaskTest {
         task.suspend();
 
         assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+
+        task.resume();
+
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
     }
 
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
