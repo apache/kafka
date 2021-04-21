@@ -198,6 +198,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         this.committedOffsets = new HashMap<>();
         this.highWatermark = new HashMap<>();
+        this.timeCurrentIdlingStarted = Optional.empty();
     }
 
     // create queues for each assigned partition and associate them
@@ -667,7 +668,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
-        boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+        final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
         if (!readyToProcess) {
             if (!timeCurrentIdlingStarted.isPresent()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
@@ -699,7 +700,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 return false;
             }
         }
-        timeCurrentIdlingStarted = Optional.empty();
 
 
         try {
