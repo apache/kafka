@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.ApiMessageAndVersion;
 
 /**
  * This interface is about transforming metadata objects into the respective {@link ApiMessageAndVersion} or vice versa.

@@ -18,7 +18,7 @@
 package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.ApiMessageAndVersion;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

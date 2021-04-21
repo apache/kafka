@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.ApiMessageAndVersion;
 import org.apache.kafka.metalog.MetaLogLeader;
 import org.apache.kafka.metalog.MetaLogListener;
 import org.apache.kafka.raft.metadata.MetadataRecordSerde;

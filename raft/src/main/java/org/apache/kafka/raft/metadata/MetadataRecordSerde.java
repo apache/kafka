@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.ApiMessageAndVersion;
 import org.apache.kafka.raft.RecordSerde;
 
 public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {

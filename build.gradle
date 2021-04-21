@@ -1409,7 +1409,6 @@ project(':storage') {
   dependencies {
     implementation project(':storage:api')
     implementation project(':clients')
-    implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 

@@ -36,7 +36,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.ApiMessageAndVersion;
 import org.apache.kafka.metalog.MetaLogLeader;
 import org.apache.kafka.metalog.MetaLogListener;
 import org.apache.kafka.queue.EventQueue;
