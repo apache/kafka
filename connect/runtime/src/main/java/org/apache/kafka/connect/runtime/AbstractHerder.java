@@ -591,13 +591,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Connector getConnector(String connType) {
-        if (tempConnectors.containsKey(connType)) {
-            return tempConnectors.get(connType);
-        } else {
-            Connector connector = plugins().newConnector(connType);
-            tempConnectors.put(connType, connector);
-            return connector;
-        }
+        return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
     }
 
     /*
