@@ -358,11 +358,10 @@ public class RestServer {
         ServerConnector serverConnector = findConnector(advertisedSecurityProtocol);
         builder.scheme(advertisedSecurityProtocol);
 
-        String advertisedHostname = config.getString(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG);
-        if (advertisedHostname != null && !advertisedHostname.isEmpty())
-            builder.host(advertisedHostname);
-        else if (serverConnector != null && serverConnector.getHost() != null && serverConnector.getHost().length() > 0)
-            builder.host(serverConnector.getHost());
+        String hostNameOverride = hostNameOverride(serverConnector);
+        if (hostNameOverride != null) {
+            builder.host(hostNameOverride);
+        }
 
         Integer advertisedPort = config.getInt(WorkerConfig.REST_ADVERTISED_PORT_CONFIG);
         if (advertisedPort != null)
@@ -371,26 +370,34 @@ public class RestServer {
             builder.port(serverConnector.getPort());
 
         URI uri = builder.build();
-        validateUriHost(uri);
+        maybeThrowInvalidHostNameException(uri, hostNameOverride);
         log.info("Advertised URI: {}", uri);
 
         return uri;
+    }
+
+    private String hostNameOverride(ServerConnector serverConnector) {
+        String advertisedHostname = config.getString(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG);
+        if (advertisedHostname != null && !advertisedHostname.isEmpty())
+            return advertisedHostname;
+        else if (serverConnector != null && serverConnector.getHost() != null && serverConnector.getHost().length() > 0)
+            return serverConnector.getHost();
+        return null;
     }
 
     /**
      * Parses the uri and throws a more definitive error
      * when the internal node to node communication can't happen due to an invalid host name.
      */
-    static void validateUriHost(URI uri) {
+    static void maybeThrowInvalidHostNameException(URI uri, String hostNameOverride) {
         //java URI parsing will fail silently returning null in the host if the host name contains invalid characters like _
         //this bubbles up later when the Herder tries to communicate on the advertised url and the current HttpClient fails with an ambiguous message
-        //we need to revisit this when we upgrade to a better HttpClient that can communicate with such host names or throws a better error message
         if (uri.getHost() == null) {
-            String errorMsg = "Could not parse host '"  + uri.toString() + "' from advertised URL";
-            String host = uri.getAuthority() != null ? Utils.getHost(uri.getAuthority()) : null;
-            if (host != null) {
+            String errorMsg = "Could not parse host from advertised URL: '"  + uri.toString() + "'";
+            if (hostNameOverride != null) {
+                //validate hostname using IDN class to see if it can bubble up the real cause and we can show the user a more detailed exception
                 try {
-                    IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
+                    IDN.toASCII(hostNameOverride, IDN.USE_STD3_ASCII_RULES);
                 } catch (IllegalArgumentException e) {
                     errorMsg += ", as it doesn't conform to RFC 1123 specification: " + e.getMessage();
                     throw new ConnectException(errorMsg, e);
