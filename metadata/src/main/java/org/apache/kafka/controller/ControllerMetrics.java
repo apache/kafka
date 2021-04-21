@@ -27,15 +27,11 @@ public interface ControllerMetrics {
 
     void updateEventQueueProcessingTime(long durationMs);
 
-    int topicCount();
+    void setGlobalTopicsCount(int topicCount);
 
-    void incTopicCount();
+    int globalTopicsCount();
 
-    void decTopicCount();
+    void setGlobalPartitionCount(int partitionCount);
 
-    int partitionCount();
-
-    void incPartitionCount();
-
-    void decPartitionCount();
+    int globalPartitionCount();
 }

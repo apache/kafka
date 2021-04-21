@@ -37,13 +37,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     
 
     private volatile boolean active;
+    private volatile int topicCount;
+    private volatile int partitionCount;
     private final Gauge<Integer> activeControllerCount;
+    private final Gauge<Integer> globalPartitionCount;
+    private final Gauge<Integer> globalTopicCount;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
-    private int topicCount;
-    private final Gauge<Integer> globalTopicCount;
-    private int partitionCount;
-    private final Gauge<Integer> globalPartitionCount;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
@@ -62,7 +62,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
                 return topicCount;
             }
         });
-        this.globalPartitionCount = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
+        this.globalPartitionCount = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
                 return partitionCount;
@@ -91,32 +91,22 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public int topicCount() {
-        return topicCount;
+    public void setGlobalTopicsCount(int topicCount) {
+        this.topicCount = topicCount;
     }
 
     @Override
-    public void incTopicCount() {
-        topicCount++;
+    public int globalTopicsCount() {
+        return this.topicCount;
     }
 
     @Override
-    public void decTopicCount() {
-        topicCount--;
+    public void setGlobalPartitionCount(int partitionCount) {
+        this.partitionCount = partitionCount;
     }
 
     @Override
-    public int partitionCount() {
-        return partitionCount;
-    }
-
-    @Override
-    public void incPartitionCount() {
-        partitionCount++;
-    }
-
-    @Override
-    public void decPartitionCount() {
-        partitionCount--;
+    public int globalPartitionCount() {
+        return this.partitionCount;
     }
 }

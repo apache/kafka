@@ -264,6 +264,8 @@ public class ReplicationControlManager {
      */
     private final int defaultNumPartitions;
 
+    private int globalPartitionCount;
+
     /**
      * A reference to the controller's configuration control manager.
      */
@@ -308,6 +310,7 @@ public class ReplicationControlManager {
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
+        this.globalPartitionCount = 0;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
@@ -317,7 +320,7 @@ public class ReplicationControlManager {
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
-        controllerMetrics.incTopicCount();
+        controllerMetrics.setGlobalTopicsCount(topics.size());
         log.info("Created topic {} with ID {}.", record.name(), record.topicId());
     }
 
@@ -335,6 +338,7 @@ public class ReplicationControlManager {
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
+            globalPartitionCount++;
         } else {
             String diff = newPartInfo.diff(prevPartInfo);
             if (!diff.isEmpty()) {
@@ -346,7 +350,7 @@ public class ReplicationControlManager {
                     newPartInfo.leader);
             }
         }
-        controllerMetrics.incPartitionCount();
+        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
     }
 
     public void replay(PartitionChangeRecord record) {
@@ -385,10 +389,11 @@ public class ReplicationControlManager {
             for (int i = 0; i < partition.isr.length; i++) {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
-            controllerMetrics.decPartitionCount();
+            globalPartitionCount--;
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
-        controllerMetrics.decTopicCount();
+        controllerMetrics.setGlobalTopicsCount(topics.size());
+        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 

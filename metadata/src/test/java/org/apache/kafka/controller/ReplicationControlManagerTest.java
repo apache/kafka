@@ -205,7 +205,7 @@ public class ReplicationControlManagerTest {
         topicsToDelete.add(result.response().topics().find("foo").topicId());
 
         ControllerTestUtils.replayAll(replicationControl, result.records());
-        assertEquals(1, ctx.metrics.topicCount());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
 
         request = new CreateTopicsRequestData();
         request.topics().add(new CreatableTopic().setName("bar").
@@ -214,20 +214,20 @@ public class ReplicationControlManagerTest {
             setNumPartitions(2).setReplicationFactor((short) -1));
         result = replicationControl.createTopics(request);
         ControllerTestUtils.replayAll(replicationControl, result.records());
-        assertEquals(3, ctx.metrics.topicCount());
-        assertEquals(4, ctx.metrics.partitionCount());
+        assertEquals(3, ctx.metrics.globalTopicsCount());
+        assertEquals(4, ctx.metrics.globalPartitionCount());
 
         topicsToDelete.add(result.response().topics().find("baz").topicId());
         ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
         ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
-        assertEquals(1, ctx.metrics.topicCount());
-        assertEquals(1, ctx.metrics.partitionCount());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+        assertEquals(1, ctx.metrics.globalPartitionCount());
 
         Uuid topicToDelete = result.response().topics().find("bar").topicId();
         deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
         ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
-        assertEquals(0, ctx.metrics.topicCount());
-        assertEquals(0, ctx.metrics.partitionCount());
+        assertEquals(0, ctx.metrics.globalTopicsCount());
+        assertEquals(0, ctx.metrics.globalPartitionCount());
     }
 
     @Test
