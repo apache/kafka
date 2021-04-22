@@ -33,7 +33,8 @@
     //
     // Version 9 is the first flexible version.
     //
-    // Version 10 adds topicId.
+    // Version 10 adds topicId and allows name field to be null. However, this functionality was not implemented on the server.
+    // Versions 10 and 11 should not use the topicId field or set topic name to null.
     //
     // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
     // by the DescribeCluster API (KIP-700).
