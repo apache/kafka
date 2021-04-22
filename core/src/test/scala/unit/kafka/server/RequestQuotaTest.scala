@@ -652,6 +652,11 @@ class RequestQuotaTest extends BaseRequestTest {
               .setBrokerEpoch(6431),
             ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK.latestVersion)
 
+        case ApiKeys.LI_COMBINED_CONTROL =>
+          new LiCombinedControlRequest.Builder(ApiKeys.LI_COMBINED_CONTROL.latestVersion, brokerId, 0, new util.ArrayList[LiCombinedControlRequestData.LeaderAndIsrPartitionState](),
+            new util.ArrayList[Node](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataPartitionState](), new util.ArrayList[LiCombinedControlRequestData.UpdateMetadataBroker](),
+            new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState]())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

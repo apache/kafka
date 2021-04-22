@@ -84,7 +84,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   }
 
   def initBrokerResponseSensors(): Unit = {
-    Array(ApiKeys.STOP_REPLICA, ApiKeys.LEADER_AND_ISR, ApiKeys.UPDATE_METADATA).foreach { k: ApiKeys =>
+    Array(ApiKeys.STOP_REPLICA, ApiKeys.LEADER_AND_ISR, ApiKeys.UPDATE_METADATA, ApiKeys.LI_COMBINED_CONTROL).foreach { k: ApiKeys =>
       brokerResponseSensors.put(k, new BrokerResponseTimeStats(k))
     }
   }

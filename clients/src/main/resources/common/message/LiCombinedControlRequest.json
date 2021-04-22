@@ -1,0 +1,145 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 1001,
+  "type": "request",
+  "name": "LiCombinedControlRequest",
+  // version 1 adds the LeaderAndIsrType
+  //                TopicId within LeaderAndIsrTopicState
+  //                TopicId within UpdateMetadataTopicState
+  //                LeaderEpoch within StopReplicaPartitionState
+  "validVersions": "0-1",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+      "about": "The current controller ID." },
+    { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+      "about": "The current controller epoch." },
+    // fields from the LeaderAndIsr
+    { "name": "LeaderAndIsrType", "type": "int8", "versions": "1+",
+      "about": "The type that indicates whether all topics are included in the LeaderAndIsr request"},
+    { "name": "LeaderAndIsrTopicStates", "type": "[]LeaderAndIsrTopicState", "versions": "0+",
+      "about": "Each topic.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "1+", "ignorable": true,
+        "about": "The unique topic ID." },
+      { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "0+",
+        "about": "The state of each partition" }
+    ]},
+    { "name": "LiveLeaders", "type": "[]LeaderAndIsrLiveLeader", "versions": "0+",
+      "about": "The current live leaders. An empty list means there is no LeaderAndIsr info in this combined request.", "fields": [
+      { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The leader's broker ID." },
+      { "name": "HostName", "type": "string", "versions": "0+",
+        "about": "The leader's hostname." },
+      { "name": "Port", "type": "int32", "versions": "0+",
+        "about": "The leader's port." }
+    ]},
+    // fields from the UpdateMetadata
+    { "name": "UpdateMetadataTopicStates", "type": "[]UpdateMetadataTopicState", "versions": "0+",
+      "about": "In newer versions of this RPC, each topic that we would like to update.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "1+", "ignorable": true, "about": "The topic id."},
+      { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "0+",
+        "about": "The partition that we would like to update." }
+    ]},
+    { "name": "LiveBrokers", "type": "[]UpdateMetadataBroker", "versions": "0+",
+      "about": "The current live brokers. An empty list means there is no UpdateMetadata info in tihs combined request",
+      "fields": [
+      { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The broker id." },
+      { "name": "Endpoints", "type": "[]UpdateMetadataEndpoint", "versions": "0+", "ignorable": true,
+        "about": "The broker endpoints.", "fields": [
+        { "name": "Port", "type": "int32", "versions": "0+",
+          "about": "The port of this endpoint" },
+        { "name": "Host", "type": "string", "versions": "0+",
+          "about": "The hostname of this endpoint" },
+        { "name": "Listener", "type": "string", "versions": "0+", "ignorable": true,
+          "about": "The listener name." },
+        { "name": "SecurityProtocol", "type": "int16", "versions": "0+",
+          "about": "The security protocol type." }
+      ]},
+      { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+", "ignorable": true,
+        "about": "The rack which this broker belongs to." }
+    ]},
+    // fields from the StopReplica
+    { "name": "StopReplicaPartitionStates", "type": "[]StopReplicaPartitionState", "versions": "0+",
+      "about": "The topics to stop."}
+  ],
+  "commonStructs": [
+    { "name": "StopReplicaPartitionState", "versions": "0+", "fields": [
+        { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+          "about": "The topic name." },
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition indexes." },
+        { "name": "DeletePartitions", "type": "bool", "versions": "0+",
+          "about": "Whether these partitions should be deleted." },
+        { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+          "about": "The broker epoch." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "1+", "default": "-1",
+          "about": "The leader epoch." }
+    ]
+    },
+    { "name": "LeaderAndIsrPartitionState", "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0", "entityType": "topicName", "ignorable": true,
+        "about": "The topic name.  This is only present in v0." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        "about": "The partition index." },
+      { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+        "about": "The controller epoch." },
+      { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+        "about": "The broker epoch." },
+      { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The broker ID of the leader." },
+      { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+        "about": "The leader epoch." },
+      { "name": "Isr", "type": "[]int32", "versions": "0+",
+        "about": "The in-sync replica IDs." },
+      { "name": "ZkVersion", "type": "int32", "versions": "0+",
+        "about": "The ZooKeeper version." },
+      { "name": "Replicas", "type": "[]int32", "versions": "0+",
+        "about": "The replica IDs." },
+      { "name": "AddingReplicas", "type": "[]int32", "versions": "0+", "ignorable": true,
+        "about": "The replica IDs that we are adding this partition to, or null if no replicas are being added." },
+      { "name": "RemovingReplicas", "type": "[]int32", "versions": "0+", "ignorable": true,
+        "about": "The replica IDs that we are removing this partition from, or null if no replicas are being removed." },
+      { "name": "IsNew", "type": "bool", "versions": "0+", "default": "false", "ignorable": true,
+        "about": "Whether the replica should have existed on the broker or not." }
+    ]},
+    { "name": "UpdateMetadataPartitionState", "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0", "entityType": "topicName", "ignorable": true,
+        "about": "In older versions of this RPC, the topic name." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        "about": "The partition index." },
+      { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+        "about": "The controller epoch." },
+      { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The ID of the broker which is the current partition leader." },
+      { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+        "about": "The leader epoch of this partition." },
+      { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The brokers which are in the ISR for this partition." },
+      { "name": "ZkVersion", "type": "int32", "versions": "0+",
+        "about": "The Zookeeper version." },
+      { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
+        "about": "All the replicas of this partition." },
+      { "name": "OfflineReplicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId", "ignorable": true,
+        "about": "The replicas of this partition which are offline." }
+    ]}
+  ]
+}
