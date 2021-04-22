@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @InterfaceStability.Evolving
 public enum TransactionState {
@@ -32,14 +34,8 @@ public enum TransactionState {
     PREPARE_EPOCH_FENCE("PrepareEpochFence"),
     UNKNOWN("Unknown");
 
-    private final static Map<String, TransactionState> NAME_TO_ENUM;
-
-    static {
-        NAME_TO_ENUM = new HashMap<>();
-        for (TransactionState state : TransactionState.values()) {
-            NAME_TO_ENUM.put(state.name, state);
-        }
-    }
+    private final static Map<String, TransactionState> NAME_TO_ENUM = Arrays.stream(values())
+        .collect(Collectors.toMap(state -> state.name, Function.identity()));
 
     private final String name;
 
