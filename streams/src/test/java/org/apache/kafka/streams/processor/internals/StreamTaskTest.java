@@ -1220,6 +1220,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
         assertFalse(task.process(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
@@ -1227,10 +1229,27 @@ public class StreamTaskTest {
         task.addRecords(partition1, singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
         assertFalse(task.process(0L));
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
 
         task.addRecords(partition2, singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
         assertTrue(task.process(0L));
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
+    }
+
+    @Test
+    public void shouldBeRecordIdlingTimeIfSuspended() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.suspend();
+
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+
+        task.resume();
+
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
     }
 
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
