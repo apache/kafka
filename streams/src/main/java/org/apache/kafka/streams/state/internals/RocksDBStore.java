@@ -133,7 +133,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         tableConfig.setBlockSize(BLOCK_SIZE);
 
         filter = new BloomFilter();
-        tableConfig.setFilter(filter);
+        tableConfig.setFilterPolicy(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
