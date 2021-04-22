@@ -325,7 +325,7 @@ public class ReplicationControlManager {
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
-        log.info("Created topic {} with ID {}.", record.name(), record.topicId());
+        log.info("Created topic {} with topic ID {}.", record.name(), record.topicId());
     }
 
     public void replay(PartitionRecord record) {
@@ -337,7 +337,7 @@ public class ReplicationControlManager {
         PartitionControlInfo newPartInfo = new PartitionControlInfo(record);
         PartitionControlInfo prevPartInfo = topicInfo.parts.get(record.partitionId());
         String description = topicInfo.name + "-" + record.partitionId() +
-            " with ID " + record.topicId();
+            " with topic ID " + record.topicId();
         if (prevPartInfo == null) {
             log.info("Created partition {} and {}.", description, newPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
@@ -367,7 +367,8 @@ public class ReplicationControlManager {
         brokersToIsrs.update(record.topicId(), record.partitionId(),
             prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.leader,
             newPartitionInfo.leader);
-        String topicPart = topicInfo.name + "-" + record.partitionId();
+        String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
+            record.topicId();
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
     }
 
@@ -909,8 +910,8 @@ public class ReplicationControlManager {
         return uncleanOk ? bestUnclean : NO_LEADER;
     }
 
-    static boolean electionWasClean(int newLeader, int[] prevIsr) {
-        return newLeader == NO_LEADER || Replicas.contains(prevIsr, newLeader);
+    static boolean electionWasClean(int newLeader, int[] isr) {
+        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader);
     }
 
     public ControllerResult<Void> unregisterBroker(int brokerId) {
@@ -1076,7 +1077,7 @@ public class ReplicationControlManager {
                                      Iterator<TopicIdPartition> iterator) {
         int oldSize = records.size();
         Function<Integer, Boolean> isAcceptableLeader =
-            r -> r == brokerToAdd || clusterControl.unfenced(r);
+            r -> (r != brokerToRemove) && (r == brokerToAdd || clusterControl.unfenced(r));
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPart = iterator.next();
             TopicControlInfo topic = topics.get(topicIdPart.topicId());
