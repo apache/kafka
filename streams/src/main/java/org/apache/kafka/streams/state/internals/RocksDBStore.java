@@ -337,6 +337,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
         final byte[] oldValue;
         try {
             oldValue = dbAccessor.getOnly(key.get());
