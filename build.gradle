@@ -1410,6 +1410,7 @@ project(':storage') {
     implementation project(':storage:api')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':raft')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 

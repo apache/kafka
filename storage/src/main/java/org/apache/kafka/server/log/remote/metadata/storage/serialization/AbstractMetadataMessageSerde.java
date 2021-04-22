@@ -19,52 +19,41 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
-
+import org.apache.kafka.raft.metadata.AbstractMetadataRecordSerde;
 import java.nio.ByteBuffer;
 
 /**
- * This class provides serialization/deserialization of {@code ApiMessageAndVersion}.
+ * This class provides serialization/deserialization of {@code ApiMessageAndVersion}. This can be used as
+ * serialization/deserialization protocol for any metadata records derived of {@code ApiMessage}s.
  * <p></p>
  * Implementors need to extend this class and implement {@link #apiMessageFor(short)} method to return a respective
  * {@code ApiMessage} for the given {@code apiKey}. This is required to deserialize the bytes to build the respective
  * {@code ApiMessage} instance.
  */
-public abstract class AbstractApiMessageAndVersionSerde  {
+public abstract class AbstractMetadataMessageSerde {
+
+    private final AbstractMetadataRecordSerde metadataRecordSerde = new AbstractMetadataRecordSerde() {
+        @Override
+        public ApiMessage apiMessageFor(short apiKey) {
+            return AbstractMetadataMessageSerde.this.apiMessageFor(apiKey);
+        }
+    };
 
     public byte[] serialize(ApiMessageAndVersion messageAndVersion) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        short version = messageAndVersion.version();
-        ApiMessage message = messageAndVersion.message();
-
-        // Compute total size of the data including header: apiKey and apiVersion.
-        int headerSize = ByteUtils.sizeOfUnsignedVarint(messageAndVersion.message().apiKey()) +
-                ByteUtils.sizeOfUnsignedVarint(messageAndVersion.version());
-        int messageSize = message.size(cache, version);
-        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
-
-        // Write apiKey and version
-        writable.writeUnsignedVarint(message.apiKey());
-        writable.writeUnsignedVarint(version);
-
-        // Write the message
-        message.write(writable, cache, version);
+        int size = metadataRecordSerde.recordSize(messageAndVersion, cache);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(size));
+        metadataRecordSerde.write(messageAndVersion, cache, writable);
 
         return writable.buffer().array();
     }
 
     public ApiMessageAndVersion deserialize(byte[] data) {
+        Readable readable = new ByteBufferAccessor(ByteBuffer.wrap(data));
 
-        ByteBufferAccessor readable = new ByteBufferAccessor(ByteBuffer.wrap(data));
-
-        short apiKey = (short) readable.readUnsignedVarint();
-        short version = (short) readable.readUnsignedVarint();
-
-        ApiMessage message = apiMessageFor(apiKey);
-        message.read(readable, version);
-
-        return new ApiMessageAndVersion(message, version);
+        return metadataRecordSerde.read(readable, data.length);
     }
 
     /**

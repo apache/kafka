@@ -39,7 +39,7 @@ public class RemoteLogMetadataContextSerde {
 
     private static final Map<Short, RemoteLogMetadataTransform> KEY_TO_TRANSFORM = createRemoteLogMetadataTransforms();
 
-    private static final AbstractApiMessageAndVersionSerde API_MESSAGE_SERDE = new AbstractApiMessageAndVersionSerde() {
+    private static final AbstractMetadataMessageSerde METADATA_MESSAGE_SERDE = new AbstractMetadataMessageSerde() {
         @Override
         public ApiMessage apiMessageFor(short apiKey) {
             if (apiKey == REMOTE_LOG_SEGMENT_METADATA_API_KEY) {
@@ -72,11 +72,11 @@ public class RemoteLogMetadataContextSerde {
         @SuppressWarnings("unchecked")
         ApiMessageAndVersion apiMessageAndVersion = metadataTransform.toApiMessageAndVersion(remoteLogMetadataContext.payload());
 
-        return API_MESSAGE_SERDE.serialize(apiMessageAndVersion);
+        return METADATA_MESSAGE_SERDE.serialize(apiMessageAndVersion);
     }
 
     public RemoteLogMetadataContext deserialize(byte[] data) {
-        ApiMessageAndVersion apiMessageAndVersion = API_MESSAGE_SERDE.deserialize(data);
+        ApiMessageAndVersion apiMessageAndVersion = METADATA_MESSAGE_SERDE.deserialize(data);
 
         short apiKey = apiMessageAndVersion.message().apiKey();
         RemoteLogMetadataTransform metadataTransform = KEY_TO_TRANSFORM.get(apiKey);
