@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.LeastLoadedNodeAlgorithm;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
@@ -741,6 +742,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
             ApiVersions apiVersions = new ApiVersions();
+
+            LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm = LeastLoadedNodeAlgorithm.valueOf(
+                config.getString(ConsumerConfig.LEAST_LOADED_NODE_ALGORITHM_CONFIG)
+            );
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,
@@ -758,7 +763,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions,
                     throttleTimeSensor,
                     logContext,
-                    config.getString(ConsumerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG));
+                    config.getString(ConsumerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG),
+                    leastLoadedNodeAlgorithm);
 
             this.client = new ConsumerNetworkClient(
                     logContext,

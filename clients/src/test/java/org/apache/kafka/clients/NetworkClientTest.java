@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.PriorityQueue;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -72,6 +73,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+
+@SuppressWarnings("checkstyle:ClassDataAbstractionCoupling")
 public class NetworkClientTest {
 
     protected final int defaultRequestTimeoutMs = 1000;
@@ -1095,6 +1098,53 @@ public class NetworkClientTest {
         while (!client.ready(node0, time.milliseconds()))
             client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node0, time.milliseconds()));
+    }
+
+    @Test
+    public void testLeastLoadedNodePrioritization() {
+        Node nodeA = new Node(1, "1", 666);
+        Node nodeB = new Node(2, "2", 666);
+        Node nodeC = new Node(3, "3", 666);
+
+        NetworkClient.CandidateNode candA = new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.HAS_CAPACITY, 7);
+        NetworkClient.CandidateNode candB = new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.HAS_CAPACITY, 7);
+        assertEquals(0, candA.compareTo(candB));
+        assertEquals(0, candB.compareTo(candA));
+
+        assertTrue(
+            new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.HAS_CAPACITY, 8).compareTo(
+                new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.HAS_CAPACITY, 5)
+            ) < 0);
+
+        assertTrue(
+            new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.HAS_CAPACITY, 1).compareTo(
+                new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.HAS_CAPACITY, 9)
+            ) > 0);
+
+        assertTrue(
+            new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.CONNECTING, 1).compareTo(
+                new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.HAS_CAPACITY, 666)
+            ) < 0);
+
+        assertTrue(
+            new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.CONNECTABLE, 0).compareTo(
+                new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.CONNECTING, Integer.MAX_VALUE)
+            ) < 0);
+
+        PriorityQueue<NetworkClient.CandidateNode> queue = new PriorityQueue<>();
+
+        queue.add(new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.HAS_CAPACITY, 4));
+        queue.add(new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.HAS_CAPACITY, 1));
+        queue.add(new NetworkClient.CandidateNode(nodeC, NetworkClient.NodeState.CONNECTING, 0)); //worst
+
+        assertEquals(3, queue.poll().node.id());
+
+        queue.clear();
+        queue.add(new NetworkClient.CandidateNode(nodeA, NetworkClient.NodeState.CONNECTABLE, -1000)); //worst
+        queue.add(new NetworkClient.CandidateNode(nodeB, NetworkClient.NodeState.CONNECTING, 7));
+        queue.add(new NetworkClient.CandidateNode(nodeC, NetworkClient.NodeState.HAS_CAPACITY, 0));
+
+        assertEquals(1, queue.poll().node.id());
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {

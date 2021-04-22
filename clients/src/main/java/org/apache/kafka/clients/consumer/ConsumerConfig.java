@@ -18,11 +18,13 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.LeastLoadedNodeAlgorithm;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.EnumValueValidator;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -348,6 +350,11 @@ public class ConsumerConfig extends AbstractConfig {
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
+    // LinkedIn Hotfixes
+    public static final String LEAST_LOADED_NODE_ALGORITHM_CONFIG = CommonClientConfigs.LEAST_LOADED_NODE_ALGORITHM_CONFIG;
+    public static final String LEAST_LOADED_NODE_ALGORITHM_DOC = CommonClientConfigs.LEAST_LOADED_NODE_ALGORITHM_DOC;
+    public static final String DEFAULT_LEAST_LOADED_NODE_ALGORITHM = CommonClientConfigs.DEFAULT_LEAST_LOADED_NODE_ALGORITHM;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -604,6 +611,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(LEAST_LOADED_NODE_ALGORITHM_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_LEAST_LOADED_NODE_ALGORITHM,
+                                        new EnumValueValidator<>(LeastLoadedNodeAlgorithm.class),
+                                        Importance.MEDIUM,
+                                        LEAST_LOADED_NODE_ALGORITHM_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }

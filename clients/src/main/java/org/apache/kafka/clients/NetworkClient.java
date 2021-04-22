@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.PriorityQueue;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -131,6 +132,8 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
+    private volatile LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm = LeastLoadedNodeAlgorithm.VANILLA;
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -199,7 +202,8 @@ public class NetworkClient implements KafkaClient {
              throttleTimeSensor,
              logContext,
              new DefaultHostResolver(),
-             null);
+             null,
+             LeastLoadedNodeAlgorithm.VANILLA);
     }
 
     public NetworkClient(Selectable selector,
@@ -237,7 +241,48 @@ public class NetworkClient implements KafkaClient {
             throttleTimeSensor,
             logContext,
             new DefaultHostResolver(),
-            clientSoftwareNameAndCommit);
+            clientSoftwareNameAndCommit,
+            LeastLoadedNodeAlgorithm.VANILLA);
+    }
+
+    public NetworkClient(Selectable selector,
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         Sensor throttleTimeSensor,
+                         LogContext logContext,
+                         String clientSoftwareNameAndCommit,
+                         LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm) {
+        this(null,
+             metadata,
+             selector,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             throttleTimeSensor,
+             logContext,
+             new DefaultHostResolver(),
+             clientSoftwareNameAndCommit,
+             leastLoadedNodeAlgorithm);
     }
 
     public NetworkClient(Selectable selector,
@@ -255,6 +300,40 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          LogContext logContext) {
+        this(selector,
+             metadataUpdater,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             logContext,
+             LeastLoadedNodeAlgorithm.VANILLA);
+    }
+
+    public NetworkClient(Selectable selector,
+                         MetadataUpdater metadataUpdater,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         LogContext logContext,
+                         LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm) {
         this(metadataUpdater,
              null,
              selector,
@@ -273,8 +352,10 @@ public class NetworkClient implements KafkaClient {
              null,
              logContext,
              new DefaultHostResolver(),
-             null);
+             null,
+             leastLoadedNodeAlgorithm);
     }
+
     public NetworkClient(MetadataUpdater metadataUpdater,
         Metadata metadata,
         Selectable selector,
@@ -311,7 +392,8 @@ public class NetworkClient implements KafkaClient {
             throttleTimeSensor,
             logContext,
             hostResolver,
-            null);
+            null,
+            LeastLoadedNodeAlgorithm.VANILLA);
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -332,7 +414,8 @@ public class NetworkClient implements KafkaClient {
                          Sensor throttleTimeSensor,
                          LogContext logContext,
                          HostResolver hostResolver,
-                         String clientSoftwareNameAndCommit) {
+                         String clientSoftwareNameAndCommit,
+                         LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -363,6 +446,10 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
+        if (leastLoadedNodeAlgorithm == null) {
+            throw new IllegalArgumentException("must specify leastLoadedNodeAlgorithm");
+        }
+        this.leastLoadedNodeAlgorithm = leastLoadedNodeAlgorithm;
     }
 
     /**
@@ -385,6 +472,14 @@ public class NetworkClient implements KafkaClient {
             initiateConnect(node, now);
 
         return false;
+    }
+
+    public LeastLoadedNodeAlgorithm getLeastLoadedNodeAlgorithm() {
+        return leastLoadedNodeAlgorithm;
+    }
+
+    public void setLeastLoadedNodeAlgorithm(LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm) {
+        this.leastLoadedNodeAlgorithm = leastLoadedNodeAlgorithm;
     }
 
     // Visible for testing
@@ -756,6 +851,21 @@ public class NetworkClient implements KafkaClient {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         if (nodes.isEmpty())
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
+        LeastLoadedNodeAlgorithm algo = this.leastLoadedNodeAlgorithm;
+        if (algo == null) {
+            throw new IllegalStateException("leastLoadedNodeAlgorithm cannot be null");
+        }
+        switch (algo) {
+            case VANILLA:
+                return vanillaLeastLoadedNode(now, nodes);
+            case AT_LEAST_THREE:
+                return atLeastThreeLeastLoadedNode(now, nodes);
+            default:
+                throw new IllegalStateException("unhandled selection algorithm " + algo);
+        }
+    }
+
+    private Node vanillaLeastLoadedNode(long now, List<Node> nodes) {
         int inflight = Integer.MAX_VALUE;
 
         Node foundConnecting = null;
@@ -806,6 +916,87 @@ public class NetworkClient implements KafkaClient {
             log.trace("Least loaded node selection failed to find an available node");
             return null;
         }
+    }
+
+    //visible for testing
+    static enum NodeState {
+        HAS_CAPACITY, CONNECTING, CONNECTABLE
+    }
+
+    /**
+     * candidate nodes for least loaded node.
+     * comparison is implemented such that WORST candidate is the least value,
+     * because {@link PriorityQueue} is implemented such that poll() returns the
+     * least element (and we want poll() to pop out the worst candidate)
+     */
+    //visible for testing
+    static class CandidateNode implements Comparable<CandidateNode> {
+        final Node node;
+        final NodeState state;
+        final int weight;
+
+        public CandidateNode(Node node, NodeState state, int weight) {
+            this.node = node;
+            this.state = state;
+            this.weight = weight;
+        }
+
+        @Override
+        public int compareTo(CandidateNode o) {
+            int byState = o.state.compareTo(state);
+            if (byState != 0) {
+                return byState;
+            }
+            return o.weight - weight;
+        }
+    }
+
+    private Node atLeastThreeLeastLoadedNode(long now, List<Node> nodes) {
+
+        PriorityQueue<CandidateNode> pool = new PriorityQueue<>(4);
+
+        //scan over nodes starting at a random location to compensate for our early loop
+        //termination clause
+        int offset = this.randOffset.nextInt(nodes.size());
+        for (int i = 0; i < nodes.size(); i++) {
+            int idx = (offset + i) % nodes.size();
+            Node node = nodes.get(idx);
+            String id = node.idString();
+            if (canSendRequest(node.idString(), now)) {
+                int currInflight = this.inFlightRequests.count(node.idString());
+                pool.add(new CandidateNode(node, NodeState.HAS_CAPACITY, currInflight));
+            } else if (connectionStates.isPreparingConnection(node.idString())) {
+                pool.add(new CandidateNode(node, NodeState.CONNECTING, 0));
+            } else if (canConnect(node, now)) {
+                pool.add(new CandidateNode(node, NodeState.CONNECTABLE, 0));
+            } else {
+                log.trace("Removing node {} from least loaded node selection since it is neither ready " +
+                    "for sending or connecting", node);
+                continue;
+            }
+
+            if (pool.size() >= 3) {
+                if (pool.size() > 3) {
+                    pool.poll(); //remove "worst" node leaving 3
+                }
+                CandidateNode worstCandidate = pool.peek();
+                if (NodeState.HAS_CAPACITY.equals(worstCandidate.state) && worstCandidate.weight == 0) {
+                    //early loop termination - we have 3 candidates with live sockets and 0 in-flight
+                    break;
+                }
+            }
+        }
+
+        if (pool.isEmpty()) {
+            log.trace("Least loaded node selection failed to find an available node (empty pool)");
+            return null;
+        }
+
+        int chosen = randOffset.nextInt(pool.size());
+        CandidateNode[] finalists = pool.toArray(new CandidateNode[0]);
+        Node chosenNode = finalists[chosen].node;
+        log.trace("Least loaded node selected {} out of a pool of {}", chosenNode.idString(), pool.size());
+        return chosenNode;
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.LeastLoadedNodeAlgorithm;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
@@ -482,6 +483,9 @@ public class KafkaAdminClient extends AdminClient {
         Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
         LogContext logContext = createLogContext(clientId);
+        LeastLoadedNodeAlgorithm leastLoadedNodeAlgorithm = LeastLoadedNodeAlgorithm.valueOf(
+            config.getString(AdminClientConfig.LEAST_LOADED_NODE_ALGORITHM_CONFIG)
+        );
 
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
@@ -530,7 +534,9 @@ public class KafkaAdminClient extends AdminClient {
                 apiVersions,
                 null,
                 logContext,
-                (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
+                (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
+                null,
+                leastLoadedNodeAlgorithm);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
