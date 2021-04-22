@@ -42,7 +42,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
     public static final String OVERVIEW_DOC =
             "Flatten a nested data structure, generating names for each field by concatenating the field names at each "
                     + "level with a configurable delimiter character. Applies to Struct when schema present, or a Map "
-                    + "in the case of schemaless data. The default delimiter is '.'."
+                    + "in the case of schemaless data. Array fields and their contents are not modified. The default delimiter is '.'."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
