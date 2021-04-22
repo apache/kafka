@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.LiCombinedControlRequestData;
+import org.apache.kafka.common.message.LiCombinedControlResponseData;
 import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckRequestData;
 import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
@@ -211,7 +213,9 @@ public enum ApiKeys {
     OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS),
 
     // LinkedIn API keys for APIs not yet upstreamed.
-    LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK(1000, "LiControlledShutdownSkipSafetyCheck", true, LiControlledShutdownSkipSafetyCheckRequestData.SCHEMAS, LiControlledShutdownSkipSafetyCheckResponseData.SCHEMAS);
+    LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK(1000, "LiControlledShutdownSkipSafetyCheck", true, LiControlledShutdownSkipSafetyCheckRequestData.SCHEMAS, LiControlledShutdownSkipSafetyCheckResponseData.SCHEMAS),
+
+    LI_COMBINED_CONTROL(1001, "LiCombinedControl", true, LiCombinedControlRequestData.SCHEMAS, LiCombinedControlResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
