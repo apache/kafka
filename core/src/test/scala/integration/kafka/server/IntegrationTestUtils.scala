@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package integration.kafka.server
+package kafka.server
 
 import kafka.network.SocketServer
 import kafka.utils.{NotNothing, TestUtils}

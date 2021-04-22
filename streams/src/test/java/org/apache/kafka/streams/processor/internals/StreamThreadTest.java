@@ -37,6 +37,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -1853,11 +1854,12 @@ public class StreamThreadTest {
             100L,
             100L,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
             "K".getBytes().length,
             "V".getBytes().length,
             "K".getBytes(),
-            "V".getBytes()));
+            "V".getBytes(),
+            new RecordHeaders(),
+            Optional.empty()));
 
         thread.runOnce();
 
@@ -1940,11 +1942,12 @@ public class StreamThreadTest {
             110L,
             110L,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
             "K".getBytes().length,
             "V".getBytes().length,
             "K".getBytes(),
-            "V".getBytes()));
+            "V".getBytes(),
+            new RecordHeaders(),
+            Optional.empty()));
 
         thread.runOnce();
 
@@ -2148,22 +2151,24 @@ public class StreamThreadTest {
             ++offset,
             -1,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
             -1,
             -1,
             new byte[0],
-            "I am not an integer.".getBytes()));
+            "I am not an integer.".getBytes(),
+            new RecordHeaders(),
+            Optional.empty()));
         mockConsumer.addRecord(new ConsumerRecord<>(
             t1p1.topic(),
             t1p1.partition(),
             ++offset,
             -1,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
             -1,
             -1,
             new byte[0],
-            "I am not an integer.".getBytes()));
+            "I am not an integer.".getBytes(),
+            new RecordHeaders(),
+            Optional.empty()));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordDeserializer.class)) {
             thread.runOnce();
@@ -2860,11 +2865,12 @@ public class StreamThreadTest {
             offset,
             timestamp,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
             -1,
             -1,
             new byte[0],
-            new byte[0]));
+            new byte[0],
+            new RecordHeaders(),
+            Optional.empty()));
     }
 
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {

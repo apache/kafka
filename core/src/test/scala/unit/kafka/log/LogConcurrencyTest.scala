@@ -150,7 +150,9 @@ class LogConcurrencyTest {
       time = Time.SYSTEM,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
   }
 
   private def validateConsumedData(log: Log, consumedBatches: Iterable[FetchedBatch]): Unit = {

@@ -26,6 +26,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -81,6 +82,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -1218,6 +1220,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
         assertFalse(task.process(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
@@ -1225,10 +1229,27 @@ public class StreamTaskTest {
         task.addRecords(partition1, singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
         assertFalse(task.process(0L));
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
 
         task.addRecords(partition2, singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
         assertTrue(task.process(0L));
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
+    }
+
+    @Test
+    public void shouldBeRecordIdlingTimeIfSuspended() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.suspend();
+
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+
+        task.resume();
+
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
     }
 
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
@@ -2539,11 +2560,12 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             recordKey,
-            intSerializer.serialize(null, value)
+            intSerializer.serialize(null, value),
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 
@@ -2555,11 +2577,12 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             recordKey,
-            recordValue
+            recordValue,
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 
@@ -2570,11 +2593,12 @@ public class StreamTaskTest {
             offset,
             offset, // use the offset as the timestamp
             TimestampType.CREATE_TIME,
-            0L,
             0,
             0,
             new IntegerSerializer().serialize(topic1, key),
-            recordValue
+            recordValue,
+            new RecordHeaders(),
+            Optional.empty()
         );
     }
 
