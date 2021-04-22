@@ -50,7 +50,8 @@ class TransactionCoordinatorTest {
   private val partitions = mutable.Set[TopicPartition](new TopicPartition("topic1", 0))
   private val scheduler = new MockScheduler(time)
 
-  val coordinator = new TransactionCoordinator(brokerId,
+  val coordinator = new TransactionCoordinator(
+    brokerId,
     TransactionConfig(),
     scheduler,
     () => pidGenerator,
@@ -1085,6 +1086,22 @@ class TransactionCoordinatorTest {
     val result = coordinator.handleDescribeTransactions("")
     assertEquals("", result.transactionalId)
     assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
+  }
+
+  @Test
+  def testDescribeTransactionsWithExpiringTransactionalId(): Unit = {
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Dead, mutable.Set.empty, time.milliseconds(),
+      time.milliseconds())
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    EasyMock.replay(transactionManager)
+
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(Errors.TRANSACTIONAL_ID_NOT_FOUND, Errors.forCode(result.errorCode))
   }
 
   @Test
