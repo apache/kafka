@@ -20,6 +20,9 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Class used to configure the name of the join processor, the repartition topic name,
  * state stores or state store names in  Stream-Stream join.
@@ -36,6 +39,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final WindowBytesStoreSupplier otherStoreSupplier;
     protected final String name;
     protected final String storeName;
+    protected final boolean loggingEnabled;
+    protected final Map<String, String> topicConfig;
 
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
@@ -44,7 +49,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             streamJoined.thisStoreSupplier,
             streamJoined.otherStoreSupplier,
             streamJoined.name,
-            streamJoined.storeName);
+            streamJoined.storeName,
+            streamJoined.loggingEnabled,
+            streamJoined.topicConfig);
     }
 
     private StreamJoined(final Serde<K> keySerde,
@@ -53,7 +60,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
                          final WindowBytesStoreSupplier thisStoreSupplier,
                          final WindowBytesStoreSupplier otherStoreSupplier,
                          final String name,
-                         final String storeName) {
+                         final String storeName,
+                         final boolean loggingEnabled,
+                         final Map<String, String> topicConfig) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -61,6 +70,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
         this.otherStoreSupplier = otherStoreSupplier;
         this.name = name;
         this.storeName = storeName;
+        this.loggingEnabled = loggingEnabled;
+        this.topicConfig = topicConfig;
     }
 
     /**
@@ -84,7 +95,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             storeSupplier,
             otherStoreSupplier,
             null,
-            null
+            null,
+            true,
+            new HashMap<>()
         );
     }
 
@@ -94,6 +107,10 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      * or ${applicationId}-&lt;storeName&gt;-outer-this-join and ${applicationId}-&lt;storeName&gt;-outer-other-join depending if the join is an inner-join
      * or an outer join. The changelog topics will have the -changelog suffix.  The user should note that even though the join stores will have a
      * specified name, the stores will remain unavailable for querying.
+     *
+     * Please note that if you are using {@link StreamJoined} to replace deprecated {@link KStream#join} functions with
+     * {@link Joined} parameters in order to set the name for the join processors, you would need to create the {@link StreamJoined}
+     * object first and then call {@link StreamJoined#withName}
      *
      * @param storeName  The name to use for the store
      * @param <K>        The key type
@@ -109,7 +126,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
-            storeName
+            storeName,
+            true,
+            new HashMap<>()
         );
     }
 
@@ -136,7 +155,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
-            null
+            null,
+            true,
+            new HashMap<>()
         );
     }
 
@@ -154,7 +175,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -176,7 +199,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -193,7 +218,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -210,7 +237,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -227,7 +256,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -247,7 +278,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 
@@ -267,7 +300,49 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            topicConfig
+        );
+    }
+
+    /**
+     * Configures logging for both state stores. The changelog will be created with the provided configs.
+     * <p>
+     * Note: Any unrecognized configs will be ignored
+     * @param config  configs applied to the changelog topic
+     * @return            a new {@link StreamJoined} configured with logging enabled
+     */
+    public StreamJoined<K, V1, V2> withLoggingEnabled(final Map<String, String> config) {
+
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            true,
+            config
+        );
+    }
+
+    /**
+     * Disable change logging for both state stores.
+     * @return            a new {@link StreamJoined} configured with logging disabled
+     */
+    public StreamJoined<K, V1, V2> withLoggingDisabled() {
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            false,
+            new HashMap<>()
         );
     }
 
@@ -281,6 +356,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             ", otherStoreSupplier=" + otherStoreSupplier +
             ", name='" + name + '\'' +
             ", storeName='" + storeName + '\'' +
+            ", loggingEnabled=" + loggingEnabled +
+            ", topicConfig=" + topicConfig +
             '}';
     }
 }

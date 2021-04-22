@@ -22,8 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Properties, Random}
-
+import java.util.{Collections, Locale, Map, Optional, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -32,11 +31,10 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -113,8 +111,8 @@ object ConsoleConsumer extends Logging {
       }
       messageCount += 1
       try {
-        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp, msg.timestampType,
+          0, 0, msg.key, msg.value, msg.headers, Optional.empty[Integer]), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -338,8 +336,8 @@ object ConsoleConsumer extends Logging {
     val offsetArg =
       if (options.has(offsetOpt)) {
         options.valueOf(offsetOpt).toLowerCase(Locale.ROOT) match {
-          case "earliest" => ListOffsetRequest.EARLIEST_TIMESTAMP
-          case "latest" => ListOffsetRequest.LATEST_TIMESTAMP
+          case "earliest" => ListOffsetsRequest.EARLIEST_TIMESTAMP
+          case "latest" => ListOffsetsRequest.LATEST_TIMESTAMP
           case offsetString =>
             try {
               val offset = offsetString.toLong
@@ -351,8 +349,8 @@ object ConsoleConsumer extends Logging {
             }
         }
       }
-      else if (fromBeginning) ListOffsetRequest.EARLIEST_TIMESTAMP
-      else ListOffsetRequest.LATEST_TIMESTAMP
+      else if (fromBeginning) ListOffsetsRequest.EARLIEST_TIMESTAMP
+      else ListOffsetsRequest.LATEST_TIMESTAMP
 
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
@@ -405,7 +403,7 @@ object ConsoleConsumer extends Logging {
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
           // default to latest if no offset is provided
-          seek(topic, partitionId, ListOffsetRequest.LATEST_TIMESTAMP)
+          seek(topic, partitionId, ListOffsetsRequest.LATEST_TIMESTAMP)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
         case (None, None, None, Some(whitelist)) =>
@@ -422,8 +420,8 @@ object ConsoleConsumer extends Logging {
       val topicPartition = new TopicPartition(topic, partitionId)
       consumer.assign(Collections.singletonList(topicPartition))
       offset match {
-        case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
-        case ListOffsetRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
+        case ListOffsetsRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        case ListOffsetsRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
         case _ => consumer.seek(topicPartition, offset)
       }
     }
@@ -615,18 +613,3 @@ class NoOpMessageFormatter extends MessageFormatter {
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
 
-class ChecksumMessageFormatter extends MessageFormatter {
-  private var topicStr: String = _
-
-  override def configure(configs: Map[String, _]): Unit = {
-    topicStr = if (configs.containsKey("topic"))
-      configs.get("topic").toString + ":"
-    else
-      ""
-  }
-
-  @nowarn("cat=deprecation")
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-    output.println(topicStr + "checksum:" + consumerRecord.checksum)
-  }
-}

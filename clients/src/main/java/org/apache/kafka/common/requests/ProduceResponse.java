@@ -18,15 +18,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.SendBuilder;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -60,6 +57,7 @@ public class ProduceResponse extends AbstractResponse {
     private final ProduceResponseData data;
 
     public ProduceResponse(ProduceResponseData produceResponseData) {
+        super(ApiKeys.PRODUCE);
         this.data = produceResponseData;
     }
 
@@ -80,11 +78,6 @@ public class ProduceResponse extends AbstractResponse {
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
         this(toData(responses, throttleTimeMs));
-    }
-
-    @Override
-    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
     }
 
     private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
@@ -113,41 +106,9 @@ public class ProduceResponse extends AbstractResponse {
         return data;
     }
 
-    /**
-     * Visible for testing.
-     */
     @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public ProduceResponseData data() {
         return this.data;
-    }
-
-    /**
-     * this method is used by testing only.
-     * refactor the tests which are using this method and then remove this method from production code.
-     * https://issues.apache.org/jira/browse/KAFKA-10697
-     */
-    @Deprecated
-    public Map<TopicPartition, PartitionResponse> responses() {
-        return data.responses()
-                .stream()
-                .flatMap(t -> t.partitionResponses()
-                        .stream()
-                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.index()),
-                                new PartitionResponse(
-                                        Errors.forCode(p.errorCode()),
-                                        p.baseOffset(),
-                                        p.logAppendTimeMs(),
-                                        p.logStartOffset(),
-                                        p.recordErrors()
-                                                .stream()
-                                                .map(e -> new RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
-                                                .collect(Collectors.toList()),
-                                        p.errorMessage()))))
-                .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
     }
 
     @Override

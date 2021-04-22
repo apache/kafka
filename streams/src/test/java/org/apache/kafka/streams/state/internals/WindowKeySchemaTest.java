@@ -51,7 +51,7 @@ public class WindowKeySchemaTest {
     final private Window window = new TimeWindow(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
     final private WindowKeySchema windowKeySchema = new WindowKeySchema();
-    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
+    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
 
     @Test
@@ -242,7 +242,7 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void shouldExtractEndTimeFromBinary() {
+    public void shouldExtractSequenceFromBinary() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
         assertEquals(0, WindowKeySchema.extractStoreSequence(serialized.get()));
     }

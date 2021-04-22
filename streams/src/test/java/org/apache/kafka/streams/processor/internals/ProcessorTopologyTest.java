@@ -53,20 +53,27 @@ import org.junit.Test;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ProcessorTopologyTest {
@@ -149,25 +156,103 @@ public class ProcessorTopologyTest {
 
     @Test
     public void shouldUpdateSourceTopicsWithNewMatchingTopic() {
-        topology.addSource("source-1", "topic-1");
+        final String sourceNode = "source-1";
+        final String topic = "topic-1";
+        final String newTopic = "topic-2";
+        topology.addSource(sourceNode, topic);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+        assertThat(processorTopology.source(newTopic), is(nullValue()));
 
-        assertNull(processorTopology.source("topic-2"));
-        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", asList("topic-1", "topic-2")));
+        processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, asList(topic, newTopic)));
 
-        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+        assertThat(processorTopology.source(newTopic).name(), equalTo(sourceNode));
     }
 
     @Test
     public void shouldUpdateSourceTopicsWithRemovedTopic() {
-        topology.addSource("source-1", "topic-1", "topic-2");
+        final String sourceNode = "source-1";
+        final String topic = "topic-1";
+        final String topicToRemove = "topic-2";
+        topology.addSource(sourceNode, topic, topicToRemove);
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+        assertThat(processorTopology.source(topicToRemove).name(), equalTo(sourceNode));
+
+        processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, Collections.singletonList(topic)));
+
+        assertThat(processorTopology.source(topicToRemove), is(nullValue()));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsWithAllTopicsRemoved() {
+        final String sourceNode = "source-1";
+        final String topic = "topic-1";
+        topology.addSource(sourceNode, topic);
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+        assertThat(processorTopology.source(topic).name(), equalTo(sourceNode));
+
+        processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, Collections.emptyList()));
+
+        assertThat(processorTopology.source(topic), is(nullValue()));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsOnlyForSourceNodesWithinTheSubtopology() {
+        final String sourceNodeWithinSubtopology = "source-1";
+        final String sourceNodeOutsideSubtopology = "source-2";
+        final String topicWithinSubtopology = "topic-1";
+        final String topicOutsideSubtopology = "topic-2";
+        topology.addSource(sourceNodeWithinSubtopology, topicWithinSubtopology);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+        processorTopology.updateSourceTopics(mkMap(
+            mkEntry(sourceNodeWithinSubtopology, Collections.singletonList(topicWithinSubtopology)),
+            mkEntry(sourceNodeOutsideSubtopology, Collections.singletonList(topicOutsideSubtopology))
+            )
+        );
 
-        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
+        assertThat(processorTopology.source(topicOutsideSubtopology), is(nullValue()));
+        assertThat(processorTopology.sources().size(), equalTo(1));
+    }
 
-        assertNull(processorTopology.source("topic-2"));
+    @Test
+    public void shouldThrowIfSourceNodeToUpdateDoesNotExist() {
+        final String existingSourceNode = "source-1";
+        final String nonExistingSourceNode = "source-2";
+        final String topicOfExistingSourceNode = "topic-1";
+        final String topicOfNonExistingSourceNode = "topic-2";
+        topology.addSource(nonExistingSourceNode, topicOfNonExistingSourceNode);
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> processorTopology.updateSourceTopics(Collections.singletonMap(
+                existingSourceNode, Collections.singletonList(topicOfExistingSourceNode)
+            ))
+        );
+        assertThat(exception.getMessage(), is("Node " + nonExistingSourceNode + " not found in full topology"));
+    }
+
+    @Test
+    public void shouldThrowIfMultipleSourceNodeOfSameSubtopologySubscribedToSameTopic() {
+        final String sourceNode = "source-1";
+        final String updatedSourceNode = "source-2";
+        final String doublySubscribedTopic = "topic-1";
+        final String topic = "topic-2";
+        topology.addSource(sourceNode, doublySubscribedTopic);
+        topology.addSource(updatedSourceNode, topic);
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> processorTopology.updateSourceTopics(mkMap(
+                mkEntry(sourceNode, Collections.singletonList(doublySubscribedTopic)),
+                mkEntry(updatedSourceNode, Arrays.asList(topic, doublySubscribedTopic))
+            ))
+        );
+        assertThat(
+            exception.getMessage(),
+            startsWith("Topic " + doublySubscribedTopic + " was already registered to source node")
+        );
     }
 
     @Test
@@ -193,61 +278,6 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4");
         assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5");
         assertTrue(outputTopic1.isEmpty());
-    }
-
-
-    @Test
-    public void testDrivingMultiplexingTopology() {
-        driver = new TopologyTestDriver(createMultiplexingTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
-        final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
-        final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
-        inputTopic.pipeInput("key1", "value1");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key1", "value1(2)");
-
-        inputTopic.pipeInput("key2", "value2");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2(2)");
-
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key4", "value4");
-        inputTopic.pipeInput("key5", "value5");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key3", "value3(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key4", "value4(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key5", "value5(2)");
-    }
-
-    @Test
-    public void testDrivingMultiplexByNameTopology() {
-        driver = new TopologyTestDriver(createMultiplexByNameTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
-        inputTopic.pipeInput("key1", "value1");
-        final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
-        final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
-        assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key1", "value1(2)");
-
-        inputTopic.pipeInput("key2", "value2");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2(2)");
-
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key4", "value4");
-        inputTopic.pipeInput("key5", "value5");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4(1)");
-        assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5(1)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key3", "value3(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key4", "value4(2)");
-        assertNextOutputRecord(outputTopic2.readRecord(), "key5", "value5(2)");
     }
 
     @Test
@@ -662,43 +692,25 @@ public class ProcessorTopologyTest {
     private Topology createSimpleTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source")
+            .addProcessor("processor", ForwardingProcessor::new, "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "source")
+            .addProcessor("processor", TimestampProcessor::new, "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", () -> (Processor<String, String, String, String>) new FanOutTimestampProcessor("child1", "child2"), "source")
-            .addProcessor("child1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "processor")
-            .addProcessor("child2", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "processor")
+            .addProcessor("processor", () -> new FanOutTimestampProcessor("child1", "child2"), "source")
+            .addProcessor("child1", ForwardingProcessor::new, "processor")
+            .addProcessor("child2", TimestampProcessor::new, "processor")
             .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
-    }
-
-    @Deprecated // testing old PAPI
-    private Topology createMultiplexingTopology() {
-        return topology
-            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new MultiplexingProcessor(2)), "source")
-            .addSink("sink1", OUTPUT_TOPIC_1, "processor")
-            .addSink("sink2", OUTPUT_TOPIC_2, "processor");
-    }
-
-    @Deprecated // testing old PAPI
-    private Topology createMultiplexByNameTopology() {
-        return topology
-            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new MultiplexByNameProcessor(2)), "source")
-            .addSink("sink0", OUTPUT_TOPIC_1, "processor")
-            .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
     @Deprecated // testing old PAPI
@@ -734,7 +746,7 @@ public class ProcessorTopologyTest {
 
     private Topology createInternalRepartitioningWithValueTimestampTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
-                .addProcessor("processor", () -> (Processor<String, String, String, String>) new ValueTimestampProcessor(), "source")
+                .addProcessor("processor", ValueTimestampProcessor::new, "source")
                 .addSink("sink0", THROUGH_TOPIC_1, "processor")
                 .addSource("source1", THROUGH_TOPIC_1)
                 .addSink("sink1", OUTPUT_TOPIC_1, "source1");
@@ -755,16 +767,16 @@ public class ProcessorTopologyTest {
 
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-1")
+                .addProcessor("processor-1", ForwardingProcessor::new, "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-                .addProcessor("processor-2", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-2")
+                .addProcessor("processor-2", ForwardingProcessor::new, "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new AddHeaderProcessor(), "source-1")
+                .addProcessor("processor-1", AddHeaderProcessor::new, "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, "processor-1");
     }
 
@@ -863,45 +875,6 @@ public class ProcessorTopologyTest {
     }
 
     /**
-     * A processor that forwards slightly-modified messages to each child.
-     */
-    protected static class MultiplexingProcessor extends AbstractProcessor<String, String> {
-        private final int numChildren;
-
-        MultiplexingProcessor(final int numChildren) {
-            this.numChildren = numChildren;
-        }
-
-        @SuppressWarnings("deprecation") // need to test deprecated code until removed
-        @Override
-        public void process(final String key, final String value) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")", i);
-            }
-        }
-    }
-
-    /**
-     * A processor that forwards slightly-modified messages to each named child.
-     * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
-     */
-    protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String> {
-        private final int numChildren;
-
-        MultiplexByNameProcessor(final int numChildren) {
-            this.numChildren = numChildren;
-        }
-
-        @SuppressWarnings("deprecation") // need to test deprecated code until removed
-        @Override
-        public void process(final String key, final String value) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
-            }
-        }
-    }
-
-    /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
     protected static class OldAPIStatefulProcessor extends AbstractProcessor<String, String> {
@@ -913,10 +886,9 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<String, String>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

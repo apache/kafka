@@ -17,7 +17,7 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, V_0_9_0_0
+from kafkatest.version import DEV_BRANCH
 
 
 
@@ -53,7 +53,7 @@ class EndToEndLatencyService(PerformanceService):
 
         security_protocol = self.security_config.security_protocol
 
-        if version < V_0_9_0_0:
+        if not version.consumer_supports_bootstrap_server():
             assert security_protocol == SecurityConfig.PLAINTEXT, \
                 "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
             assert compression_type == "none", \
@@ -74,15 +74,18 @@ class EndToEndLatencyService(PerformanceService):
     def start_cmd(self, node):
         args = self.args.copy()
         args.update({
-            'zk_connect': self.kafka.zk_connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
             'kafka_run_class': self.path.script("kafka-run-class.sh", node),
             'java_class_name': self.java_class_name()
         })
+        if not node.version.consumer_supports_bootstrap_server():
+            args.update({
+                'zk_connect': self.kafka.zk_connect_setting(),
+            })
 
         cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
-        if node.version >= V_0_9_0_0:
+        if node.version.consumer_supports_bootstrap_server():
             cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s %(java_class_name)s " % args
             cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(config_file)s" % args
         else:
@@ -102,7 +105,7 @@ class EndToEndLatencyService(PerformanceService):
 
         node.account.create_file(EndToEndLatencyService.LOG4J_CONFIG, log_config)
         client_config = str(self.security_config)
-        if node.version >= V_0_9_0_0:
+        if node.version.consumer_supports_bootstrap_server():
             client_config += "compression_type=%(compression_type)s" % self.args
         node.account.create_file(EndToEndLatencyService.CONFIG_FILE, client_config)
 

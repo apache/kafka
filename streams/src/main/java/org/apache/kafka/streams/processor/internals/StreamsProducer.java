@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -184,12 +185,12 @@ public class StreamsProducer {
         transactionInitialized = false;
     }
 
-    private void maybeBeginTransaction() throws ProducerFencedException {
+    private void maybeBeginTransaction() {
         if (eosEnabled() && !transactionInFlight) {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
-            } catch (final ProducerFencedException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to begin a new transaction"),
                     error
@@ -212,7 +213,7 @@ public class StreamsProducer {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be
-                // captured and re-wrapped as TaskMigrationException
+                // captured and re-wrapped as TaskMigratedException
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to send a record"),
                     uncaughtException.getCause()
@@ -228,6 +229,7 @@ public class StreamsProducer {
 
     private static boolean isRecoverable(final KafkaException uncaughtException) {
         return uncaughtException.getCause() instanceof ProducerFencedException ||
+            uncaughtException.getCause() instanceof InvalidProducerEpochException ||
             uncaughtException.getCause() instanceof UnknownProducerIdException;
     }
 
@@ -235,8 +237,8 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
+    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                           final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
@@ -279,7 +281,7 @@ public class StreamsProducer {
                         " Will rely on broker to eventually abort the transaction after the transaction timeout passed.",
                     logAndSwallow
                 );
-            } catch (final ProducerFencedException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
                 // The producer is aborting the txn when there's still an ongoing one,
                 // which means that we did not commit the task while closing it, which
                 // means that it is a dirty close. Therefore it is possible that the dirty
@@ -299,7 +301,10 @@ public class StreamsProducer {
         }
     }
 
-    List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
+    /**
+     * Cf {@link KafkaProducer#partitionsFor(String)}
+     */
+    List<PartitionInfo> partitionsFor(final String topic) {
         return producer.partitionsFor(topic);
     }
 

@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -55,8 +55,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                               final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valueSerde, subTopologySourceNodes, streamsGraphNode, builder);
+                               final GraphNode graphNode) {
+        super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;
@@ -222,13 +222,11 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             materializedInternal.valueSerde());
     }
 
-    @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
-            // to be (windows.inactivityGap() + windows.grace()). This will yield the same default behavior.
-            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.maintainMs();
+            final long retentionPeriod = materialized.retention() != null ?
+                materialized.retention().toMillis() : windows.inactivityGap() + windows.gracePeriodMs();
 
             if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the session store "

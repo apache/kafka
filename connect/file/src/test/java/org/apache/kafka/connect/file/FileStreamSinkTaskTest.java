@@ -20,24 +20,21 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
-
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FileStreamSinkTaskTest {
 
@@ -45,17 +42,16 @@ public class FileStreamSinkTaskTest {
     private ByteArrayOutputStream os;
     private PrintStream printStream;
 
-    @Rule
-    public TemporaryFolder topDir = new TemporaryFolder();
+    @TempDir
+    public Path topDir;
     private String outputFile;
 
-    @Before
-    public void setup() throws Exception {
+    @BeforeEach
+    public void setup() {
         os = new ByteArrayOutputStream();
         printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
-        File outputDir = topDir.newFolder("file-stream-sink-" + UUID.randomUUID().toString());
-        outputFile = outputDir.getCanonicalPath() + "/connect.output";
+        outputFile = topDir.resolve("connect.output").toAbsolutePath().toString();
     }
 
     @Test

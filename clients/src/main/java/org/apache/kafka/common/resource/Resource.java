@@ -68,13 +68,6 @@ public class Resource {
         return name;
     }
 
-    /**
-     * Create a filter which matches only this Resource.
-     */
-    public ResourceFilter toFilter() {
-        return new ResourceFilter(resourceType, name);
-    }
-
     @Override
     public String toString() {
         return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";

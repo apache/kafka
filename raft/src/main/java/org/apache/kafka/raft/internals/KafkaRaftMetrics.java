@@ -86,7 +86,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.currentVotedIdMetricName = metrics.metricName("current-vote", metricGroupName, "The current voted leader's id; -1 indicates not voted for anyone");
         metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
             if (state.isLeader() || state.isCandidate()) {
-                return state.localId;
+                return state.localIdOrThrow();
             } else if (state.isVoted()) {
                 return state.votedStateOrThrow().votedId();
             } else {

@@ -19,13 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -49,7 +50,7 @@ public abstract class AbstractStream<K, V> {
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
     protected final Set<String> subTopologySourceNodes;
-    protected final StreamsGraphNode streamsGraphNode;
+    protected final GraphNode graphNode;
     protected final InternalStreamsBuilder builder;
 
     // This copy-constructor will allow to extend KStream
@@ -60,14 +61,14 @@ public abstract class AbstractStream<K, V> {
         this.keySerde = stream.keySerde;
         this.valueSerde = stream.valueSerde;
         this.subTopologySourceNodes = stream.subTopologySourceNodes;
-        this.streamsGraphNode = stream.streamsGraphNode;
+        this.graphNode = stream.graphNode;
     }
 
     AbstractStream(final String name,
                    final Serde<K> keySerde,
                    final Serde<V> valueSerde,
                    final Set<String> subTopologySourceNodes,
-                   final StreamsGraphNode streamsGraphNode,
+                   final GraphNode graphNode,
                    final InternalStreamsBuilder builder) {
         if (subTopologySourceNodes == null || subTopologySourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
@@ -78,7 +79,7 @@ public abstract class AbstractStream<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.subTopologySourceNodes = subTopologySourceNodes;
-        this.streamsGraphNode = streamsGraphNode;
+        this.graphNode = graphNode;
     }
 
     // This method allows to expose the InternalTopologyBuilder instance
@@ -99,6 +100,10 @@ public abstract class AbstractStream<K, V> {
 
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return (value2, value1) -> joiner.apply(value1, value2);
+    }
+
+    static <K, T2, T1, R> ValueJoinerWithKey<K, T2, T1, R> reverseJoinerWithKey(final ValueJoinerWithKey<K, T1, T2, R> joiner) {
+        return (key, value2, value1) -> joiner.apply(key, value1, value2);
     }
 
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
@@ -137,6 +142,11 @@ public abstract class AbstractStream<K, V> {
                 return valueTransformerSupplier.stores();
             }
         };
+    }
+
+    static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> toValueJoinerWithKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
+        Objects.requireNonNull(valueJoiner, "joiner can't be null");
+        return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
     }
 
     // for testing only

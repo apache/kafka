@@ -19,19 +19,19 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -46,6 +46,10 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  * <p>
  * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
+ * However, the {@link KafkaFuture KafkaFutures} returned from request methods are executed
+ * by a single thread so it is important that any code which executes on that thread when they complete
+ * (using {@link KafkaFuture#thenApply(KafkaFuture.Function)}, for example) doesn't block
+ * for too long. If necessary, processing of results should be passed to another thread.
  * <p>
  * The operations exposed by Admin follow a consistent pattern:
  * <ul>
@@ -57,11 +61,11 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *     preferred over multiple calls to the same method.
  *     <li>The operation methods execute asynchronously.
  *     <li>Each {@code xxx} operation method returns an {@code XxxResult} class with methods which expose
- *     {@link org.apache.kafka.common.KafkaFuture} for accessing the result(s) of the operation.
+ *     {@link KafkaFuture} for accessing the result(s) of the operation.
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
- *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get()}
+ *     <li>For synchronous behaviour use {@link KafkaFuture#get()}
  * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:
@@ -142,28 +146,11 @@ public interface Admin extends AutoCloseable {
     /**
      * Close the Admin and release all associated resources.
      * <p>
-     * See {@link #close(long, TimeUnit)}
+     * See {@link #close(Duration)}
      */
     @Override
     default void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Close the Admin and release all associated resources.
-     * <p>
-     * The close operation has a grace period during which current operations will be allowed to
-     * complete, specified by the given duration and time unit.
-     * New operations will not be accepted during the grace period. Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
-     *
-     * @param duration The duration to use for the wait time.
-     * @param unit     The time unit to use for the wait time.
-     * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
-     */
-    @Deprecated
-    default void close(long duration, TimeUnit unit) {
-        close(Duration.ofMillis(unit.toMillis(duration)));
+        close(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**
@@ -246,6 +233,41 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    
+    /**
+     * This is a convenience method for {@link #deleteTopicsWithIds(Collection, DeleteTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * This operation is supported by brokers with version 2.8.0 or higher.
+     *
+     * @param topics The topic IDs for the topics to delete.
+     * @return The DeleteTopicsWithIdsResult.
+     */
+    default DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics) {
+        return deleteTopicsWithIds(topics, new DeleteTopicsOptions());
+    }
+
+    /**
+     * Delete a batch of topics.
+     * <p>
+     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>
+     * It may take several seconds after the {@link DeleteTopicsWithIdsResult} returns
+     * success for all the brokers to become aware that the topics are gone.
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
+     * may continue to return information about the deleted topics.
+     * <p>
+     * If delete.topic.enable is false on the brokers, deleteTopicsWithIds will mark
+     * the topics for deletion, but not actually delete them. The futures will
+     * return successfully in this case.
+     * <p>
+     * This operation is supported by brokers with version 2.8.0 or higher.
+     *
+     * @param topics  The topic IDs for the topics to delete.
+     * @param options The options to use when deleting the topics.
+     * @return The DeleteTopicsWithIdsResult.
+     */
+    DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
@@ -931,46 +953,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type and default options.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
-        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
-    }
-
-    /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @param options    The options to use when electing the preferred leaders.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
-                                                              ElectPreferredLeadersOptions options) {
-        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
-        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
-
-        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
-    }
-
-    /**
      * Elect a replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -1443,6 +1425,70 @@ public interface Admin extends AutoCloseable {
      * @return the {@link UpdateFeaturesResult} containing the result
      */
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
+
+    /**
+     * Unregister a broker.
+     * <p>
+     * This operation does not have any effect on partition assignments. It is supported
+     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
+     *
+     * This is a convenience method for {@link #unregisterBroker(int, UnregisterBrokerOptions)}
+     *
+     * @param brokerId  the broker id to unregister.
+     *
+     * @return the {@link UnregisterBrokerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    default UnregisterBrokerResult unregisterBroker(int brokerId) {
+        return unregisterBroker(brokerId, new UnregisterBrokerOptions());
+    }
+
+    /**
+     * Unregister a broker.
+     * <p>
+     * This operation does not have any effect on partition assignments. It is supported
+     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link UnregisterBrokerResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support the unregistration API, or if the
+     *   cluster is not using Raft to store metadata.
+     * </ul>
+     * <p>
+     *
+     * @param brokerId  the broker id to unregister.
+     * @param options   the options to use.
+     *
+     * @return the {@link UnregisterBrokerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
+
+    /**
+     * Describe producer state on a set of topic partitions. See
+     * {@link #describeProducers(Collection, DescribeProducersOptions)} for more details.
+     *
+     * @param partitions The set of partitions to query
+     * @return The result
+     */
+    default DescribeProducersResult describeProducers(Collection<TopicPartition> partitions) {
+        return describeProducers(partitions, new DescribeProducersOptions());
+    }
+
+    /**
+     * Describe active producer state on a set of topic partitions. Unless a specific broker
+     * is requested through {@link DescribeProducersOptions#brokerId(int)}, this will
+     * query the partition leader to find the producer state.
+     *
+     * @param partitions The set of partitions to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

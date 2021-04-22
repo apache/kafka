@@ -21,8 +21,8 @@ import java.nio.ByteBuffer;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class RenewDelegationTokenRequest extends AbstractRequest {
 
@@ -33,20 +33,12 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public RenewDelegationTokenRequest(Struct struct, short version) {
-        super(ApiKeys.RENEW_DELEGATION_TOKEN, version);
-        this.data = new RenewDelegationTokenRequestData(struct, version);
-    }
-
     public static RenewDelegationTokenRequest parse(ByteBuffer buffer, short version) {
-        return new RenewDelegationTokenRequest(ApiKeys.RENEW_DELEGATION_TOKEN.parseRequest(version, buffer), version);
+        return new RenewDelegationTokenRequest(new RenewDelegationTokenRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public RenewDelegationTokenRequestData data() {
         return data;
     }

@@ -36,6 +36,8 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -79,15 +82,15 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.put("key.deserializer.encoding", "UTF8");
-        props.put("value.deserializer.encoding", "UTF-16");
+        props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
+        props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsRecordingLevel() {
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -97,28 +100,28 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketSendBufferSize() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketReceiveBufferSize() {
         props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfApplicationIdIsNotSet() {
         props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
         props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -126,7 +129,6 @@ public class StreamsConfigTest {
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
         assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
-        assertThat(returnedProps.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), equalTo(10000));
     }
 
     @Test
@@ -207,8 +209,8 @@ public class StreamsConfigTest {
     @Test
     public void defaultSerdeShouldBeConfigured() {
         final Map<String, Object> serializerConfigs = new HashMap<>();
-        serializerConfigs.put("key.serializer.encoding", "UTF8");
-        serializerConfigs.put("value.serializer.encoding", "UTF-16");
+        serializerConfigs.put("key.serializer.encoding", StandardCharsets.UTF_8.name());
+        serializerConfigs.put("value.serializer.encoding", StandardCharsets.UTF_16.name());
         final Serializer<String> serializer = Serdes.String().serializer();
 
         final String str = "my string for testing";
@@ -361,18 +363,18 @@ public class StreamsConfigTest {
         assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultKeySerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultKeySerde);
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultValueSerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultValueSerde);
     }
 
     @Test
@@ -548,10 +550,10 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -669,6 +671,7 @@ public class StreamsConfigTest {
         );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
+        assertThat(producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), equalTo(10000));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
     }
 
@@ -876,6 +879,13 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldStateDirStartsWithJavaIOTmpDir() {
+        final String expectedPrefix = System.getProperty("java.io.tmpdir") + File.separator;
+        final String actual = streamsConfig.getString(STATE_DIR_CONFIG);
+        assertTrue(actual.startsWith(expectedPrefix));
+    }
+
+    @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
         final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
@@ -891,30 +901,10 @@ public class StreamsConfigTest {
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
-        new StreamsConfig(props);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldLogWarningWhenPartitionGrouperIsUsed() {
-        props.put(
-            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.DefaultPartitionGrouper.class
-        );
-
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            new StreamsConfig(props);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG +
-                    "` is deprecated and will be removed in 3.0.0 release.")
-            );
-        }
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @SuppressWarnings("deprecation")

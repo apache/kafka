@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -100,7 +101,6 @@ public class StreamsBuilderTest {
             () -> new Processor<String, String, Void, Void>() {
                 private KeyValueStore<String, String> store;
 
-                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext<Void, Void> context) {
                     store = context.getStateStore("store");
@@ -112,7 +112,7 @@ public class StreamsBuilderTest {
                 }
             }
         );
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), new Properties())) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic", new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("hey", "there");
@@ -463,6 +463,35 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldNotReuseRepartitionTopicAsChangelogs() {
+        final String topic = "topic";
+        builder.<Long, String>stream(topic).repartition().toTable(Materialized.as("store"));
+        final Properties props = StreamsTestUtils.getStreamsConfig("appId");
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final Topology topology = builder.build(props);
+
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
+
+        assertThat(
+            internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
+            equalTo(Collections.singletonMap("store", "appId-store-changelog"))
+        );
+        assertThat(
+            internalTopologyBuilder.stateStores().keySet(),
+            equalTo(Collections.singleton("store"))
+        );
+        assertThat(
+            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
+            equalTo(true)
+        );
+        assertThat(
+            internalTopologyBuilder.topicGroups().get(1).stateChangelogTopics.keySet(),
+            equalTo(Collections.singleton("appId-store-changelog"))
+        );
+    }
+
+    @Test
     public void shouldNotReuseSourceTopicAsChangelogsByDefault() {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
@@ -484,16 +513,16 @@ public class StreamsBuilderTest {
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream(Collections.emptyList());
-        builder.build();
+        assertThrows(TopologyException.class, builder::build);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Arrays.asList(null, null));
-        builder.build();
+        assertThrows(NullPointerException.class, builder::build);
     }
 
     @Test
@@ -606,7 +635,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void shouldUseSpecifiedNameForTransformValuesWithKey() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformerWithKey<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -615,7 +643,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public void shouldUseSpecifiedNameForBranchOperation() {
         builder.stream(STREAM_TOPIC)
                .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
@@ -627,6 +655,21 @@ public class StreamsBuilderTest {
                                 "branch-processor",
                                 "branch-processor-predicate-0",
                                 "branch-processor-predicate-1");
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForSplitOperation() {
+        builder.stream(STREAM_TOPIC)
+                .split(Named.as("branch-processor"))
+                .branch((k, v) -> true, Branched.as("-1"))
+                .branch((k, v) -> false, Branched.as("-2"));
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertNamesForOperation(topology,
+                "KSTREAM-SOURCE-0000000000",
+                "branch-processor",
+                "branch-processor-1",
+                "branch-processor-2");
     }
 
     @Test
@@ -682,12 +725,11 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedStoreNamesForLeftJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -729,12 +771,11 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedNameForJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -775,12 +816,11 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedStoreNamesForOuterJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -831,7 +871,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void shouldUseSpecifiedNameForFlatTransformValueOperation() {
         builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -903,20 +942,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldAllowTablesFromSameTopic() {
-        builder.table("topic");
-        builder.table("topic");
-        assertBuildDoesNotThrow(builder);
-    }
-
-    @Test
-    public void shouldAllowStreamAndTableFromSameTopic() {
-        builder.stream("topic");
-        builder.table("topic");
-        assertBuildDoesNotThrow(builder);
-    }
-
-    @Test
     public void shouldAllowSubscribingToSamePattern() {
         builder.stream(Pattern.compile("some-regex"));
         builder.stream(Pattern.compile("some-regex"));
@@ -969,6 +994,20 @@ public class StreamsBuilderTest {
     public void shouldThrowWhenSubscribedToAPatternWithSetAndUnsetResetPolicies() {
         builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
         builder.stream(Pattern.compile("some-regex"));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldNotAllowTablesFromSameTopic() {
+        builder.table("topic");
+        builder.table("topic");
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldNowAllowStreamAndTableFromSameTopic() {
+        builder.stream("topic");
+        builder.table("topic");
         assertThrows(TopologyException.class, builder::build);
     }
 

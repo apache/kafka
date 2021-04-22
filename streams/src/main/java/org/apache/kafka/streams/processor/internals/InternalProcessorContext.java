@@ -49,11 +49,6 @@ public interface InternalProcessorContext
     void setSystemTimeMs(long timeMs);
 
     /**
-     * @return the current wall-clock system timestamp in milliseconds
-     */
-    long currentSystemTimeMs();
-
-    /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */

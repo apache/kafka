@@ -23,15 +23,15 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,10 +42,13 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SubscriptionStateTest {
 
@@ -253,13 +256,14 @@ public class SubscriptionStateTest {
         assertTrue(state.isFetchable(tp0));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
         state.assignFromSubscribed(singleton(tp0));
 
-        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch));
+        assertThrows(IllegalStateException.class, () -> state.position(tp0,
+            new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch)));
     }
 
     @Test
@@ -275,40 +279,41 @@ public class SubscriptionStateTest {
         assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch));
+        assertThrows(IllegalStateException.class, () -> state.position(tp0,
+            new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch)));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribeTopicAndPattern() {
         state.subscribe(singleton(topic), rebalanceListener);
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePartitionAndPattern() {
         state.assignFromUser(singleton(tp0));
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePatternAndTopic() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
-        state.subscribe(singleton(topic), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(singleton(topic), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePatternAndPartition() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
-        state.assignFromUser(singleton(tp0));
+        assertThrows(IllegalStateException.class, () -> state.assignFromUser(singleton(tp0)));
     }
 
     @Test
     public void patternSubscription() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
-        assertEquals("Expected subscribed topics count is incorrect", 2, state.subscription().size());
+        assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
 
     @Test
@@ -520,7 +525,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -577,7 +582,7 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, updatePosition);
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -602,7 +607,7 @@ public class SubscriptionStateTest {
         state.requestOffsetReset(tp0);
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -628,7 +633,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(divergentOffsetEpoch)
                     .setEndOffset(divergentOffset));
         assertEquals(Optional.empty(), truncationOpt);
@@ -657,7 +662,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(divergentOffsetEpoch)
                     .setEndOffset(divergentOffset));
         assertTrue(truncationOpt.isPresent());
@@ -685,9 +690,9 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                new EpochEndOffset()
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
@@ -710,9 +715,9 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                new EpochEndOffset()
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertTrue(truncationOpt.isPresent());
         LogTruncation truncation = truncationOpt.get();
 
@@ -788,6 +793,20 @@ public class SubscriptionStateTest {
         assertTrue(state.hasValidPosition(tp0));
         assertFalse(state.awaitingValidation(tp0));
         assertFalse(state.isOffsetResetNeeded(tp0));
+    }
+
+    @Test
+    public void nullPositionLagOnNoPosition() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
+
+        state.updateHighWatermark(tp0, 1L);
+        state.updateLastStableOffset(tp0, 1L);
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
     }
 
 }
