@@ -428,7 +428,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -761,7 +761,7 @@ tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" 
 
 project(':core') {
   apply plugin: 'scala'
-  
+
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
   // for the `core` module, this ensures the generated jar doesn't include scaladoc
@@ -983,6 +983,8 @@ project(':core') {
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':trogdor').jar) { into("libs/") }
+    from(project(':trogdor').configurations.runtimeClasspath) { into("libs/") }
     from(project(':shell').jar) { into("libs/") }
     from(project(':shell').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:api').jar) { into("libs/") }
@@ -1318,7 +1320,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -1467,6 +1469,49 @@ project(':storage') {
 
 project(':tools') {
   archivesBaseName = "kafka-tools"
+
+  dependencies {
+    implementation project(':clients')
+    implementation project(':log4j-appender')
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.slf4jApi
+    implementation libs.log4j
+
+    implementation libs.jacksonJaxrsJsonProvider
+
+    testImplementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':trogdor') {
+  archivesBaseName = "trogdor"
 
   dependencies {
     implementation project(':clients')
