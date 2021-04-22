@@ -118,6 +118,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  @Ignore // ignoring the test since the AlterLogDirs request has been disabled
   def shouldMoveSinglePartition(): Unit = {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
@@ -161,6 +162,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  @Ignore // ignoring the test since the AlterLogDirs request has been disabled
   def shouldMoveSinglePartitionToSameFolderWithinBroker(): Unit = shouldMoveSinglePartitionWithinBroker(true)
 
   @Ignore
@@ -193,6 +195,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  @Ignore // ignoring the test since the AlterLogDirs request has been disabled
   def shouldExpandCluster(): Unit = {
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
@@ -257,6 +260,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  @Ignore // ignoring the test since the AlterLogDirs request has been disabled
   def shouldMoveSubsetOfPartitions(): Unit = {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
@@ -722,6 +726,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  @Ignore // ignoring the test since the AlterLogDirs request has been disabled
   def shouldListReassignmentsTriggeredByZk(): Unit = {
     // Given a single replica on server 100
     startBrokers(Seq(100, 101))

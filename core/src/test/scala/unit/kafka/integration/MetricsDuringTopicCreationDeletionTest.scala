@@ -20,10 +20,10 @@ package kafka.integration
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
+
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import org.scalatest.Assertions.fail
-
-import org.junit.{Before, Test}
+import org.junit.{Before, Ignore, Test}
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 
@@ -68,6 +68,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
   @Test
+  @Ignore // the test is flaky, ignoring it for now
   def testMetricsDuringTopicCreateDelete(): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605

@@ -2042,9 +2042,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     results.get(longTopicName).get()
     assertTrue(results.containsKey(invalidTopicName))
     assertFutureExceptionTypeEquals(results.get(invalidTopicName), classOf[InvalidTopicException])
-    assertFutureExceptionTypeEquals(client.alterReplicaLogDirs(
-      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> servers(0).config.logDirs(0)).asJava).all(),
-      classOf[InvalidTopicException])
+//    assertFutureExceptionTypeEquals(client.alterReplicaLogDirs(
+//      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> servers(0).config.logDirs(0)).asJava).all(),
+//      classOf[InvalidTopicException])
     client.close()
   }
 
