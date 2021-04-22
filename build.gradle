@@ -103,12 +103,12 @@ ext {
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
   jfrogUsername = System.getenv('JFROG_USERNAME')
-  jfrogPassword = System.getenv('JFROG_PASSWORD')
+  jfrogApiKey = System.getenv('JFROG_API_KEY')
 
   // By default, publish to JFrog.
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : jfrogRepoUrl
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : jfrogUsername
-  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : jfrogPassword
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : jfrogApiKey
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 

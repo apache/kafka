@@ -53,6 +53,6 @@ jobs:
       - name: Upload archive
         env:
           JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
-          JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
+          JFROG_API_KEY: ${{ secrets.JFROG_API_KEY }}
         run: |
           ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon
