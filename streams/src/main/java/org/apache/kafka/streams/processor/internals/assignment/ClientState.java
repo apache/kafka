@@ -110,10 +110,11 @@ public class ClientState {
     }
 
     public void assignActiveToConsumer(final TaskId task, final String consumer) {
-        if (assignedActiveTasks.taskIds().contains(task)) {
-            assignedActiveTasks.consumerToTaskIds()
-                               .computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
+        if (!assignedActiveTasks.taskIds().contains(task)) {
+            throw new IllegalStateException("added not assign active task " + task + " to this client state.");
         }
+        assignedActiveTasks.consumerToTaskIds()
+                           .computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
     }
 
     public void assignStandbyToConsumer(final TaskId task, final String consumer) {

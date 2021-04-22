@@ -485,4 +485,9 @@ public class ClientStateTest {
         assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
     }
 
+    @Test
+    public void shouldThrowIllegalStateExceptionIfAssignedTasksForConsumerToNonClientAssignActive() {
+        assertThrows(IllegalStateException.class, () -> client.assignActiveToConsumer(TASK_0_0, "c1"));
+    }
+
 }
