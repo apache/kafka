@@ -57,6 +57,21 @@ public class CoordinatorStrategyTest {
     }
 
     @Test
+    public void testHandleResponseRequiresOneKey() {
+        FindCoordinatorResponseData responseData = new FindCoordinatorResponseData().setErrorCode(Errors.NONE.code());
+        FindCoordinatorResponse response = new FindCoordinatorResponse(responseData);
+
+        CoordinatorStrategy strategy = new CoordinatorStrategy(new LogContext());
+        assertThrows(IllegalArgumentException.class, () ->
+            strategy.handleResponse(Collections.emptySet(), response));
+
+        CoordinatorKey group1 = CoordinatorKey.byGroupId("foo");
+        CoordinatorKey group2 = CoordinatorKey.byGroupId("bar");
+        assertThrows(IllegalArgumentException.class, () ->
+            strategy.handleResponse(mkSet(group1, group2), response));
+    }
+
+    @Test
     public void testSuccessfulCoordinatorLookup() {
         CoordinatorKey group = CoordinatorKey.byGroupId("foo");
 
@@ -77,7 +92,7 @@ public class CoordinatorStrategyTest {
         testRetriableCoordinatorLookup(Errors.COORDINATOR_NOT_AVAILABLE);
     }
 
-    public void testRetriableCoordinatorLookup(Errors error) {
+    private void testRetriableCoordinatorLookup(Errors error) {
         CoordinatorKey group = CoordinatorKey.byGroupId("foo");
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData().setErrorCode(error.code());
         AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(group, responseData);

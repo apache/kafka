@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.HashMap;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.HashMap;
+import java.util.Map;
+
+@InterfaceStability.Evolving
 public enum TransactionState {
     ONGOING("Ongoing"),
     PREPARE_ABORT("PrepareAbort"),
@@ -28,7 +32,7 @@ public enum TransactionState {
     PREPARE_EPOCH_FENCE("PrepareEpochFence"),
     UNKNOWN("Unknown");
 
-    private final static HashMap<String, TransactionState> NAME_TO_ENUM;
+    private final static Map<String, TransactionState> NAME_TO_ENUM;
 
     static {
         NAME_TO_ENUM = new HashMap<>();

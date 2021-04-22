@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -72,18 +73,24 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
     @Override
     public DescribeTransactionsRequest.Builder buildRequest(
-        Integer brokerId,
+        int brokerId,
         Set<CoordinatorKey> keys
     ) {
         DescribeTransactionsRequestData request = new DescribeTransactionsRequestData();
-        List<String> transactionalIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
+        List<String> transactionalIds = keys.stream().map(key -> {
+            if (key.type != FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
+                throw new IllegalArgumentException("Invalid group coordinator key " + key +
+                    " when building `DescribeTransaction` request");
+            }
+            return key.idValue;
+        }).collect(Collectors.toList());
         request.setTransactionalIds(transactionalIds);
         return new DescribeTransactionsRequest.Builder(request);
     }
 
     @Override
     public ApiResult<CoordinatorKey, TransactionDescription> handleResponse(
-        Integer brokerId,
+        int brokerId,
         Set<CoordinatorKey> keys,
         AbstractResponse abstractResponse
     ) {
@@ -169,13 +176,13 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
                 unmapped.add(transactionalIdKey);
-                log.debug("DescribeTransactions request for transactionalId `{}` returned error {}. Will retry",
-                    transactionalIdKey.idValue, error);
+                log.debug("DescribeTransactions request for transactionalId `{}` returned error {}. Will attempt " +
+                        "to find the coordinator again and retry", transactionalIdKey.idValue, error);
                 break;
 
             default:
                 failed.put(transactionalIdKey, error.exception("DescribeTransactions request for " +
-                    "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error "));
+                    "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error"));
         }
     }
 
