@@ -403,7 +403,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfPrefixSerializerIsNull() {
+    public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
         assertThrows(NullPointerException.class, () -> rocksDBStore.prefixScan("prefix", null));
     }
 

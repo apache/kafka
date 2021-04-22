@@ -227,7 +227,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfPrefixSerializerIsNull() {
+    public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
         assertThrows(NullPointerException.class, () -> byteStore.prefixScan("bb", null));
     }
 }
