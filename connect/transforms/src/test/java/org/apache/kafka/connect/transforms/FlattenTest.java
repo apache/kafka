@@ -264,18 +264,24 @@ public class FlattenTest {
     @Test
     public void testSchemalessArray() {
         xformValue.configure(Collections.emptyMap());
-        Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
+        Object value = Collections.singletonMap("foo", Arrays.asList("bar", Collections.singletonMap("baz", Collections.singletonMap("lfg", "lfg"))));
         assertEquals(value, xformValue.apply(new SourceRecord(null, null, "topic", null, null, null, value)).value());
     }
 
     @Test
     public void testArrayWithSchema() {
         xformValue.configure(Collections.emptyMap());
+        Schema nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build();
+        Schema innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build();
         Schema structSchema = SchemaBuilder.struct()
-            .field("foo", SchemaBuilder.array(Schema.STRING_SCHEMA).doc("durk").build())
+            .field("foo", SchemaBuilder.array(innerStructSchema).doc("durk").build())
             .build();
+        Struct nestedValue = new Struct(nestedStructSchema);
+        nestedValue.put("lfg", "lfg");
+        Struct innerValue = new Struct(innerStructSchema);
+        innerValue.put("baz", nestedValue);
         Struct value = new Struct(structSchema);
-        value.put("foo", Arrays.asList("bar", "baz"));
+        value.put("foo", Collections.singletonList(innerValue));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value)); 
         assertEquals(value, transformed.value());
         assertEquals(structSchema, transformed.valueSchema());
