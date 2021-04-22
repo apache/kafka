@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
@@ -225,7 +224,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        List<KeyValue<K, V>> possiblyNullKeys = entries
+        final List<KeyValue<K, V>> possiblyNullKeys = entries
                 .stream()
                 .filter(entry -> entry.key == null)
                 .collect(Collectors.toList());

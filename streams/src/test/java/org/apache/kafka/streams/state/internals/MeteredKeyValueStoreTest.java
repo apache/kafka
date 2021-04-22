@@ -463,8 +463,7 @@ public class MeteredKeyValueStoreTest {
     @Test
     public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
         final StringSerializer stringSerializer = new StringSerializer();
-
-        assertThrows(NullPointerException.class, () -> metered.prefixScan(null , stringSerializer));
+        assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
     }
 
     @Test

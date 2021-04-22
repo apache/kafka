@@ -159,6 +159,8 @@ public class MeteredSessionStore<K, V>
     public void put(final Windowed<K> sessionKey,
                     final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -178,6 +180,8 @@ public class MeteredSessionStore<K, V>
     @Override
     public void remove(final Windowed<K> sessionKey) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+
         try {
             maybeMeasureLatency(
                 () -> {

@@ -473,6 +473,16 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
+    public void shouldThrowNullPointerOnPutIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(new Windowed<>(null, new SessionWindow(0, 0)), "a"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(null, new SessionWindow(0, 0))));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.fetch(null));
     }
