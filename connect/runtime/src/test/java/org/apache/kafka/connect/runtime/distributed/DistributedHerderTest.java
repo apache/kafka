@@ -1680,7 +1680,7 @@ public class DistributedHerderTest {
         // Reading to end of log times out
         configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall().andThrow(new TimeoutException());
-        member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"), EasyMock.eq(true));
+        member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"));
         EasyMock.expectLastCall();
         member.requestRejoin();
 
@@ -1786,7 +1786,7 @@ public class DistributedHerderTest {
             // Reading to end of log times out
             configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
             EasyMock.expectLastCall().andThrow(new TimeoutException());
-            member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"), EasyMock.eq(true));
+            member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"));
             EasyMock.expectLastCall();
         }
 
@@ -1878,7 +1878,7 @@ public class DistributedHerderTest {
             // Reading to end of log times out
             configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
             EasyMock.expectLastCall().andThrow(new TimeoutException());
-            member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"), EasyMock.eq(true));
+            member.maybeLeaveGroup(EasyMock.eq("taking too long to read the log"));
             EasyMock.expectLastCall();
         }
 

@@ -201,8 +201,8 @@ public class WorkerGroupMember {
         coordinator.requestRejoin("connect worker requested rejoin");
     }
 
-    public void maybeLeaveGroup(String leaveReason, boolean shouldWarn) {
-        coordinator.maybeLeaveGroup(leaveReason, shouldWarn);
+    public void maybeLeaveGroup(String leaveReason) {
+        coordinator.maybeLeaveGroup(leaveReason, true);
     }
 
     public String ownerUrl(String connector) {

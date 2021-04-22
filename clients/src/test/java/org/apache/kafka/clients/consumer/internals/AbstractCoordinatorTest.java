@@ -951,7 +951,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
-        return coordinator.maybeLeaveGroup("test maybe leave group", false);
+        return coordinator.maybeLeaveGroup("test maybe leave group");
     }
 
     @Test
