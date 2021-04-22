@@ -14,44 +14,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin;
 
-package org.apache.kafka.common;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * The consumer group state.
- */
-public enum ConsumerGroupState {
-    UNKNOWN("Unknown"),
-    PREPARING_REBALANCE("PreparingRebalance"),
-    COMPLETING_REBALANCE("CompletingRebalance"),
-    STABLE("Stable"),
-    DEAD("Dead"),
-    EMPTY("Empty");
+@InterfaceStability.Evolving
+public enum TransactionState {
+    ONGOING("Ongoing"),
+    PREPARE_ABORT("PrepareAbort"),
+    PREPARE_COMMIT("PrepareCommit"),
+    COMPLETE_ABORT("CompleteAbort"),
+    COMPLETE_COMMIT("CompleteCommit"),
+    EMPTY("Empty"),
+    PREPARE_EPOCH_FENCE("PrepareEpochFence"),
+    UNKNOWN("Unknown");
 
-    private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(state -> state.name, Function.identity()));;
+    private final static Map<String, TransactionState> NAME_TO_ENUM = Arrays.stream(values())
+        .collect(Collectors.toMap(state -> state.name, Function.identity()));
 
     private final String name;
 
-    ConsumerGroupState(String name) {
+    TransactionState(String name) {
         this.name = name;
-    }
-
-    /**
-     * Parse a string into a consumer group state.
-     */
-    public static ConsumerGroupState parse(String name) {
-        ConsumerGroupState state = NAME_TO_ENUM.get(name);
-        return state == null ? UNKNOWN : state;
     }
 
     @Override
     public String toString() {
         return name;
     }
+
+    public static TransactionState parse(String name) {
+        TransactionState state = NAME_TO_ENUM.get(name);
+        return state == null ? UNKNOWN : state;
+    }
+
 }
