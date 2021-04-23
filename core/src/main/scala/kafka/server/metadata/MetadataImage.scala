@@ -47,6 +47,14 @@ case class MetadataImageBuilder(brokerId: Int,
     }
   }
 
+  def topicNameToId(topicName: String): Option[Uuid] = {
+    if (_partitionsBuilder != null) {
+      _partitionsBuilder.topicNameToId(topicName)
+    } else {
+      prevImage.topicNameToId(topicName)
+    }
+  }
+
   def controllerId(controllerId: Option[Int]): Unit = {
     _controllerId = controllerId
   }

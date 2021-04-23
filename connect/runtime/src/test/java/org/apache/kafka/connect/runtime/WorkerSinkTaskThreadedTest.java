@@ -64,6 +64,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -555,9 +556,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
                         Collections.singletonMap(
                                 new TopicPartition(TOPIC, PARTITION),
-                                Arrays.asList(
-                                        new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0L, 0, 0, RAW_KEY, RAW_VALUE)
-                                )));
+                                Arrays.asList(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE,
+                                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()))));
                 recordsReturned++;
                 return records;
             });
@@ -586,9 +586,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
                         Collections.singletonMap(
                                 new TopicPartition(TOPIC, PARTITION),
-                                Arrays.asList(
-                                        new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0L, 0, 0, RAW_KEY, RAW_VALUE)
-                                )));
+                                Arrays.asList(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE,
+                                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()))));
                 recordsReturned++;
                 return records;
             });
@@ -617,8 +616,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(
                         Collections.singletonMap(
                                 new TopicPartition(TOPIC, PARTITION),
-                                Arrays.asList(
-                                        new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0L, 0, 0, RAW_KEY, RAW_VALUE)
+                                Arrays.asList(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE,
+                                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty())
                                 )));
                 recordsReturned++;
                 return records;

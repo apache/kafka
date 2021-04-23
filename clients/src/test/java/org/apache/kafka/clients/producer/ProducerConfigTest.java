@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -31,39 +30,9 @@ public class ProducerConfigTest {
 
     private final Serializer<byte[]> keySerializer = new ByteArraySerializer();
     private final Serializer<String> valueSerializer = new StringSerializer();
-    private final String keySerializerClassName = keySerializer.getClass().getName();
-    private final String valueSerializerClassName = valueSerializer.getClass().getName();
     private final Object keySerializerClass = keySerializer.getClass();
     private final Object valueSerializerClass = valueSerializer.getClass();
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testSerializerToPropertyConfig() {
-        Properties properties = new Properties();
-        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClassName);
-        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClassName);
-        Properties newProperties = ProducerConfig.addSerializerToConfig(properties, null, null);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClassName);
-        newProperties = ProducerConfig.addSerializerToConfig(properties, keySerializer, null);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClassName);
-        newProperties = ProducerConfig.addSerializerToConfig(properties, null, valueSerializer);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-
-        properties.clear();
-        newProperties = ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer);
-        assertEquals(newProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClassName);
-        assertEquals(newProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClassName);
-    }
-    
     @Test
     public void testAppendSerializerToConfig() {
         Map<String, Object> configs = new HashMap<>();

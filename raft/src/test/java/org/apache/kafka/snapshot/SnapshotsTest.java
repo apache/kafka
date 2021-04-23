@@ -116,7 +116,7 @@ final public class SnapshotsTest {
 
             if (renameBeforeDeleting)
                 // rename snapshot before deleting
-                Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId));
+                Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId), false);
 
             assertTrue(Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId()));
             assertFalse(Files.exists(snapshotPath));

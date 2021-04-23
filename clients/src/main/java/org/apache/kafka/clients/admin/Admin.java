@@ -19,13 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
@@ -148,28 +146,11 @@ public interface Admin extends AutoCloseable {
     /**
      * Close the Admin and release all associated resources.
      * <p>
-     * See {@link #close(long, TimeUnit)}
+     * See {@link #close(Duration)}
      */
     @Override
     default void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Close the Admin and release all associated resources.
-     * <p>
-     * The close operation has a grace period during which current operations will be allowed to
-     * complete, specified by the given duration and time unit.
-     * New operations will not be accepted during the grace period. Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
-     *
-     * @param duration The duration to use for the wait time.
-     * @param unit     The time unit to use for the wait time.
-     * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
-     */
-    @Deprecated
-    default void close(long duration, TimeUnit unit) {
-        close(Duration.ofMillis(unit.toMillis(duration)));
+        close(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**
@@ -972,46 +953,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type and default options.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
-        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
-    }
-
-    /**
-     * Elect the preferred replica as leader for topic partitions.
-     * <p>
-     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
-     * with preferred election type.
-     * <p>
-     * This operation is supported by brokers with version 2.2.0 or higher.
-     *
-     * @param partitions The partitions for which the preferred leader should be elected.
-     * @param options    The options to use when electing the preferred leaders.
-     * @return The ElectPreferredLeadersResult.
-     * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}.
-     */
-    @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
-                                                              ElectPreferredLeadersOptions options) {
-        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
-        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
-
-        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
-    }
-
-    /**
      * Elect a replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -1548,6 +1489,27 @@ public interface Admin extends AutoCloseable {
      * @return The result
      */
     DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
+
+    /**
+     * Describe the state of a set of transactional IDs. See
+     * {@link #describeTransactions(Collection, DescribeTransactionsOptions)} for more details.
+     *
+     * @param transactionalIds The set of transactional IDs to query
+     * @return The result
+     */
+    default DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds) {
+        return describeTransactions(transactionalIds, new DescribeTransactionsOptions());
+    }
+
+    /**
+     * Describe the state of a set of transactional IDs from the respective transaction coordinators,
+     * which are dynamically discovered.
+     *
+     * @param transactionalIds The set of transactional IDs to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options);
 
     /**
      * Get the metrics kept by the adminClient

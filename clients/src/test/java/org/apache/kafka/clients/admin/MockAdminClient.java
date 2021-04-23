@@ -513,12 +513,6 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
-    @Deprecated
-    @Override
-    synchronized public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
     @Override
     synchronized public ElectLeadersResult electLeaders(
             ElectionType electionType,
@@ -911,6 +905,11 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
