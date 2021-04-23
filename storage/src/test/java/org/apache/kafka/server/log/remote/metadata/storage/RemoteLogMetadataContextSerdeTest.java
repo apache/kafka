@@ -115,14 +115,14 @@ public class RemoteLogMetadataContextSerdeTest {
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
-        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 2,
+        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
                                             time.milliseconds(), 1024, segLeaderEpochs);
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds(),
-                                                  RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0);
+                                                  RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 2);
     }
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata() {

@@ -26,16 +26,20 @@ import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
 public final class RemotePartitionDeleteMetadataTransform implements RemoteLogMetadataTransform<RemotePartitionDeleteMetadata> {
 
     @Override
-    public ApiMessageAndVersion toApiMessageAndVersion(RemotePartitionDeleteMetadata data) {
+    public ApiMessageAndVersion toApiMessageAndVersion(RemotePartitionDeleteMetadata partitionDeleteMetadata) {
         RemotePartitionDeleteMetadataRecord record = new RemotePartitionDeleteMetadataRecord()
-                .setTopicIdPartition(new RemotePartitionDeleteMetadataRecord.TopicIdPartitionEntry()
-                        .setName(data.topicIdPartition().topicPartition().topic())
-                        .setPartition(data.topicIdPartition().topicPartition().partition())
-                        .setId(data.topicIdPartition().topicId()))
-                .setEventTimestampMs(data.eventTimestampMs())
-                .setBrokerId(data.brokerId())
-                .setRemotePartitionDeleteState(data.state().id());
+                .setTopicIdPartition(createTopicIdPartitionEntry(partitionDeleteMetadata.topicIdPartition()))
+                .setEventTimestampMs(partitionDeleteMetadata.eventTimestampMs())
+                .setBrokerId(partitionDeleteMetadata.brokerId())
+                .setRemotePartitionDeleteState(partitionDeleteMetadata.state().id());
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
+    }
+
+    private RemotePartitionDeleteMetadataRecord.TopicIdPartitionEntry createTopicIdPartitionEntry(TopicIdPartition topicIdPartition) {
+        return new RemotePartitionDeleteMetadataRecord.TopicIdPartitionEntry()
+                .setName(topicIdPartition.topicPartition().topic())
+                .setPartition(topicIdPartition.topicPartition().partition())
+                .setId(topicIdPartition.topicId());
     }
 
     public RemotePartitionDeleteMetadata fromApiMessageAndVersion(ApiMessageAndVersion apiMessageAndVersion) {

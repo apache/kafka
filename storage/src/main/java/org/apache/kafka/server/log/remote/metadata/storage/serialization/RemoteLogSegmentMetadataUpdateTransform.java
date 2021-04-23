@@ -26,11 +26,12 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataUpdate> {
 
-    public ApiMessageAndVersion toApiMessageAndVersion(RemoteLogSegmentMetadataUpdate data) {
+    public ApiMessageAndVersion toApiMessageAndVersion(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate) {
         RemoteLogSegmentMetadataUpdateRecord record = new RemoteLogSegmentMetadataUpdateRecord()
-                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
-                .setEventTimestampMs(data.eventTimestampMs())
-                .setRemoteLogSegmentState(data.state().id());
+                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(segmentMetadataUpdate))
+                .setBrokerId(segmentMetadataUpdate.brokerId())
+                .setEventTimestampMs(segmentMetadataUpdate.eventTimestampMs())
+                .setRemoteLogSegmentState(segmentMetadataUpdate.state().id());
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }

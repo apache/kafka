@@ -32,17 +32,17 @@ import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadata> {
 
-    public ApiMessageAndVersion toApiMessageAndVersion(RemoteLogSegmentMetadata data) {
+    public ApiMessageAndVersion toApiMessageAndVersion(RemoteLogSegmentMetadata segmentMetadata) {
         RemoteLogSegmentMetadataRecord record = new RemoteLogSegmentMetadataRecord()
-                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(data))
-                .setStartOffset(data.startOffset())
-                .setEndOffset(data.endOffset())
-                .setBrokerId(data.brokerId())
-                .setEventTimestampMs(data.eventTimestampMs())
-                .setMaxTimestampMs(data.maxTimestampMs())
-                .setSegmentSizeInBytes(data.segmentSizeInBytes())
-                .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(data))
-                .setRemoteLogSegmentState(data.state().id());
+                .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(segmentMetadata))
+                .setStartOffset(segmentMetadata.startOffset())
+                .setEndOffset(segmentMetadata.endOffset())
+                .setBrokerId(segmentMetadata.brokerId())
+                .setEventTimestampMs(segmentMetadata.eventTimestampMs())
+                .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
+                .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
+                .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata))
+                .setRemoteLogSegmentState(segmentMetadata.state().id());
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
 
@@ -69,26 +69,29 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
     @Override
     public RemoteLogSegmentMetadata fromApiMessageAndVersion(ApiMessageAndVersion apiMessageAndVersion) {
         RemoteLogSegmentMetadataRecord record = (RemoteLogSegmentMetadataRecord) apiMessageAndVersion.message();
-
         RemoteLogSegmentId remoteLogSegmentId = buildRemoteLogSegmentId(record.remoteLogSegmentId());
+
         Map<Integer, Long> segmentLeaderEpochs = new HashMap<>();
         for (RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry segmentLeaderEpoch : record.segmentLeaderEpochs()) {
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
 
-        RemoteLogSegmentMetadata remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId,
-                record.startOffset(), record.endOffset(), record.maxTimestampMs(), record.brokerId(),
-                record.eventTimestampMs(), record.segmentSizeInBytes(), segmentLeaderEpochs);
-        RemoteLogSegmentMetadataUpdate rlsmUpdate = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId,
-                record.eventTimestampMs(), RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                record.brokerId());
+        RemoteLogSegmentMetadata remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
+                                                                                         record.maxTimestampMs(), record.brokerId(),
+                                                                                         record.eventTimestampMs(), record.segmentSizeInBytes(),
+                                                                                         segmentLeaderEpochs);
+        RemoteLogSegmentMetadataUpdate rlsmUpdate = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
+                                                                                       RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
+                                                                                       record.brokerId());
 
         return remoteLogSegmentMetadata.createWithUpdates(rlsmUpdate);
     }
 
     private RemoteLogSegmentId buildRemoteLogSegmentId(RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry entry) {
-        TopicIdPartition topicIdPartition = new TopicIdPartition(entry.topicIdPartition().id(),
-                new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
+        TopicIdPartition topicIdPartition =
+                new TopicIdPartition(entry.topicIdPartition().id(),
+                                     new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
+
         return new RemoteLogSegmentId(topicIdPartition, entry.id());
     }
 }
