@@ -184,6 +184,13 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         Objects.requireNonNull(consumerGroupId);
+        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
+    }
+
+    @Override
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(groupMetadata);
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
@@ -196,16 +203,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
             return;
         }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets =
-            this.uncommittedConsumerGroupOffsets.computeIfAbsent(consumerGroupId, k -> new HashMap<>());
+            this.uncommittedConsumerGroupOffsets.computeIfAbsent(groupMetadata.groupId(), k -> new HashMap<>());
         uncommittedOffsets.putAll(offsets);
         this.sentOffsets = true;
-    }
-
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
-        Objects.requireNonNull(groupMetadata);
-        sendOffsetsToTransaction(offsets, groupMetadata.groupId());
     }
 
     @Override

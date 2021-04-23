@@ -55,16 +55,16 @@
     <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
         by setting <code>StreamsConfig.PROCESSING_GUARANTEE</code> to <code>StreamsConfig.EXACTLY_ONCE_V2</code> for
-        application versions 3.0+, or setting it to <code>StreamsConfig.EXACTLY_ONCE_BETA</code> for versions between 2.6 and 3.0.
+        application versions 3.0+, or setting it to <code>StreamsConfig.EXACTLY_ONCE_BETA</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
-        If you want to upgrade your EOS application from an older version and enable this feature,
-        you first need to upgrade your application to version 2.6.x, staying on <code>StreamsConfig.EXACTLY_ONCE</code>,
-        and then do second round of rolling bounces to switch to <code>StreamsConfig.EXACTLY_ONCE_BETA</code>. If you
-        are upgrading an EOS application from an older (pre-2.6) version to 3.0 or higher, follow these same steps but
-        with the config <code>StreamsConfig.EXACTLY_ONCE_V2</code> instead. No special steps are required to upgrade
-        an application using <code>StreamsConfig.EXACTLY_ONCE_BETA</code> from version 2.6+ to 3.0 or higher: you can
+        If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
+        you first need to upgrade your application to version 3.0.x, staying on <code>StreamsConfig.EXACTLY_ONCE</code>,
+        and then do second round of rolling bounces to switch to <code>StreamsConfig.EXACTLY_ONCE_V2</code>. If you
+        are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these
+        same steps but with the config <code>StreamsConfig.EXACTLY_ONCE_BETA</code> instead. No special steps are required
+        to upgrade an application using <code>StreamsConfig.EXACTLY_ONCE_BETA</code> from version 2.6+ to 3.0 or higher: you can
         just replace the config during the rolling upgrade.
-        For a downgrade, do the reverse: first switch the config from <code>StreamsConfig.EXACTLY_ONCE_BETA</code> to
+        For a downgrade, do the reverse: first switch the config from <code>StreamsConfig.EXACTLY_ONCE_V2</code> to
         <code>StreamsConfig.EXACTLY_ONCE</code> to disable the feature in your 2.6.x application.
         Afterward, you can downgrade your application to a pre-2.6.x version.
     </p>
@@ -97,7 +97,7 @@
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
       The <code>StreamsConfig.EXACTLY_ONCE</code> and <code>StreamsConfig.EXACTLY_ONCE_BETA</code> configs have been deprecated, and a new <code>StreamsConfig.EXACTLY_ONCE_V2</code> config has been
-      introduced in their place. Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
+      introduced. This is the same feature as eos-beta, but renamed to highlight its production-readiness. Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
       from the release of 3.0, whichever comes last. Note that eos-v2 requires broker version 2.5 or higher, like eos-beta, so users should begin to upgrade their kafka cluster if necessary. See
       <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
     </p>

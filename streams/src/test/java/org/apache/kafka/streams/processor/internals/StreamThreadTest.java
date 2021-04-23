@@ -992,6 +992,7 @@ public class StreamThreadTest {
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosAlphaEnabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);

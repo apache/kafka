@@ -313,7 +313,7 @@ public class StreamsProducerTest {
             () -> nonEosStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -323,7 +323,7 @@ public class StreamsProducerTest {
             () -> eosAlphaStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
 
@@ -332,11 +332,10 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
-    public void shouldNotSetTransactionIdIfEosDisable() {
+    public void shouldNotSetTransactionIdIfEosDisabled() {
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
         expect(mockConfig.getProducerConfigs("threadId-producer")).andReturn(mock(Map.class));
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE).anyTimes();
-        expect(mockConfig.processingMode()).andReturn(ProcessingMode.AT_LEAST_ONCE).anyTimes();
         replay(mockConfig);
 
         new StreamsProducer(
@@ -455,7 +454,6 @@ public class StreamsProducerTest {
         expect(mockConfig.getProducerConfigs("threadId-0_0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE);
-        expect(mockConfig.processingMode()).andReturn(ProcessingMode.EXACTLY_ONCE_ALPHA).anyTimes();
 
         replay(mockMap, mockConfig);
 
@@ -472,7 +470,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldSetTransactionIdUsingProcessIdIfEosV2Enable() {
+    public void shouldSetTransactionIdUsingProcessIdIfEosV2Enabled() {
         final UUID processId = UUID.randomUUID();
 
         final Map<String, Object> mockMap = mock(Map.class);
@@ -483,7 +481,6 @@ public class StreamsProducerTest {
         expect(mockConfig.getProducerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_V2).anyTimes();
-        expect(mockConfig.processingMode()).andReturn(ProcessingMode.EXACTLY_ONCE_V2).anyTimes();
 
         replay(mockMap, mockConfig);
 

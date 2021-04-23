@@ -378,7 +378,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            config.processingMode()
+            processingMode(config)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -433,6 +433,30 @@ public class StreamThread extends Thread {
         ProcessingMode(final String name) {
             this.name = name;
         }
+    }
+
+    // Note: the below two methods are static methods here instead of methods on StreamsConfig because it's a public API
+
+    @SuppressWarnings("deprecation")
+    public static ProcessingMode processingMode(final StreamsConfig config) {
+        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
+        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+        } else {
+            return StreamThread.ProcessingMode.AT_LEAST_ONCE;
+        }
+    }
+
+    public static boolean eosEnabled(final StreamsConfig config) {
+        return eosEnabled(processingMode(config));
+    }
+
+    public static boolean eosEnabled(final ProcessingMode processingMode) {
+        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
+            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     public StreamThread(final Time time,

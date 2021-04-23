@@ -84,7 +84,7 @@ public class StreamsProducer {
         log = Objects.requireNonNull(logContext, "logContext cannot be null").logger(getClass());
         logPrefix = logContext.logPrefix().trim();
 
-        processingMode = config.processingMode();
+        processingMode = StreamThread.processingMode(config);
 
         final Map<String, Object> producerConfigs;
         switch (processingMode) {
@@ -135,7 +135,7 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return StreamsConfig.eosEnabled(processingMode);
+        return StreamThread.eosEnabled(processingMode);
     }
 
     /**

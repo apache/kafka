@@ -653,7 +653,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Deprecated
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        log.warn("This method has been deprecated and will be removed in 4.0, please use #sendOffsetsToTransaction(Map, ConsumerGroupMetadata) instead");
         sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
     }
 

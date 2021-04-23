@@ -87,7 +87,7 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = config.processingMode();
+        processingMode = StreamThread.processingMode(config);
 
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
@@ -148,7 +148,7 @@ class ActiveTaskCreator {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 Task.TaskType.ACTIVE,
-                config.eosEnabled(),
+                StreamThread.eosEnabled(config),
                 logContext,
                 stateDirectory,
                 storeChangelogReader,
