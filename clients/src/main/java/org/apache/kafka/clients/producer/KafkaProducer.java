@@ -75,6 +75,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -237,6 +238,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
+
+    static final byte[] EMPTY_BYTE_ARRAY = {};
 
     private final String clientId;
     // Visible for testing
@@ -920,23 +923,28 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer", cce);
             }
-            byte[] serializedValue;
-            try {
-                serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
-            } catch (ClassCastException cce) {
-                throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
+
+            boolean valueIsByteBuffer = record.value() instanceof ByteBuffer;
+
+            // it's not used by any partitioner impl but making default value non-null as an extra precaution
+            byte[] serializedValue = EMPTY_BYTE_ARRAY;
+
+            if (!valueIsByteBuffer) {
+                try {
+                    serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+                } catch (ClassCastException cce) {
+                    throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer", cce);
+                }
             }
+
             int partition = partition(record, serializedKey, serializedValue, cluster);
             tp = new TopicPartition(record.topic(), partition);
 
             setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
-            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    compressionType, serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
@@ -947,8 +955,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
             }
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
+
+            int serializedSize = valueIsByteBuffer ?
+                AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    compressionType, Utils.wrapNullable(serializedKey), (ByteBuffer) record.value(), headers) :
+                AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    compressionType, serializedKey, serializedValue, headers);
+
+            ensureValidRecordSize(serializedSize);
+
+            RecordAccumulator.RecordAppendResult result;
+
+            if (valueIsByteBuffer) {
+                result = accumulator.append(tp, timestamp, Utils.wrapNullable(serializedKey),
+                    (ByteBuffer) record.value(), headers, interceptCallback, remainingWaitMs, true, nowMs);
+            } else {
+                result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
+            }
 
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
@@ -961,8 +985,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 // producer callback will make sure to call both 'callback' and interceptor callback
                 interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
-                result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
+                if (valueIsByteBuffer) {
+                    result = accumulator.append(tp, timestamp, Utils.wrapNullable(serializedKey),
+                        (ByteBuffer) record.value(), headers, interceptCallback, remainingWaitMs, false, nowMs);
+                } else {
+                    result = accumulator.append(tp, timestamp, serializedKey,
+                        serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
+                }
             }
 
             if (transactionManager != null && transactionManager.isTransactional())

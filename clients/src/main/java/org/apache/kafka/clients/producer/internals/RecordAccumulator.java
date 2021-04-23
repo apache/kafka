@@ -54,6 +54,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 /**
@@ -186,6 +187,36 @@ public final class RecordAccumulator {
                                      long maxTimeToBlock,
                                      boolean abortOnNewBatch,
                                      long nowMs) throws InterruptedException {
+        return append(tp, timestamp, Utils.wrapNullable(key), Utils.wrapNullable(value),
+            headers, callback, maxTimeToBlock, abortOnNewBatch, nowMs);
+    }
+
+    /**
+     * Add a record to the accumulator, return the append result
+     * <p>
+     * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
+     * <p>
+     *
+     * @param tp The topic/partition to which this record is being sent
+     * @param timestamp The timestamp of the record
+     * @param key The key for the record
+     * @param value The value for the record
+     * @param headers the Headers for the record
+     * @param callback The user-supplied callback to execute when the request is complete
+     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
+     *                        running the partitioner's onNewBatch method before trying to append again
+     * @param nowMs The current time, in milliseconds
+     */
+    public RecordAppendResult append(TopicPartition tp,
+                                     long timestamp,
+                                     ByteBuffer key,
+                                     ByteBuffer value,
+                                     Header[] headers,
+                                     Callback callback,
+                                     long maxTimeToBlock,
+                                     boolean abortOnNewBatch,
+                                     long nowMs) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -261,7 +292,7 @@ public final class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
