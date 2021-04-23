@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -1515,8 +1516,8 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
-     * @throws InvalidStateStoreException If the specified store name does not exist in the topology
-     *                                    or if the Streams instance isn't in a queryable state.
+     * @throws UnknownStateStoreException If the specified store name does not exist in the topology.
+     * @throws InvalidStateStoreException If the Streams instance isn't in a queryable state.
      *                                    If the store's type does not match the QueryableStoreType,
      *                                    the Streams instance is not in a queryable state with respect
      *                                    to the parameters, or if the store is not available locally, then
@@ -1526,7 +1527,7 @@ public class KafkaStreams implements AutoCloseable {
         final String storeName = storeQueryParameters.storeName();
         if ((taskTopology == null || !taskTopology.hasStore(storeName))
             && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
-            throw new InvalidStateStoreException(
+            throw new UnknownStateStoreException(
                 "Cannot get state store " + storeName + " because no such store is registered in the topology."
             );
         }
