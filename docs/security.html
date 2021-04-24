@@ -319,7 +319,7 @@ keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></
             We need to configure the following property in server.properties, which must have one or more comma-separated values:
             <pre>listeners</code></pre>
 
-            If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
+            If SSL is enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
             <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://host.name:port,SSL://host.name:port</code></pre>
 
             Following SSL configs are needed on the broker side
