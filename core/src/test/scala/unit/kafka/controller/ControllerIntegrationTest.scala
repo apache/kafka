@@ -585,12 +585,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     })
 
     TestUtils.waitUntilTrue(() => notEnoughReplicasDetected, "Fail to detect expected NotEnoughReplicasException")
-
-    // The epoch for broker 2 will be 49 every time. This is because every time a test case is run in this suite, a
-    // fresh ZooKeeper state is created, and the epoch comes from the czxid of the broker znode. Since this test always
-    // registers the brokers one at a time in the same order, from 3 to 0, the epochs will be consistent across runs.
-    val expectedShutdownEntries = Map(2 -> 49)
-    assertEquals(expectedShutdownEntries, zkClient.getBrokerShutdownEntries)
+    val shutdownEpoch = zkClient.getBrokerShutdownEntries.get(2).get
+    assertTrue(shutdownEpoch > 0)
 
     // Now ensure that after the controller moves, shutdown is still rejected.
     zkClient.deleteController(controller.controllerContext.epochZkVersion)
@@ -611,7 +607,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       case _ =>
     })
     TestUtils.waitUntilTrue(() => notEnoughReplicasDetected, "Fail to detect expected NotEnoughReplicasException")
-    assertEquals(expectedShutdownEntries, zkClient.getBrokerShutdownEntries)
+    assertEquals(shutdownEpoch, zkClient.getBrokerShutdownEntries.get(2).get)
 
     // Tell the controller to skip shutdown for this brokerEpoch, simulating LiControlledShutdownSkipSafetyCheckRequest.
     // After that the controller should allow the shutdown that it just rejected.
