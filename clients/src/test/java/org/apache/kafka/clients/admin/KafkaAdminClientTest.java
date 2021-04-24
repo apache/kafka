@@ -100,10 +100,12 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
+import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -157,8 +159,11 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
+import org.apache.kafka.common.requests.DescribeTransactionsRequest;
+import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -5429,6 +5434,123 @@ public class KafkaAdminClientTest {
             KafkaFuture<DescribeProducersResult.PartitionProducerState> partitionFuture =
                 result.partitionResult(topicPartition);
             assertEquals(new HashSet<>(expected), new HashSet<>(partitionFuture.get().activeProducers()));
+        }
+    }
+
+    @Test
+    public void testDescribeTransactions() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "foo";
+            Node coordinator = env.cluster().nodes().iterator().next();
+            TransactionDescription expected = new TransactionDescription(
+                coordinator.id(), TransactionState.COMPLETE_COMMIT, 12345L,
+                15, 10000L, OptionalLong.empty(), emptySet());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof FindCoordinatorRequest,
+                new FindCoordinatorResponse(new FindCoordinatorResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setNodeId(coordinator.id())
+                    .setHost(coordinator.host())
+                    .setPort(coordinator.port()))
+            );
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof DescribeTransactionsRequest,
+                new DescribeTransactionsResponse(new DescribeTransactionsResponseData().setTransactionStates(
+                    singletonList(new DescribeTransactionsResponseData.TransactionState()
+                        .setErrorCode(Errors.NONE.code())
+                        .setProducerEpoch((short) expected.producerEpoch())
+                        .setProducerId(expected.producerId())
+                        .setTransactionalId(transactionalId)
+                        .setTransactionTimeoutMs(10000)
+                        .setTransactionStartTimeMs(-1)
+                        .setTransactionState(expected.state().toString())
+                    )
+                )),
+                coordinator
+            );
+
+            DescribeTransactionsResult result = env.adminClient().describeTransactions(singleton(transactionalId));
+            KafkaFuture<TransactionDescription> future = result.description(transactionalId);
+            assertEquals(expected, future.get());
+        }
+    }
+
+    @Test
+    public void testRetryDescribeTransactionsAfterNotCoordinatorError() throws Exception {
+        MockTime time = new MockTime();
+        int retryBackoffMs = 100;
+        Cluster cluster = mockCluster(3, 0);
+        Map<String, Object> configOverride = newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoffMs);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, configOverride)) {
+            String transactionalId = "foo";
+
+            Iterator<Node> nodeIterator = env.cluster().nodes().iterator();
+            Node coordinator1 = nodeIterator.next();
+            Node coordinator2 = nodeIterator.next();
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof FindCoordinatorRequest,
+                new FindCoordinatorResponse(new FindCoordinatorResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setNodeId(coordinator1.id())
+                    .setHost(coordinator1.host())
+                    .setPort(coordinator1.port()))
+            );
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> {
+                    if (!(request instanceof DescribeTransactionsRequest)) {
+                        return false;
+                    } else {
+                        // Backoff needed here for the retry of FindCoordinator
+                        time.sleep(retryBackoffMs);
+                        return true;
+                    }
+                },
+                new DescribeTransactionsResponse(new DescribeTransactionsResponseData().setTransactionStates(
+                    singletonList(new DescribeTransactionsResponseData.TransactionState()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code())
+                        .setTransactionalId(transactionalId)
+                    )
+                )),
+                coordinator1
+            );
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof FindCoordinatorRequest,
+                new FindCoordinatorResponse(new FindCoordinatorResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setNodeId(coordinator2.id())
+                    .setHost(coordinator2.host())
+                    .setPort(coordinator2.port()))
+            );
+
+            TransactionDescription expected = new TransactionDescription(
+                coordinator2.id(), TransactionState.COMPLETE_COMMIT, 12345L,
+                15, 10000L, OptionalLong.empty(), emptySet());
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof DescribeTransactionsRequest,
+                new DescribeTransactionsResponse(new DescribeTransactionsResponseData().setTransactionStates(
+                    singletonList(new DescribeTransactionsResponseData.TransactionState()
+                        .setErrorCode(Errors.NONE.code())
+                        .setProducerEpoch((short) expected.producerEpoch())
+                        .setProducerId(expected.producerId())
+                        .setTransactionalId(transactionalId)
+                        .setTransactionTimeoutMs(10000)
+                        .setTransactionStartTimeMs(-1)
+                        .setTransactionState(expected.state().toString())
+                    )
+                )),
+                coordinator2
+            );
+
+            DescribeTransactionsResult result = env.adminClient().describeTransactions(singleton(transactionalId));
+            KafkaFuture<TransactionDescription> future = result.description(transactionalId);
+            assertEquals(expected, future.get());
         }
     }
 

@@ -96,6 +96,9 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+        A new exception may be thrown from <code>KafkaStreams#store()</code>. If the specified store name does not exist in the topology, an UnknownStateStoreException will be thrown instead of the former InvalidStateStoreException. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-216%3A+IQ+should+throw+different+exceptions+for+different+errors">KIP-216</a> for more information.
+    </p>
+    <p>
       The <code>StreamsConfig.EXACTLY_ONCE</code> and <code>StreamsConfig.EXACTLY_ONCE_BETA</code> configs have been deprecated, and a new <code>StreamsConfig.EXACTLY_ONCE_V2</code> config has been
       introduced. This is the same feature as eos-beta, but renamed to highlight its production-readiness. Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
       from the release of 3.0, whichever comes last. Note that eos-v2 requires broker version 2.5 or higher, like eos-beta, so users should begin to upgrade their kafka cluster if necessary. See

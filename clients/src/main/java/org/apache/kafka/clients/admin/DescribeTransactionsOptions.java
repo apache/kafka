@@ -14,9 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.clients.admin;
 
-public enum BufferFullStrategy {
-    EMIT,
-    SHUT_DOWN
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
+
+/**
+ * Options for {@link Admin#describeTransactions(Collection)}.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class DescribeTransactionsOptions extends AbstractOptions<DescribeTransactionsOptions> {
+
 }

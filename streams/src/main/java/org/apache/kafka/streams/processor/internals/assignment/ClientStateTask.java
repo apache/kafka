@@ -14,9 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.streams.processor.internals.assignment;
 
-public enum BufferFullStrategy {
-    EMIT,
-    SHUT_DOWN
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.kafka.streams.processor.TaskId;
+
+class ClientStateTask {
+    private final Map<String, Set<TaskId>> consumerToTaskIds;
+    private Set<TaskId> taskIds;
+
+    ClientStateTask(final Set<TaskId> taskIds,
+                    final Map<String, Set<TaskId>> consumerToTaskIds) {
+        this.taskIds = taskIds;
+        this.consumerToTaskIds = consumerToTaskIds;
+    }
+
+    void taskIds(final Set<TaskId> clientToTaskIds) {
+        taskIds = clientToTaskIds;
+    }
+
+    Set<TaskId> taskIds() {
+        return taskIds;
+    }
+
+    Map<String, Set<TaskId>> consumerToTaskIds() {
+        return consumerToTaskIds;
+    }
 }
