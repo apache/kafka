@@ -127,7 +127,7 @@ class ActiveTaskCreator {
 
     StreamsProducer threadProducer() {
         if (processingMode != EXACTLY_ONCE_V2) {
-            throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
+            throw new IllegalStateException("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was " + processingMode);
         }
         return threadProducer;
     }

@@ -97,7 +97,7 @@ public class ResetPartitionTimeIntegrationTest {
         return Arrays.asList(new String[][] {
             {StreamsConfig.AT_LEAST_ONCE},
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 

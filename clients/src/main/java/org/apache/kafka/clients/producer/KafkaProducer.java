@@ -648,7 +648,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      *
-     * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} instead.
+     * @deprecated Since 3.0.0, please use {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} instead.
      */
     @Deprecated
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -666,7 +666,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * together, typically in a consume-transform-produce pattern. Thus, the specified
      * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
      * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata. This will provide
-     * stronger fencing than just supplying the consumerGroupId and passing in {@code new ConsumerGroupMetadata(consumerGroupId)},
+     * stronger fencing than just supplying the {@code consumerGroupId} and passing in {@code new ConsumerGroupMetadata(consumerGroupId)},
      * however note that the full set of consumer group metadata returned by {@link KafkaConsumer#groupMetadata()}
      * requires the brokers to be on version 2.5 or newer to understand.
      *

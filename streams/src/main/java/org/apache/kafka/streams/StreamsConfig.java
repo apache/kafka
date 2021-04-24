@@ -123,7 +123,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * </ul>
  *
  * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
- * {@link #EXACTLY_ONCE "exactly_once"}, or {@link #EXACTLY_ONCE_BETA "exactly_once_beta"}, Kafka Streams does not
+ * {@link #EXACTLY_ONCE "exactly_once"} (deprecated), or {@link #EXACTLY_ONCE_BETA "exactly_once_beta"} (deprecated), Kafka Streams does not
  * allow users to overwrite the following properties (Streams setting shown in parentheses):
  * <ul>
  *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
@@ -306,7 +306,7 @@ public class StreamsConfig extends AbstractConfig {
      * <p>
      * Enabling exactly-once (beta) requires broker version 2.5 or higher.
      * If you enable this feature Kafka Streams will use fewer resources (like broker connections)
-     * compared to the {@link #EXACTLY_ONCE} case.
+     * compared to the {@link #EXACTLY_ONCE} (deprecated) case.
      *
      * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
      */

@@ -54,18 +54,18 @@
 
     <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
-        by setting <code>StreamsConfig.PROCESSING_GUARANTEE</code> to <code>StreamsConfig.EXACTLY_ONCE_V2</code> for
-        application versions 3.0+, or setting it to <code>StreamsConfig.EXACTLY_ONCE_BETA</code> for versions between 2.6 and 2.8.
+        by setting <code>"processing.guarantee"</code> to <code>"exactly_once"</code> for
+        application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
         If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
-        you first need to upgrade your application to version 3.0.x, staying on <code>StreamsConfig.EXACTLY_ONCE</code>,
-        and then do second round of rolling bounces to switch to <code>StreamsConfig.EXACTLY_ONCE_V2</code>. If you
+        you first need to upgrade your application to version 3.0.x, staying on <code>"exactly_once"</code>,
+        and then do second round of rolling bounces to switch to <code>"exactly_once_v2"</code>. If you
         are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these
-        same steps but with the config <code>StreamsConfig.EXACTLY_ONCE_BETA</code> instead. No special steps are required
-        to upgrade an application using <code>StreamsConfig.EXACTLY_ONCE_BETA</code> from version 2.6+ to 3.0 or higher: you can
-        just replace the config during the rolling upgrade.
-        For a downgrade, do the reverse: first switch the config from <code>StreamsConfig.EXACTLY_ONCE_V2</code> to
-        <code>StreamsConfig.EXACTLY_ONCE</code> to disable the feature in your 2.6.x application.
+        same steps but with the config <code>"exactly_once_beta"</code> instead. No special steps are required
+        to upgrade an application using <code>"exactly_once_beta"</code> from version 2.6+ to 3.0 or higher: you can
+        just change the config from <code>"exactly_once_beta"</code> to <code>"exactly_once_v2"</code> during the rolling upgrade.
+        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_v2"</code> to
+        <code>"exactly_once"</code> to disable the feature in your 2.6.x application.
         Afterward, you can downgrade your application to a pre-2.6.x version.
     </p>
 
