@@ -2258,6 +2258,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+        validateSnapshotId(snapshotId);
         return new SnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE_BYTES,
@@ -2266,6 +2267,20 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             CompressionType.NONE,
             serde
         );
+    }
+
+    private void validateSnapshotId(OffsetAndEpoch snapshotId) {
+        Optional<LogOffsetMetadata> highWatermarkOpt = quorum().highWatermark();
+        if (!highWatermarkOpt.isPresent() || highWatermarkOpt.get().offset <= snapshotId.offset) {
+            throw new KafkaException("Trying to creating snapshot with snapshotId: " + snapshotId + " whose offset is larger than the high-watermark: " +
+                    highWatermarkOpt + ". This may necessarily mean a bug in the caller, since the there should be a minimum " +
+                    "size of records between the latest snapshot and the high-watermark when creating snapshot");
+        }
+        int leaderEpoch = quorum().epoch();
+        if (snapshotId.epoch > leaderEpoch) {
+            throw new KafkaException("Trying to creating snapshot with snapshotId: " + snapshotId + " whose epoch is" +
+                    " larger than the current leader epoch: " + leaderEpoch);
+        }
     }
 
     @Override
