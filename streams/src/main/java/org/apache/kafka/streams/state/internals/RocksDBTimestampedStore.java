@@ -206,6 +206,22 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(oldColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
+            try {
+                db.deleteRange(newColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
+        }
+
+        @Override
         public KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
             final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);

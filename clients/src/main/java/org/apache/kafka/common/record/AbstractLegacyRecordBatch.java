@@ -113,11 +113,6 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public Long checksumOrNull() {
-        return checksum();
-    }
-
-    @Override
     public long checksum() {
         return outerRecord().checksum();
     }
