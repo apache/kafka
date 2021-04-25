@@ -17,9 +17,10 @@
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 
 /**
- * This interface is about transforming metadata objects into the respective {@link ApiMessageAndVersion} or vice versa.
+ * This interface is about transforming {@link RemoteLogMetadata} objects into the respective {@link ApiMessageAndVersion} or vice versa.
  * <p></p>
  * Those metadata objects can be {@link org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata},
  * {@link org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate}, or {@link org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata}.
@@ -30,7 +31,7 @@ import org.apache.kafka.metadata.ApiMessageAndVersion;
  * @see RemoteLogSegmentMetadataUpdateTransform
  * @see RemotePartitionDeleteMetadataTransform
  */
-public interface RemoteLogMetadataTransform<T> {
+public interface RemoteLogMetadataTransform<T extends RemoteLogMetadata> {
 
     /**
      * Transforms the given {@code metadata} object into the respective {@code ApiMessageAndVersion} object.

@@ -17,29 +17,31 @@
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataContext;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemotePartitionDeleteMetadataRecord;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
+import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This class provides serialization and deserialization for {@link RemoteLogMetadataContext}. This is the root serde
+ * This class provides serialization and deserialization for {@link RemoteLogMetadata}. This is the root serde
  * for the messages that are stored in internal remote log metadata topic.
  */
-public class RemoteLogMetadataContextSerde {
-    public static final short REMOTE_LOG_SEGMENT_METADATA_API_KEY = new RemoteLogSegmentMetadataRecord().apiKey();
-    public static final short REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY = new RemoteLogSegmentMetadataUpdateRecord().apiKey();
-    public static final short REMOTE_PARTITION_DELETE_API_KEY = new RemotePartitionDeleteMetadataRecord().apiKey();
+public class RemoteLogMetadataSerde {
+    private static final short REMOTE_LOG_SEGMENT_METADATA_API_KEY = new RemoteLogSegmentMetadataRecord().apiKey();
+    private static final short REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY = new RemoteLogSegmentMetadataUpdateRecord().apiKey();
+    private static final short REMOTE_PARTITION_DELETE_API_KEY = new RemotePartitionDeleteMetadataRecord().apiKey();
 
+    private static final Map<String, Short> REMOTE_LOG_STORAGE_CLASS_TO_API_KEY = createRemoteLogStorageClassToApiKeyMap();
     private static final Map<Short, RemoteLogMetadataTransform> KEY_TO_TRANSFORM = createRemoteLogMetadataTransforms();
 
-    private static final AbstractMetadataMessageSerde METADATA_MESSAGE_SERDE = new AbstractMetadataMessageSerde() {
+    private static final BytesApiMessageSerde BYTES_API_MESSAGE_SERDE = new BytesApiMessageSerde() {
         @Override
         public ApiMessage apiMessageFor(short apiKey) {
             if (apiKey == REMOTE_LOG_SEGMENT_METADATA_API_KEY) {
@@ -62,49 +64,40 @@ public class RemoteLogMetadataContextSerde {
         return map;
     }
 
-    public byte[] serialize(RemoteLogMetadataContext remoteLogMetadataContext) {
-        RemoteLogMetadataTransform metadataTransform = KEY_TO_TRANSFORM.get(remoteLogMetadataContext.apiKey());
-        if (metadataTransform == null) {
-            throw new IllegalArgumentException(
-                    "RemoteLogMetadataTransform for apiKey: " + remoteLogMetadataContext.apiKey() + " does not exist.");
+    private static Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
+        Map<String, Short> map = new HashMap<>();
+        map.put(RemoteLogSegmentMetadata.class.getName(), REMOTE_LOG_SEGMENT_METADATA_API_KEY);
+        map.put(RemoteLogSegmentMetadataUpdate.class.getName(), REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY);
+        map.put(RemotePartitionDeleteMetadata.class.getName(), REMOTE_PARTITION_DELETE_API_KEY);
+        return map;
+    }
+
+    public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
+        Short apiKey = REMOTE_LOG_STORAGE_CLASS_TO_API_KEY.get(remoteLogMetadata.getClass().getName());
+        if (apiKey == null) {
+            throw new IllegalArgumentException("ApiKey for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
+                                                       + " does not exist.");
         }
 
         @SuppressWarnings("unchecked")
-        ApiMessageAndVersion apiMessageAndVersion = metadataTransform.toApiMessageAndVersion(remoteLogMetadataContext.payload());
+        ApiMessageAndVersion apiMessageAndVersion = remoteLogMetadataTransform(apiKey).toApiMessageAndVersion(remoteLogMetadata);
 
-        return METADATA_MESSAGE_SERDE.serialize(apiMessageAndVersion);
+        return BYTES_API_MESSAGE_SERDE.serialize(apiMessageAndVersion);
     }
 
-    public RemoteLogMetadataContext deserialize(byte[] data) {
-        ApiMessageAndVersion apiMessageAndVersion = METADATA_MESSAGE_SERDE.deserialize(data);
+    public RemoteLogMetadata deserialize(byte[] data) {
+        ApiMessageAndVersion apiMessageAndVersion = BYTES_API_MESSAGE_SERDE.deserialize(data);
 
-        short apiKey = apiMessageAndVersion.message().apiKey();
+        return remoteLogMetadataTransform(apiMessageAndVersion.message().apiKey()).fromApiMessageAndVersion(apiMessageAndVersion);
+    }
+
+    private RemoteLogMetadataTransform remoteLogMetadataTransform(short apiKey) {
         RemoteLogMetadataTransform metadataTransform = KEY_TO_TRANSFORM.get(apiKey);
         if (metadataTransform == null) {
-            throw new IllegalArgumentException(
-                    "RemoteLogMetadataTransform for apikey: " + apiKey + " does not exist.");
+            throw new IllegalArgumentException("RemoteLogMetadataTransform for apikey: " + apiKey + " does not exist.");
         }
 
-        Object deserializedObj = metadataTransform.fromApiMessageAndVersion(apiMessageAndVersion);
-        return new RemoteLogMetadataContext(apiKey, deserializedObj);
+        return metadataTransform;
     }
 
-    public static class RemoteLogMetadataContextSerializer implements Serializer<RemoteLogMetadataContext> {
-        private final RemoteLogMetadataContextSerde serde = new RemoteLogMetadataContextSerde();
-
-        @Override
-        public byte[] serialize(String topic, RemoteLogMetadataContext remoteLogMetadataContext) {
-            return serde.serialize(remoteLogMetadataContext);
-        }
-    }
-
-    public static class RemoteLogMetadataContextDeserializer implements Deserializer<RemoteLogMetadataContext> {
-
-        private final RemoteLogMetadataContextSerde serde = new RemoteLogMetadataContextSerde();
-
-        @Override
-        public RemoteLogMetadataContext deserialize(String topic, byte[] data) {
-            return serde.deserialize(data);
-        }
-    }
 }

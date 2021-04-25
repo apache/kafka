@@ -19,7 +19,7 @@ package org.apache.kafka.raft.metadata;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 
-public class MetadataRecordSerde extends AbstractMetadataRecordSerde {
+public class MetadataRecordSerde extends AbstractApiMessageSerde {
 
     @Override
     public ApiMessage apiMessageFor(short apiKey) {

@@ -76,13 +76,15 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
 
-        RemoteLogSegmentMetadata remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
-                                                                                         record.maxTimestampMs(), record.brokerId(),
-                                                                                         record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                                                                         segmentLeaderEpochs);
-        RemoteLogSegmentMetadataUpdate rlsmUpdate = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
-                                                                                       RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                                                       record.brokerId());
+        RemoteLogSegmentMetadata remoteLogSegmentMetadata =
+                new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
+                                             record.maxTimestampMs(), record.brokerId(),
+                                             record.eventTimestampMs(), record.segmentSizeInBytes(),
+                                             segmentLeaderEpochs);
+        RemoteLogSegmentMetadataUpdate rlsmUpdate
+                = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
+                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
+                                                     record.brokerId());
 
         return remoteLogSegmentMetadata.createWithUpdates(rlsmUpdate);
     }

@@ -27,12 +27,24 @@ import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.raft.RecordSerde;
 
 /**
- * This is an implementation of {@code RecordSerde} with {@code ApiMessageAndVersion} but implementors need to implement
+ * This is an implementation of {@code RecordSerde} with {@link ApiMessageAndVersion} but implementors need to implement
  * {@link #apiMessageFor(short)} to return a {@code ApiMessage} instance for the given {@code apiKey}.
  *
  * This can be used as the underlying serialization mechanism for any metadata kind of log storage.
+ * <p></p>
+ * Serialization format for the given {@code ApiMessageAndVersion} is like below:
+ * <p></p>
+ * <pre>
+ *     [data_frame_version header message]
+ *     header => [api_key version]
+ *
+ *     data_frame_version   : This is the header version, current value is 0. Header includes both api_key and version.
+ *     api_key              : apiKey of {@code ApiMessageAndVersion} object.
+ *     version              : version of {@code ApiMessageAndVersion} object.
+ *     message              : serialized message of {@code ApiMessageAndVersion} object.
+ * </pre>
  */
-public abstract class AbstractMetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
+public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageAndVersion> {
     private static final short DEFAULT_FRAME_VERSION = 0;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 

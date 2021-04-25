@@ -21,23 +21,24 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.raft.metadata.AbstractMetadataRecordSerde;
+import org.apache.kafka.raft.metadata.AbstractApiMessageSerde;
 import java.nio.ByteBuffer;
 
 /**
- * This class provides serialization/deserialization of {@code ApiMessageAndVersion}. This can be used as
- * serialization/deserialization protocol for any metadata records derived of {@code ApiMessage}s.
+ * This class class provides conversion of {@code ApiMessageAndVersion} to bytes and vice versa.. This can be used as serialization protocol for any
+ * metadata records derived of {@code ApiMessage}s. It internally uses {@link AbstractApiMessageSerde} for serialization/deserialization
+ * mechanism.
  * <p></p>
  * Implementors need to extend this class and implement {@link #apiMessageFor(short)} method to return a respective
  * {@code ApiMessage} for the given {@code apiKey}. This is required to deserialize the bytes to build the respective
  * {@code ApiMessage} instance.
  */
-public abstract class AbstractMetadataMessageSerde {
+public abstract class BytesApiMessageSerde {
 
-    private final AbstractMetadataRecordSerde metadataRecordSerde = new AbstractMetadataRecordSerde() {
+    private final AbstractApiMessageSerde metadataRecordSerde = new AbstractApiMessageSerde() {
         @Override
         public ApiMessage apiMessageFor(short apiKey) {
-            return AbstractMetadataMessageSerde.this.apiMessageFor(apiKey);
+            return BytesApiMessageSerde.this.apiMessageFor(apiKey);
         }
     };
 
