@@ -54,7 +54,6 @@ class LogSegmentsTest {
   @Test
   def testBasicOperations(): Unit = {
     val segments = new LogSegments(topicPartition)
-
     assertTrue(segments.isEmpty)
     assertFalse(segments.nonEmpty)
 
