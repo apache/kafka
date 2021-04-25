@@ -181,8 +181,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   private val expirationReaper = new ExpiredOperationReaper()
 
   private val metricsTags = Map("delayedOperation" -> purgatoryName)
-  newGauge("PurgatorySize", () => watched, metricsTags)
-  newGauge("NumDelayedOperations", () => numDelayed, metricsTags)
+  newGauge(DelayedOperationMetricNames.PurgatorySize, () => watched, metricsTags)
+  newGauge(DelayedOperationMetricNames.NumDelayedOperations, () => numDelayed, metricsTags)
 
   if (reaperEnabled)
     expirationReaper.start()
@@ -329,8 +329,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (reaperEnabled)
       expirationReaper.shutdown()
     timeoutTimer.shutdown()
-    removeMetric("PurgatorySize", metricsTags)
-    removeMetric("NumDelayedOperations", metricsTags)
+    DelayedOperationMetricNames.allMetricNames.foreach(removeMetric(_, metricsTags))
   }
 
   /**
@@ -432,5 +431,14 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     override def doWork(): Unit = {
       advanceClock(200L)
     }
+  }
+}
+
+object DelayedOperationMetricNames {
+  val PurgatorySize: String = "PurgatorySize"
+  val NumDelayedOperations: String = "NumDelayedOperations"
+
+  def allMetricNames: List[String] = {
+    List(PurgatorySize, NumDelayedOperations)
   }
 }

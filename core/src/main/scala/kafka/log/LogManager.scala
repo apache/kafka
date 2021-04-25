@@ -120,10 +120,10 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _cleaner: LogCleaner = _
   private[kafka] def cleaner: LogCleaner = _cleaner
 
-  newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
+  newGauge(LogManagerMetricNames.OfflineLogDirectoryCount, () => offlineLogDirs.size)
 
   for (dir <- logDirs) {
-    newGauge("LogDirectoryOffline",
+    newGauge(LogManagerMetricNames.LogDirectoryOffline,
       () => if (_liveLogDirs.contains(dir)) 0 else 1,
       Map("logDirectory" -> dir.getAbsolutePath))
   }
@@ -465,9 +465,9 @@ class LogManager(logDirs: Seq[File],
   def shutdown(): Unit = {
     info("Shutting down.")
 
-    removeMetric("OfflineLogDirectoryCount")
+    removeMetric(LogManagerMetricNames.OfflineLogDirectoryCount)
     for (dir <- logDirs) {
-      removeMetric("LogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
+      removeMetric(LogManagerMetricNames.LogDirectoryOffline, Map("logDirectory" -> dir.getAbsolutePath))
     }
 
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -1257,4 +1257,9 @@ object LogManager {
       keepPartitionMetadataFile = keepPartitionMetadataFile)
   }
 
+}
+
+object LogManagerMetricNames {
+  val OfflineLogDirectoryCount: String = "OfflineLogDirectoryCount"
+  val LogDirectoryOffline: String = "LogDirectoryOffline"
 }
