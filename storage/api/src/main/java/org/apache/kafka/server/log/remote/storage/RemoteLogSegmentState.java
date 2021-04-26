@@ -21,18 +21,20 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * It indicates the state of the remote log segment. This will be based on the action executed on this
+ * This enum indicates the state of the remote log segment. This will be based on the action executed on this
  * segment by the remote log service implementation.
  * <p>
- * It goes through the below state transitions.
+ * It goes through the below state transitions. Self transition is treated as valid. This allows updating with the
+ * same state in case of retries and failover.
  * <p>
  * <pre>
  * +---------------------+            +----------------------+
- * |COPY_SEGMENT_STARTED |-----------&gt;|COPY_SEGMENT_FINISHED |
+ * |COPY_SEGMENT_STARTED |----------> |COPY_SEGMENT_FINISHED |
  * +-------------------+-+            +--+-------------------+
  *                     |                 |
  *                     |                 |
@@ -86,5 +88,28 @@ public enum RemoteLogSegmentState {
 
     public static RemoteLogSegmentState forId(byte id) {
         return STATE_TYPES.get(id);
+    }
+
+    public static boolean isValidTransition(RemoteLogSegmentState srcState, RemoteLogSegmentState targetState) {
+        Objects.requireNonNull(targetState, "targetState can not be null");
+
+        if (srcState == null) {
+            // If the source state is null, check the target state as the initial state viz COPY_SEGMENT_STARTED
+            // This ensures simplicity here as we don't have to define one more type to represent the state 'null' like
+            // COPY_SEGMENT_NOT_STARTED, have the null check by the caller and pass that state.
+            return targetState == COPY_SEGMENT_STARTED;
+        } else if (srcState == targetState) {
+            // Self transition is treated as valid. This is to maintain the idempotency for the state in case of retries
+            // or failover.
+            return true;
+        } else if (srcState == COPY_SEGMENT_STARTED) {
+            return targetState == COPY_SEGMENT_FINISHED || targetState == DELETE_SEGMENT_STARTED;
+        } else if (srcState == COPY_SEGMENT_FINISHED) {
+            return targetState == DELETE_SEGMENT_STARTED;
+        } else if (srcState == DELETE_SEGMENT_STARTED) {
+            return targetState == DELETE_SEGMENT_FINISHED;
+        } else {
+            return false;
+        }
     }
 }

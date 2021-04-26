@@ -113,14 +113,14 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * the given leader-epoch for the offset, else returns {@link Optional#empty()}.
      *
      * @param topicIdPartition topic partition
-     * @param offset           offset
      * @param epochForOffset   leader epoch for the given offset
+     * @param offset           offset
      * @return the requested remote log segment metadata if it exists.
      * @throws RemoteStorageException if there are any storage related errors occurred.
      */
     Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                long offset,
-                                                                int epochForOffset)
+                                                                int epochForOffset,
+                                                                long offset)
             throws RemoteStorageException;
 
     /**
@@ -133,8 +133,8 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return the requested highest log offset if exists.
      * @throws RemoteStorageException if there are any storage related errors occurred.
      */
-    Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                    int leaderEpoch) throws RemoteStorageException;
+    Optional<Long> highestOffsetForEpoch(TopicIdPartition topicIdPartition,
+                                         int leaderEpoch) throws RemoteStorageException;
 
     /**
      * This method is used to update the metadata about remote partition delete event. Currently, it allows updating the
@@ -158,12 +158,12 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
             throws RemoteStorageException;
 
     /**
-     * List all the remote log segment metadata of the given topicIdPartition.
+     * Returns all the remote log segment metadata of the given topicIdPartition.
      * <p>
      * Remote Partition Removers uses this method to fetch all the segments for a given topic partition, so that they
      * can delete them.
      *
-     * @return Iterator of remote log segment metadata for the given topic partition.
+     * @return Iterator of all the remote log segment metadata for the given topic partition.
      */
     Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException;
