@@ -41,12 +41,12 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     private Class<?> listClass;
     private Integer primitiveSize;
 
-    static private Map<Class<? extends Deserializer<?>>, Integer> fixedLengthDeserializers = mkMap(
-        mkEntry(ShortDeserializer.class, 2),
-        mkEntry(IntegerDeserializer.class, 4),
-        mkEntry(FloatDeserializer.class, 4),
-        mkEntry(LongDeserializer.class, 8),
-        mkEntry(DoubleDeserializer.class, 8),
+    private static Map<Class<? extends Deserializer<?>>, Integer> fixedLengthDeserializers = mkMap(
+        mkEntry(ShortDeserializer.class, Short.BYTES),
+        mkEntry(IntegerDeserializer.class, Integer.BYTES),
+        mkEntry(FloatDeserializer.class, Float.BYTES),
+        mkEntry(LongDeserializer.class, Long.BYTES),
+        mkEntry(DoubleDeserializer.class, Double.BYTES),
         mkEntry(UUIDDeserializer.class, 36)
     );
 
