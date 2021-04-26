@@ -15,7 +15,7 @@
 
 {
   "apiKey": 1,
-  "type": "data",
+  "type": "metadata",
   "name": "RemoteLogSegmentMetadataUpdateRecord",
   "validVersions": "0",
   "flexibleVersions": "0+",

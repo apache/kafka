@@ -50,7 +50,6 @@ public class RemoteLogMetadataSerdeTest {
 
     @Test
     public void testRemoteLogSegmentMetadataUpdateSerde() {
-        // Create RemoteLogSegmentMetadataUpdate for RemoteLogSegmentMetadataUpdate
         RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate = createRemoteLogSegmentMetadataUpdate();
 
         doTestRemoteLogMetadataSerde(remoteLogSegmentMetadataUpdate);
@@ -58,7 +57,6 @@ public class RemoteLogMetadataSerdeTest {
 
     @Test
     public void testRemotePartitionDeleteMetadataSerde() {
-        // Create RemoteLogMetadataContext for RemotePartitionDeleteMetadata
         RemotePartitionDeleteMetadata remotePartitionDeleteMetadata = createRemotePartitionDeleteMetadata();
 
         doTestRemoteLogMetadataSerde(remotePartitionDeleteMetadata);
@@ -93,8 +91,8 @@ public class RemoteLogMetadataSerdeTest {
 
         // Deserialize the bytes and check the RemoteLogMetadata object is as expected.
         RemoteLogMetadataSerde deserializer = new RemoteLogMetadataSerde();
-        RemoteLogMetadata deserializedRlmContext = deserializer.deserialize(metadataBytes);
-        Assertions.assertEquals(remoteLogMetadata, deserializedRlmContext);
+        RemoteLogMetadata deserializedRremoteLogMetadata = deserializer.deserialize(metadataBytes);
+        Assertions.assertEquals(remoteLogMetadata, deserializedRremoteLogMetadata);
     }
 
     @Test

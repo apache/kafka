@@ -1444,7 +1444,8 @@ project(':storage') {
     args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
              "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
              "-i", "src/main/resources/message",
-             "-m", "MessageDataGenerator", "JsonConverterGenerator"]
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
     inputs.dir("src/main/resources/message")
     outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }

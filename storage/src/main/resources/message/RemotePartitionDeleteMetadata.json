@@ -15,7 +15,7 @@
 
 {
   "apiKey": 2,
-  "type": "data",
+  "type": "metadata",
   "name": "RemotePartitionDeleteMetadataRecord",
   "validVersions": "0",
   "flexibleVersions": "0+",

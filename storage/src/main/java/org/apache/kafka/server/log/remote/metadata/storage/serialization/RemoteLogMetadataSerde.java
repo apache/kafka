@@ -18,13 +18,14 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.log.remote.metadata.storage.generated.MetadataRecordType;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemotePartitionDeleteMetadataRecord;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,25 +39,26 @@ public class RemoteLogMetadataSerde {
     private static final short REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY = new RemoteLogSegmentMetadataUpdateRecord().apiKey();
     private static final short REMOTE_PARTITION_DELETE_API_KEY = new RemotePartitionDeleteMetadataRecord().apiKey();
 
-    private static final Map<String, Short> REMOTE_LOG_STORAGE_CLASS_TO_API_KEY = createRemoteLogStorageClassToApiKeyMap();
-    private static final Map<Short, RemoteLogMetadataTransform> KEY_TO_TRANSFORM = createRemoteLogMetadataTransforms();
+    private final Map<String, Short> remoteLogStorageClassToApiKey;
+    private final Map<Short, RemoteLogMetadataTransform> keyToTransform;
+    private final BytesApiMessageSerde bytesApiMessageSerde;
 
-    private static final BytesApiMessageSerde BYTES_API_MESSAGE_SERDE = new BytesApiMessageSerde() {
-        @Override
-        public ApiMessage apiMessageFor(short apiKey) {
-            if (apiKey == REMOTE_LOG_SEGMENT_METADATA_API_KEY) {
-                return new RemoteLogSegmentMetadataRecord();
-            } else if (apiKey == REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY) {
-                return new RemoteLogSegmentMetadataUpdateRecord();
-            } else if (apiKey == REMOTE_PARTITION_DELETE_API_KEY) {
-                return new RemotePartitionDeleteMetadataRecord();
-            } else {
-                throw new IllegalArgumentException("apiKey: " + apiKey + "is not supported.");
+    public RemoteLogMetadataSerde() {
+        remoteLogStorageClassToApiKey = createRemoteLogStorageClassToApiKeyMap();
+        keyToTransform = createRemoteLogMetadataTransforms();
+        bytesApiMessageSerde = new BytesApiMessageSerde() {
+            @Override
+            public ApiMessage apiMessageFor(short apiKey) {
+                return newApiMessage(apiKey);
             }
-        }
-    };
+        };
+    }
 
-    private static Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
+    protected ApiMessage newApiMessage(short apiKey) {
+        return MetadataRecordType.fromId(apiKey).newMetadataRecord();
+    }
+
+    protected Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
         Map<Short, RemoteLogMetadataTransform> map = new HashMap<>();
         map.put(REMOTE_LOG_SEGMENT_METADATA_API_KEY, new RemoteLogSegmentMetadataTransform());
         map.put(REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY, new RemoteLogSegmentMetadataUpdateTransform());
@@ -64,7 +66,7 @@ public class RemoteLogMetadataSerde {
         return map;
     }
 
-    private static Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
+    protected Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
         Map<String, Short> map = new HashMap<>();
         map.put(RemoteLogSegmentMetadata.class.getName(), REMOTE_LOG_SEGMENT_METADATA_API_KEY);
         map.put(RemoteLogSegmentMetadataUpdate.class.getName(), REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY);
@@ -73,7 +75,7 @@ public class RemoteLogMetadataSerde {
     }
 
     public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
-        Short apiKey = REMOTE_LOG_STORAGE_CLASS_TO_API_KEY.get(remoteLogMetadata.getClass().getName());
+        Short apiKey = remoteLogStorageClassToApiKey.get(remoteLogMetadata.getClass().getName());
         if (apiKey == null) {
             throw new IllegalArgumentException("ApiKey for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
                                                        + " does not exist.");
@@ -82,17 +84,17 @@ public class RemoteLogMetadataSerde {
         @SuppressWarnings("unchecked")
         ApiMessageAndVersion apiMessageAndVersion = remoteLogMetadataTransform(apiKey).toApiMessageAndVersion(remoteLogMetadata);
 
-        return BYTES_API_MESSAGE_SERDE.serialize(apiMessageAndVersion);
+        return bytesApiMessageSerde.serialize(apiMessageAndVersion);
     }
 
     public RemoteLogMetadata deserialize(byte[] data) {
-        ApiMessageAndVersion apiMessageAndVersion = BYTES_API_MESSAGE_SERDE.deserialize(data);
+        ApiMessageAndVersion apiMessageAndVersion = bytesApiMessageSerde.deserialize(data);
 
         return remoteLogMetadataTransform(apiMessageAndVersion.message().apiKey()).fromApiMessageAndVersion(apiMessageAndVersion);
     }
 
     private RemoteLogMetadataTransform remoteLogMetadataTransform(short apiKey) {
-        RemoteLogMetadataTransform metadataTransform = KEY_TO_TRANSFORM.get(apiKey);
+        RemoteLogMetadataTransform metadataTransform = keyToTransform.get(apiKey);
         if (metadataTransform == null) {
             throw new IllegalArgumentException("RemoteLogMetadataTransform for apikey: " + apiKey + " does not exist.");
         }

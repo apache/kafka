@@ -23,7 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * and {@link RemotePartitionDeleteMetadata}.
  */
 @InterfaceStability.Evolving
-public class RemoteLogMetadata {
+public abstract class RemoteLogMetadata {
 
     /**
      * Broker id from which this event is generated.
