@@ -53,11 +53,12 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     public ListDeserializer() {}
 
     public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> innerDeserializer) {
+        if (listClass == null || innerDeserializer == null) {
+            throw new IllegalArgumentException("ListDeserializer requires both \"listClass\" and \"innerDeserializer\" parameters to be provided during initialization");
+        }
         this.listClass = listClass;
         this.inner = innerDeserializer;
-        if (innerDeserializer != null) {
-            this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
-        }
+        this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
     }
 
     public Deserializer<Inner> getInnerDeserializer() {
@@ -89,7 +90,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 throw new KafkaException("Could not determine the list class instance using \"" + listTypePropertyName + "\" property.");
             }
         } catch (final ClassNotFoundException e) {
-            throw new ConfigException(listTypePropertyName, listClassOrName, "Deserializer's list class \"" + listClassOrName + "\" could not be found.");
+            throw new ConfigException(listTypePropertyName, listClassOrName, "Deserializer's list class \"" + listClassOrName + "\" was not a valid Serde/Deserializer.");
         }
     }
 

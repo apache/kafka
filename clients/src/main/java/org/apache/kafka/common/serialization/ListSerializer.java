@@ -49,8 +49,11 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     public ListSerializer() {}
 
     public ListSerializer(Serializer<Inner> serializer) {
+        if (serializer == null) {
+            throw new IllegalArgumentException("ListSerializer requires \"serializer\" parameter to be provided during initialization");
+        }
         this.inner = serializer;
-        this.isFixedLength = serializer != null && fixedLengthSerializers.contains(serializer.getClass());
+        this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
         this.serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
     }
 
