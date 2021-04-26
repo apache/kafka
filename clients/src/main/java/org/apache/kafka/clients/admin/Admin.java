@@ -1512,6 +1512,28 @@ public interface Admin extends AutoCloseable {
     DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options);
 
     /**
+     * Forcefully abort a transaction which is open on a topic partition. See
+     * {@link #abortTransaction(AbortTransactionSpec, AbortTransactionOptions)} for more details.
+     *
+     * @param spec The transaction specification including topic partition and producer details
+     * @return The result
+     */
+    default AbortTransactionResult abortTransaction(AbortTransactionSpec spec) {
+        return abortTransaction(spec, new AbortTransactionOptions());
+    }
+
+    /**
+     * Forcefully abort a transaction which is open on a topic partition. This will
+     * send a `WriteTxnMarkers` request to the partition leader in order to abort the
+     * transaction. This requires administrative privileges.
+     *
+     * @param spec The transaction specification including topic partition and producer details
+     * @param options Options to control the method behavior (including filters)
+     * @return The result
+     */
+    AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
