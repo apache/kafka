@@ -99,8 +99,10 @@
         A new exception may be thrown from <code>KafkaStreams#store()</code>. If the specified store name does not exist in the topology, an UnknownStateStoreException will be thrown instead of the former InvalidStateStoreException. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-216%3A+IQ+should+throw+different+exceptions+for+different+errors">KIP-216</a> for more information.
     </p>
     <p>
-      The <code>StreamsConfig.EXACTLY_ONCE</code> and <code>StreamsConfig.EXACTLY_ONCE_BETA</code> configs have been deprecated, and a new <code>StreamsConfig.EXACTLY_ONCE_V2</code> config has been
-      introduced. This is the same feature as eos-beta, but renamed to highlight its production-readiness. Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
+      We deprecated the StreamsConfig <code>processing.guarantee</code> configuration value <code>"exactly_once"</code> (for EOS version 1) in favor of the improved EOS version 2, formerly configured via
+      <code>"exactly_once_beta</code>. To avoid confusion about the term "beta" in the config name and highlight the production-readiness of EOS version 2, we have also renamed "eos-beta" to "eos-v2"
+      and deprecated the configuration value <code>"exactly_once_beta"</code>, replacing it with a new configuration value <code>"exactly_once_v2"</code>
+      Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
       from the release of 3.0, whichever comes last. Note that eos-v2 requires broker version 2.5 or higher, like eos-beta, so users should begin to upgrade their kafka cluster if necessary. See
       <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
     </p>
