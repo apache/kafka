@@ -1332,19 +1332,25 @@ final public class KafkaRaftClientSnapshotTest {
         int currentEpoch = context.currentEpoch();
 
         // When creating snapshot:
-        // 1. high watermark cannot be empty
+        // 1.1 high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
         assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
 
-        // 2. high watermark must larger than the snapshotId's endOffset
+        // 1.2 high watermark must larger than or equal to the snapshotId's endOffset
         advanceHighWatermark(context, currentEpoch, currentEpoch, otherNodeId, localId);
         assertNotEquals(OptionalLong.empty(), context.client.highWatermark());
-        OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong(), currentEpoch);
+        OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
         assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
 
-        // 3. the current leader epoch cache must larger than the snapshotId's epoch
+        // 2 the quorum epoch must larger than or equal to the snapshotId's epoch
         OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
         assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
+
+        // 3 the snapshotId should be validated against endOffsetForEpoch
+        OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(currentEpoch);
+        assertEquals(currentEpoch, endOffsetForEpoch.epoch);
+        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, currentEpoch);
+        assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
     }
 
     private void advanceHighWatermark(RaftClientTestContext context,

@@ -38,7 +38,7 @@ final public class SnapshotWriterTest {
 
     @Test
     public void testWritingSnapshot() throws IOException {
-        OffsetAndEpoch id = new OffsetAndEpoch(0L, 1);
+        OffsetAndEpoch id = new OffsetAndEpoch(1L, 1);
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
@@ -56,7 +56,7 @@ final public class SnapshotWriterTest {
 
     @Test
     public void testAbortedSnapshot() throws IOException {
-        OffsetAndEpoch id = new OffsetAndEpoch(0L, 1);
+        OffsetAndEpoch id = new OffsetAndEpoch(1L, 1);
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
@@ -71,7 +71,7 @@ final public class SnapshotWriterTest {
 
     @Test
     public void testAppendToFrozenSnapshot() throws IOException {
-        OffsetAndEpoch id = new OffsetAndEpoch(0L, 1);
+        OffsetAndEpoch id = new OffsetAndEpoch(1L, 1);
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
