@@ -32,7 +32,6 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.Objects;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
