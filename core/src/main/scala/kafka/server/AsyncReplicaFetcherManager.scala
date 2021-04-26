@@ -21,22 +21,25 @@ import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
-class ReplicaFetcherManager(brokerConfig: KafkaConfig,
+class AsyncReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
                             metrics: Metrics,
                             time: Time,
                             threadNamePrefix: Option[String] = None,
                             quotaManager: ReplicationQuotaManager)
-      extends AbstractFetcherManager[ReplicaFetcherThread](
+      extends AsyncAbstractFetcherManager[FetcherEventManager](
         name = "ReplicaFetcherManager on broker " + brokerConfig.brokerId,
         clientId = "Replica",
         numFetchers = brokerConfig.numReplicaFetchers) {
 
-  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): FetcherEventManager = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, failedPartitions, replicaManager,
-      metrics, time, quotaManager)
+    val fetcherEventBus = new FetcherEventBus(time)
+    val replicaFetcher = new AsyncReplicaFetcher(threadName, fetcherId, sourceBroker, brokerConfig, failedPartitions, replicaManager,
+      metrics, time, quotaManager, fetcherEventBus)
+
+    new FetcherEventManager(threadName, fetcherEventBus, replicaFetcher, time)
   }
 
   def shutdown(): Unit = {

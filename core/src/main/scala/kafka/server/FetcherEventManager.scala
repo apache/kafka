@@ -54,7 +54,7 @@ object FetcherEventManager {
 class FetcherEventManager(name: String,
                           fetcherEventBus: FetcherEventBus,
                           processor: FetcherEventProcessor,
-                          time: Time) extends KafkaMetricsGroup {
+                          time: Time) extends FetcherTrait with KafkaMetricsGroup {
 
   import FetcherEventManager._
 

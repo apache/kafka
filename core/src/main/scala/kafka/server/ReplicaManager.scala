@@ -243,9 +243,9 @@ class ReplicaManager(val config: KafkaConfig,
   protected val allPartitions = new Pool[TopicPartition, HostedPartition](
     valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
   )
-  protected val replicaStateChangeLock = new Object
-  val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
-  // private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
+  private val replicaStateChangeLock = new Object
+  val replicaFetcherManager: FetcherManagerTrait = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
+//  val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile private[server] var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
@@ -2089,8 +2089,20 @@ class ReplicaManager(val config: KafkaConfig,
     info("Shut down completely")
   }
 
-  protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {
+  protected def createLockBasedReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {
     new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
+  }
+
+  protected def createAsyncReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {
+    new AsyncReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
+  }
+
+  protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager): FetcherManagerTrait = {
+    if (config.liAsyncFetcherEnable) {
+      createAsyncReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManager)
+    } else {
+      createLockBasedReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManager)
+    }
   }
 
 //  protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {

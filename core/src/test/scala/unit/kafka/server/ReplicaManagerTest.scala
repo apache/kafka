@@ -56,6 +56,8 @@ import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, Configuratio
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentMatchers, Mockito}
@@ -831,16 +833,18 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(): Unit = {
-    verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(new Properties, expectTruncation = false)
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(liAsyncFetcherEnabled: Boolean): Unit = {
+    verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(new Properties, expectTruncation = false, liAsyncFetcherEnabled)
   }
 
-  @Test
-  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(liAsyncFetcherEnabled: Boolean): Unit = {
     val extraProps = new Properties
     extraProps.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_6_IV0.version)
-    verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true)
+    verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true, liAsyncFetcherEnabled)
   }
 
   /**
@@ -850,7 +854,8 @@ class ReplicaManagerTest {
    * on diverging epochs returned in fetch responses.
    */
   private def verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps: Properties,
-                                                                             expectTruncation: Boolean): Unit = {
+    expectTruncation: Boolean,
+    liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val topicId = Uuid.randomUuid()
     val followerBrokerId = 0
@@ -863,6 +868,7 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    extraProps.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
       expectTruncation = expectTruncation, localLogOffset = Some(10), extraProps = extraProps, topicId = Some(topicId))
@@ -900,8 +906,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testReplicaSelector(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testReplicaSelector(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
@@ -911,9 +918,11 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
 
     val tp = new TopicPartition(topic, topicPartition)
     val partition = replicaManager.createPartition(tp)
@@ -934,8 +943,10 @@ class ReplicaManagerTest {
     assertFalse(preferredReadReplica.isDefined)
   }
 
-  @Test
-  def testPreferredReplicaAsFollower(): Unit = {
+
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testPreferredReplicaAsFollower(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val topicId = Uuid.randomUuid()
     val followerBrokerId = 0
@@ -945,9 +956,12 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
+
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props, topicId = Some(topicId))
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -991,8 +1005,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testPreferredReplicaAsLeader(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testPreferredReplicaAsLeader(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val topicId = Uuid.randomUuid()
     val followerBrokerId = 0
@@ -1002,9 +1017,12 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
+
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props, topicId = Some(topicId))
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -1048,8 +1066,9 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @Test
-  def testFollowerFetchWithDefaultSelectorNoForcedHwPropagation(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testFollowerFetchWithDefaultSelectorNoForcedHwPropagation(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val topicId = Uuid.randomUuid()
     val followerBrokerId = 0
@@ -1059,10 +1078,13 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
     val timer = new MockTimer(time)
 
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
+
     // Prepare the mocked components for the test
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(timer,
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, topicId = Some(topicId))
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props, topicId = Some(topicId))
 
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -1114,8 +1136,9 @@ class ReplicaManagerTest {
     assertEquals(fetchOffset, followerResult.assertFired.highWatermark)
   }
 
-  @Test
-  def testUnknownReplicaSelector(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testUnknownReplicaSelector(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
@@ -1125,6 +1148,7 @@ class ReplicaManagerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
@@ -1139,8 +1163,9 @@ class ReplicaManagerTest {
     partition.log = Some(log)
   }
 
-  @Test
-  def testDefaultReplicaSelector(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testDefaultReplicaSelector(liAsyncFetcherEnabled: Boolean): Unit = {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
@@ -1148,9 +1173,12 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 2
     val countDownLatch = new CountDownLatch(1)
 
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
+
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
     assertFalse(replicaManager.replicaSelectorOpt.isDefined)
   }
 
@@ -1670,11 +1698,39 @@ class ReplicaManagerTest {
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockDelayedRemoteFetchPurgatory, Option(this.getClass.getName),
       alterIsrManager) {
 
-      override protected def createReplicaFetcherManager(metrics: Metrics,
+      override protected def createLockBasedReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
                                                      threadNamePrefix: Option[String],
                                                      replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager) {
+
+          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
+              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quotaManager.follower, Some(blockingSend)) {
+
+              override def doWork() = {
+                // In case the thread starts before the partition is added by AbstractFetcherManager,
+                // add it here (it's a no-op if already added)
+                val initialOffset = InitialFetchState(
+                  leader = new BrokerEndPoint(0, "localhost", 9092),
+                  initOffset = 0L, currentLeaderEpoch = leaderEpochInLeaderAndIsr)
+                addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
+                super.doWork()
+
+                // Shut the thread down after one iteration to avoid double-counting truncations
+                initiateShutdown()
+                countDownLatch.countDown()
+              }
+            }
+          }
+        }
+      }
+
+      override protected def createAsyncReplicaFetcherManager(metrics: Metrics,
+                                                              time: Time,
+                                                              threadNamePrefix: Option[String],
+                                                              replicationQuotaManager: ReplicationQuotaManager): AsyncReplicaFetcherManager = {
+        new AsyncReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): FetcherEventManager = {
             val fetcherEventBus = new FetcherEventBus(time)
@@ -1693,6 +1749,7 @@ class ReplicaManagerTest {
           }
         }
       }
+
     }
 
     (replicaManager, mockLogMgr)
@@ -1817,7 +1874,7 @@ class ReplicaManagerTest {
     brokerId: Int = 0,
     aliveBrokerIds: Seq[Int] = Seq(0, 1),
     propsModifier: Properties => Unit = _ => {},
-    mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None
+    mockReplicaFetcherManager: Option[FetcherManagerTrait] = None
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
@@ -1851,7 +1908,7 @@ class ReplicaManagerTest {
         time: Time,
         threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
-      ): ReplicaFetcherManager = {
+      ): FetcherManagerTrait = {
         mockReplicaFetcherManager.getOrElse {
           super.createReplicaFetcherManager(
             metrics,
@@ -3228,3 +3285,10 @@ class ReplicaManagerTest {
     )
   }
 }
+
+object ReplicaManagerTest {
+  def parameters: java.util.stream.Stream[Boolean] = {
+    Seq(false, true).asJava.stream()
+  }
+}
+

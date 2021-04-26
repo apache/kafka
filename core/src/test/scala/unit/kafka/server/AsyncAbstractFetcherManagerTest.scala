@@ -19,7 +19,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.junit.jupiter.api.BeforeEach
 
-class AbstractFetcherManagerTest {
+class AsyncAbstractFetcherManagerTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {
