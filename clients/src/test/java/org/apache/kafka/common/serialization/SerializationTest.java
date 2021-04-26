@@ -282,7 +282,7 @@ public class SerializationTest {
     public void listSerdeShouldRoundtripInputWithNullIndexListSerializationStrategy() {
         List<Integer> testData = Arrays.asList(1, null, 3);
         Serde<List<Integer>> listSerde = Serdes
-            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.NULL_INDEX_LIST);
+            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.CONSTANT_SIZE);
         byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
         assertEquals(21,
             listSerde.serializer().serialize(topic, testData).length,
@@ -298,7 +298,7 @@ public class SerializationTest {
     public void listSerdeShouldRoundtripInputWithNegativeSizeSerializationStrategy() {
         List<Integer> testData = Arrays.asList(1, null, 3);
         Serde<List<Integer>> listSerde = Serdes
-            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.NEGATIVE_SIZE);
+            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.VARIABLE_SIZE);
         byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
         assertEquals(25, listSerde.serializer().serialize(topic, testData).length,
             "Should get length of 25 bytes (serialization flag + size of the input list + 2 integer entries "

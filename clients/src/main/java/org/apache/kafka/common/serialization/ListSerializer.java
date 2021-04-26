@@ -51,7 +51,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     public ListSerializer(Serializer<Inner> serializer) {
         this.inner = serializer;
         this.isFixedLength = serializer != null && fixedLengthSerializers.contains(serializer.getClass());
-        this.serStrategy = this.isFixedLength ? SerializationStrategy.NULL_INDEX_LIST : SerializationStrategy.NEGATIVE_SIZE;
+        this.serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
     }
 
     public ListSerializer(Serializer<Inner> serializer, SerializationStrategy serStrategy) {
@@ -103,19 +103,19 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeByte(serStrategy.ordinal()); // write serialization strategy flag
-            if (serStrategy == SerializationStrategy.NULL_INDEX_LIST) {
+            if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 serializeNullIndexList(out, data);
             }
             final int size = data.size();
             out.writeInt(size);
             for (Inner entry : data) {
                 if (entry == null) {
-                    if (serStrategy == SerializationStrategy.NEGATIVE_SIZE) {
-                        out.writeInt(Serdes.ListSerde.NEGATIVE_SIZE_VALUE);
+                    if (serStrategy == SerializationStrategy.VARIABLE_SIZE) {
+                        out.writeInt(Serdes.ListSerde.NULL_ENTRY_VALUE);
                     }
                 } else {
                     final byte[] bytes = inner.serialize(topic, entry);
-                    if (!isFixedLength || serStrategy == SerializationStrategy.NEGATIVE_SIZE) {
+                    if (!isFixedLength || serStrategy == SerializationStrategy.VARIABLE_SIZE) {
                         out.writeInt(bytes.length);
                     }
                     out.write(bytes);

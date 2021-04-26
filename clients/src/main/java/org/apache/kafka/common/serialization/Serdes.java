@@ -128,11 +128,11 @@ public class Serdes {
 
     static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
 
-        final static int NEGATIVE_SIZE_VALUE = -1;
+        final static int NULL_ENTRY_VALUE = -1;
 
         enum SerializationStrategy {
-            NULL_INDEX_LIST,
-            NEGATIVE_SIZE;
+            CONSTANT_SIZE,
+            VARIABLE_SIZE;
 
             public static final SerializationStrategy[] VALUES = SerializationStrategy.values();
         }

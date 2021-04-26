@@ -157,20 +157,20 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
             List<Integer> nullIndexList = null;
-            if (serStrategy == SerializationStrategy.NULL_INDEX_LIST) {
+            if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 nullIndexList = deserializeNullIndexList(dis);
             }
             final int size = dis.readInt();
             List<Inner> deserializedList = getListInstance(size);
             for (int i = 0; i < size; i++) {
-                if (serStrategy == SerializationStrategy.NULL_INDEX_LIST
+                if (serStrategy == SerializationStrategy.CONSTANT_SIZE
                         && nullIndexList.contains(i)) {
                     deserializedList.add(null);
                     continue;
                 }
-                int entrySize = primitiveSize == null || serStrategy == SerializationStrategy.NEGATIVE_SIZE ? dis.readInt() : primitiveSize;
-                if (serStrategy == SerializationStrategy.NEGATIVE_SIZE &&
-                        entrySize == Serdes.ListSerde.NEGATIVE_SIZE_VALUE) {
+                int entrySize = (primitiveSize == null || serStrategy == SerializationStrategy.VARIABLE_SIZE) ? dis.readInt() : primitiveSize;
+                if (serStrategy == SerializationStrategy.VARIABLE_SIZE &&
+                        entrySize == Serdes.ListSerde.NULL_ENTRY_VALUE) {
                     deserializedList.add(null);
                 } else {
                     byte[] payload = new byte[entrySize];
