@@ -27,7 +27,7 @@ import org.junit.Assert._
 
 import scala.collection.JavaConverters._
 
-class AbstractFetcherManagerTest {
+class AsyncAbstractFetcherManagerTest {
 
   @Before
   def cleanMetricRegistry(): Unit = {

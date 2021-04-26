@@ -1424,11 +1424,11 @@ class ReplicaManagerTest {
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName)) {
 
-      override protected def createReplicaFetcherManager(metrics: Metrics,
+      override protected def createAsyncReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
                                                      threadNamePrefix: Option[String],
-                                                     quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
-        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
+                                                     quotaManager: ReplicationQuotaManager): AsyncReplicaFetcherManager = {
+        new AsyncReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): FetcherEventManager = {
             val fetcherEventBus = new FetcherEventBus(time)

@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.{Map, Set, mutable}
 import scala.collection.mutable.ArrayBuffer
 
-abstract class AbstractFetcherManager[T <: FetcherEventManager](val name: String, clientId: String, numFetchers: Int)
+abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
