@@ -224,20 +224,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
     private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
 
-    /**
-     * <code>list.key.serializer.inner</code>
-     */
-    public static final String LIST_KEY_DESERIALIZER_INNER_CLASS_CONFIG = "list.key.deserializer.inner";
-    public static final String LIST_KEY_DESERIALIZER_INNER_CLASS_DOC = "Inner deserializer class for key that implements the <code>java.util.List</code> interface. "
-            + "This configuration will be read if and only if <code>key.deserializer</code> configuration is set to <code>org.apache.kafka.common.serialization.ListDeserializer</code>";
-
-    /**
-     * <code>list.key.serializer.type</code>
-     */
-    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG = "list.key.deserializer.type";
-    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC = "Deserializer's list class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface."
-            + "This configuration will be read if and only if <code>key.deserializer</code> configuration is set to <code>org.apache.kafka.common.serialization.ListDeserializer</code>";
-
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
@@ -569,16 +555,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .define(LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        null,
-                                        Importance.MEDIUM,
-                                        LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC)
-                                .define(LIST_KEY_DESERIALIZER_INNER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        null,
-                                        Importance.MEDIUM,
-                                        LIST_KEY_DESERIALIZER_INNER_CLASS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }
