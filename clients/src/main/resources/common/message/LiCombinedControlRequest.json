@@ -80,8 +80,8 @@
           "about": "The partition indexes." },
         { "name": "DeletePartitions", "type": "bool", "versions": "0+",
           "about": "Whether these partitions should be deleted." },
-        { "name": "MaxBrokerEpoch", "type": "int64", "versions": "0+",
-          "about": "The max broker epoch." }
+        { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+          "about": "The broker epoch." }
         ]
     },
     { "name": "LeaderAndIsrPartitionState", "versions": "0+", "fields": [
@@ -91,8 +91,8 @@
         "about": "The partition index." },
       { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
         "about": "The controller epoch." },
-      { "name": "MaxBrokerEpoch", "type": "int64", "versions": "0+",
-        "about": "The max broker epoch." },
+      { "name": "BrokerEpoch", "type": "int64", "versions": "0+",
+        "about": "The broker epoch." },
       { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
         "about": "The broker ID of the leader." },
       { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
