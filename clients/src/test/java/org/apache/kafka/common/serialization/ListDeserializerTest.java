@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-
+@SuppressWarnings("unchecked")
 public class ListDeserializerTest {
     private final ListDeserializer<?> listDeserializer = new ListDeserializer<>();
     private final Map<String, Object> props = new HashMap<>();
@@ -78,8 +78,6 @@ public class ListDeserializerTest {
         assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
     }
 
-
-
     @Test
     public void testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueMissingInnerClassProp() {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
@@ -87,19 +85,41 @@ public class ListDeserializerTest {
             ConfigException.class,
             () -> listDeserializer.configure(props, true)
         );
-        assertEquals(exception.getMessage(), "Not able to determine the inner serde class because "
-            + "it was neither passed via the constructor nor set in the config.");
+        assertEquals("Not able to determine the inner serde class because "
+            + "it was neither passed via the constructor nor set in the config.", exception.getMessage());
+    }
+
+    @Test
+    public void testListValueDeserializerNoArgConstructorsShouldThrowConfigExceptionDueMissingInnerClassProp() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, ArrayList.class);
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> listDeserializer.configure(props, false)
+        );
+        assertEquals("Not able to determine the inner serde class because "
+            + "it was neither passed via the constructor nor set in the config.", exception.getMessage());
     }
 
     @Test
     public void testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueMissingTypeClassProp() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         final ConfigException exception = assertThrows(
             ConfigException.class,
             () -> listDeserializer.configure(props, true)
         );
-        assertEquals(exception.getMessage(), "Not able to determine the list class because "
-            + "it was neither passed via the constructor nor set in the config.");
+        assertEquals("Not able to determine the list class because "
+            + "it was neither passed via the constructor nor set in the config.", exception.getMessage());
+    }
+
+    @Test
+    public void testListValueDeserializerNoArgConstructorsShouldThrowConfigExceptionDueMissingTypeClassProp() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> listDeserializer.configure(props, false)
+        );
+        assertEquals("Not able to determine the list class because "
+            + "it was neither passed via the constructor nor set in the config.", exception.getMessage());
     }
 
     @Test
@@ -110,20 +130,8 @@ public class ListDeserializerTest {
             KafkaException.class,
             () -> listDeserializer.configure(props, true)
         );
-        assertEquals(exception.getMessage(), "Could not determine the list class instance using "
-            + "\"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS + "\" property.");
-    }
-
-    @Test
-    public void testListKeyDeserializerNoArgConstructorsShouldThrowKafkaExceptionDueInvalidInnerClass() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, new FakeObject());
-        final KafkaException exception = assertThrows(
-            KafkaException.class,
-            () -> listDeserializer.configure(props, true)
-        );
-        assertEquals(exception.getMessage(), "Could not determine the inner serde class instance using "
-            + "\"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "\" property.");
+        assertEquals("Could not determine the list class instance using "
+            + "\"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS + "\" property.", exception.getMessage());
     }
 
     @Test
@@ -134,8 +142,20 @@ public class ListDeserializerTest {
             KafkaException.class,
             () -> listDeserializer.configure(props, false)
         );
-        assertEquals(exception.getMessage(), "Could not determine the list class instance using "
-            + "\"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS + "\" property.");
+        assertEquals("Could not determine the list class instance using "
+            + "\"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS + "\" property.", exception.getMessage());
+    }
+
+    @Test
+    public void testListKeyDeserializerNoArgConstructorsShouldThrowKafkaExceptionDueInvalidInnerClass() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
+        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, new FakeObject());
+        final KafkaException exception = assertThrows(
+            KafkaException.class,
+            () -> listDeserializer.configure(props, true)
+        );
+        assertEquals("Could not determine the inner serde class instance using "
+            + "\"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "\" property.", exception.getMessage());
     }
 
     @Test
@@ -146,34 +166,86 @@ public class ListDeserializerTest {
             KafkaException.class,
             () -> listDeserializer.configure(props, false)
         );
-        assertEquals(exception.getMessage(), "Could not determine the inner serde class instance using "
-            + "\"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "\" property.");
+        assertEquals("Could not determine the inner serde class instance using "
+            + "\"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "\" property.", exception.getMessage());
     }
 
     @Test
-    public void testListDeserializerNoArgConstructorsShouldThrowConfigExceptionDueListClassNotFound() {
+    public void testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueListClassNotFound() {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, nonExistingClass);
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         final ConfigException exception = assertThrows(
             ConfigException.class,
             () -> listDeserializer.configure(props, true)
         );
-        assertEquals(exception.getMessage(), "Invalid value " + nonExistingClass + " for configuration "
+        assertEquals("Invalid value " + nonExistingClass + " for configuration "
             + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS + ": Deserializer's list class "
-            + "\"" + nonExistingClass + "\" could not be found.");
+            + "\"" + nonExistingClass + "\" could not be found.", exception.getMessage());
     }
 
     @Test
-    public void testListDeserializerNoArgConstructorsShouldThrowConfigExceptionDueInnerSerdeClassNotFound() {
+    public void testListValueDeserializerNoArgConstructorsShouldThrowConfigExceptionDueListClassNotFound() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, nonExistingClass);
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> listDeserializer.configure(props, false)
+        );
+        assertEquals("Invalid value " + nonExistingClass + " for configuration "
+            + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS + ": Deserializer's list class "
+            + "\"" + nonExistingClass + "\" could not be found.", exception.getMessage());
+    }
+
+    @Test
+    public void testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueInnerSerdeClassNotFound() {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, nonExistingClass);
         final ConfigException exception = assertThrows(
             ConfigException.class,
             () -> listDeserializer.configure(props, true)
         );
-        assertEquals(exception.getMessage(), "Invalid value " + nonExistingClass + " for configuration "
+        assertEquals("Invalid value " + nonExistingClass + " for configuration "
             + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + ": Deserializer's inner serde class "
-            + "\"" + nonExistingClass + "\" could not be found.");
+            + "\"" + nonExistingClass + "\" could not be found.", exception.getMessage());
+    }
+
+    @Test
+    public void testListValueDeserializerNoArgConstructorsShouldThrowConfigExceptionDueInnerSerdeClassNotFound() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, ArrayList.class);
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, nonExistingClass);
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> listDeserializer.configure(props, false)
+        );
+        assertEquals("Invalid value " + nonExistingClass + " for configuration "
+            + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + ": Deserializer's inner serde class "
+            + "\"" + nonExistingClass + "\" could not be found.", exception.getMessage());
+    }
+
+    @Test
+    public void testListKeyDeserializerShouldThrowConfigExceptionDueAlreadyInitialized() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
+        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        final ListDeserializer<Integer> initializedListDeserializer = new ListDeserializer<>(ArrayList.class,
+            Serdes.Integer().deserializer());
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> initializedListDeserializer.configure(props, true)
+        );
+        assertEquals("List deserializer was already initialized using a non-default constructor", exception.getMessage());
+    }
+
+    @Test
+    public void testListValueDeserializerShouldThrowConfigExceptionDueAlreadyInitialized() {
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, ArrayList.class);
+        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        final ListDeserializer<Integer> initializedListDeserializer = new ListDeserializer<>(ArrayList.class,
+            Serdes.Integer().deserializer());
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> initializedListDeserializer.configure(props, true)
+        );
+        assertEquals("List deserializer was already initialized using a non-default constructor", exception.getMessage());
     }
 
 }
