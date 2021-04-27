@@ -52,12 +52,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MirrorSourceConnectorTest {
+abstract class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"), 
-            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+            replicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
     }
@@ -71,20 +71,9 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
-    public void testNoCycles() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
-        assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
-        assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
-        assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
-        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
-        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
-    }
-
-    @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
+            replicationPolicy(), x -> true, x -> true);
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
@@ -92,33 +81,11 @@ public class MirrorSourceConnectorTest {
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
     }
-
-    @Test
-    public void testAclTransformation() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, x -> true);
-        AclBinding allowAllAclBinding = new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
-        AclBinding processedAllowAllAclBinding = connector.targetAclBinding(allowAllAclBinding);
-        String expectedRemoteTopicName = "source" + DefaultReplicationPolicy.SEPARATOR_DEFAULT
-            + allowAllAclBinding.pattern().name();
-        assertEquals(expectedRemoteTopicName, processedAllowAllAclBinding.pattern().name(), "should change topic name");
-        assertEquals(processedAllowAllAclBinding.entry().operation(), AclOperation.READ, "should change ALL to READ");
-        assertEquals(processedAllowAllAclBinding.entry().permissionType(), AclPermissionType.ALLOW, "should not change ALLOW");
-
-        AclBinding denyAllAclBinding = new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.DENY));
-        AclBinding processedDenyAllAclBinding = connector.targetAclBinding(denyAllAclBinding);
-        assertEquals(processedDenyAllAclBinding.entry().operation(), AclOperation.ALL, "should not change ALL");
-        assertEquals(processedDenyAllAclBinding.entry().permissionType(), AclPermissionType.DENY, "should not change DENY");
-    }
     
     @Test
     public void testConfigPropertyFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+            replicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         entries.add(new ConfigEntry("min.insync.replicas", "2"));
@@ -176,10 +143,9 @@ public class MirrorSourceConnectorTest {
         assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS));
     }
 
-    @Test
-    public void testRefreshTopicPartitions() throws Exception {
+    public void testRefreshTopicPartitions(String newTopic) throws Exception {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                replicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
@@ -199,18 +165,18 @@ public class MirrorSourceConnectorTest {
         connector.refreshTopicPartitions();
 
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
-        expectedPartitionCounts.put("source.topic", 1L);
+        expectedPartitionCounts.put(newTopic, 1L);
         Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
         assertEquals(2, configMap.size());
 
         Map<String, NewTopic> expectedNewTopics = new HashMap<>();
-        expectedNewTopics.put("source.topic", new NewTopic("source.topic", 1, (short) 0).configs(configMap));
+        expectedNewTopics.put(newTopic, new NewTopic(newTopic, 1, (short) 0).configs(configMap));
 
         verify(connector, times(2)).computeAndCreateTopicPartitions();
         verify(connector, times(2)).createNewTopics(eq(expectedNewTopics));
         verify(connector, times(0)).createNewPartitions(any());
 
-        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
+        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition(newTopic, 0));
         doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
         connector.refreshTopicPartitions();
 
@@ -251,4 +217,6 @@ public class MirrorSourceConnectorTest {
         connector.refreshTopicPartitions();
         verify(connector, times(1)).computeAndCreateTopicPartitions();
     }
+
+    protected abstract ReplicationPolicy replicationPolicy();
 }

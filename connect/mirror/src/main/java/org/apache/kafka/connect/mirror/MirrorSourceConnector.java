@@ -203,9 +203,11 @@ public class MirrorSourceConnector extends SourceConnector {
     List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(targetAdminClient).stream()
-            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
-            .filter(t -> !t.equals(config.checkpointsTopic()))
-            .collect(Collectors.toSet());
+                // Allow replication policies that can't track back to the source of a topic (like LegacyReplicationPolicy)
+                // consider all topics as target topics.
+                .filter(t -> !replicationPolicy.canTrackSource(t)
+                        || sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+                .collect(Collectors.toSet());
         return describeTopics(targetAdminClient, topics).stream()
                 .flatMap(MirrorSourceConnector::expandTopicDescription)
                 .collect(Collectors.toList());
