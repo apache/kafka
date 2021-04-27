@@ -223,7 +223,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
-                .filter(topic -> topic.startsWith(appID + "-"))
+                .filter(topic -> StreamsResetter.matchesInternalTopicFormat(topic))
                 .collect(Collectors.toList());
         cleanGlobal(false,
                 "--internal-topics",
@@ -387,7 +387,6 @@ public abstract class AbstractResetIntegrationTest {
                                    final String resetScenario,
                                    final String resetScenarioArg,
                                    final String appID) throws Exception {
-        // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
                     "--bootstrap-servers", cluster.bootstrapServers(),

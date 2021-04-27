@@ -681,7 +681,7 @@ public class StreamsResetter {
     }
 
     // visible for testing
-    public boolean matchesInternalTopicFormat(final String topicName) {
+    public static boolean matchesInternalTopicFormat(final String topicName) {
         return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
                || topicName.endsWith("-subscription-registration-topic")
                || topicName.endsWith("-subscription-response-topic")

@@ -152,12 +152,28 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhenSpecifiedInternalTopicAbsent() {
+    public void shouldNotAllowToResetWhenSpecifiedInternalTopicDoesNotExist() {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
             "--internal-topics", NON_EXISTING_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+
+        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        Assert.assertEquals(1, exitCode);
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal() {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--internal-topics", INPUT_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
