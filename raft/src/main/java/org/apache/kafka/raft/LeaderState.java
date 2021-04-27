@@ -97,7 +97,7 @@ public class LeaderState<T> implements EpochState {
             .setGrantingVoters(grantingVoters);
         
         accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
-        accumulator.flush();
+        accumulator.forceDrain();
     }
 
     @Override

@@ -95,6 +95,107 @@ class BatchAccumulatorTest {
     }
 
     @Test
+    public void testForceDrain() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            // Check that a drain is needed
+            time.sleep(lingerMs);
+            assertTrue(acc.needsDrain(time.milliseconds()));
+
+            // Force a drain and check that the drain status is `FINISHED`
+            acc.forceDrain();
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+           
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            assertEquals(1, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+        });
+    }
+
+    @Test
+    public void testForceDrainBeforeAppendLeaderChangeMessage() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+            Mockito.when(memoryPool.tryAllocate(256))
+                .thenReturn(ByteBuffer.allocate(256));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            // Check that a drain is needed
+            time.sleep(lingerMs);
+            assertTrue(acc.needsDrain(time.milliseconds()));
+           
+            // Append a leader change message
+            acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+
+            // Test that drain status is FINISHED
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            // Should have 2 batches, one consisting of `records` and one `leaderChangeMessage`
+            assertEquals(2, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+        });
+    }
+
+    @Test
     public void testLingerIgnoredIfAccumulatorEmpty() {
         int leaderEpoch = 17;
         long baseOffset = 157;

@@ -1841,8 +1841,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state,
         long currentTimeMs
     ) {
-        long timeUntilFlush = state.accumulator().timeUntilDrain(currentTimeMs);
-        if (timeUntilFlush <= 0) {
+        long timeUntilDrain = state.accumulator().timeUntilDrain(currentTimeMs);
+        if (timeUntilDrain <= 0) {
             List<BatchAccumulator.CompletedBatch<T>> batches = state.accumulator().drain();
             Iterator<BatchAccumulator.CompletedBatch<T>> iterator = batches.iterator();
 
@@ -1859,7 +1859,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
         }
-        return timeUntilFlush;
+        return timeUntilDrain;
     }
 
     private long pollResigned(long currentTimeMs) throws IOException {

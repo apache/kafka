@@ -207,7 +207,7 @@ public class BatchAccumulator<T> implements Closeable {
     public void appendLeaderChangeMessage(LeaderChangeMessage leaderChangeMessage, long currentTimeMs) {
         appendLock.lock();
         try {
-            maybeCompleteDrain();
+            forceDrain();
             ByteBuffer buffer = memoryPool.tryAllocate(256);
             if (buffer != null) {
                 MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
@@ -224,13 +224,15 @@ public class BatchAccumulator<T> implements Closeable {
                     buffer
                 ));
                 nextOffset += 1;
+            } else {
+                throw new IllegalStateException("Could not allocate buffer for the control batch.");
             }
         } finally {
             appendLock.unlock();
         }
     }
 
-    public void flush() {
+    public void forceDrain() {
         appendLock.lock();
         try {
             drainStatus = DrainStatus.STARTED;
