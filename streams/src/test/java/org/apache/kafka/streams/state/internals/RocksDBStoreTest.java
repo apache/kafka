@@ -403,11 +403,6 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
-        assertThrows(NullPointerException.class, () -> rocksDBStore.prefixScan("prefix", null));
-    }
-
-    @Test
     public void shouldReturnKeysWithGivenPrefixExcludingNextKeyLargestKey() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
