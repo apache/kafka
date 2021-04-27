@@ -67,12 +67,11 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        if (listClass == null) {
-            configureListClass(configs, isKey);
+        if (listClass != null || inner != null) {
+            throw new ConfigException("List deserializer was already initialized using a non-default constructor");
         }
-        if (inner == null) {
-            configureInnerSerde(configs, isKey);
-        }
+        configureListClass(configs, isKey);
+        configureInnerSerde(configs, isKey);
     }
 
     private void configureListClass(Map<String, ?> configs, boolean isKey) {
@@ -90,7 +89,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 throw new KafkaException("Could not determine the list class instance using \"" + listTypePropertyName + "\" property.");
             }
         } catch (final ClassNotFoundException e) {
-            throw new ConfigException(listTypePropertyName, listClassOrName, "Deserializer's list class \"" + listClassOrName + "\" was not a valid Serde/Deserializer.");
+            throw new ConfigException(listTypePropertyName, listClassOrName, "Deserializer's list class \"" + listClassOrName + "\" could not be found.");
         }
     }
 
