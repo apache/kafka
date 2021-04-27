@@ -1632,6 +1632,13 @@ class PartitionTest extends AbstractPartitionTest {
       case _ => fail("Expected a committed ISR following Zk expansion")
     }
 
+    // Verify duplicate request. In-flight state should be reset even though version hasn't changed.
+    doAnswer(_ => (true, 2))
+      .when(kafkaZkClient)
+      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(2), any())
+    partition.expandIsr(follower3)
+    TestUtils.waitUntilTrue(() => !partition.isrState.isInflight, "Expected ISR state to be committed", 100)
+
     scheduler.shutdown()
   }
 
