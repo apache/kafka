@@ -84,15 +84,15 @@ public class RemoteLogMetadataSerdeTest {
     }
 
     private void doTestRemoteLogMetadataSerde(RemoteLogMetadata remoteLogMetadata) {
-        RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
-
         // Serialize metadata and get the bytes.
-        byte[] metadataBytes = serde.serialize(remoteLogMetadata);
+        RemoteLogMetadataSerde serializer = new RemoteLogMetadataSerde();
+        byte[] metadataBytes = serializer.serialize(remoteLogMetadata);
 
         // Deserialize the bytes and check the RemoteLogMetadata object is as expected.
+        // Created another RemoteLogMetadataSerde instance to depict the real usecase of serializer and deserializer having their own instances.
         RemoteLogMetadataSerde deserializer = new RemoteLogMetadataSerde();
-        RemoteLogMetadata deserializedRremoteLogMetadata = deserializer.deserialize(metadataBytes);
-        Assertions.assertEquals(remoteLogMetadata, deserializedRremoteLogMetadata);
+        RemoteLogMetadata deserializedRemoteLogMetadata = deserializer.deserialize(metadataBytes);
+        Assertions.assertEquals(remoteLogMetadata, deserializedRemoteLogMetadata);
     }
 
     @Test

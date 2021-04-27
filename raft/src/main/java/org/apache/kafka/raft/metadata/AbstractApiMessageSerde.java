@@ -17,7 +17,6 @@
 package org.apache.kafka.raft.metadata;
 
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
