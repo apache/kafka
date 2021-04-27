@@ -48,6 +48,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singleton;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -267,6 +268,17 @@ public class TransactionalMessageCopier {
         return toJsonString(statusData);
     }
 
+    private static synchronized String handledExceptionJson(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId, Exception e) {
+        Map<String, Object> handledExceptionJson = new HashMap<>();
+        handledExceptionJson.put("exception", transactionalId);
+        handledExceptionJson.put("message", e.getMessage());
+        handledExceptionJson.put("totalProcessed", totalProcessed);
+        handledExceptionJson.put("consumed", consumedSinceLastRebalanced);
+        handledExceptionJson.put("remaining", remaining);
+        handledExceptionJson.put("time", FORMAT.format(new Date()));
+        return toJsonString(handledExceptionJson);
+    }
+
     private static synchronized String shutDownString(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId) {
         Map<String, Object> shutdownData = new HashMap<>();
         shutdownData.put("shutdown_complete", transactionalId);
@@ -284,7 +296,7 @@ public class TransactionalMessageCopier {
 
         String consumerGroup = parsedArgs.getString("consumerGroup");
 
-        final KafkaProducer<String, String> producer = createProducer(parsedArgs);
+        AtomicReference<KafkaProducer<String, String>> producer = new AtomicReference<>(createProducer(parsedArgs));
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
 
         final AtomicLong remainingMessages = new AtomicLong(
@@ -318,14 +330,14 @@ public class TransactionalMessageCopier {
 
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
 
-        producer.initTransactions();
+        producer.get().initTransactions();
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
 
         Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             // Flush any remaining messages
-            producer.close();
+            producer.get().close();
             synchronized (consumer) {
                 consumer.close();
             }
@@ -345,39 +357,55 @@ public class TransactionalMessageCopier {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                 if (records.count() > 0) {
                     try {
-                        producer.beginTransaction();
+                        try {
+                            producer.get().beginTransaction();
 
-                        for (ConsumerRecord<String, String> record : records) {
-                            producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                        }
+                            for (ConsumerRecord<String, String> record : records) {
+                                producer.get().send(producerRecordFromConsumerRecord(outputTopic, record));
+                            }
 
-                        long messagesSentWithinCurrentTxn = records.count();
+                            long messagesSentWithinCurrentTxn = records.count();
 
-                        if (useGroupMetadata) {
-                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
-                        } else {
-                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
-                        }
+                            if (useGroupMetadata) {
+                                producer.get().sendOffsetsToTransaction(consumerPositions(consumer),
+                                        consumer.groupMetadata());
+                            } else {
+                                producer.get().sendOffsetsToTransaction(consumerPositions(consumer),
+                                        consumerGroup);
+                            }
 
-                        if (enableRandomAborts && random.nextInt() % 3 == 0) {
-                            throw new KafkaException("Aborting transaction");
-                        } else {
-                            producer.commitTransaction();
-                            remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
-                            numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
-                            totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
+                            if (enableRandomAborts && random.nextInt() % 3 == 0) {
+                                throw new KafkaException("Aborting transaction");
+                            } else {
+                                producer.get().commitTransaction();
+                                remainingMessages.getAndAdd(-messagesSentWithinCurrentTxn);
+                                numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
+                                totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
+                            }
+                        } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+                            // handle these exception in the outer exception handling
+                            throw e;
+                        } catch (KafkaException e) {
+                            // this may throw a ProducerFencedException on recovery
+                            // this will handled in the outer catch if necessary
+                            System.out.println(handledExceptionJson(totalMessageProcessed.get(),
+                                    numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, e));
+                            producer.get().abortTransaction();
+                            resetToLastCommittedPositions(consumer);
                         }
                     } catch (ProducerFencedException | OutOfOrderSequenceException e) {
-                        // We cannot recover from these errors, so just rethrow them and let the process fail
-                        throw e;
-                    } catch (KafkaException e) {
-                        producer.abortTransaction();
+                        // These failures are not recoverable with the same producer
+                        System.out.println(handledExceptionJson(totalMessageProcessed.get(),
+                                numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, e));
+                        producer.get().close();
+                        producer.set(createProducer(parsedArgs));
+                        producer.get().initTransactions();
                         resetToLastCommittedPositions(consumer);
                     }
                 }
             }
         } finally {
-            producer.close();
+            producer.get().close();
             synchronized (consumer) {
                 consumer.close();
             }
