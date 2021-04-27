@@ -63,7 +63,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -125,7 +124,7 @@ public final class RaftClientTestContext {
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
-        private final MockLog log = new MockLog(METADATA_PARTITION);
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
@@ -584,13 +583,13 @@ public final class RaftClientTestContext {
 
     int assertSentEndQuorumEpochRequest(int epoch, int destinationId) {
         List<RaftRequest.Outbound> endQuorumRequests = collectEndQuorumRequests(
-            epoch, Collections.singleton(destinationId));
+            epoch, Collections.singleton(destinationId), Optional.empty());
         assertEquals(1, endQuorumRequests.size());
         return endQuorumRequests.get(0).correlationId();
     }
 
     void assertSentEndQuorumEpochResponse(
-            Errors responseError
+        Errors responseError
     ) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.END_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
@@ -728,28 +727,11 @@ public final class RaftClientTestContext {
         return FetchSnapshotResponse.forTopicPartition(response, topicPartition);
     }
 
-    void buildFollowerSet(
+    List<RaftRequest.Outbound> collectEndQuorumRequests(
         int epoch,
-        int closeFollower,
-        int laggingFollower
-    ) throws Exception {
-        // The lagging follower fetches first
-        deliverRequest(fetchRequest(1, laggingFollower, 0L, 0, 0));
-
-        pollUntilResponse();
-        assertSentFetchPartitionResponse(0L, epoch);
-
-        // Append some records, so that the close follower will be able to advance further.
-        client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
-        client.poll();
-
-        deliverRequest(fetchRequest(epoch, closeFollower, 1L, epoch, 0));
-
-        pollUntilResponse();
-        assertSentFetchPartitionResponse(1L, epoch);
-    }
-
-    List<RaftRequest.Outbound> collectEndQuorumRequests(int epoch, Set<Integer> destinationIdSet) {
+        Set<Integer> destinationIdSet,
+        Optional<List<Integer>> preferredSuccessorsOpt
+    ) {
         List<RaftRequest.Outbound> endQuorumRequests = new ArrayList<>();
         Set<Integer> collectedDestinationIdSet = new HashSet<>();
         for (RaftMessage raftMessage : channel.drainSendQueue()) {
@@ -761,6 +743,9 @@ public final class RaftClientTestContext {
 
                 assertEquals(epoch, partitionRequest.leaderEpoch());
                 assertEquals(localIdOrThrow(), partitionRequest.leaderId());
+                preferredSuccessorsOpt.ifPresent(preferredSuccessors -> {
+                    assertEquals(preferredSuccessors, partitionRequest.preferredSuccessors());
+                });
 
                 RaftRequest.Outbound outboundRequest = (RaftRequest.Outbound) raftMessage;
                 collectedDestinationIdSet.add(outboundRequest.destinationId());

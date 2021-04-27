@@ -25,7 +25,7 @@ import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.metadata.{ApiMessageAndVersion, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
@@ -66,6 +66,7 @@ class KafkaRaftServer(
     config,
     new MetadataRecordSerde,
     KafkaRaftServer.MetadataPartition,
+    KafkaRaftServer.MetadataTopicId,
     time,
     metrics,
     threadNamePrefix,
@@ -129,6 +130,7 @@ class KafkaRaftServer(
 object KafkaRaftServer {
   val MetadataTopic = "@metadata"
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
+  val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole

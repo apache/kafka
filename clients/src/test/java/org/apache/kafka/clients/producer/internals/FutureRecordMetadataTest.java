@@ -67,7 +67,6 @@ public class FutureRecordMetadataTest {
                 produceRequestResult,
                 0,
                 RecordBatch.NO_TIMESTAMP,
-                0L,
                 0,
                 0,
                 time

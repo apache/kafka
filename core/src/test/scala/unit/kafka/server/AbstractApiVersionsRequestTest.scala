@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util.Properties
 
-import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion

@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -95,8 +96,8 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             int valLength = value != null ? value.length : -1;
 
             consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
-                record.kafkaOffset(), record.timestamp(), record.timestampType(), -1L, keyLength,
-                valLength, key, value, headers);
+                record.kafkaOffset(), record.timestamp(), record.timestampType(), keyLength,
+                valLength, key, value, headers, Optional.empty());
         }
 
         Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT, SinkTask.class, consumerRecord, error);
