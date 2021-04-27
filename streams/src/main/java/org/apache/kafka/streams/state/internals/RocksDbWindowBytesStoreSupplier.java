@@ -21,12 +21,18 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
+    public enum WindowStoreTypes {
+        DEFAULT_WINDOW_STORE,
+        TIMESTAMPED_WINDOW_STORE,
+        TIME_ORDERED_WINDOW_STORE
+    }
+
     private final String name;
     private final long retentionPeriod;
     private final long segmentInterval;
     private final long windowSize;
     private final boolean retainDuplicates;
-    private final boolean returnTimestampedStore;
+    private final WindowStoreTypes windowStoreType;
 
     public RocksDbWindowBytesStoreSupplier(final String name,
                                            final long retentionPeriod,
@@ -34,12 +40,24 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                                            final long windowSize,
                                            final boolean retainDuplicates,
                                            final boolean returnTimestampedStore) {
+        this(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates,
+            returnTimestampedStore
+                ? WindowStoreTypes.TIMESTAMPED_WINDOW_STORE
+                : WindowStoreTypes.DEFAULT_WINDOW_STORE);
+    }
+
+    public RocksDbWindowBytesStoreSupplier(final String name,
+                                           final long retentionPeriod,
+                                           final long segmentInterval,
+                                           final long windowSize,
+                                           final boolean retainDuplicates,
+                                           final WindowStoreTypes windowStoreType) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segmentInterval = segmentInterval;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
-        this.returnTimestampedStore = returnTimestampedStore;
+        this.windowStoreType = windowStoreType;
     }
 
     @Override
@@ -49,38 +67,47 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public WindowStore<Bytes, byte[]> get() {
-        if (!returnTimestampedStore) {
-            return new RocksDBWindowStore(
-                new RocksDBSegmentedBytesStore(
-                    name,
-                    metricsScope(),
-                    retentionPeriod,
-                    segmentInterval,
-                    new WindowKeySchema()),
-                retainDuplicates,
-                windowSize);
-        } else {
-            return new RocksDBTimestampedWindowStore(
-                new RocksDBTimestampedSegmentedBytesStore(
-                    name,
-                    metricsScope(),
-                    retentionPeriod,
-                    segmentInterval,
-                    new WindowKeySchema()),
-                retainDuplicates,
-                windowSize);
+        switch (windowStoreType) {
+            case DEFAULT_WINDOW_STORE:
+                return new RocksDBWindowStore(
+                    new RocksDBSegmentedBytesStore(
+                        name,
+                        metricsScope(),
+                        retentionPeriod,
+                        segmentInterval,
+                        new WindowKeySchema()),
+                    retainDuplicates,
+                    windowSize);
+            case TIMESTAMPED_WINDOW_STORE:
+                return new RocksDBTimestampedWindowStore(
+                    new RocksDBTimestampedSegmentedBytesStore(
+                        name,
+                        metricsScope(),
+                        retentionPeriod,
+                        segmentInterval,
+                        new WindowKeySchema()),
+                    retainDuplicates,
+                    windowSize);
+            case TIME_ORDERED_WINDOW_STORE:
+                return new RocksDBTimeOrderedWindowStore(
+                    new RocksDBSegmentedBytesStore(
+                        name,
+                        metricsScope(),
+                        retentionPeriod,
+                        segmentInterval,
+                        new TimeOrderedKeySchema()
+                    ),
+                    retainDuplicates,
+                    windowSize
+                );
+            default:
+                throw new IllegalArgumentException("invalid window store type: " + windowStoreType);
         }
     }
 
     @Override
     public String metricsScope() {
         return "rocksdb-window";
-    }
-
-    @Deprecated
-    @Override
-    public int segments() {
-        return (int) (retentionPeriod / segmentInterval) + 1;
     }
 
     @Override
@@ -111,7 +138,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                    ", segmentInterval=" + segmentInterval +
                    ", windowSize=" + windowSize +
                    ", retainDuplicates=" + retainDuplicates +
-                   ", returnTimestampedStore=" + returnTimestampedStore +
+                   ", windowStoreType=" + windowStoreType +
                    '}';
     }
 }

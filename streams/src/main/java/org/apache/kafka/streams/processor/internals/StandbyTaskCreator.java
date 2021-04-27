@@ -66,7 +66,9 @@ class StandbyTaskCreator {
         );
     }
 
+    // TODO: change return type to `StandbyTask`
     Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        // TODO: change type to `StandbyTask`
         final List<Task> createdTasks = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -108,7 +110,7 @@ class StandbyTaskCreator {
     }
 
     StandbyTask createStandbyTaskFromActive(final StreamTask streamTask,
-                                            final Set<TopicPartition> partitions) {
+                                            final Set<TopicPartition> inputPartitions) {
         final InternalProcessorContext context = streamTask.processorContext();
         final ProcessorStateManager stateManager = streamTask.stateMgr;
 
@@ -117,7 +119,7 @@ class StandbyTaskCreator {
 
         return createStandbyTask(
             streamTask.id(),
-            partitions,
+            inputPartitions,
             builder.buildSubtopology(streamTask.id.topicGroupId),
             stateManager,
             context
@@ -125,13 +127,13 @@ class StandbyTaskCreator {
     }
 
     StandbyTask createStandbyTask(final TaskId taskId,
-                                  final Set<TopicPartition> partitions,
+                                  final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
                                   final InternalProcessorContext context) {
         final StandbyTask task = new StandbyTask(
             taskId,
-            partitions,
+            inputPartitions,
             topology,
             config,
             streamsMetrics,
@@ -141,7 +143,7 @@ class StandbyTaskCreator {
             context
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, partitions);
+        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }

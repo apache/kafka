@@ -36,6 +36,7 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,7 +134,7 @@ public class MirrorMaker {
         if (herderPairs.isEmpty()) {
             throw new IllegalArgumentException("No source->target replication flows.");
         }
-        this.herderPairs.forEach(x -> addHerder(x));
+        this.herderPairs.forEach(this::addHerder);
         shutdownHook = new ShutdownHook();
     }
 
@@ -173,7 +174,7 @@ public class MirrorMaker {
             }
         }
         log.info("Configuring connectors...");
-        herderPairs.forEach(x -> configureConnectors(x));
+        herderPairs.forEach(this::configureConnectors);
         log.info("Kafka MirrorMaker started");
     }
 
@@ -233,20 +234,28 @@ public class MirrorMaker {
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(distributedConfig);
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
+        // Create the admin client to be shared by all backing stores for this herder
+        Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
+        ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
+        SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin);
         offsetBackingStore.configure(distributedConfig);
         Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin);
         statusBackingStore.configure(distributedConfig);
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
                 distributedConfig,
-                configTransformer);
+                configTransformer,
+                sharedAdmin);
+        // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
+        // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
+        // tracking the various shared admin objects in this class.
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY);
+                advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 
@@ -281,7 +290,7 @@ public class MirrorMaker {
             Exit.exit(-1);
             return;
         }
-        File configFile = (File) ns.get("config");
+        File configFile = ns.get("config");
         List<String> clusters = ns.getList("clusters");
         try {
             log.info("Kafka MirrorMaker initializing ...");

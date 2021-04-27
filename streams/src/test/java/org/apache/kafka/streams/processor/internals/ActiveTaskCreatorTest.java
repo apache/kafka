@@ -442,9 +442,9 @@ public class ActiveTaskCreatorTest {
 
         reset(builder, stateDirectory);
         expect(builder.buildSubtopology(0)).andReturn(topology).anyTimes();
-        expect(stateDirectory.directoryForTask(task00)).andReturn(mock(File.class));
+        expect(stateDirectory.getOrCreateDirectoryForTask(task00)).andReturn(mock(File.class));
         expect(stateDirectory.checkpointFileFor(task00)).andReturn(mock(File.class));
-        expect(stateDirectory.directoryForTask(task01)).andReturn(mock(File.class));
+        expect(stateDirectory.getOrCreateDirectoryForTask(task01)).andReturn(mock(File.class));
         expect(stateDirectory.checkpointFileFor(task01)).andReturn(mock(File.class));
         expect(topology.storeToChangelogTopic()).andReturn(Collections.emptyMap()).anyTimes();
         expect(topology.source("topic")).andReturn(sourceNode).anyTimes();
@@ -470,7 +470,7 @@ public class ActiveTaskCreatorTest {
 
         assertThat(
             activeTaskCreator.createTasks(
-                null,
+                mockClientSupplier.consumer,
                 mkMap(
                     mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
                     mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))

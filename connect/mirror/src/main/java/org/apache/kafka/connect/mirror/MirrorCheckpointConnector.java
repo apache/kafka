@@ -145,16 +145,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
         knownConsumerGroups = findConsumerGroups();
     }
 
-    private List<String> findConsumerGroups()
+    List<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
         return listConsumerGroups().stream()
-                .filter(x -> !x.isSimpleConsumerGroup())
-                .map(x -> x.groupId())
+                .map(ConsumerGroupListing::groupId)
                 .filter(this::shouldReplicate)
                 .collect(Collectors.toList());
     }
 
-    private Collection<ConsumerGroupListing> listConsumerGroups()
+    Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
         return sourceAdminClient.listConsumerGroups().valid().get();
     }

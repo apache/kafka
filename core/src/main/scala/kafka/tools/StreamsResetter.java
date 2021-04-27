@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -42,18 +43,17 @@ import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -105,7 +105,6 @@ public class StreamsResetter {
     private static OptionSpecBuilder dryRunOption;
     private static OptionSpec<Void> helpOption;
     private static OptionSpec<Void> versionOption;
-    private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
     private static OptionSpecBuilder forceOption;
 
@@ -121,7 +120,7 @@ public class StreamsResetter {
             + "* This tool will not clean up the local state on the stream application instances (the persisted "
             + "stores used to cache aggregation results).\n"
             + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
-            + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n"
+            + "directory specified by \"state.dir\" configuration (${java.io.tmpdir}/kafka-streams/<application.id> by default).\n"
             + "* When long session timeout has been configured, active members could take longer to get expired on the "
             + "broker thus blocking the reset job to complete. Use the \"--force\" option could remove those left-over "
             + "members immediately. Make sure to stop all stream applications when this option is specified "
@@ -249,13 +248,10 @@ public class StreamsResetter {
             .describedAs("file name");
         forceOption = optionParser.accepts("force", "Force the removal of members of the consumer group (intended to remove stopped members if a long session timeout was used). " +
                 "Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.");
-        executeOption = optionParser.accepts("execute", "Execute the command.");
+
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
         versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
-
-        // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
-        optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");
 
         try {
             options = optionParser.parse(args);
@@ -267,10 +263,6 @@ public class StreamsResetter {
             }
         } catch (final OptionException e) {
             CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
-        }
-
-        if (options.has(executeOption) && options.has(dryRunOption)) {
-            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
@@ -446,7 +438,7 @@ public class StreamsResetter {
                 shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
                 final String ts = options.valueOf(toDatetimeOption);
-                final long timestamp = getDateTime(ts);
+                final long timestamp = Utils.getDateTime(ts);
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
@@ -491,24 +483,13 @@ public class StreamsResetter {
     private void resetByDuration(final Consumer<byte[], byte[]> client,
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
-        final Instant now = Instant.now();
-        final long timestamp = now.minus(duration).toEpochMilli();
-
-        final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            topicPartitionsAndTimes.put(topicPartition, timestamp);
-        }
-
-        final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
-
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
-        }
+        resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
-    private void resetToDatetime(final Consumer<byte[], byte[]> client,
-                                 final Set<TopicPartition> inputTopicPartitions,
-                                 final Long timestamp) {
+    // visible for testing
+    public void resetToDatetime(final Consumer<byte[], byte[]> client,
+                                final Set<TopicPartition> inputTopicPartitions,
+                                final Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
@@ -517,7 +498,16 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
+            final Optional<Long> partitionOffset = Optional.ofNullable(topicPartitionsAndOffset.get(topicPartition))
+                    .map(OffsetAndTimestamp::offset)
+                    .filter(offset -> offset != ListOffsetsResponse.UNKNOWN_OFFSET);
+            if (partitionOffset.isPresent()) {
+                client.seek(topicPartition, partitionOffset.get());
+            } else {
+                client.seekToEnd(Collections.singletonList(topicPartition));
+                System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
+                        " is empty, without a committed record. Falling back to latest known offset.");
+            }
         }
     }
 
@@ -563,30 +553,6 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
-    public long getDateTime(String timestamp) throws ParseException {
-        final String[] timestampParts = timestamp.split("T");
-        if (timestampParts.length < 2) {
-            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
-        }
-
-        final String secondPart = timestampParts[1];
-        if (secondPart == null || secondPart.isEmpty()) {
-            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
-        }
-
-        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
-            timestamp = timestamp + "Z";
-        }
-
-        try {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
-            return date.getTime();
-        } catch (final ParseException e) {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
-            return date.getTime();
-        }
-    }
 
     private Map<TopicPartition, Long> parseResetPlan(final String resetPlanCsv) throws ParseException {
         final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();

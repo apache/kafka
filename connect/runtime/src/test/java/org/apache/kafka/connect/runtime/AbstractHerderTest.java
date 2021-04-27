@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigTransformer;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -34,6 +35,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
@@ -46,7 +48,6 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -66,6 +67,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.easymock.EasyMock.strictMock;
@@ -121,10 +124,10 @@ public class AbstractHerderTest {
     }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+            TASK_CONFIGS_MAP, Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_NO_TASKS = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            Collections.emptyMap(), Collections.<String>emptySet());
+            Collections.emptyMap(), Collections.emptySet());
 
     private final String workerId = "workerId";
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
@@ -155,7 +158,7 @@ public class AbstractHerderTest {
             .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
         EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
         replayAll();
         assertEquals(Collections.singleton(CONN1), new HashSet<>(herder.connectors()));
@@ -179,7 +182,7 @@ public class AbstractHerderTest {
             .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
         EasyMock.expect(statusStore.get(connector))
             .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
         EasyMock.expect(statusStore.getAll(connector))
@@ -203,7 +206,7 @@ public class AbstractHerderTest {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
@@ -249,12 +252,7 @@ public class AbstractHerderTest {
         statusStore.putSafe(EasyMock.capture(statusCapture));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(statusStore.get(taskId)).andAnswer(new IAnswer<TaskStatus>() {
-            @Override
-            public TaskStatus answer() throws Throwable {
-                return statusCapture.getValue();
-            }
-        });
+        EasyMock.expect(statusStore.get(taskId)).andAnswer(statusCapture::getValue);
 
         replayAll();
 
@@ -270,12 +268,12 @@ public class AbstractHerderTest {
     }
 
 
-    @Test(expected = BadRequestException.class)
-    public void testConfigValidationEmptyConfig() throws Throwable {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+    @Test
+    public void testConfigValidationEmptyConfig() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
         replayAll();
 
-        herder.validateConnectorConfig(Collections.emptyMap(), false);
+        assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), false));
 
         verifyAll();
     }
@@ -309,8 +307,8 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
-    public void testConfigValidationInvalidTopics() throws Throwable {
+    @Test
+    public void testConfigValidationInvalidTopics() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
@@ -319,12 +317,12 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigValidationTopicsWithDlq() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
@@ -334,12 +332,12 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigValidationTopicsRegexWithDlq() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
@@ -349,7 +347,7 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
@@ -360,7 +358,7 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
+        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
 
         replayAll();
@@ -412,11 +410,11 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
+        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
 
         Set<PluginDesc<Predicate>> predicates = new HashSet<>();
-        predicates.add(new PluginDesc<Predicate>(SamplePredicate.class, "1.0", classLoader));
+        predicates.add(new PluginDesc<>(SamplePredicate.class, "1.0", classLoader));
         EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
 
         replayAll();
@@ -606,10 +604,178 @@ public class AbstractHerderTest {
         testConfigProviderRegex("plain.PlainLoginModule required username", false);
     }
 
+    @Test
+    public void testGenerateResultWithConfigValuesAllUsingConfigKeysAndWithNoErrors() {
+        String name = "com.acme.connector.MyConnector";
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+        addConfigKey(keys, "config.a1", null);
+        addConfigKey(keys, "config.b1", "group B");
+        addConfigKey(keys, "config.b2", "group B");
+        addConfigKey(keys, "config.c1", "group C");
+
+        List<String> groups = Arrays.asList("groupB", "group C");
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.a1", "value.a1");
+        addValue(values, "config.b1", "value.b1");
+        addValue(values, "config.b2", "value.b2");
+        addValue(values, "config.c1", "value.c1");
+
+        ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
+        assertEquals(name, infos.name());
+        assertEquals(groups, infos.groups());
+        assertEquals(values.size(), infos.values().size());
+        assertEquals(0, infos.errorCount());
+        assertInfoKey(infos, "config.a1", null);
+        assertInfoKey(infos, "config.b1", "group B");
+        assertInfoKey(infos, "config.b2", "group B");
+        assertInfoKey(infos, "config.c1", "group C");
+        assertInfoValue(infos, "config.a1", "value.a1");
+        assertInfoValue(infos, "config.b1", "value.b1");
+        assertInfoValue(infos, "config.b2", "value.b2");
+        assertInfoValue(infos, "config.c1", "value.c1");
+    }
+
+    @Test
+    public void testGenerateResultWithConfigValuesAllUsingConfigKeysAndWithSomeErrors() {
+        String name = "com.acme.connector.MyConnector";
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+        addConfigKey(keys, "config.a1", null);
+        addConfigKey(keys, "config.b1", "group B");
+        addConfigKey(keys, "config.b2", "group B");
+        addConfigKey(keys, "config.c1", "group C");
+
+        List<String> groups = Arrays.asList("groupB", "group C");
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.a1", "value.a1");
+        addValue(values, "config.b1", "value.b1");
+        addValue(values, "config.b2", "value.b2");
+        addValue(values, "config.c1", "value.c1", "error c1");
+
+        ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
+        assertEquals(name, infos.name());
+        assertEquals(groups, infos.groups());
+        assertEquals(values.size(), infos.values().size());
+        assertEquals(1, infos.errorCount());
+        assertInfoKey(infos, "config.a1", null);
+        assertInfoKey(infos, "config.b1", "group B");
+        assertInfoKey(infos, "config.b2", "group B");
+        assertInfoKey(infos, "config.c1", "group C");
+        assertInfoValue(infos, "config.a1", "value.a1");
+        assertInfoValue(infos, "config.b1", "value.b1");
+        assertInfoValue(infos, "config.b2", "value.b2");
+        assertInfoValue(infos, "config.c1", "value.c1", "error c1");
+    }
+
+    @Test
+    public void testGenerateResultWithConfigValuesMoreThanConfigKeysAndWithSomeErrors() {
+        String name = "com.acme.connector.MyConnector";
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+        addConfigKey(keys, "config.a1", null);
+        addConfigKey(keys, "config.b1", "group B");
+        addConfigKey(keys, "config.b2", "group B");
+        addConfigKey(keys, "config.c1", "group C");
+
+        List<String> groups = Arrays.asList("groupB", "group C");
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.a1", "value.a1");
+        addValue(values, "config.b1", "value.b1");
+        addValue(values, "config.b2", "value.b2");
+        addValue(values, "config.c1", "value.c1", "error c1");
+        addValue(values, "config.extra1", "value.extra1");
+        addValue(values, "config.extra2", "value.extra2", "error extra2");
+
+        ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
+        assertEquals(name, infos.name());
+        assertEquals(groups, infos.groups());
+        assertEquals(values.size(), infos.values().size());
+        assertEquals(2, infos.errorCount());
+        assertInfoKey(infos, "config.a1", null);
+        assertInfoKey(infos, "config.b1", "group B");
+        assertInfoKey(infos, "config.b2", "group B");
+        assertInfoKey(infos, "config.c1", "group C");
+        assertNoInfoKey(infos, "config.extra1");
+        assertNoInfoKey(infos, "config.extra2");
+        assertInfoValue(infos, "config.a1", "value.a1");
+        assertInfoValue(infos, "config.b1", "value.b1");
+        assertInfoValue(infos, "config.b2", "value.b2");
+        assertInfoValue(infos, "config.c1", "value.c1", "error c1");
+        assertInfoValue(infos, "config.extra1", "value.extra1");
+        assertInfoValue(infos, "config.extra2", "value.extra2", "error extra2");
+    }
+
+    @Test
+    public void testGenerateResultWithConfigValuesWithNoConfigKeysAndWithSomeErrors() {
+        String name = "com.acme.connector.MyConnector";
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+
+        List<String> groups = new ArrayList<>();
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.a1", "value.a1");
+        addValue(values, "config.b1", "value.b1");
+        addValue(values, "config.b2", "value.b2");
+        addValue(values, "config.c1", "value.c1", "error c1");
+        addValue(values, "config.extra1", "value.extra1");
+        addValue(values, "config.extra2", "value.extra2", "error extra2");
+
+        ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
+        assertEquals(name, infos.name());
+        assertEquals(groups, infos.groups());
+        assertEquals(values.size(), infos.values().size());
+        assertEquals(2, infos.errorCount());
+        assertNoInfoKey(infos, "config.a1");
+        assertNoInfoKey(infos, "config.b1");
+        assertNoInfoKey(infos, "config.b2");
+        assertNoInfoKey(infos, "config.c1");
+        assertNoInfoKey(infos, "config.extra1");
+        assertNoInfoKey(infos, "config.extra2");
+        assertInfoValue(infos, "config.a1", "value.a1");
+        assertInfoValue(infos, "config.b1", "value.b1");
+        assertInfoValue(infos, "config.b2", "value.b2");
+        assertInfoValue(infos, "config.c1", "value.c1", "error c1");
+        assertInfoValue(infos, "config.extra1", "value.extra1");
+        assertInfoValue(infos, "config.extra2", "value.extra2", "error extra2");
+    }
+
+    protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
+        keys.put(name, new ConfigDef.ConfigKey(name, ConfigDef.Type.STRING, null, null,
+                ConfigDef.Importance.HIGH, "doc", group, 10,
+                ConfigDef.Width.MEDIUM, "display name", Collections.emptyList(), null, false));
+    }
+
+    protected void addValue(List<ConfigValue> values, String name, String value, String...errors) {
+        values.add(new ConfigValue(name, value, new ArrayList<>(), Arrays.asList(errors)));
+    }
+
+    protected void assertInfoKey(ConfigInfos infos, String name, String group) {
+        ConfigInfo info = findInfo(infos, name);
+        assertEquals(name, info.configKey().name());
+        assertEquals(group, info.configKey().group());
+    }
+
+    protected void assertNoInfoKey(ConfigInfos infos, String name) {
+        ConfigInfo info = findInfo(infos, name);
+        assertNull(info.configKey());
+    }
+
+    protected void assertInfoValue(ConfigInfos infos, String name, String value, String...errors) {
+        ConfigValueInfo info = findInfo(infos, name).configValue();
+        assertEquals(name, info.name());
+        assertEquals(value, info.value());
+        assertEquals(Arrays.asList(errors), info.errors());
+    }
+
+    protected ConfigInfo findInfo(ConfigInfos infos, String name) {
+        return infos.values()
+                    .stream()
+                    .filter(i -> i.configValue().name().equals(name))
+                    .findFirst()
+                    .orElse(null);
+    }
+
     private void testConfigProviderRegex(String rawConnConfig) {
         testConfigProviderRegex(rawConnConfig, true);
     }
-    
+
     private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
         Set<String> keys = keysWithVariableValues(Collections.singletonMap("key", rawConnConfig), ConfigTransformer.DEFAULT_PATTERN);
         boolean actual = keys != null && !keys.isEmpty() && keys.contains("key");
@@ -618,6 +784,12 @@ public class AbstractHerderTest {
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
                                                         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        return createConfigValidationHerder(connectorClass, connectorClientConfigOverridePolicy, 1);
+    }
+
+    private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
+                                                        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                                        int countOfCallingNewConnector) {
 
 
         ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
@@ -642,8 +814,11 @@ public class AbstractHerderTest {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Couldn't create connector", e);
         }
-        EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector);
-        EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(classLoader);
+        if (countOfCallingNewConnector > 0) {
+            EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector).times(countOfCallingNewConnector);
+            EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(classLoader).times(countOfCallingNewConnector);
+        }
+
         return herder;
     }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
@@ -104,7 +106,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             metrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
+            new ThreadCache(new LogContext("testCache "), 100000, metrics),
+            Time.SYSTEM
         ) {
             @SuppressWarnings("unchecked")
             @Override
@@ -131,7 +134,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
 
         sessionStore = storeBuilder.build();
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
     }
 
     @After
@@ -623,7 +626,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
+            Time.SYSTEM
         ) {
             @SuppressWarnings("unchecked")
             @Override
@@ -640,7 +644,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 Serdes.Long())
                 .withLoggingDisabled();
         final SessionStore<String, Long> sessionStore = storeBuilder.build();
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
         return context;
     }
 }

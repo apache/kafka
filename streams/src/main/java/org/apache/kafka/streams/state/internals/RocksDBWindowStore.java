@@ -18,8 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -31,7 +29,6 @@ public class RocksDBWindowStore
     private final boolean retainDuplicates;
     private final long windowSize;
 
-    private ProcessorContext context;
     private int seqnum = 0;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -40,18 +37,6 @@ public class RocksDBWindowStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.windowSize = windowSize;
-    }
-
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        this.context = context;
-        super.init(context, root);
-    }
-
-    @Deprecated
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        put(key, value, context.timestamp());
     }
 
     @Override

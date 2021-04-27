@@ -28,15 +28,17 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
@@ -56,7 +58,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
     static {
@@ -66,6 +67,16 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
     }
 
     @Override
@@ -90,8 +101,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
@@ -110,13 +120,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
+    public void shouldNotAllowToResetWhenInputTopicAbsent() {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
@@ -127,13 +136,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
+    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--intermediate-topics", NON_EXISTING_TOPIC,
-            "--execute"
+            "--intermediate-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);

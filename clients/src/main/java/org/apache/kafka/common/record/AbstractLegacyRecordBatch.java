@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -109,11 +110,6 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
         return outerRecord().timestampType() == timestampType;
-    }
-
-    @Override
-    public Long checksumOrNull() {
-        return checksum();
     }
 
     @Override

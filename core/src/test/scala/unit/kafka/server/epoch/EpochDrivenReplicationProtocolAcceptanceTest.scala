@@ -33,8 +33,8 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
@@ -59,12 +59,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     TestUtils.shutdownServers(brokers)
@@ -176,7 +176,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Wait for replication to resync
     waitForLogsToMatch(broker100, broker101)
 
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = KAFKA_0_11_0_IV1
@@ -242,12 +242,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     val records = TestUtils.pollUntilAtLeastNumRecords(consumer, 100)
     var prevOffset = -1L
     records.foreach { r =>
-      assertTrue(s"Offset $prevOffset came before ${r.offset} ", r.offset > prevOffset)
+      assertTrue(r.offset > prevOffset, s"Offset $prevOffset came before ${r.offset} ")
       prevOffset = r.offset
     }
 
     //Are the files identical?
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   /**
@@ -371,8 +371,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
-    assertTrue(s"Logs on Broker 100 and Broker 101 should match",
-               crcSeq(brokers(0)) == crcSeq(brokers(1)))
+    assertTrue(crcSeq(brokers(0)) == crcSeq(brokers(1)),
+               s"Logs on Broker 100 and Broker 101 should match")
   }
 
   private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
@@ -444,7 +444,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def awaitISR(tp: TopicPartition): Unit = {
     TestUtils.waitUntilTrue(() => {
-      leader.replicaManager.nonOfflinePartition(tp).get.inSyncReplicaIds.size == 2
+      leader.replicaManager.onlinePartition(tp).get.inSyncReplicaIds.size == 2
     }, "Timed out waiting for replicas to join ISR")
   }
 

@@ -19,11 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EndTxnRequestTest {
 
@@ -41,7 +41,7 @@ public class EndTxnRequestTest {
                 .setProducerId(producerId)
                 .setTransactionalId(transactionId));
 
-        for (short version = 0; version <= ApiKeys.END_TXN.latestVersion(); version++) {
+        for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnRequest request = builder.build(version);
 
             EndTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());

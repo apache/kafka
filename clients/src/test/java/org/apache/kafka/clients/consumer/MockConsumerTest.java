@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -29,15 +29,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockConsumerTest {
     
-    private MockConsumer<String, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<String, String> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
     @Test
     public void testSimpleMock() {
@@ -50,8 +48,10 @@ public class MockConsumerTest {
         beginningOffsets.put(new TopicPartition("test", 1), 0L);
         consumer.updateBeginningOffsets(beginningOffsets);
         consumer.seek(new TopicPartition("test", 0), 0);
-        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key1", "value1");
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key2", "value2");
+        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
+            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
+            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
         ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(1));
@@ -77,8 +77,10 @@ public class MockConsumerTest {
         beginningOffsets.put(new TopicPartition("test", 1), 0L);
         consumer.updateBeginningOffsets(beginningOffsets);
         consumer.seek(new TopicPartition("test", 0), 0);
-        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key1", "value1");
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, "key2", "value2");
+        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
+            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
+            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
         ConsumerRecords<String, String> recs = consumer.poll(1);
@@ -90,7 +92,8 @@ public class MockConsumerTest {
         assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertThat(consumer.groupMetadata(), equalTo(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty())));
+        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty()),
+            consumer.groupMetadata());
     }
 
     @Test
@@ -101,8 +104,8 @@ public class MockConsumerTest {
         consumer.updateEndOffsets(Collections.singletonMap(partition, 1L));
         consumer.seekToEnd(Collections.singleton(partition));
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
-        assertThat(records.count(), is(0));
-        assertThat(records.isEmpty(), is(true));
+        assertEquals(0, records.count());
+        assertTrue(records.isEmpty());
     }
 
     @Test
@@ -118,7 +121,7 @@ public class MockConsumerTest {
         consumer.poll(Duration.ofMillis(1));
         consumer.resume(testPartitionList);
         ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
-        assertThat(recordsSecondPoll.count(), is(1));
+        assertEquals(1, recordsSecondPoll.count());
     }
 
     @Test
@@ -126,14 +129,14 @@ public class MockConsumerTest {
         TopicPartition partition = new TopicPartition("test", 0);
         consumer.updateEndOffsets(Collections.singletonMap(partition, 10L));
         // consumer.endOffsets should NOT change the value of end offsets
-        Assert.assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
-        Assert.assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
-        Assert.assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(10L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
         consumer.updateEndOffsets(Collections.singletonMap(partition, 11L));
         // consumer.endOffsets should NOT change the value of end offsets
-        Assert.assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
-        Assert.assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
-        Assert.assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
+        assertEquals(11L, (long) consumer.endOffsets(Collections.singleton(partition)).get(partition));
     }
 
 }

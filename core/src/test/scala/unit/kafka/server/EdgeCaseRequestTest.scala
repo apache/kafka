@@ -20,19 +20,22 @@ package kafka.server
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.util.Collections
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
+import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
+import org.apache.kafka.common.utils.ByteUtils
+import org.apache.kafka.common.{TopicPartition, requests}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -82,12 +85,16 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   // Custom header serialization so that protocol assumptions are not forced
-  private def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
+  def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
+    // Check for flex versions, some tests here verify that an invalid apiKey is detected properly, so if -1 is used,
+    // assume the request is not using flex versions.
+    val flexVersion = if (apiKey >= 0) ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion) >= 2 else false
     val size = {
       2 /* apiKey */ +
         2 /* version id */ +
         4 /* correlation id */ +
-        Type.NULLABLE_STRING.sizeOf(clientId) /* client id */
+        Type.NULLABLE_STRING.sizeOf(clientId)  /* client id */ +
+        (if (flexVersion) ByteUtils.sizeOfUnsignedVarint(0) else 0) /* Empty tagged fields for flexible versions */
     }
 
     val buffer = ByteBuffer.allocate(size)
@@ -95,6 +102,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     buffer.putShort(apiVersion)
     buffer.putInt(correlationId)
     Type.NULLABLE_STRING.write(buffer, clientId)
+    if (flexVersion) ByteUtils.writeUnsignedVarint(0, buffer)
     buffer.array()
   }
 
@@ -102,7 +110,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val plainSocket = connect()
     try {
       sendRequest(plainSocket, requestHeaderBytes(-1, 0))
-      assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
+      assertEquals(-1, plainSocket.getInputStream.read(), "The server should disconnect")
     } finally {
       plainSocket.close()
     }
@@ -117,14 +125,24 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val version = ApiKeys.PRODUCE.latestVersion: Short
     val (serializedBytes, responseHeaderVersion) = {
-      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null,
-        correlationId)
-      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))
-      val request = ProduceRequest.Builder.forCurrentMagic(1, 10000, Map(topicPartition -> records).asJava).build()
-      val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.toStruct.sizeOf)
+      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, "", correlationId)
+      val request = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(topicPartition.partition())
+              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(10000)
+        .setTransactionalId(null))
+        .build()
+      val bodyBytes = request.serialize
+      val byteBuffer = ByteBuffer.allocate(headerBytes.length + bodyBytes.remaining())
       byteBuffer.put(headerBytes)
-      request.toStruct.writeTo(byteBuffer)
-      (byteBuffer.array(), request.api.responseHeaderVersion(version))
+      byteBuffer.put(bodyBytes)
+      (byteBuffer.array(), request.apiKey.responseHeaderVersion(version))
     }
 
     val response = requestAndReceive(serializedBytes)
@@ -133,13 +151,14 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
     val produceResponse = ProduceResponse.parse(responseBuffer, version)
 
-    assertEquals("The response should parse completely", 0, responseBuffer.remaining)
-    assertEquals("The correlationId should match request", correlationId, responseHeader.correlationId)
-    assertEquals("One partition response should be returned", 1, produceResponse.responses.size)
-
-    val partitionResponse = produceResponse.responses.get(topicPartition)
-    assertNotNull(partitionResponse)
-    assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
+    assertEquals(0, responseBuffer.remaining, "The response should parse completely")
+    assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")
+    assertEquals(1, produceResponse.data.responses.size, "One topic response should be returned")
+    val topicProduceResponse = produceResponse.data.responses.asScala.head
+    assertEquals(1, topicProduceResponse.partitionResponses.size, "One partition response should be returned")    
+    val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+    assertNotNull(partitionProduceResponse)
+    assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
   @Test

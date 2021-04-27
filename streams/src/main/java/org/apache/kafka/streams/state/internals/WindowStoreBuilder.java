@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Objects;
+
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
     private final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
 
@@ -34,6 +36,8 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
                               final Serde<V> valueSerde,
                               final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
     }
 
@@ -67,7 +71,11 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(inner, storeSupplier.retainDuplicates());
+        return new ChangeLoggingWindowBytesStore(
+            inner,
+            storeSupplier.retainDuplicates(),
+            WindowKeySchema::toStoreKeyBinary
+        );
     }
 
     public long retentionPeriod() {

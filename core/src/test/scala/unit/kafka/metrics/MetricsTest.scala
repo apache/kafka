@@ -22,8 +22,8 @@ import java.util.Properties
 
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricPredicate
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
@@ -33,14 +33,16 @@ import scala.jdk.CollectionConverters._
 import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.JmxReporter
+import org.apache.kafka.common.utils.Time
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
 
+  val requiredKafkaServerPrefix = "kafka.server:type=KafkaServer,name"
   val overridingProps = new Properties
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-  overridingProps.put(JmxReporter.BLACKLIST_CONFIG, "kafka.server:type=KafkaServer,name=ClusterId")
+  overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
@@ -53,7 +55,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     createTopic(topic, 1, 1)
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
-    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
+    assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
   @Test
@@ -63,18 +65,43 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Produce a few messages to create the metrics
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-    assertTrue("Topic metrics don't exist", topicMetricGroups(topic).nonEmpty)
+    assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(topic)))
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
-    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
+    assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
   @Test
   def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=ClusterId"), 1)
+  }
+
+  @Test
+  def testBrokerStateMetric(): Unit = {
+    // Check if BrokerState metric exists.
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=BrokerState"), 1)
+  }
+
+  @Test
+  def testYammerMetricsCountMetric(): Unit = {
+    // Check if yammer-metrics-count metric exists.
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=yammer-metrics-count"), 1)
+  }
+
+  @Test
+  def testLinuxIoMetrics(): Unit = {
+    // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
+    // able to collect those metrics on the platform where this test is running.
+    val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying).usable()
+    val expectedCount = if (usable) 1 else 0
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
+      assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
   @Test
@@ -83,19 +110,19 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
     assertFalse(ManagementFactory.getPlatformMBeanServer
-                  .isRegistered(new ObjectName("kafka.server:type=KafkaServer,name=ClusterId")))
+                  .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
   @Test
   def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     servers.foreach(server => server.kafkaYammerMetrics.reconfigure(
-      Map(JmxReporter.BLACKLIST_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
+      Map(JmxReporter.EXCLUDE_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
     ))
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
     assertTrue(ManagementFactory.getPlatformMBeanServer
-                  .isRegistered(new ObjectName("kafka.server:type=KafkaServer,name=ClusterId")))
+                  .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
   @Test
@@ -104,12 +131,12 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     createTopic(topic, 2, 1)
 
     // The broker metrics for all topics should be greedily registered
-    assertTrue("General topic metrics don't exist", topicMetrics(None).nonEmpty)
+    assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
     assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
     // topic metrics should be lazily registered
-    assertTrue("Topic metrics aren't lazily registered", topicMetricGroups(topic).isEmpty)
+    assertTrue(topicMetricGroups(topic).isEmpty, "Topic metrics aren't lazily registered")
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-    assertTrue("Topic metrics aren't registered", topicMetricGroups(topic).nonEmpty)
+    assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics aren't registered")
   }
 
   @Test
@@ -142,8 +169,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       val log = server.logManager.getLog(new TopicPartition(topic, 0))
       val brokerId = server.config.brokerId
       val logSize = log.map(_.size)
-      assertTrue(s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize",
-        logSize.map(_ > 0).getOrElse(false))
+      assertTrue(logSize.exists(_ > 0), s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize")
     }
 
     // Consume messages to make bytesOut tick

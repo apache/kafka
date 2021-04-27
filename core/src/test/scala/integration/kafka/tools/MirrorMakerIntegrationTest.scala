@@ -17,9 +17,9 @@
 package kafka.tools
 
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.Seq
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}
@@ -29,15 +29,36 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.junit.Test
-import org.junit.Assert._
+import org.apache.kafka.common.utils.Exit
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
     TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps(_, new Properties()))
 
-  @Test(expected = classOf[TimeoutException])
+  val exited = new AtomicBoolean(false)
+
+  @BeforeEach
+  override def setUp(): Unit = {
+    Exit.setExitProcedure((_, _) => exited.set(true))
+    super.setUp()
+  }
+
+  @AfterEach
+  override def tearDown(): Unit = {
+    super.tearDown()
+    try {
+      assertFalse(exited.get())
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
+  @Test
   def testCommitOffsetsThrowTimeoutException(): Unit = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
@@ -47,7 +68,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
-    mirrorMakerConsumer.commit()
+    assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
   }
 
   @Test
@@ -62,7 +83,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic1", 0), 0L)
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
-    assertTrue("Offsets for non-existent topics should be removed", mirrorMakerConsumer.offsets.isEmpty)
+    assertTrue(mirrorMakerConsumer.offsets.isEmpty, "Offsets for non-existent topics should be removed")
   }
 
   @Test

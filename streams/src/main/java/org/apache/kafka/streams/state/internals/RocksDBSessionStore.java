@@ -43,11 +43,37 @@ public class RocksDBSessionStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(
+            key,
+            earliestSessionEndTime,
+            latestSessionStartTime
+        );
+        return new WrappedSessionStoreIterator(bytesIterator);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
+            keyFrom,
+            keyTo,
+            earliestSessionEndTime,
+            latestSessionStartTime
+        );
+        return new WrappedSessionStoreIterator(bytesIterator);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                          final Bytes keyTo,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(
             keyFrom,
             keyTo,
             earliestSessionEndTime,
@@ -67,8 +93,18 @@ public class RocksDBSessionStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
+        return backwardFindSessions(key, 0, Long.MAX_VALUE);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
         return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from, final Bytes to) {
+        return backwardFindSessions(from, to, 0, Long.MAX_VALUE);
     }
 
     @Override

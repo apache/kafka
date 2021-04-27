@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -30,9 +30,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxReporterTest {
 
@@ -124,7 +124,7 @@ public class JmxReporterTest {
 
         Map<String, String> configs = new HashMap<>();
 
-        configs.put(JmxReporter.BLACKLIST_CONFIG,
+        configs.put(JmxReporter.EXCLUDE_CONFIG,
                     JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
 
         try {
@@ -143,7 +143,7 @@ public class JmxReporterTest {
 
             sensor.record();
 
-            configs.put(JmxReporter.BLACKLIST_CONFIG,
+            configs.put(JmxReporter.EXCLUDE_CONFIG,
                         JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
 
             reporter.reconfigure(configs);

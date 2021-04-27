@@ -31,12 +31,14 @@ import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityT
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.ClassRule;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Properties;
@@ -54,8 +56,18 @@ import static org.hamcrest.Matchers.sameInstance;
 
 @Category(IntegrationTest.class)
 public class TaskAssignorIntegrationTest {
-    @ClassRule
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -111,8 +123,8 @@ public class TaskAssignorIntegrationTest {
 
             final Field threads = KafkaStreams.class.getDeclaredField("threads");
             threads.setAccessible(true);
-            final StreamThread[] streamThreads = (StreamThread[]) threads.get(kafkaStreams);
-            final StreamThread streamThread = streamThreads[0];
+            final  List<StreamThread> streamThreads = (List<StreamThread>) threads.get(kafkaStreams);
+            final StreamThread streamThread = streamThreads.get(0);
 
             final Field mainConsumer = StreamThread.class.getDeclaredField("mainConsumer");
             mainConsumer.setAccessible(true);

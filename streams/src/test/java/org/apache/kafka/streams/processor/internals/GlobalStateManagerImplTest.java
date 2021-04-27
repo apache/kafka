@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
@@ -68,6 +69,8 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -160,12 +163,12 @@ public class GlobalStateManagerImplTest {
         assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
     }
 
-    @Test(expected = LockException.class)
+    @Test
     public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
         final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
         try {
             stateDir.lockGlobalState();
-            stateManager.initialize();
+            assertThrows(LockException.class, stateManager::initialize);
         } finally {
             stateDir.unlockGlobalState();
         }
@@ -178,6 +181,25 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        stateManager.initialize();
+        stateManager.updateChangelogOffsets(offsets);
+
+        // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
+        // and then swap to CHECKPOINT_FILE_NAME by replacing it
+        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
+        file.createNewFile();
+        file.setWritable(false);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
+            stateManager.checkpoint();
+            assertThat(appender.getMessages(), hasItem(containsString(
+                "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
+        }
     }
 
     @Test
@@ -210,10 +232,10 @@ public class GlobalStateManagerImplTest {
         assertTrue(checkpointFile.exists());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
         writeCorruptCheckpoint();
-        stateManager.initialize();
+        assertThrows(StreamsException.class, stateManager::initialize);
     }
 
     @Test
@@ -376,7 +398,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(store2.flushed);
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() {
         stateManager.initialize();
         // register the stores
@@ -387,8 +409,7 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         }, stateRestoreCallback);
-
-        stateManager.flush();
+        assertThrows(StreamsException.class, stateManager::flush);
     }
 
     @Test
@@ -405,7 +426,7 @@ public class GlobalStateManagerImplTest {
         assertFalse(store2.isOpen());
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
@@ -416,7 +437,7 @@ public class GlobalStateManagerImplTest {
             }
         }, stateRestoreCallback);
 
-        stateManager.close();
+        assertThrows(ProcessorStateException.class, stateManager::close);
     }
 
     @Test

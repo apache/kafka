@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -134,7 +135,7 @@ public class ProcessorStateManagerTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getPath());
             }
         }), new MockTime(), true);
-        checkpointFile = new File(stateDirectory.directoryForTask(taskId), CHECKPOINT_FILE_NAME);
+        checkpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
 
         expect(storeMetadata.changelogPartition()).andReturn(persistentStorePartition).anyTimes();
@@ -162,7 +163,7 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldReturnBaseDir() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        assertEquals(stateDirectory.directoryForTask(taskId), stateMgr.baseDir());
+        assertEquals(stateDirectory.getOrCreateDirectoryForTask(taskId), stateMgr.baseDir());
     }
 
     // except this test for all other tests active / standby state managers acts the same, so
@@ -295,7 +296,7 @@ public class ProcessorStateManagerTest {
         expect(store.name()).andStubReturn(persistentStoreName);
 
         context.uninitialize();
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         replay(storeMetadata, context, store);
 
         stateMgr.registerStateStores(singletonList(store), context);
@@ -325,7 +326,7 @@ public class ProcessorStateManagerTest {
         expect(store.name()).andStubReturn(persistentStoreName);
 
         context.uninitialize();
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         replay(storeMetadata, context, store);
 
         stateMgr.registerStateStores(singletonList(store), context);
@@ -770,12 +771,14 @@ public class ProcessorStateManagerTest {
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 10L));
             stateMgr.checkpoint();
 
-
             boolean foundExpectedLogMessage = false;
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
                 if ("WARN".equals(event.getLevel())
                     && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
-                    && event.getMessage().endsWith(".checkpoint]")
+                    && event.getMessage().endsWith(".checkpoint]." +
+                        " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
+                        " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                        " Changing the location of state.dir may resolve the problem.")
                     && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
 
                     foundExpectedLogMessage = true;
@@ -901,8 +904,8 @@ public class ProcessorStateManagerTest {
                 () -> stateMgr.initializeStoreOffsetsFromCheckpoint(false));
 
             assertEquals(
-                Collections.singletonMap(taskId, stateMgr.changelogPartitions()),
-                exception.corruptedTaskWithChangelogs()
+                Collections.singleton(taskId),
+                exception.corruptedTasks()
             );
         } finally {
             stateMgr.close();
@@ -986,6 +989,36 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
 
         stateMgr.close();
+    }
+
+    @Test
+    public void shouldDeleteCheckPointFileIfEosEnabled() throws IOException {
+        final long checkpointOffset = 10L;
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        stateMgr.deleteCheckPointFileIfEOSEnabled();
+        stateMgr.close();
+        assertFalse(checkpointFile.exists());
+    }
+
+    @Test
+    public void shouldNotDeleteCheckPointFileIfEosNotEnabled() throws IOException {
+        final long checkpointOffset = 10L;
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false);
+        stateMgr.deleteCheckPointFileIfEOSEnabled();
+        stateMgr.close();
+        assertTrue(checkpointFile.exists());
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled) {

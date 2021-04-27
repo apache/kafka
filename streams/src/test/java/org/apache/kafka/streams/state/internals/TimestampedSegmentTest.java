@@ -67,7 +67,7 @@ public class TimestampedSegmentTest {
         expect(mockContext.stateDir()).andReturn(directory);
         replay(mockContext);
 
-        segment.openDB(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());

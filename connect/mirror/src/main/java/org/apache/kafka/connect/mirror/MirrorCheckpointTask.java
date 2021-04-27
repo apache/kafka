@@ -168,7 +168,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return listConsumerGroupOffsets(group).entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .filter(x -> x.downstreamOffset() > 0)  // ignore offsets we cannot translate accurately
+            .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .collect(Collectors.toList());
     }
 
@@ -235,7 +235,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
                     idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
                         .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(e -> e.getKey(), e -> e.getValue())));
+                            Collectors.toMap(Entry::getKey, Entry::getValue)));
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {

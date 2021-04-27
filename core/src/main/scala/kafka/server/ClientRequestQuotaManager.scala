@@ -79,7 +79,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     QuotaUtils.boundedThrottleTime(e, maxThrottleTimeMs, timeMs)
   }
 
-  override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("request-time", QuotaType.Request.toString,
       "Tracking request-time per user/client-id",
       quotaMetricTags.asJava)

@@ -18,7 +18,6 @@ from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 import importlib
-import os
 import subprocess
 import signal
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm

@@ -16,6 +16,7 @@
 {
   "apiKey": 31,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "DeleteAclsRequest",
   // Version 1 adds the pattern type.
   // Version 2 enables flexible versions.

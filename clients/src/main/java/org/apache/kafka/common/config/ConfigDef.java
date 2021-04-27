@@ -404,11 +404,26 @@ public class ConfigDef {
      * @param name              The name of the config parameter
      * @param type              The type of the config
      * @param defaultValue      The default value to use if this config isn't present
-     * @param importance
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
         return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+    }
+
+    /**
+     * Define a new internal configuration. Internal configuration won't show up in the docs and aren't
+     * intended for general use.
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param validator         The validator to use in checking the correctness of the config
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
+     * @param documentation     The documentation string for the config
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
     }
 
     /**
@@ -1042,7 +1057,7 @@ public class ConfigDef {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
-                desc.append(String.valueOf(v));
+                desc.append(v);
             }
             return desc.toString();
         }
@@ -1534,7 +1549,7 @@ public class ConfigDef {
             }
             b.append("<li>\n");
             b.append(String.format("<h%1$d>" +
-                    "<a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
                     "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));

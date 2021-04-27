@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 /**
@@ -34,10 +38,8 @@ public final class ProcessorContextUtils {
      * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
      * removing the need for this method.
      */
-    public static long getCurrentSystemTime(final ProcessorContext context) {
-        return context instanceof InternalProcessorContext
-            ? ((InternalProcessorContext) context).currentSystemTimeMs()
-            : System.currentTimeMillis();
+    public static long currentSystemTime(final ProcessorContext context) {
+        return context.currentSystemTimeMs();
     }
 
     /**
@@ -47,9 +49,63 @@ public final class ProcessorContextUtils {
         return (StreamsMetricsImpl) context.metrics();
     }
 
+    /**
+     * Should be removed as part of KAFKA-10217
+     */
+    public static StreamsMetricsImpl getMetricsImpl(final StateStoreContext context) {
+        return (StreamsMetricsImpl) context.metrics();
+    }
+
     public static String changelogFor(final ProcessorContext context, final String storeName) {
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
             : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+    }
+
+    public static String changelogFor(final StateStoreContext context, final String storeName) {
+        return context instanceof InternalProcessorContext
+            ? ((InternalProcessorContext) context).changelogFor(storeName)
+            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+    }
+
+    public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {
+        if (context instanceof InternalProcessorContext) {
+            return (InternalProcessorContext) context;
+        } else {
+            throw new IllegalArgumentException(
+                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
+            );
+        }
+    }
+
+    public static InternalProcessorContext asInternalProcessorContext(final StateStoreContext context) {
+        if (context instanceof InternalProcessorContext) {
+            return (InternalProcessorContext) context;
+        } else {
+            throw new IllegalArgumentException(
+                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
+            );
+        }
+    }
+
+    public static Serializer<?> getKeySerializer(final ProcessorContext processorContext) {
+        return getSerializer(processorContext, true);
+    }
+    public static Serializer<?> getValueSerializer(final ProcessorContext processorContext) {
+        return getSerializer(processorContext, false);
+    }
+    private static Serializer<?> getSerializer(final ProcessorContext processorContext, final boolean key) {
+        final Serde<?> serde = key ? processorContext.keySerde() : processorContext.valueSerde();
+        return serde == null ? null : serde.serializer();
+    }
+    public static Deserializer<?> getKeyDeserializer(final ProcessorContext processorContext) {
+        return getDeserializer(processorContext, true);
+    }
+    public static Deserializer<?> getValueDeserializer(final ProcessorContext processorContext) {
+        return getDeserializer(processorContext, false);
+    }
+    private static Deserializer<?> getDeserializer(final ProcessorContext processorContext, final boolean key) {
+        final Serde<?> serde = key ? processorContext.keySerde() : processorContext.valueSerde();
+        return serde == null ? null : serde.deserializer();
     }
 }

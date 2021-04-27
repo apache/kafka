@@ -36,7 +36,12 @@
   // Starting in version 8, brokers can send authorized operations for topic and cluster.
   //
   // Version 9 is the first flexible version.
-  "validVersions": "0-9",
+  //
+  // Version 10 adds topicId.
+  //
+  // Version 11 deprecates ClusterAuthorizedOperations. This is now exposed
+  // by the DescribeCluster API (KIP-700).
+  "validVersions": "0-11",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
@@ -62,6 +67,7 @@
         "about": "The topic error, or 0 if there was no error." },
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
       { "name": "IsInternal", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
         "about": "True if the topic is internal." },
       { "name": "Partitions", "type": "[]MetadataResponsePartition", "versions": "0+",
@@ -76,15 +82,15 @@
           "about": "The leader epoch of this partition." },
         { "name": "ReplicaNodes", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of all nodes that host this partition." },
-        { "name": "IsrNodes", "type": "[]int32", "versions": "0+",
+        { "name": "IsrNodes", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The set of nodes that are in sync with the leader for this partition." },
-        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true,
+        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true, "entityType": "brokerId",
           "about": "The set of offline replicas of this partition." }
       ]},
       { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "8+", "default": "-2147483648",
         "about": "32-bit bitfield to represent authorized operations for this topic." }
     ]},
-    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8+", "default": "-2147483648",
+    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8-10", "default": "-2147483648",
       "about": "32-bit bitfield to represent authorized operations for this cluster." }
   ]
 }
