@@ -17,15 +17,17 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionV0;
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -44,6 +46,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StopReplicaRequestTest {
 
+    private Map<Uuid, String> topicNames;
+    private Map<String, Uuid> topicIds;
+
+    @BeforeEach
+    public void setup() {
+        topicNames = new HashMap<>();
+        topicIds = new HashMap<>();
+        Uuid topicId0 = Uuid.randomUuid();
+        Uuid topicId1 = Uuid.randomUuid();
+
+        topicNames.put(topicId0, "topic0");
+        topicNames.put(topicId1, "topic1");
+        topicIds.put("topic0", topicId0);
+        topicIds.put("topic1", topicId1);
+
+    }
+
     @Test
     public void testUnsupportedVersion() {
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
@@ -54,17 +73,7 @@ public class StopReplicaRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        List<StopReplicaTopicState> topicStates = topicStates(true);
-
-        Set<StopReplicaPartitionError> expectedPartitions = new HashSet<>();
-        for (StopReplicaTopicState topicState : topicStates) {
-            for (StopReplicaPartitionState partitionState: topicState.partitionStates()) {
-                expectedPartitions.add(new StopReplicaPartitionError()
-                    .setTopicName(topicState.topicName())
-                    .setPartitionIndex(partitionState.partitionIndex())
-                    .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
-            }
-        }
+        List<StopReplicaTopicState> topicStates = topicStates(topicIds, true);
 
         for (short version : STOP_REPLICA.allVersions()) {
             StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
@@ -73,6 +82,22 @@ public class StopReplicaRequestTest {
             StopReplicaResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+
+            Set<StopReplicaPartitionError> expectedPartitions = new HashSet<>();
+            for (StopReplicaTopicState topicState : topicStates) {
+                for (StopReplicaPartitionState partitionState: topicState.partitionStates()) {
+
+                    StopReplicaPartitionError error = new StopReplicaPartitionError()
+                        .setPartitionIndex(partitionState.partitionIndex())
+                        .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+                    if (version >= 4)
+                        error.setTopicId(topicState.topicId());
+                    else
+                        error.setTopicName(topicState.topicName());
+
+                    expectedPartitions.add(error);
+                }
+            }
             assertEquals(expectedPartitions, new HashSet<>(response.partitionErrors()));
         }
     }
@@ -88,12 +113,13 @@ public class StopReplicaRequestTest {
     }
 
     private void testBuilderNormalization(boolean deletePartitions) {
-        List<StopReplicaTopicState> topicStates = topicStates(deletePartitions);
-
-        Map<TopicPartition, StopReplicaPartitionState> expectedPartitionStates =
-            StopReplicaRequestTest.partitionStates(topicStates);
+        List<StopReplicaTopicState> topicStates = topicStates(topicIds, true);
 
         for (short version : STOP_REPLICA.allVersions()) {
+
+            Map<TopicPartition, StopReplicaPartitionState> expectedPartitionStates =
+                StopReplicaRequestTest.partitionStates(topicStates, version, topicNames);
+
             StopReplicaRequest request = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 deletePartitions, topicStates).build(version);
             StopReplicaRequestData data = request.data();
@@ -116,7 +142,7 @@ public class StopReplicaRequestTest {
                 assertEquals(deletePartitions, data.deletePartitions());
             } else {
                 Map<TopicPartition, StopReplicaPartitionState> partitionStates =
-                    StopReplicaRequestTest.partitionStates(data.topicStates());
+                    StopReplicaRequestTest.partitionStates(data.topicStates(), version, topicNames);
                 assertEquals(expectedPartitionStates, partitionStates);
                 // Always false from V3 on
                 assertFalse(data.deletePartitions());
@@ -126,10 +152,10 @@ public class StopReplicaRequestTest {
 
     @Test
     public void testTopicStatesNormalization() {
-        List<StopReplicaTopicState> topicStates = topicStates(true);
 
         for (short version : STOP_REPLICA.allVersions()) {
             // Create a request for version to get its serialized form
+            List<StopReplicaTopicState> topicStates = topicStates(topicIds, true);
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
 
@@ -137,12 +163,17 @@ public class StopReplicaRequestTest {
             StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
             Map<TopicPartition, StopReplicaPartitionState> partitionStates =
-                StopReplicaRequestTest.partitionStates(request.topicStates());
+                StopReplicaRequestTest.partitionStates(request.topicStates(), version, topicNames);
             assertEquals(6, partitionStates.size());
 
             for (StopReplicaTopicState expectedTopicState : topicStates) {
                 for (StopReplicaPartitionState expectedPartitionState: expectedTopicState.partitionStates()) {
-                    TopicPartition tp = new TopicPartition(expectedTopicState.topicName(),
+                    String topicName;
+                    if (version >= 4)
+                        topicName = topicNames.get(expectedTopicState.topicId());
+                    else
+                        topicName = expectedTopicState.topicName();
+                    TopicPartition tp = new TopicPartition(topicName,
                         expectedPartitionState.partitionIndex());
                     StopReplicaPartitionState partitionState = partitionStates.get(tp);
 
@@ -161,9 +192,9 @@ public class StopReplicaRequestTest {
 
     @Test
     public void testPartitionStatesNormalization() {
-        List<StopReplicaTopicState> topicStates = topicStates(true);
 
         for (short version : STOP_REPLICA.allVersions()) {
+            List<StopReplicaTopicState> topicStates = topicStates(topicIds, true);
             // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
@@ -171,12 +202,18 @@ public class StopReplicaRequestTest {
             // Construct the request from the buffer
             StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
-            Map<TopicPartition, StopReplicaPartitionState> partitionStates = request.partitionStates();
+            Map<TopicPartition, StopReplicaPartitionState> partitionStates = request.partitionStates(topicNames);
             assertEquals(6, partitionStates.size());
 
             for (StopReplicaTopicState expectedTopicState : topicStates) {
                 for (StopReplicaPartitionState expectedPartitionState: expectedTopicState.partitionStates()) {
-                    TopicPartition tp = new TopicPartition(expectedTopicState.topicName(),
+                    String topicName;
+                    if (version >= 4) {
+                        topicName = topicNames.get(expectedTopicState.topicId());
+                    } else {
+                        topicName = expectedTopicState.topicName();
+                    }
+                    TopicPartition tp = new TopicPartition(topicName,
                         expectedPartitionState.partitionIndex());
                     StopReplicaPartitionState partitionState = partitionStates.get(tp);
 
@@ -193,10 +230,11 @@ public class StopReplicaRequestTest {
         }
     }
 
-    private List<StopReplicaTopicState> topicStates(boolean deletePartition) {
+    private List<StopReplicaTopicState> topicStates(Map<String, Uuid> topicIds, boolean deletePartition) {
         List<StopReplicaTopicState> topicStates = new ArrayList<>();
         StopReplicaTopicState topic0 = new StopReplicaTopicState()
-            .setTopicName("topic0");
+            .setTopicName("topic0")
+            .setTopicId(topicIds.get("topic0"));
         topic0.partitionStates().add(new StopReplicaPartitionState()
             .setPartitionIndex(0)
             .setLeaderEpoch(0)
@@ -207,7 +245,8 @@ public class StopReplicaRequestTest {
             .setDeletePartition(deletePartition));
         topicStates.add(topic0);
         StopReplicaTopicState topic1 = new StopReplicaTopicState()
-            .setTopicName("topic1");
+            .setTopicName("topic1")
+            .setTopicId(topicIds.get("topic1"));
         topic1.partitionStates().add(new StopReplicaPartitionState()
             .setPartitionIndex(2)
             .setLeaderEpoch(2)
@@ -218,7 +257,8 @@ public class StopReplicaRequestTest {
             .setDeletePartition(deletePartition));
         topicStates.add(topic1);
         StopReplicaTopicState topic3 = new StopReplicaTopicState()
-            .setTopicName("topic1");
+            .setTopicName("topic1")
+            .setTopicId(topicIds.get("topic1"));
         topic3.partitionStates().add(new StopReplicaPartitionState()
             .setPartitionIndex(4)
             .setLeaderEpoch(-2)
@@ -232,12 +272,19 @@ public class StopReplicaRequestTest {
     }
 
     public static Map<TopicPartition, StopReplicaPartitionState> partitionStates(
-        Iterable<StopReplicaTopicState> topicStates) {
+        Iterable<StopReplicaTopicState> topicStates,
+        short version,
+        Map<Uuid, String> topicNames) {
         Map<TopicPartition, StopReplicaPartitionState> partitionStates = new HashMap<>();
         for (StopReplicaTopicState topicState : topicStates) {
             for (StopReplicaPartitionState partitionState: topicState.partitionStates()) {
+                String topicName;
+                if (version >= 4)
+                    topicName = topicNames.get(topicState.topicId());
+                else
+                    topicName = topicState.topicName();
                 partitionStates.put(
-                    new TopicPartition(topicState.topicName(), partitionState.partitionIndex()),
+                    new TopicPartition(topicName, partitionState.partitionIndex()),
                     partitionState);
             }
         }

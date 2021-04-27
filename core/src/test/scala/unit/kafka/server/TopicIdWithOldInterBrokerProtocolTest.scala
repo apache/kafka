@@ -19,14 +19,15 @@ package kafka.server
 
 import java.util.{Arrays, Properties}
 
-import kafka.api.KAFKA_2_7_IV0
+import kafka.api.{KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse, StopReplicaRequest, StopReplicaResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -97,12 +98,44 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     assertEquals(2, error(Errors.UNSUPPORTED_VERSION))
   }
 
+  @Test
+  def testUnsupportedVersionOnStopReplicaRequest(): Unit = {
+    val topic = "topic"
+    createTopic(topic)
+
+    val server = servers.head
+    val topicId = server.metadataCache.getTopicId(topic)
+
+    for (version <- 4 to ApiKeys.STOP_REPLICA.latestVersion() ) {
+      val topicStates = Seq(
+        new StopReplicaTopicState()
+          .setTopicName(topic)
+          .setTopicId(topicId)
+          .setPartitionStates(Seq(new StopReplicaPartitionState()
+            .setPartitionIndex(0)
+            .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch)
+            .setDeletePartition(false)).asJava)
+      ).asJava
+
+      val request = new StopReplicaRequest.Builder(version.toShort,
+        server.config.brokerId, server.replicaManager.controllerEpoch, server.kafkaController.brokerEpoch,
+        false, topicStates).build()
+      val response = sendStopReplicaRequest(request)
+
+      assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
+    }
+  }
+
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer]): MetadataResponse = {
     connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
+  }
+
+  private def sendStopReplicaRequest(request: StopReplicaRequest, socketServer: SocketServer = controllerSocketServer): StopReplicaResponse = {
+    connectAndReceive[StopReplicaResponse](request, destination = socketServer)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
