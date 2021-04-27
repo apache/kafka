@@ -21,7 +21,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 
 import java.util.Map;
 
-public class SchemaUtil {
+public abstract class SchemaUtil {
 
     public static SchemaBuilder copySchemaBasics(Schema source) {
         return copySchemaBasics(source, new SchemaBuilder(source.type()));

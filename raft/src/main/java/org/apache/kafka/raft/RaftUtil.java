@@ -35,7 +35,7 @@ import java.util.function.Consumer;
 
 import static java.util.Collections.singletonList;
 
-public class RaftUtil {
+public abstract class RaftUtil {
 
     public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
         switch (apiKey) {

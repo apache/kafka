@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class RecordsUtil {
+public abstract class RecordsUtil {
     /**
      * Down convert batches to the provided message format version. The first offset parameter is only relevant in the
      * conversion from uncompressed v2 or higher to v1 or lower. The reason is that uncompressed records in v0 and v1
