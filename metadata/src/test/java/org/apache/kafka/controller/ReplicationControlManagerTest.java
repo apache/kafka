@@ -657,7 +657,7 @@ public class ReplicationControlManagerTest {
         assertTrue(ReplicationControlManager.electionWasClean(1, new int[] {1, 2}));
         assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {0, 2}));
         assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {}));
-        assertTrue(ReplicationControlManager.electionWasClean(3, new int[] {1,2,3,4,5,6}));
+        assertTrue(ReplicationControlManager.electionWasClean(3, new int[] {1, 2, 3, 4, 5, 6}));
     }
 
     @Test

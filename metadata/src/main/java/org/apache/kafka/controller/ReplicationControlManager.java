@@ -825,7 +825,7 @@ public class ReplicationControlManager {
                 "No such partition as " + topic + "-" + partitionId);
         }
         int newLeader = bestLeader(partitionInfo.replicas, partitionInfo.isr, uncleanOk,
-                                   r -> clusterControl.unfenced(r));
+            r -> clusterControl.unfenced(r));
         if (newLeader == NO_LEADER) {
             // If we can't find any leader for the partition, return an error.
             return new ApiError(Errors.LEADER_NOT_AVAILABLE,
