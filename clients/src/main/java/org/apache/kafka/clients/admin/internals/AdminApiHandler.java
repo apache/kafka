@@ -58,7 +58,7 @@ public interface AdminApiHandler<K, V> {
      *
      * @return a builder for the request containing the given keys
      */
-    AbstractRequest.Builder<?> buildRequest(Integer brokerId, Set<K> keys);
+    AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys);
 
     /**
      * Callback that is invoked when a request returns successfully.
@@ -80,7 +80,7 @@ public interface AdminApiHandler<K, V> {
      *
      * @return result indicating key completion, failure, and unmapping
      */
-    ApiResult<K, V> handleResponse(Integer brokerId, Set<K> keys, AbstractResponse response);
+    ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response);
 
     class Keys<K> {
         public final Map<K, Integer> staticKeys;

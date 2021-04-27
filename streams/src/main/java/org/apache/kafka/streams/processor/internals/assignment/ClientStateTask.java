@@ -14,16 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.streams.processor.internals.assignment;
 
-/**
- * An non-sampled cumulative total maintained over all time.
- * This is a non-sampled version of {@link WindowedSum}.
- *
- * See also {@link CumulativeCount} if you just want to increment the value by 1 on each recording.
- *
- * @deprecated since 2.4 . Use {@link CumulativeSum} instead.
- */
-@Deprecated
-public class Total extends CumulativeSum {
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.kafka.streams.processor.TaskId;
+
+class ClientStateTask {
+    private final Map<String, Set<TaskId>> consumerToTaskIds;
+    private Set<TaskId> taskIds;
+
+    ClientStateTask(final Set<TaskId> taskIds,
+                    final Map<String, Set<TaskId>> consumerToTaskIds) {
+        this.taskIds = taskIds;
+        this.consumerToTaskIds = consumerToTaskIds;
+    }
+
+    void taskIds(final Set<TaskId> clientToTaskIds) {
+        taskIds = clientToTaskIds;
+    }
+
+    Set<TaskId> taskIds() {
+        return taskIds;
+    }
+
+    Map<String, Set<TaskId>> consumerToTaskIds() {
+        return consumerToTaskIds;
+    }
 }

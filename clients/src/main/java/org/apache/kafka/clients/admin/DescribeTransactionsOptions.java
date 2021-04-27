@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
 
 /**
- * A {@link SampledStat} that maintains the sum of what it has seen.
- * This is a sampled version of {@link CumulativeSum}.
+ * Options for {@link Admin#describeTransactions(Collection)}.
  *
- * See also {@link WindowedCount} if you want to increment the value by 1 on each recording.
- *
- * @deprecated since 2.4 . Use {@link WindowedSum} instead
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-@Deprecated
-public class Sum extends WindowedSum {
+@InterfaceStability.Evolving
+public class DescribeTransactionsOptions extends AbstractOptions<DescribeTransactionsOptions> {
+
 }
