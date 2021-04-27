@@ -140,7 +140,7 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -265,7 +265,7 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
     @SuppressWarnings("deprecation")
