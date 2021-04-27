@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -152,6 +153,8 @@ public class AbortTransactionHandlerTest {
             handleWithError(abortSpec, Errors.INVALID_PRODUCER_EPOCH));
         assertFailed(TransactionCoordinatorFencedException.class, abortSpec.topicPartition(),
             handleWithError(abortSpec, Errors.TRANSACTION_COORDINATOR_FENCED));
+        assertFailed(UnknownServerException.class, abortSpec.topicPartition(),
+            handleWithError(abortSpec, Errors.UNKNOWN_SERVER_ERROR));
     }
 
     private AdminApiHandler.ApiResult<TopicPartition, Void> handleWithError(

@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
+/**
+ * The result of {@link Admin#abortTransaction(AbortTransactionSpec, AbortTransactionOptions)}.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
 @InterfaceStability.Evolving
 public class AbortTransactionResult {
     private final Map<TopicPartition, KafkaFutureImpl<Void>> futures;
@@ -33,20 +36,15 @@ public class AbortTransactionResult {
         this.futures = futures;
     }
 
+    /**
+     * Get a future which completes when the transaction specified by {@link AbortTransactionSpec}
+     * in the respective call to {@link Admin#abortTransaction(AbortTransactionSpec, AbortTransactionOptions)}
+     * returns successfully or fails due to an error or timeout.
+     *
+     * @return the future
+     */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
-            .thenApply(nil -> {
-                for (Map.Entry<TopicPartition, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                    try {
-                        KafkaFutureImpl<Void> future = entry.getValue();
-                        future.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                        throw new KafkaException(e);
-                    }
-                }
-                return null;
-            });
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 
 }

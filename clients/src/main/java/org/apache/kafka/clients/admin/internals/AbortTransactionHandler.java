@@ -142,7 +142,7 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
                 log.error("WriteTxnMarkers request for abort spec {} failed cluster authorization", abortSpec);
                 return ApiResult.failed(abortSpec.topicPartition(), new ClusterAuthorizationException(
                     "WriteTxnMarkers request with " + abortSpec + " failed due to cluster " +
-                        "authorization error."));
+                        "authorization error"));
 
             case INVALID_PRODUCER_EPOCH:
                 log.error("WriteTxnMarkers request for abort spec {} failed due to an invalid producer epoch",
