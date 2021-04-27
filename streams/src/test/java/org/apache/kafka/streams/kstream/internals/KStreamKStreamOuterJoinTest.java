@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -109,47 +108,6 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic2.pipeInput(3, "a3", 315);
 
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "null+a0", 111));
-        }
-    }
-
-    @Test
-    public void testOuterJoinDuplicatesWithFixDisabled() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<Integer, String> stream1;
-        final KStream<Integer, String> stream2;
-        final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        stream1 = builder.stream(topic1, consumed);
-        stream2 = builder.stream(topic2, consumed);
-
-        joined = stream1.outerJoin(
-            stream2,
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)).grace(ofMillis(10)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
-        joined.process(supplier);
-
-        props.put(StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<Integer, String> inputTopic1 =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
-
-            inputTopic1.pipeInput(0, "A0", 0);
-            inputTopic1.pipeInput(0, "A0-0", 0);
-            inputTopic2.pipeInput(0, "a0", 0);
-            inputTopic2.pipeInput(1, "b1", 0);
-
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", 0),
-                new KeyValueTimestamp<>(0, "A0-0+null", 0),
-                new KeyValueTimestamp<>(0, "A0+a0", 0),
-                new KeyValueTimestamp<>(0, "A0-0+a0", 0),
-                new KeyValueTimestamp<>(1, "null+b1", 0));
         }
     }
 
