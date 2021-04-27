@@ -196,7 +196,7 @@ public class BatchAccumulator<T> implements Closeable {
         MemoryRecords data = currentBatch.build();
         completed.add(new CompletedBatch<>(
             currentBatch.baseOffset(),
-            Optional.of(currentBatch.records()),
+            currentBatch.records(),
             data,
             memoryPool,
             currentBatch.initialBuffer()
@@ -211,21 +211,22 @@ public class BatchAccumulator<T> implements Closeable {
             ByteBuffer buffer = memoryPool.tryAllocate(256);
             if (buffer != null) {
                 MemoryRecords data = MemoryRecords.withLeaderChangeMessage(
-                        this.nextOffset, 
-                        currentTimeMs, 
-                        this.epoch, 
-                        buffer, 
-                        leaderChangeMessage);
+                    this.nextOffset, 
+                    currentTimeMs, 
+                    this.epoch, 
+                    buffer, 
+                    leaderChangeMessage
+                );
                 completed.add(new CompletedBatch<>(
                     nextOffset,
-                    Optional.empty(),
+                    1,
                     data,
                     memoryPool,
                     buffer
                 ));
                 nextOffset += 1;
             } else {
-                throw new IllegalStateException("Could not allocate buffer for the control batch.");
+                throw new IllegalStateException("Could not allocate buffer for the leader change record.");
             }
         } finally {
             appendLock.unlock();
@@ -379,6 +380,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
+        public final int numRecords;
         public final Optional<List<T>> records;
         public final MemoryRecords data;
         private final MemoryPool pool;
@@ -388,13 +390,29 @@ public class BatchAccumulator<T> implements Closeable {
 
         private CompletedBatch(
             long baseOffset,
-            Optional<List<T>> records,
+            List<T> records,
             MemoryRecords data,
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
-            this.records = records;
+            this.records = Optional.of(records);
+            this.numRecords = records.size();
+            this.data = data;
+            this.pool = pool;
+            this.initialBuffer = initialBuffer;
+        }
+
+        private CompletedBatch(
+            long baseOffset,
+            int numRecords,
+            MemoryRecords data,
+            MemoryPool pool,
+            ByteBuffer initialBuffer
+        ) {
+            this.baseOffset = baseOffset;
+            this.records = Optional.empty();
+            this.numRecords = numRecords;
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;

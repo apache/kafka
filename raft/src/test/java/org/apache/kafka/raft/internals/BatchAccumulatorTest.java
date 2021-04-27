@@ -121,12 +121,9 @@ class BatchAccumulatorTest {
             assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
             assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
 
-            // Check that a drain is needed
-            time.sleep(lingerMs);
-            assertTrue(acc.needsDrain(time.milliseconds()));
-
-            // Force a drain and check that the drain status is `FINISHED`
+            assertFalse(acc.needsDrain(time.milliseconds()));
             acc.forceDrain();
+            assertTrue(acc.needsDrain(time.milliseconds()));
             assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
            
             // Drain completed batches
@@ -171,12 +168,12 @@ class BatchAccumulatorTest {
             assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
             assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
 
-            // Check that a drain is needed
-            time.sleep(lingerMs);
-            assertTrue(acc.needsDrain(time.milliseconds()));
+            assertFalse(acc.needsDrain(time.milliseconds()));
            
             // Append a leader change message
             acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+
+            assertTrue(acc.needsDrain(time.milliseconds()));
 
             // Test that drain status is FINISHED
             assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
@@ -484,7 +481,6 @@ class BatchAccumulatorTest {
             completedBatch.data.batches().forEach(recordBatch -> {
                 assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
         });
-        acc.close();
     }
 
     int recordSizeInBytes(String record, int numberOfRecords) {

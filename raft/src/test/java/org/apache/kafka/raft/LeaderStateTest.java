@@ -228,9 +228,9 @@ public class LeaderStateTest {
     }
 
     private LeaderState<?> setUpLeaderAndFollowers(int follower1,
-                                                int follower2,
-                                                long leaderStartOffset,
-                                                long leaderEndOffset) {
+                                                   int follower2,
+                                                   long leaderStartOffset,
+                                                   long leaderEndOffset) {
         LeaderState<?> state = newLeaderState(mkSet(localId, follower1, follower2), leaderStartOffset);
         state.updateLocalState(0, new LogOffsetMetadata(leaderEndOffset));
         assertEquals(Optional.empty(), state.highWatermark());

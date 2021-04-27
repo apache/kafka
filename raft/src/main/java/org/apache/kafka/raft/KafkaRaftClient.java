@@ -1819,17 +1819,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 offsetAndEpoch.offset + 1, Integer.MAX_VALUE);
 
             future.whenComplete((commitTimeMs, exception) -> {
-                if (batch.records.isPresent()) {
-                    int numRecords = batch.records.get().size();
-                    if (exception != null) {
-                        logger.debug("Failed to commit {} records at {}", numRecords, offsetAndEpoch, exception);
-                    } else {
-                        long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
-                        double elapsedTimePerRecord = (double) elapsedTime / numRecords;
-                        kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
-                        logger.debug("Completed commit of {} records at {}", numRecords, offsetAndEpoch);
-                        maybeFireHandleCommit(batch.baseOffset, epoch, batch.records.get());
-                    }
+                if (exception != null) {
+                    logger.debug("Failed to commit {} records at {}", batch.numRecords, offsetAndEpoch, exception);
+                } else {
+                    long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
+                    double elapsedTimePerRecord = (double) elapsedTime / batch.numRecords;
+                    kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
+                    logger.debug("Completed commit of {} records at {}", batch.numRecords, offsetAndEpoch);
+                    maybeFireHandleCommit(batch.baseOffset, epoch, batch.records.get());
                 }
             });
         } finally {
@@ -2199,7 +2196,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             offset = accumulator.append(epoch, records);
         }
-        
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
