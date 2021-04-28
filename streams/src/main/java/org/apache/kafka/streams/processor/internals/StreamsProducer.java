@@ -50,7 +50,7 @@ import java.util.concurrent.Future;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -64,7 +64,7 @@ public class StreamsProducer {
     private final Logger log;
     private final String logPrefix;
 
-    private final Map<String, Object> eosBetaProducerConfigs;
+    private final Map<String, Object> eosV2ProducerConfigs;
     private final KafkaClientSupplier clientSupplier;
     private final StreamThread.ProcessingMode processingMode;
 
@@ -90,7 +90,7 @@ public class StreamsProducer {
         switch (processingMode) {
             case AT_LEAST_ONCE: {
                 producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
-                eosBetaProducerConfigs = null;
+                eosV2ProducerConfigs = null;
 
                 break;
             }
@@ -105,21 +105,21 @@ public class StreamsProducer {
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
 
-                eosBetaProducerConfigs = null;
+                eosV2ProducerConfigs = null;
 
                 break;
             }
-            case EXACTLY_ONCE_BETA: {
+            case EXACTLY_ONCE_V2: {
                 producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
 
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(
                     ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                     applicationId + "-" +
-                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once beta") +
+                        Objects.requireNonNull(processId, "processId cannot be null for exactly-once v2") +
                         "-" + threadId.split("-StreamThread-")[1]);
 
-                eosBetaProducerConfigs = producerConfigs;
+                eosV2ProducerConfigs = producerConfigs;
 
                 break;
             }
@@ -135,8 +135,7 @@ public class StreamsProducer {
     }
 
     boolean eosEnabled() {
-        return processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        return StreamThread.eosEnabled(processingMode);
     }
 
     /**
@@ -175,13 +174,13 @@ public class StreamsProducer {
     }
 
     public void resetProducer() {
-        if (processingMode != EXACTLY_ONCE_BETA) {
-            throw new IllegalStateException(formatException("Exactly-once beta is not enabled"));
+        if (processingMode != EXACTLY_ONCE_V2) {
+            throw new IllegalStateException("Expected eos-v2 to be enabled, but the processing mode was " + processingMode);
         }
 
         producer.close();
 
-        producer = clientSupplier.getProducer(eosBetaProducerConfigs);
+        producer = clientSupplier.getProducer(eosV2ProducerConfigs);
         transactionInitialized = false;
     }
 

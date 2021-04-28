@@ -160,14 +160,14 @@ public class MockProducerTest {
     @Test
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
         buildMockProducer(true);
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
     public void shouldThrowOnSendOffsetsToTransactionTransactionIfNoTransactionGotStarted() {
         buildMockProducer(true);
         producer.initTransactions();
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
@@ -270,7 +270,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         producer.fenceProducer();
-        assertThrows(ProducerFencedException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(ProducerFencedException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test
@@ -404,8 +404,8 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(21L, null));
             }
         };
-        producer.sendOffsetsToTransaction(group1Commit, group1);
-        producer.sendOffsetsToTransaction(group2Commit, group2);
+        producer.sendOffsetsToTransaction(group1Commit, new ConsumerGroupMetadata(group1));
+        producer.sendOffsetsToTransaction(group2Commit, new ConsumerGroupMetadata(group2));
 
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
 
@@ -498,7 +498,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, "groupId");
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         producer.commitTransaction(); // commit should not reset "sentOffsets" flag
         assertTrue(producer.sentOffsets());
 
@@ -532,7 +532,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 2), new OffsetAndMetadata(21L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit1, group);
+        producer.sendOffsetsToTransaction(groupCommit1, new ConsumerGroupMetadata(group));
         producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group));
 
         assertTrue(producer.consumerGroupOffsetsHistory().isEmpty());
@@ -563,7 +563,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, group);
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.abortTransaction();
 
         producer.beginTransaction();
@@ -592,7 +592,7 @@ public class MockProducerTest {
                 put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
             }
         };
-        producer.sendOffsetsToTransaction(groupCommit, group);
+        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.commitTransaction();
 
         producer.beginTransaction();
@@ -663,7 +663,7 @@ public class MockProducerTest {
     public void shouldThrowSendOffsetsToTransactionByGroupIdIfProducerIsClosed() {
         buildMockProducer(true);
         producer.close();
-        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, groupId));
+        assertThrows(IllegalStateException.class, () -> producer.sendOffsetsToTransaction(null, new ConsumerGroupMetadata(groupId)));
     }
 
     @Test

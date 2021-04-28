@@ -65,7 +65,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 public class TaskManager {
     // initialize the task list
@@ -490,7 +490,7 @@ public class TaskManager {
      * {@link #handleAssignment(Map, Map)} is called. Note that only active task partitions are passed in from the
      * rebalance listener, so we only need to consider/commit active tasks here
      *
-     * If eos-beta is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
+     * If eos-v2 is used, we must commit ALL tasks. Otherwise, we can just commit those (active) tasks which are revoked
      *
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
@@ -629,7 +629,7 @@ public class TaskManager {
             }
         }
 
-        if (processingMode == EXACTLY_ONCE_BETA) {
+        if (processingMode == EXACTLY_ONCE_V2) {
             tasks.reInitializeThreadProducer();
         }
     }
@@ -847,7 +847,7 @@ public class TaskManager {
         }
 
         // If any active tasks can't be committed, none of them can be, and all that need a commit must be closed dirty
-        if (processingMode == EXACTLY_ONCE_BETA && !tasksToCloseDirty.isEmpty()) {
+        if (processingMode == EXACTLY_ONCE_V2 && !tasksToCloseDirty.isEmpty()) {
             tasksToCloseClean.removeAll(tasksToCommit);
             tasksToCloseDirty.addAll(tasksToCommit);
         } else {
@@ -1104,7 +1104,7 @@ public class TaskManager {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                if (processingMode == EXACTLY_ONCE_BETA) {
+                if (processingMode == EXACTLY_ONCE_V2) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
                         updateTaskMetadata(allOffsets);
