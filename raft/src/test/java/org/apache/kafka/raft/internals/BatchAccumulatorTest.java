@@ -85,6 +85,7 @@ class BatchAccumulatorTest {
         );
 
         acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+        assertTrue(acc.needsDrain(time.milliseconds()));
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(1, batches.size());
