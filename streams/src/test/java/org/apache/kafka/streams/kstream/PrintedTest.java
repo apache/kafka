@@ -19,8 +19,9 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.PrintedInternal;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -37,6 +38,7 @@ import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 public class PrintedTest {
 
@@ -58,11 +60,11 @@ public class PrintedTest {
     @Test
     public void shouldCreateProcessorThatPrintsToFile() throws IOException {
         final File file = TestUtils.tempFile();
-        final ProcessorSupplier<String, Integer> processorSupplier = new PrintedInternal<>(
+        final ProcessorSupplier<String, Integer, Void, Void> processorSupplier = new PrintedInternal<>(
                 Printed.<String, Integer>toFile(file.getPath()))
                 .build("processor");
-        final Processor<String, Integer> processor = processorSupplier.get();
-        processor.process("hi", 1);
+        final Processor<String, Integer, Void, Void> processor = processorSupplier.get();
+        processor.process(new Record<>("hi", 1, 0L));
         processor.close();
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
             final byte[] data = new byte[stream.available()];
@@ -73,62 +75,57 @@ public class PrintedTest {
 
     @Test
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
-        final ProcessorSupplier<String, Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
-        final Processor<String, Integer> processor = supplier.get();
+        final ProcessorSupplier<String, Integer, Void, Void> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
+        final Processor<String, Integer, Void, Void> processor = supplier.get();
 
-        processor.process("good", 2);
+        processor.process(new Record<>("good", 2, 0L));
         processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
     }
 
     @Test
     public void shouldPrintWithLabel() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
+        final Processor<String, Integer, Void, Void> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
                 .build("processor")
                 .get();
 
-        processor.process("hello", 3);
+        processor.process(new Record<>("hello", 3, 0L));
         processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
     }
 
     @Test
     public void shouldPrintWithKeyValueMapper() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withKeyValueMapper(
-                new KeyValueMapper<String, Integer, String>() {
-                    @Override
-                    public String apply(final String key, final Integer value) {
-                        return String.format("%s -> %d", key, value);
-                    }
-                })).build("processor")
-                .get();
-        processor.process("hello", 1);
+        final Processor<String, Integer, Void, Void> processor = new PrintedInternal<>(
+            sysOutPrinter.withKeyValueMapper((key, value) -> String.format("%s -> %d", key, value))
+        ).build("processor").get();
+        processor.process(new Record<>("hello", 1, 0L));
         processor.close();
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfFilePathIsNull() {
-        Printed.toFile(null);
+        assertThrows(NullPointerException.class, () -> Printed.toFile(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfMapperIsNull() {
-        sysOutPrinter.withKeyValueMapper(null);
+        assertThrows(NullPointerException.class, () -> sysOutPrinter.withKeyValueMapper(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfLabelIsNull() {
-        sysOutPrinter.withLabel(null);
+        assertThrows(NullPointerException.class, () -> sysOutPrinter.withLabel(null));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowTopologyExceptionIfFilePathIsEmpty() {
-        Printed.toFile("");
+        assertThrows(TopologyException.class, () -> Printed.toFile(""));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowTopologyExceptionIfFilePathDoesntExist() {
-        Printed.toFile("/this/should/not/exist");
+        assertThrows(TopologyException.class, () -> Printed.toFile("/this/should/not/exist"));
     }
 }

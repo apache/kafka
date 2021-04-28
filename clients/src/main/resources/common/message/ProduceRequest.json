@@ -16,6 +16,7 @@
 {
   "apiKey": 0,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "ProduceRequest",
   // Version 1 and 2 are the same as version 0.
   //
@@ -40,7 +41,7 @@
     { "name": "Acks", "type": "int16", "versions": "0+",
       "about": "The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR." },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",
-      "about": "The timeout to await a response in miliseconds." },
+      "about": "The timeout to await a response in milliseconds." },
     { "name": "TopicData", "type": "[]TopicProduceData", "versions": "0+",
       "about": "Each topic to produce to.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,

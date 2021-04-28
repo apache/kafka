@@ -19,7 +19,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    {"name": "LeaderId", "type": "int32", "versions": "0+",
+    {"name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The ID of the newly elected leader"},
     {"name": "Voters", "type": "[]Voter", "versions": "0+",
       "about": "The set of voters in the quorum for this epoch"},

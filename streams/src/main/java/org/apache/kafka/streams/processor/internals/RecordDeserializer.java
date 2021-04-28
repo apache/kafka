@@ -25,6 +25,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.slf4j.Logger;
 
+import java.util.Optional;
+
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
@@ -59,12 +61,12 @@ class RecordDeserializer {
                 rawRecord.offset(),
                 rawRecord.timestamp(),
                 TimestampType.CREATE_TIME,
-                rawRecord.checksum(),
                 rawRecord.serializedKeySize(),
                 rawRecord.serializedValueSize(),
                 sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),
                 sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()),
-                rawRecord.headers()
+                rawRecord.headers(),
+                Optional.empty()
             );
         } catch (final Exception deserializationException) {
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;

@@ -28,7 +28,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -41,10 +43,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 
 /**
@@ -79,13 +83,15 @@ public class KafkaBasedLog<K, V> {
     private final Map<String, Object> producerConfigs;
     private final Map<String, Object> consumerConfigs;
     private final Callback<ConsumerRecord<K, V>> consumedCallback;
+    private final Supplier<TopicAdmin> topicAdminSupplier;
     private Consumer<K, V> consumer;
     private Producer<K, V> producer;
+    private TopicAdmin admin;
 
     private Thread thread;
     private boolean stopRequested;
     private Queue<Callback<Void>> readLogEndOffsetCallbacks;
-    private Runnable initializer;
+    private java.util.function.Consumer<TopicAdmin> initializer;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -103,31 +109,63 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
      * @param initializer the component that should be run when this log is {@link #start() started}; may be null
+     * @deprecated Replaced by {@link #KafkaBasedLog(String, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
      */
+    @Deprecated
     public KafkaBasedLog(String topic,
                          Map<String, Object> producerConfigs,
                          Map<String, Object> consumerConfigs,
                          Callback<ConsumerRecord<K, V>> consumedCallback,
                          Time time,
                          Runnable initializer) {
+        this(topic, producerConfigs, consumerConfigs, () -> null, consumedCallback, time, initializer != null ? admin -> initializer.run() : null);
+    }
+
+    /**
+     * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
+     * {@link #start()} is invoked.
+     *
+     * @param topic              the topic to treat as a log
+     * @param producerConfigs    configuration options to use when creating the internal producer. At a minimum this must
+     *                           contain compatible serializer settings for the generic types used on this class. Some
+     *                           setting, such as the number of acks, will be overridden to ensure correct behavior of this
+     *                           class.
+     * @param consumerConfigs    configuration options to use when creating the internal consumer. At a minimum this must
+     *                           contain compatible serializer settings for the generic types used on this class. Some
+     *                           setting, such as the auto offset reset policy, will be overridden to ensure correct
+     *                           behavior of this class.
+     * @param topicAdminSupplier supplier function for an admin client, the lifecycle of which is expected to be controlled
+     *                           by the calling component; may not be null
+     * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
+     * @param time               Time interface
+     * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     */
+    public KafkaBasedLog(String topic,
+            Map<String, Object> producerConfigs,
+            Map<String, Object> consumerConfigs,
+            Supplier<TopicAdmin> topicAdminSupplier,
+            Callback<ConsumerRecord<K, V>> consumedCallback,
+            Time time,
+            java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
+        this.topicAdminSupplier = Objects.requireNonNull(topicAdminSupplier);
         this.consumedCallback = consumedCallback;
         this.stopRequested = false;
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
-        this.initializer = initializer != null ? initializer : new Runnable() {
-            @Override
-            public void run() {
-            }
-        };
+        this.initializer = initializer != null ? initializer : admin -> { };
     }
 
     public void start() {
         log.info("Starting KafkaBasedLog with topic " + topic);
 
-        initializer.run();
+        // Create the topic admin client and initialize the topic ...
+        admin = topicAdminSupplier.get();   // may be null
+        initializer.accept(admin);
+
+        // Then create the producer and consumer
         producer = createProducer();
         consumer = createConsumer();
 
@@ -192,6 +230,9 @@ public class KafkaBasedLog<K, V> {
         } catch (KafkaException e) {
             log.error("Failed to stop KafkaBasedLog consumer", e);
         }
+
+        // do not close the admin client, since we don't own it
+        admin = null;
 
         log.info("Stopped KafkaBasedLog for topic " + topic);
     }
@@ -279,10 +320,8 @@ public class KafkaBasedLog<K, V> {
     }
 
     private void readToLogEnd() {
-        log.trace("Reading to end of offset log");
-
         Set<TopicPartition> assignment = consumer.assignment();
-        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
+        Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment);
         log.trace("Reading to end of log offsets {}", endOffsets);
 
         while (!endOffsets.isEmpty()) {
@@ -305,6 +344,37 @@ public class KafkaBasedLog<K, V> {
         }
     }
 
+    // Visible for testing
+    Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment) {
+        log.trace("Reading to end of offset log");
+
+        // Note that we'd prefer to not use the consumer to find the end offsets for the assigned topic partitions.
+        // That is because it's possible that the consumer is already blocked waiting for new records to appear, when
+        // the consumer is already at the end. In such cases, using 'consumer.endOffsets(...)' will block until at least
+        // one more record becomes available, meaning we can't even check whether we're at the end offset.
+        // Since all we're trying to do here is get the end offset, we should use the supplied admin client
+        // (if available) to obtain the end offsets for the given topic partitions.
+
+        // Deprecated constructors do not provide an admin supplier, so the admin is potentially null.
+        if (admin != null) {
+            // Use the admin client to immediately find the end offsets for the assigned topic partitions.
+            // Unlike using the consumer
+            try {
+                return admin.endOffsets(assignment);
+            } catch (UnsupportedVersionException e) {
+                // This may happen with really old brokers that don't support the auto topic creation
+                // field in metadata requests
+                log.debug("Reading to end of log offsets with consumer since admin client is unsupported: {}", e.getMessage());
+                // Forget the reference to the admin so that we won't even try to use the admin the next time this method is called
+                admin = null;
+                // continue and let the consumer handle the read
+            }
+            // Other errors, like timeouts and retriable exceptions are intentionally propagated
+        }
+        // The admin may be null if older deprecated constructor is used or if the admin client is using a broker that doesn't
+        // support getting the end offsets (e.g., 0.10.x). In such cases, we should use the consumer, which is not ideal (see above).
+        return consumer.endOffsets(assignment);
+    }
 
     private class WorkThread extends Thread {
         public WorkThread() {
@@ -329,7 +399,11 @@ public class KafkaBasedLog<K, V> {
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                                     "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                            continue;
+                        } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
+                            log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
+                                     "Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was

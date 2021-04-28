@@ -23,13 +23,13 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EnvelopeRequestTest {
 
@@ -46,7 +46,7 @@ public class EnvelopeRequestTest {
 
     @Test
     public void testToSend() throws IOException {
-        for (short version = ApiKeys.ENVELOPE.oldestVersion(); version <= ApiKeys.ENVELOPE.latestVersion(); version++) {
+        for (short version : ApiKeys.ENVELOPE.allVersions()) {
             ByteBuffer requestData = ByteBuffer.wrap("foobar".getBytes());
             RequestHeader header = new RequestHeader(ApiKeys.ENVELOPE, version, "clientId", 15);
             EnvelopeRequest request = new EnvelopeRequest.Builder(

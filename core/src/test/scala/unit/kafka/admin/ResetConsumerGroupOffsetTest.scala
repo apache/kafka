@@ -23,8 +23,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.test
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -189,6 +189,16 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val args = buildArgsForGroup(group, "--all-topics", "--by-duration", "PT0.1S", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
+  }
+
+  @Test
+  def testResetOffsetsByDurationFallbackToLatestWhenNoRecords(): Unit = {
+    val topic = "foo2"
+    val args = buildArgsForGroup(group, "--topic", topic, "--by-duration", "PT1M", "--execute")
+    createTopic(topic)
+    resetAndAssertOffsets(args, expectedOffset = 0, topics = Seq("foo2"))
+
+    adminZkClient.deleteTopic(topic)
   }
 
   @Test
@@ -413,11 +423,11 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     adminZkClient.deleteTopic(topic)
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testResetWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {

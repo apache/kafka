@@ -46,9 +46,9 @@ public class MeteredWindowStore<K, V>
     private final long windowSizeMs;
     private final String metricsScope;
     private final Time time;
-    final Serde<K> keySerde;
-    final Serde<V> valueSerde;
-    StateSerdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private StateSerdes<K, V> serdes;
     private StreamsMetricsImpl streamsMetrics;
     private Sensor putSensor;
     private Sensor fetchSensor;
@@ -155,13 +155,6 @@ public class MeteredWindowStore<K, V>
                 sendOldValues);
         }
         return false;
-    }
-
-    @Deprecated
-    @Override
-    public void put(final K key,
-                    final V value) {
-        put(key, value, context != null ? context.timestamp() : 0L);
     }
 
     @Override

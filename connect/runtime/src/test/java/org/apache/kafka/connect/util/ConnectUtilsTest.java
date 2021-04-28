@@ -32,6 +32,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class ConnectUtilsTest {
 
@@ -55,7 +56,7 @@ public class ConnectUtilsTest {
         assertNull(ConnectUtils.lookupKafkaClusterId(adminClient));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testLookupKafkaClusterIdTimeout() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
@@ -64,7 +65,7 @@ public class ConnectUtilsTest {
             brokers(cluster).build();
         adminClient.timeoutNextRequest(1);
 
-        ConnectUtils.lookupKafkaClusterId(adminClient);
+        assertThrows(ConnectException.class, () -> ConnectUtils.lookupKafkaClusterId(adminClient));
     }
 
     @Test
@@ -96,7 +97,7 @@ public class ConnectUtilsTest {
 
         Map<String, Object> prop = new HashMap<>();
         ConnectUtils.addMetricsContextProperties(prop, config, "cluster-1");
-        assertEquals(null, prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
+        assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
         assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
 
     }

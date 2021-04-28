@@ -21,7 +21,6 @@ import java.io.{File, IOException}
 import java.nio._
 import java.util.Date
 import java.util.concurrent.TimeUnit
-
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
@@ -32,7 +31,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageExcep
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -451,12 +450,11 @@ object LogCleaner {
 
   }
 
-  def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
-    LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
-    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM,
-      fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+  def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
+    LogSegment.deleteIfExists(dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
+    LogSegment.open(dir, baseOffset, logConfig, Time.SYSTEM,
+      fileSuffix = Log.CleanedFileSuffix, initFileSize = logConfig.initFileSize, preallocate = logConfig.preallocate)
   }
-
 }
 
 /**
@@ -564,7 +562,7 @@ private[log] class Cleaner(val id: Int,
                                  stats: CleanerStats,
                                  transactionMetadata: CleanedTransactionMetadata): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
-    val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
+    val cleaned = LogCleaner.createNewCleanedSegment(log.dir, log.config, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
 
     try {

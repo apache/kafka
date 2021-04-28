@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.Properties;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -29,14 +28,14 @@ import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
-import kafka.zk.KafkaZkClient;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -89,6 +88,7 @@ public class CheckpointBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
+    private final CachedConfigRepository configRepository = new CachedConfigRepository();
 
 
     @SuppressWarnings("deprecation")
@@ -105,30 +105,24 @@ public class CheckpointBench {
         final List<File> files =
             JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                LogConfig.apply(), new CachedConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                new MetadataCache(this.brokerProperties.brokerId());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
                         this.time, "");
 
-        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
-            @Override
-            public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
-                return new Properties();
-            }
-        };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
                 this.time,
-                zkClient,
+                Option.empty(),
                 this.scheduler,
                 this.logManager,
                 new AtomicBoolean(false),
@@ -137,6 +131,7 @@ public class CheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
+                configRepository,
                 Option.empty());
         replicaManager.startup();
 
@@ -151,7 +146,7 @@ public class CheckpointBench {
         OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
-            partition.createLogIfNotExists(true, false, checkpoints);
+            partition.createLogIfNotExists(true, false, checkpoints, Option.apply(Uuid.randomUuid()));
         }
 
         replicaManager.checkpointHighWatermarks();

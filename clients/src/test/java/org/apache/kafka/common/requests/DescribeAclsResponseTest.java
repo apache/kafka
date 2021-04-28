@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -38,7 +38,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeAclsResponseTest {
     private static final short V0 = 0;
@@ -80,14 +81,16 @@ public class DescribeAclsResponseTest {
             PatternType.LITERAL,
             Collections.singletonList(DENY_READ_ACL));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serialize(V0);
+        assertThrows(UnsupportedVersionException.class,
+            () -> buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serialize(V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfUnknown() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serialize(V0);
+        assertThrows(IllegalArgumentException.class,
+            () -> buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serialize(V0));
     }
 
     @Test

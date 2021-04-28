@@ -125,11 +125,6 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public boolean isClosed() {
-        return state() == State.CLOSED;
-    }
-
-    @Override
     public final Task.State state() {
         return state;
     }
@@ -137,6 +132,7 @@ public abstract class AbstractTask implements Task {
     @Override
     public void revive() {
         if (state == CLOSED) {
+            clearTaskTimeout();
             transitionTo(CREATED);
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
@@ -154,7 +150,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
+    public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
         this.inputPartitions = topicPartitions;
         topology.updateSourceTopics(allTopologyNodesToSourceTopics);
     }

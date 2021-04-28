@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -102,9 +103,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private boolean userSpecifiedStatistics = false;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-
-    // visible for testing
-    volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
 
@@ -238,11 +236,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
@@ -251,11 +248,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
@@ -309,6 +305,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                    final PS prefixKeySerializer) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+
+        validateStoreOpen();
+        final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+
+        final KeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);
+        openIterators.add(rocksDbPrefixSeekIterator);
+
+        return rocksDbPrefixSeekIterator;
+    }
+
+    @Override
     public synchronized byte[] get(final Bytes key) {
         validateStoreOpen();
         try {
@@ -331,6 +342,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         put(key, null);
         return oldValue;
+    }
+
+    void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+
+        validateStoreOpen();
+
+        // End of key is exclusive, so we increment it by 1 byte to make keyTo inclusive
+        dbAccessor.deleteRange(keyFrom.get(), Bytes.increment(keyTo).get());
     }
 
     @Override
@@ -508,7 +529,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                               final Bytes to,
                                               final boolean forward);
 
+        /**
+         * Deletes keys entries in the range ['from', 'to'], including 'from' and excluding 'to'.
+         */
+        void deleteRange(final byte[] from,
+                         final byte[] to);
+
         KeyValueIterator<Bytes, byte[]> all(final boolean forward);
+
+        KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -580,7 +609,19 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 openIterators,
                 from,
                 to,
-                forward);
+                forward,
+                true
+            );
+        }
+
+        @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(columnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
         }
 
         @Override
@@ -592,6 +633,20 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 innerIterWithTimestamp.seekToLast();
             }
             return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, forward);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+            final Bytes to = Bytes.increment(prefix);
+            return new RocksDBRangeIterator(
+                name,
+                db.newIterator(columnFamily),
+                openIterators,
+                prefix,
+                to,
+                true,
+                false
+            );
         }
 
         @Override

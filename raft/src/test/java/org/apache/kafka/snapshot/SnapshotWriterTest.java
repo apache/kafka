@@ -22,7 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClientTestContext;
@@ -100,7 +100,7 @@ final public class SnapshotWriterTest {
         return result;
     }
 
-    private void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
+    public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 

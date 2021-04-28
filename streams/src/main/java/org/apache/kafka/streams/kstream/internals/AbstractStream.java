@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformer;
@@ -101,6 +102,10 @@ public abstract class AbstractStream<K, V> {
         return (value2, value1) -> joiner.apply(value1, value2);
     }
 
+    static <K, T2, T1, R> ValueJoinerWithKey<K, T2, T1, R> reverseJoinerWithKey(final ValueJoinerWithKey<K, T1, T2, R> joiner) {
+        return (key, value2, value1) -> joiner.apply(key, value1, value2);
+    }
+
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
         Objects.requireNonNull(valueMapper, "valueMapper can't be null");
         return (readOnlyKey, value) -> valueMapper.apply(value);
@@ -137,6 +142,11 @@ public abstract class AbstractStream<K, V> {
                 return valueTransformerSupplier.stores();
             }
         };
+    }
+
+    static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> toValueJoinerWithKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
+        Objects.requireNonNull(valueJoiner, "joiner can't be null");
+        return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
     }
 
     // for testing only

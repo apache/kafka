@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -29,8 +33,15 @@ public class FollowerState implements EpochState {
     private final int epoch;
     private final int leaderId;
     private final Set<Integer> voters;
+    // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
     private Optional<LogOffsetMetadata> highWatermark;
+    /* Used to track the currently fetching snapshot. When fetching snapshot regular
+     * Fetch request are paused
+     */
+    private Optional<RawSnapshotWriter> fetchingSnapshot;
+
+    private final Logger log;
 
     public FollowerState(
         Time time,
@@ -38,7 +49,8 @@ public class FollowerState implements EpochState {
         int leaderId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int fetchTimeoutMs
+        int fetchTimeoutMs,
+        LogContext logContext
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
@@ -46,6 +58,8 @@ public class FollowerState implements EpochState {
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
+        this.fetchingSnapshot = Optional.empty();
+        this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
@@ -120,6 +134,24 @@ public class FollowerState implements EpochState {
         return highWatermark;
     }
 
+    public Optional<RawSnapshotWriter> fetchingSnapshot() {
+        return fetchingSnapshot;
+    }
+
+    public void setFetchingSnapshot(Optional<RawSnapshotWriter> fetchingSnapshot) throws IOException {
+        if (fetchingSnapshot.isPresent()) {
+            fetchingSnapshot.get().close();
+        }
+        this.fetchingSnapshot = fetchingSnapshot;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
+                candidateId, leaderId(), epoch);
+        return false;
+    }
+
     @Override
     public String toString() {
         return "FollowerState(" +
@@ -128,5 +160,12 @@ public class FollowerState implements EpochState {
             ", leaderId=" + leaderId +
             ", voters=" + voters +
             ')';
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (fetchingSnapshot.isPresent()) {
+            fetchingSnapshot.get().close();
+        }
     }
 }

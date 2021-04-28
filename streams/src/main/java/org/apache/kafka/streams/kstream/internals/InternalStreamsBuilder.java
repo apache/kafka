@@ -204,11 +204,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String sourceName,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
-                                                       final String processorName,
                                                        final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        // explicitly disable logging for global stores
+        storeBuilder.withLoggingDisabled();
+        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
 
         final GraphNode globalStoreNode = new GlobalStoreNode<>(
             storeBuilder,
@@ -220,24 +222,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         );
 
         addGraphNode(root, globalStoreNode);
-    }
-
-    public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String topic,
-                                                       final ConsumedInternal<KIn, VIn> consumed,
-                                                       final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
-        // explicitly disable logging for global stores
-        storeBuilder.withLoggingDisabled();
-        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
-        addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            consumed,
-            processorName,
-            stateUpdateSupplier
-        );
     }
 
     void addGraphNode(final GraphNode parent,

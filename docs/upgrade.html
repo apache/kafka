@@ -19,7 +19,74 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
+<ul>
+    <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
+    <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
+        instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
+        or updating the application not to use internal classes.</li>
+    <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
+        For a complete list of removed APIs compare the detailed Kafka Streams upgrade notes.</li>
+    <li>Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
+        Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
+    <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>core</code> and <code>tools</code> modules:</li>
+    <ul>
+        <li>The Scala <code>Authorizer</code>, <code>SimpleAclAuthorizer</code> and related classes have been removed. Please use the Java <code>Authorizer</code>
+            and <code>AclAuthorizer</code> instead.</li>
+        <li>The <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
+        <li>The <code>Sum</code> and <code>Total</code> classes were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12584">KAFKA-12584</a>).
+            Please use <code>WindowedSum</code> and <code>CumulativeSum</code> instead.</li>
+        <li>The <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code> classes were removed.
+        <li>Various constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>, <code>AclBinding</code> and
+            <code>AclBindingFilter</code>.</li>
+        <li>The <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
+        <li>The <code>kafka-preferred-replica-election</code> command line tool was removed. Please use <code>kafka-leader-election</code> instead.</li>
+        <li>The <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
+            Please use the remaining public constructor instead.</li>
+        <li>The config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely
+            event that you set this config explicitly, we recommend leaving the config unset (<code>use_all_dns_ips</code> is used by default).</li>
+        <li>The <code>ExtendedDeserializer</code> and <code>ExtendedSerializer</code> classes have been removed. Please use <code>Deserializer</code>
+            and <code>Serializer</code> instead.</li>
+        <li>The <code>close(long, TimeUnit)</code> method was removed from the producer, consumer and admin client. Please use
+            <code>close(Duration)</code>.</li>
+        <li>The <code>ConsumerConfig.addDeserializerToConfig</code> and <code>ProducerConfig.addSerializerToConfig</code> methods
+            were removed. These methods were not intended to be public API and there is no replacement.</li>
+        <li>The <code>NoOffsetForPartitionException.partition()</code> method was removed. Please use <code>partitions()</code>
+            instead.</li>
+        <li>The Scala <code>kafka.common.MessageFormatter</code> was removed. Please use the Java <code>org.apache.kafka.common.MessageFormatter</code>.</li>
+        <li>The <code>MessageFormatter.init(Properties)</code> method was removed. Please use <code>configure(Map)</code> instead.</li>
+        <li>The <code>checksum()</code> method has been removed from <code>ConsumerRecord</code> and <code>RecordMetadata</code>. The message
+            format v2, which has been the default since 0.11, moved the checksum from the record to the record batch. As such, these methods
+            don't make sense and no replacements exist.</li>
+        <li>The <code>ChecksumMessageFormatter</code> class was removed. It is not part of the public API, but it may have been used
+            with <code>kafka-console-consumer.sh</code>. It reported the checksum of each record, which has not been supported
+            since message format v2.</li>
+        <li>The <code>org.apache.kafka.clients.consumer.internals.PartitionAssignor</code> class has been removed. Please use
+            <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
+        <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
+            Dynamic quota defaults must be used instead.</li>
+    </ul>
+</ul>
+
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
+<ul>
+    <li>
+        The 2.8.0 release added a new method to the Authorizer Interface introduced in
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default">KIP-679</a>.
+        The motivation is to unblock our future plan to enable the strongest message delivery guarantee by default.
+        Custom authorizer should consider providing a more efficient implementation that supports audit logging and any custom configs or access rules.
+    </li>
+    <li>
+        IBP 2.8 introduces topic IDs to topics as a part of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-516%3A+Topic+Identifiers">KIP-516</a>.
+        When using ZooKeeper, this information is stored in the TopicZNode. If the cluster is downgraded to a previous IBP or version,
+        future topics will not get topic IDs and it is not guaranteed that topics will retain their topic IDs in ZooKeeper.
+        This means that upon upgrading again, some topics or all topics will be assigned new IDs.
+    </li>
+    <li>Kafka Streams introduce a type-safe <code>split()</code> operator as a substitution for deprecated <code>KStream#branch()</code> method
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-418%3A+A+method-chaining+way+to+branch+KStream">KIP-418</a>).
+    </li>
+</ul>
 
 <h4><a id="upgrade_2_7_0" href="#upgrade_2_7_0">Upgrading to 2.7.0 from any version 0.8.x through 2.6.x</a></h4>
 

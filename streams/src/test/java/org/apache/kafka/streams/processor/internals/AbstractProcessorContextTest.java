@@ -47,6 +47,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
@@ -78,9 +79,9 @@ public class AbstractProcessorContextTest {
         context.register(stateStore, null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        context.register(null, null);
+        assertThrows(NullPointerException.class, () -> context.register(null, null));
     }
 
     @Test
@@ -155,30 +156,20 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
-        context.setRecordContext(null);
-        try {
-            context.headers();
-        } catch (final IllegalStateException e) {
-            // pass
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void appConfigsShouldReturnParsedValues() {
         assertThat(
             context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
-            equalTo(RocksDBConfigSetter.class));
+            equalTo(RocksDBConfigSetter.class)
+        );
     }
 
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
         assertThat(
             context.appConfigs().get("user.supplied.config"),
-            equalTo("user-supplied-value"));
+            equalTo("user-supplied-value")
+        );
     }
-
 
     private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;
@@ -231,15 +222,12 @@ public class AbstractProcessorContextTest {
         public <K, V> void forward(final K key, final V value, final To to) {}
 
         @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final int childIndex) {}
-
-        @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final String childName) {}
-
-        @Override
         public void commit() {}
+
+        @Override
+        public long currentStreamTimeMs() {
+            throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
+        }
 
         @Override
         public void logChange(final String storeName,

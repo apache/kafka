@@ -55,12 +55,6 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
         return "in-memory-window";
     }
 
-    @Deprecated
-    @Override
-    public int segments() {
-        throw new IllegalStateException("Segments is deprecated and should not be called");
-    }
-
     @Override
     public long retentionPeriod() {
         return retentionPeriod;

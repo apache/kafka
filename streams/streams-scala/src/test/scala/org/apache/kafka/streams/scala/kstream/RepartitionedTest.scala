@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,55 +18,58 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.RepartitionedInternal
 import org.apache.kafka.streams.processor.StreamPartitioner
-import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.serialization.Serdes
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class RepartitionedTest extends FlatSpec with Matchers {
+class RepartitionedTest {
 
-  "Create a Repartitioned" should "create a Repartitioned with Serdes" in {
+  @Test
+  def testCreateRepartitionedWithSerdes(): Unit = {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long]
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
+    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
   }
 
-  "Create a Repartitioned with numPartitions" should "create a Repartitioned with Serdes and numPartitions" in {
+  @Test
+  def testCreateRepartitionedWithSerdesAndNumPartitions(): Unit = {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](5)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    internalRepartitioned.numberOfPartitions shouldBe 5
+    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
+    assertEquals(5, internalRepartitioned.numberOfPartitions)
 
   }
 
-  "Create a Repartitioned with topicName" should "create a Repartitioned with Serdes and topicName" in {
+  @Test
+  def testCreateRepartitionedWithSerdesAndTopicName(): Unit = {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long]("repartitionTopic")
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    internalRepartitioned.name shouldBe "repartitionTopic"
+    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
+    assertEquals("repartitionTopic", internalRepartitioned.name)
   }
 
-  "Create a Repartitioned with streamPartitioner" should "create a Repartitioned with Serdes, numPartitions, topicName and streamPartitioner" in {
+  @Test
+  def testCreateRepartitionedWithSerdesAndTopicNameAndNumPartitionsAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
     }
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](partitioner)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    internalRepartitioned.streamPartitioner shouldBe partitioner
+    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
+    assertEquals(partitioner, internalRepartitioned.streamPartitioner)
   }
 
-  "Create a Repartitioned with numPartitions, topicName, and streamPartitioner" should "create a Repartitioned with Serdes, numPartitions, topicName and streamPartitioner" in {
+  @Test
+  def testCreateRepartitionedWithTopicNameAndNumPartitionsAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
     }
@@ -79,11 +80,11 @@ class RepartitionedTest extends FlatSpec with Matchers {
         .withStreamPartitioner(partitioner)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    internalRepartitioned.numberOfPartitions shouldBe 5
-    internalRepartitioned.name shouldBe "repartitionTopic"
-    internalRepartitioned.streamPartitioner shouldBe partitioner
+    assertEquals(Serdes.stringSerde.getClass, internalRepartitioned.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalRepartitioned.valueSerde.getClass)
+    assertEquals(5, internalRepartitioned.numberOfPartitions)
+    assertEquals("repartitionTopic", internalRepartitioned.name)
+    assertEquals(partitioner, internalRepartitioned.streamPartitioner)
   }
 
 }

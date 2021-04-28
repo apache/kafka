@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -23,9 +23,8 @@ import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase
-import org.apache.kafka.test.IntegrationTest
-import org.junit._
-import org.junit.experimental.categories.Category
+import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions._
 
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
@@ -33,7 +32,7 @@ import org.junit.experimental.categories.Category
  * The suite contains the test case using Scala APIs `testShouldCountClicksPerRegion` and the same test case using the
  * Java APIs `testShouldCountClicksPerRegionJava`. The idea is to demonstrate that both generate the same result.
  */
-@Category(Array(classOf[IntegrationTest]))
+@Tag("integration")
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJoinScalaIntegrationTestBase {
 
   @Test def testShouldCountClicksPerRegion(): Unit = {
@@ -74,7 +73,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
 
-    Assert.assertTrue("Expected to process some data", !actualClicksPerRegion.isEmpty)
+    assertTrue(!actualClicksPerRegion.isEmpty, "Expected to process some data")
 
     streams.close()
   }
@@ -118,7 +117,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
 
-    Assert.assertTrue("Expected to process some data", !actualClicksPerRegion.isEmpty)
+    assertTrue(!actualClicksPerRegion.isEmpty, "Expected to process some data")
 
     streams.close()
   }
