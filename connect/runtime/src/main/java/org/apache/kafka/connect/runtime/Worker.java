@@ -76,6 +76,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -824,7 +825,7 @@ public class Worker {
         return null;
     }
 
-    private void stopTask(ConnectorTaskId taskId) {
+    private void stopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
@@ -839,7 +840,22 @@ public class Worker {
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
                 savedLoader = Plugins.compareAndSwapLoaders(task.loader());
-                task.stop();
+                CountDownLatch latch = new CountDownLatch(1);
+                new Thread() {
+                    @Override
+                    public void run() {
+                        task.stop();
+                        latch.countDown();
+                    }
+                }.start();
+                // Wait for thread to terminate, but not longer than timeout.
+                if (timeout <= 0) {
+                    log.debug("Not waiting for Task {} to stop.", task.id());
+                } else if (!latch.await(timeout, TimeUnit.MILLISECONDS)) {
+                    log.debug("Task {} stopping exceeded {} ms timeout.", task.id(), timeout);
+                }
+            } catch (InterruptedException e) {
+                log.debug("Task {} stopping interrupted.", task.id());
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
@@ -849,8 +865,15 @@ public class Worker {
     private void stopTasks(Collection<ConnectorTaskId> ids) {
         // Herder is responsible for stopping tasks. This is an internal method to sequentially
         // stop the tasks that have not explicitly been stopped.
+        long now = time.milliseconds();
+        long deadline = now + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         for (ConnectorTaskId taskId : ids) {
-            stopTask(taskId);
+            long remaining = Math.max(0, deadline - time.milliseconds());
+            // While there is time remaining, tasks are stopped sequentially. After
+            // the grace period expires, we stop all remaining tasks concurrently.
+            // This prevents a stuck task from starving other tasks, but remains
+            // sequential most of the time.
+            stopTask(taskId, remaining);
         }
     }
 
@@ -909,7 +932,8 @@ public class Worker {
      * @param taskId the ID of the task to be stopped.
      */
     public void stopAndAwaitTask(ConnectorTaskId taskId) {
-        stopTask(taskId);
+        long timeout = config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
+        stopTask(taskId, timeout);
         awaitStopTasks(Collections.singletonList(taskId));
     }
 
