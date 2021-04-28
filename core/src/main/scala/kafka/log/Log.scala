@@ -2675,6 +2675,6 @@ case object LogDeletion extends SegmentDeletionReason {
 
 case object SegmentCompaction extends SegmentDeletionReason {
   override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
-    log.info(s"Deleting segments as all records were deleted in log compaction: ${toDelete.mkString(",")}")
+    log.info(s"Deleting segments as all records were deleted during log compaction: ${toDelete.mkString(",")}")
   }
 }

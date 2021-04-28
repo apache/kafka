@@ -1282,7 +1282,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // First topic will not have compaction. Simply a sanity test.
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 1, recordsPerPartition = 100)
 
-    
     // Second topic will have compaction. 
     // The first partition will have compaction occur at offset 0 so beginningOffsets should be nonzero.
     // The second partition will not have compaction occur at offset 0, so beginningOffsets will remain 0.
@@ -1301,7 +1300,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     TestUtils.sendRecordsWithKey(producer, 50, 50L, new TopicPartition(topic1, 1), "key")
 
     // Sleep to allow compaction to take place.
-    Thread.sleep(25000)
+    Thread.sleep(15000)
 
     val consumer = createConsumer()
     val zero = long2Long(0L)

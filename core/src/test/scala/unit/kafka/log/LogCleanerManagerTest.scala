@@ -548,8 +548,12 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(log.activeSegment.baseOffset, cleanableOffsets.firstUncleanableDirtyOffset, "The first uncleanable offset begins with the active segment.")
   }
 
+  /**
+   * Test computation of cleanable range with no minimum compaction lag settings active and high watermark one offset less than active
+   * segment's base offset. We do not clean past the high watermark, so this should be the first uncleanable offset.
+   */
   @Test
-  def testCleanableOffsetsForNoneWithLowerHighWatermark(): Unit = {
+  def testCleanableOffsetsWithLowerHighWatermark(): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 

@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
@@ -347,14 +348,14 @@ public class MemoryRecords extends AbstractRecords {
         }
 
         private void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
-                                                long baseOffset, int messagesRetained, int bytesRetained) {
+                                                 long baseOffset, int messagesRetained, int bytesRetained) {
             validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
             if (maxTimestamp > this.maxTimestamp) {
                 this.maxTimestamp = maxTimestamp;
                 this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             }
             this.maxOffset = Math.max(maxOffset, this.maxOffset);
-            if (this.bytesRetained == 0) this.baseOffsetOfFirstBatch = baseOffset;
+            if (this.baseOffsetOfFirstBatch < 0) this.baseOffsetOfFirstBatch = baseOffset;
             this.messagesRetained += messagesRetained;
             this.bytesRetained += bytesRetained;
         }
@@ -391,10 +392,13 @@ public class MemoryRecords extends AbstractRecords {
         }
 
         /**
-         * @return  the baseOffset of the first batch of retained records or -1 if no batches are retained
+         * @return  An Optional containing the baseOffset of the first batch of retained records or empty if no batches are retained
          */
-        public long baseOffsetOfFirstBatch() {
-            return baseOffsetOfFirstBatch;
+        public Optional<Long> baseOffsetOfFirstBatch() {
+            if (baseOffsetOfFirstBatch < 0)
+                return Optional.empty();
+            else
+                return Optional.of(baseOffsetOfFirstBatch);
         }
 
         public long maxTimestamp() {

@@ -359,7 +359,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *
    * @param dataDir                       The File object to be updated
    * @param partitionToUpdateOrAdd        The [TopicPartition, Long] map data to be updated. pass "none" if doing remove, not add
-   * @param topicPartitionToBeRemoved     The TopicPartition to be removed
+   * @param partitionToRemove             The TopicPartition to be removed
    */
   def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition, Long)] = None,
                         partitionToRemove: Option[TopicPartition] = None): Unit = {
@@ -595,7 +595,7 @@ private[log] object LogCleanerManager extends Logging {
     // may be cleaned
     val firstUncleanableDirtyOffset: Long = Seq(
 
-      // we do not clean beyond the lastStableOffset
+      // we do not clean beyond the lastStableOffset (and therefore the high watermark)
       Option(log.lastStableOffset),
 
       // the active segment is always uncleanable

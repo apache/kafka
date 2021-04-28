@@ -982,47 +982,37 @@ class LogCleanerTest {
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
-
-    // Number of distinct keys. For an effective test this should be small enough such that each log segment contains some duplicates.
-    val N = 10
     val numCleanableSegments = 2
     val numTotalSegments = 7
 
-    // append messages with the keys 0 through N-1, values equal offset
+    // append messages with duplicate keys
     while(log.numberOfSegments <= numCleanableSegments)
-      log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
+      log.appendAsLeader(record(0, 0), leaderEpoch = 0)
 
     // at this point one message past the cleanable segments has been added
     // the entire segment containing the first uncleanable offset should not be cleaned.
     val firstUncleanableOffset = log.logEndOffset + 1  // +1  so it is past the baseOffset
 
-    while(log.numberOfSegments < numTotalSegments - 1)
-      log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
+    while(log.numberOfSegments < numTotalSegments)
+      log.appendAsLeader(record(0, 0), leaderEpoch = 0)
 
+    val bytesPerSegment = log.segments.firstSegment.get.size
     // the last (active) segment has just one message
-
-    def distinctValuesBySegment = log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
-
-    val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
-    assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
-      "Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.")
+    val bytesForSegmentWithOneRecord = log.segments.lastSegment.get.size
 
     log.updateHighWatermark(log.activeSegment.baseOffset)
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, firstUncleanableOffset))
 
-    val distinctValuesBySegmentAfterClean = distinctValuesBySegment
+    // One segment should have been completely deleted
+    assertEquals(6, log.segments.numberOfSegments)
 
-    // One segment should have been completely deleted, so there will be fewer segments.
-    assertTrue(distinctValuesBySegmentAfterClean.size < distinctValuesBySegmentBeforeClean.size)
-
-    // Drop the first segment from before cleaning since it was removed. Also subtract 1 from numCleanableSegments
-    val normalizedDistinctValuesBySegmentBeforeClean = distinctValuesBySegmentBeforeClean.drop(1)
-    val newNumCleanableSegments = numCleanableSegments - 1
-    assertTrue(normalizedDistinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .take(newNumCleanableSegments).forall { case (before, after) => after < before },
-      "The cleanable segments should have fewer number of values after cleaning")
-    assertTrue(normalizedDistinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .slice(newNumCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 }, "The uncleanable segments should have the same number of values after cleaning")
+    // Since we clean based on the keys in the dirty segment only,
+    // one "0" key from the last offset in the last cleaned segment will be retained.
+    assertEquals(bytesForSegmentWithOneRecord, log.segments.firstSegment.get.size)
+    // The last segment still has one record.
+    assertEquals(bytesForSegmentWithOneRecord, log.segments.lastSegment.get.size)
+    // Ensure all other segments have the same number of bytes (no records deleted)
+    log.segments.values.drop(1).dropRight(1).foreach( segment => assertEquals(bytesPerSegment, segment.size))
   }
 
   @Test

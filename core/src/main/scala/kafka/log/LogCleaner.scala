@@ -490,7 +490,7 @@ private[log] class Cleaner(val id: Int,
   /* buffer used for write i/o */
   private var writeBuffer = ByteBuffer.allocate(ioBufferSize)
 
-  private val decompressionBufferSupplier = BufferSupplier.create();
+  private val decompressionBufferSupplier = BufferSupplier.create()
 
   require(offsetMap.slots * dupBufferLoadFactor > 1, "offset map is too small to fit in even a single message, so log cleaning will never make progress. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads")
 
@@ -622,7 +622,7 @@ private[log] class Cleaner(val id: Int,
           info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
           log.replaceSegments(List(cleaned), segments)
         case None =>
-          info(s"Deleting segment(s) $segments in log $log")
+          info(s"Deleting segment(s) $segments in log $log since no records were retained after cleaning")
           log.deleteSegments(segments, SegmentCompaction)
       }
     } catch {
@@ -716,18 +716,21 @@ private[log] class Cleaner(val id: Int,
       // if any messages are to be retained, write them out
       val outputBuffer = result.outputBuffer
       if (outputBuffer.position() > 0) {
-        if (destSegment.isEmpty) {
+        val segment = destSegment.getOrElse {
           // create a new segment with a suffix appended to the name of the log and indexes
-          destSegment = Some(LogCleaner.createNewCleanedSegment(log.dir, log.config, result.baseOffsetOfFirstBatch()))
-          transactionMetadata.cleanedIndex = Some(destSegment.get.txnIndex)
+          val newSegment = LogCleaner.createNewCleanedSegment(log.dir, log.config,
+            result.baseOffsetOfFirstBatch.orElseThrow(() => new IllegalStateException("Could not find baseOffset of first batch in segment.")))
+          transactionMetadata.cleanedIndex = Some(newSegment.txnIndex)
           transactionMetadata.appendTransactionIndex()
+          destSegment = Some(newSegment)
+          newSegment
         }
         
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        destSegment.get.append(largestOffset = result.maxOffset,
+        segment.append(largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
@@ -1196,7 +1199,7 @@ private[log] class CleanedTransactionMetadata {
    */
   def appendTransactionIndex(): Unit = {
     toAppend.foreach(transaction => cleanedIndex.foreach(_.append(transaction)))
-    toAppend = ListBuffer.empty
+    toAppend.clear()
   }
 
 }
