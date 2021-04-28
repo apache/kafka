@@ -1667,11 +1667,6 @@ project(':streams') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
-      include('*hamcrest*')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
