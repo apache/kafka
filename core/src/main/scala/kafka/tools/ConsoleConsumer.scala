@@ -200,7 +200,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
-    val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
+    val offsetOpt = parser.accepts("offset", "The offset to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
       .withRequiredArg
       .describedAs("consume offset")
       .ofType(classOf[String])
