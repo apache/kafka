@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.errors.MissingSinkTopicException;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
@@ -73,6 +74,21 @@ public class StreamsRebalanceListenerTest {
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
         assertThat(exception.getMessage(), is("One or more source topics were missing during rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowMissingSinkTopicException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.INCOMPLETE_SINK_TOPIC_METADATA.code());
+
+        final MissingSinkTopicException exception = assertThrows(
+                MissingSinkTopicException.class,
+                () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("One or more sink topics were missing during rebalance"));
         verify(taskManager, streamThread);
     }
 

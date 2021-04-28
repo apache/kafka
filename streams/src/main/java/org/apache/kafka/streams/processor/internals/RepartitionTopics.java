@@ -21,6 +21,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.MissingSinkTopicException;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
@@ -96,6 +97,7 @@ public class RepartitionTopics {
         final Map<String, InternalTopicConfig> repartitionTopicConfigs = new HashMap<>();
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             checkIfExternalSourceTopicsExist(topicsInfo, clusterMetadata);
+            checkIfSinkTopicsExist(topicsInfo, clusterMetadata);
             repartitionTopicConfigs.putAll(topicsInfo.repartitionSourceTopics.values().stream()
                 .collect(Collectors.toMap(InternalTopicConfig::name, topicConfig -> topicConfig)));
         }
@@ -113,7 +115,7 @@ public class RepartitionTopics {
     }
 
     private void checkIfExternalSourceTopicsExist(final TopicsInfo topicsInfo,
-                                                  final Cluster clusterMetadata) {
+                                                        final Cluster clusterMetadata) {
         final Set<String> missingExternalSourceTopics = new HashSet<>(topicsInfo.sourceTopics);
         missingExternalSourceTopics.removeAll(topicsInfo.repartitionSourceTopics.keySet());
         missingExternalSourceTopics.removeAll(clusterMetadata.topics());
@@ -122,6 +124,19 @@ public class RepartitionTopics {
                     "have been pre-created before starting the Streams application. ",
                 missingExternalSourceTopics);
             throw new MissingSourceTopicException("Missing source topics.");
+        }
+    }
+
+    private void checkIfSinkTopicsExist(final TopicsInfo topicsInfo,
+                                                        final Cluster clusterMetadata) {
+        final Set<String> missingSinkTopics = new HashSet<>(topicsInfo.sinkTopics);
+        missingSinkTopics.removeAll(clusterMetadata.topics());
+
+        if (!missingSinkTopics.isEmpty()) {
+            log.error("The following sink topics are missing/unknown: {}." +
+                            " If these are External topic make sure they have been pre created before starting the streams application",
+                    missingSinkTopics);
+            throw new MissingSinkTopicException("Missing sink topics.");
         }
     }
 

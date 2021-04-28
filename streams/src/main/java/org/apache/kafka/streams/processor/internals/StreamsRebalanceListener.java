@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.MissingSinkTopicException;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
@@ -67,6 +68,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             taskManager.handleRebalanceComplete();
             streamThread.shutdownToError();
             return;
+        } else if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SINK_TOPIC_METADATA.code()) {
+            log.error("Received error code {}", AssignorError.INCOMPLETE_SINK_TOPIC_METADATA);
+            taskManager.handleRebalanceComplete();
+            throw new MissingSinkTopicException("One or more sink topics were missing during rebalance");
         } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
             log.error("Received unknown error code {}", assignmentErrorCode.get());
             throw new TaskAssignmentException("Hit an unrecognized exception during rebalance");

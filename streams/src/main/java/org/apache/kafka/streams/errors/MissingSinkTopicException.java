@@ -14,26 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.assignment;
+package org.apache.kafka.streams.errors;
 
-public enum AssignorError {
-    // Note: this error code should be reserved for fatal errors, as the receiving clients are future-proofed
-    // to throw an exception upon an unrecognized error code.
-    NONE(0),
-    INCOMPLETE_SOURCE_TOPIC_METADATA(1),
-    VERSION_PROBING(2), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
-    ASSIGNMENT_ERROR(3),
-    SHUTDOWN_REQUESTED(4),
-    INCOMPLETE_SINK_TOPIC_METADATA(5);
+public class MissingSinkTopicException extends StreamsException {
 
-    private final int code;
+    private final static long serialVersionUID = 1L;
 
-    AssignorError(final int code) {
-        this.code = code;
+    public MissingSinkTopicException(final String message) {
+        super(message);
     }
-
-    public int code() {
-        return code;
-    }
-
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.MissingSinkTopicException;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -419,6 +420,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.error("Caught an error in the task assignment. Returning an error assignment.", e);
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap, AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
+            );
+        } catch (final MissingSinkTopicException e) {
+            log.error("Caught an error in the task assignment. Returning an error assignment.", e);
+            return new GroupAssignment(
+                errorAssignment(clientMetadataMap, AssignorError.INCOMPLETE_SINK_TOPIC_METADATA.code())
             );
         } catch (final TaskAssignmentException e) {
             log.error("Caught an error in the task assignment. Returning an error assignment.", e);
