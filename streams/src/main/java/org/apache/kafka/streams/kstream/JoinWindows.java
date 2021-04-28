@@ -94,7 +94,9 @@ public final class JoinWindows extends Windows<Window> {
      *
      * @param timeDifference join window interval
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0 Use {@link #ofTimeDifferenceWithNoGrace(Duration)} instead
      */
+    @Deprecated
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
@@ -158,7 +160,9 @@ public final class JoinWindows extends Windows<Window> {
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0 Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
+    @Deprecated
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
@@ -166,6 +170,58 @@ public final class JoinWindows extends Windows<Window> {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
         return new JoinWindows(beforeMs, afterMs, afterWindowEndMs);
+    }
+
+
+    /**
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference},
+     * i.e., the timestamp of a record from the secondary stream is max {@code timeDifference} earlier or later than
+     * the timestamp of the record from the primary stream.
+     *
+     * @param timeDifference join window interval
+     * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
+     * @since 3.0
+     */
+    public static JoinWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) {
+
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
+        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
+
+        if (timeDifferenceMs < 0) {
+            throw new IllegalArgumentException("Time difference must not be negative.");
+        }
+
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+    }
+
+    /**
+     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
+     * after the end of its window.
+     * <p>
+     * Delay is defined as (stream_time - record_timestamp).
+     *
+     * @param timeDifference join window interval
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
+     * @return this updated builder
+     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @since 3.0
+     */
+    public static JoinWindows ofTimeDifferenceAndGrace(final Duration timeDifference, final Duration afterWindowEnd) {
+
+        final String msgPrefixTimeDiff = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
+        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefixTimeDiff);
+
+        if (timeDifferenceMs < 0) {
+            throw new IllegalArgumentException("Time difference must not be negative.");
+        }
+
+        final String msgPrefixGracePeriod = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefixGracePeriod);
+        if (afterWindowEndMs < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
+        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs);
     }
 
     @Override

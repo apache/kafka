@@ -85,7 +85,9 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @param size The size of the window
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0 Use {@link #ofSizeWithNoGrace(Duration)} } instead
      */
+    @Deprecated
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = validateMillisecondDuration(size, msgPrefix);
@@ -142,7 +144,9 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @deprecated since 3.0 Use {@link #ofSizeAndGrace(Duration, Duration)} instead
      */
+    @Deprecated
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
@@ -151,6 +155,59 @@ public final class TimeWindows extends Windows<TimeWindow> {
         }
 
         return new TimeWindows(sizeMs, advanceMs, afterWindowEndMs);
+    }
+
+    /**
+     * Return a window definition with the given window size, and with the advance interval being equal to the window
+     * size.
+     * The time interval represented by the N-th window is: {@code [N * size, N * size + size)}.
+     * <p>
+     * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
+     * Tumbling windows are a special case of hopping windows with {@code advance == size}.
+     *
+     * @param size The size of the window
+     * @return a new window definition with default no grace period
+     * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
+     * @since 3.0
+     */
+    public static TimeWindows ofSizeWithNoGrace(final Duration size) throws IllegalArgumentException {
+
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
+        final long sizeMs = validateMillisecondDuration(size, msgPrefix);
+        if (sizeMs <= 0) {
+            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
+        }
+        return new TimeWindows(sizeMs, sizeMs, DEFAULT_GRACE_PERIOD_MS);
+    }
+
+    /**
+     * Reject out-of-order events that arrive more than {@code millisAfterWindowEnd} after the end of its window.
+     *
+     * <p>
+     * Delay is defined as (stream_time - record_timestamp).
+     *
+     * @param size The size of the window. Must be larger than zero
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window. Must be non-negative.
+     * @return a TimeWindows object with the specified size and grace period
+     * @throws IllegalArgumentException if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @since 3.0
+     */
+    public static TimeWindows ofSizeAndGrace(final Duration size, final Duration afterWindowEnd)
+            throws IllegalArgumentException{
+
+        final String sizeMsgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
+        final long sizeMs = validateMillisecondDuration(size, sizeMsgPrefix);
+        if (sizeMs <= 0) {
+            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
+        }
+
+        final String gracePeriodMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, gracePeriodMsgPrefix);
+        if (afterWindowEndMs < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
+
+        return new TimeWindows(sizeMs, sizeMs, afterWindowEndMs);
     }
 
     @Override

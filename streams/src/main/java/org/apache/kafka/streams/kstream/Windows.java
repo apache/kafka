@@ -38,9 +38,8 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    // By default grace period is 24 hours for all windows,
-    // in other words we allow out-of-order data for up to a day
-    protected static final long DEFAULT_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000L;
+    // By default, there is no longer any grace period since Kafka 3.0
+    protected static final long DEFAULT_GRACE_PERIOD_MS = 0L;
 
     protected Windows() {}
 
