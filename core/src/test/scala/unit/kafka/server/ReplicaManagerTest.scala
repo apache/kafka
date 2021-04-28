@@ -21,8 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Optional, Properties}
-
+import java.util.{Optional, Properties, Arrays, Collection}
 import kafka.api.Request
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.BrokerEndPoint
@@ -49,13 +48,17 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
 import org.junit.{After, Before, Ignore, Test}
 import org.mockito.Mockito
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 
-class ReplicaManagerTest {
+@RunWith(value = classOf[Parameterized])
+class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
 
   val topic = "test-topic"
   val time = new MockTime
@@ -825,8 +828,10 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
-      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch, expectTruncation = true)
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch, expectTruncation = true, props)
 
     // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
     val tp = new TopicPartition(topic, topicPartition)
@@ -864,9 +869,11 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, props)
 
     val tp = new TopicPartition(topic, topicPartition)
     val partition = replicaManager.createPartition(tp)
@@ -899,9 +906,11 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, props)
 
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -948,9 +957,11 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, props)
 
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -998,6 +1009,7 @@ class ReplicaManagerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
@@ -1012,9 +1024,11 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 2
     val countDownLatch = new CountDownLatch(1)
 
+    val props = new Properties()
+    props.put(KafkaConfig.LiAsyncFetcherEnableProp, liAsyncFetcherEnabled.toString)
     val (replicaManager, _) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true)
+      leaderBrokerId, countDownLatch, expectTruncation = true, props)
     assertFalse(replicaManager.replicaSelectorOpt.isDefined)
   }
 
@@ -1424,10 +1438,36 @@ class ReplicaManagerTest {
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName)) {
 
-      override protected def createAsyncReplicaFetcherManager(metrics: Metrics,
+      override protected def createLockBasedReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
                                                      threadNamePrefix: Option[String],
-                                                     quotaManager: ReplicationQuotaManager): AsyncReplicaFetcherManager = {
+                                                     quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
+        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
+
+          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
+              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+
+              override def doWork() = {
+                // In case the thread starts before the partition is added by AbstractFetcherManager,
+                // add it here (it's a no-op if already added)
+                val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = leaderEpochInLeaderAndIsr)
+                addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
+                super.doWork()
+
+                // Shut the thread down after one iteration to avoid double-counting truncations
+                initiateShutdown()
+                countDownLatch.countDown()
+              }
+            }
+          }
+        }
+      }
+
+      override protected def createAsyncReplicaFetcherManager(metrics: Metrics,
+        time: Time,
+        threadNamePrefix: Option[String],
+        quotaManager: ReplicationQuotaManager): AsyncReplicaFetcherManager = {
         new AsyncReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): FetcherEventManager = {
@@ -1445,6 +1485,7 @@ class ReplicaManagerTest {
           }
         }
       }
+
     }
 
     (replicaManager, mockLogMgr)
@@ -1807,3 +1848,11 @@ class ReplicaManagerTest {
   }
 
 }
+
+object ReplicaManagerTest {
+  @Parameters
+  def parameters: Collection[Boolean] = {
+    Arrays.asList(false, true)
+  }
+}
+

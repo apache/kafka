@@ -272,6 +272,7 @@ object Defaults {
   val PasswordEncoderCipherAlgorithm = "AES/CBC/PKCS5Padding"
   val PasswordEncoderKeyLength = 128
   val PasswordEncoderIterations = 4096
+  val LiAsyncFetcherEnabled = false
 }
 
 object KafkaConfig {
@@ -305,6 +306,7 @@ object KafkaConfig {
   val HeapDumpTimeoutProp = "heap.dump.timeout"
   val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
   val PreferredControllerProp = "preferred.controller"
+  val LiAsyncFetcherEnableProp = "li.async.fetcher.enable"
   val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
 
   /************* Authorizer Configuration ***********/
@@ -562,6 +564,7 @@ object KafkaConfig {
   val HeapDumpTimeoutDoc = "The max amount of time (in millis) to wait for heap dump to complete before halting regardless"
   val ProducerBatchDecompressionEnableDoc = "Decompress batch sent by producer to perform verification of individual records inside the batch"
   val PreferredControllerDoc = "Specifies whether the broker is a dedicated controller node. If set to true, the broker is a preferred controller node."
+  val LiAsyncFetcherEnableDoc = "Specifies whether the event-based async fetcher should be used."
   // Although AllowPreferredControllerFallback is expected to be configured dynamically at per cluster level, providing a static configuration entry
   // here allows its value to be obtained without holding the dynamic broker configuration lock.
   val AllowPreferredControllerFallbackDoc = "Specifies whether a non-preferred controller node (broker) is allowed to become the controller." +
@@ -948,6 +951,7 @@ object KafkaConfig {
       .define(HeapDumpTimeoutProp, LONG, Defaults.HeapDumpTimeout, LOW, HeapDumpTimeoutDoc)
       .define(ProducerBatchDecompressionEnableProp, BOOLEAN, Defaults.ProducerBatchDecompressionEnable, LOW, ProducerBatchDecompressionEnableDoc)
       .define(PreferredControllerProp, BOOLEAN, Defaults.PreferredController, HIGH, PreferredControllerDoc)
+      .define(LiAsyncFetcherEnableProp, BOOLEAN, Defaults.LiAsyncFetcherEnabled, HIGH, LiAsyncFetcherEnableDoc)
       .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, AllowPreferredControllerFallbackDoc)
 
       /************* Authorizer Configuration ***********/
@@ -1261,6 +1265,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   var preferredController = getBoolean(KafkaConfig.PreferredControllerProp)
   def allowPreferredControllerFallback: Boolean = getBoolean(KafkaConfig.AllowPreferredControllerFallbackProp)
+
+  val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
 
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)

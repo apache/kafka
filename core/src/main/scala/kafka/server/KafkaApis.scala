@@ -265,7 +265,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setPartitionErrors(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toBuffer.asJava)))
     }
 
-    CoreUtils.swallow(replicaManager.asyncReplicaFetcherManager.shutdownIdleFetcherThreads(), this)
+    CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request): Unit = {
