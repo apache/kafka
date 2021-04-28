@@ -337,7 +337,7 @@ public class EmbeddedKafkaCluster {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions) {
-        createTopic(topic, partitions, 1, new HashMap<>(), new Properties());
+        createTopic(topic, partitions, 1, Collections.emptyMap(), new Properties());
     }
 
     /**
