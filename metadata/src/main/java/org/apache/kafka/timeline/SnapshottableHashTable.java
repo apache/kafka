@@ -112,14 +112,17 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         public void mergeFrom(long epoch, Delta source) {
             HashTier<T> other = (HashTier<T>) source;
             List<T> list = new ArrayList<>();
-            Object[] otherElements = other.deltaTable.baseElements();
-            for (int slot = 0; slot < otherElements.length; slot++) {
-                BaseHashTable.unpackSlot(list, otherElements, slot);
-                for (T element : list) {
-                    // When merging in a later hash tier, we want to keep only the elements
-                    // that were present at our epoch.
-                    if (element.startEpoch() <= epoch) {
-                        deltaTable.baseAddOrReplace(element);
+            BaseHashTable<T> otherDeltaTable = other.deltaTable;
+            if (otherDeltaTable != null) {
+                Object[] otherElements = otherDeltaTable.baseElements();
+                for (int slot = 0; slot < otherElements.length; slot++) {
+                    BaseHashTable.unpackSlot(list, otherElements, slot);
+                    for (T element : list) {
+                        // When merging in a later hash tier, we want to keep only the elements
+                        // that were present at our epoch.
+                        if (element.startEpoch() <= epoch) {
+                            deltaTable.baseAddOrReplace(element);
+                        }
                     }
                 }
             }
