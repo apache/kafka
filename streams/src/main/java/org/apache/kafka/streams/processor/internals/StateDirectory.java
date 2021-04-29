@@ -40,8 +40,10 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -247,8 +249,27 @@ public class StateDirectory {
         final File[] storeDirs = taskDir.listFiles(pathname ->
                 !pathname.getName().equals(CHECKPOINT_FILE_NAME));
 
+        boolean taskDirEmpty = true;
+
         // if the task is stateless, storeDirs would be null
-        return storeDirs == null || storeDirs.length == 0;
+        if (storeDirs != null && storeDirs.length > 0) {
+            for (final File file : storeDirs) {
+                // We removed the task directory locking but some upgrading applications may still have old lock files on disk,
+                // we just lazily delete those in this method since it's the only thing that would be affected by these
+                if (file.getName().endsWith(LOCK_FILE_NAME)) {
+                    if (!file.delete()) {
+                        // If we hit an error deleting this just ignore it and move on, we'll retry again at some point
+                        log.warn("Error encountered deleting lock file in {}", taskDir);
+                    }
+                } else {
+                    // If it's not a lock file then the directory is not empty,
+                    // but finish up the loop in case there's a lock file left to delete
+                    log.trace("TaskDir {} was not empty, found {}", taskDir, file);
+                    taskDirEmpty = false;
+                }
+            }
+        }
+        return taskDirEmpty;
     }
 
     /**
