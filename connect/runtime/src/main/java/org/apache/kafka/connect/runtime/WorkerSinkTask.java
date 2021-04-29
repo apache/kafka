@@ -615,10 +615,12 @@ class WorkerSinkTask extends WorkerTask {
             }
         } catch (RetriableException e) {
             log.error("{} RetriableException from SinkTask:", this, e);
-            // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
-            // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
-            pausedForRedelivery = true;
-            pauseAll();
+            if (!pausedForRedelivery) {
+                // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
+                // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
+                pausedForRedelivery = true;
+                pauseAll();
+            }
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
             log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not "
@@ -705,9 +707,6 @@ class WorkerSinkTask extends WorkerTask {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
-            if (partitions.isEmpty()) {
-                return;
-            }
 
             for (TopicPartition tp : partitions) {
                 long pos = consumer.position(tp);
@@ -717,17 +716,29 @@ class WorkerSinkTask extends WorkerTask {
             }
             sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 
-            // If we paused everything for redelivery and all partitions for the failed deliveries have been revoked, make
-            // sure anything we paused that the task didn't request to be paused *and* which we still own is resumed.
-            // Also make sure our tracking of paused partitions is updated to remove any partitions we no longer own.
-            pausedForRedelivery = pausedForRedelivery && !messageBatch.isEmpty();
-
-            // Ensure that the paused partitions contains only assigned partitions and repause as necessary
-            context.pausedPartitions().retainAll(consumer.assignment());
-            if (shouldPause())
+            boolean wasPausedForRedelivery = pausedForRedelivery;
+            pausedForRedelivery = wasPausedForRedelivery && !messageBatch.isEmpty();
+            if (pausedForRedelivery) {
+                // Re-pause here in case we picked up new partitions in the rebalance
                 pauseAll();
-            else if (!context.pausedPartitions().isEmpty())
-                consumer.pause(context.pausedPartitions());
+            } else {
+                // If we paused everything for redelivery and all partitions for the failed deliveries have been revoked, make
+                // sure anything we paused that the task didn't request to be paused *and* which we still own is resumed.
+                // Also make sure our tracking of paused partitions is updated to remove any partitions we no longer own.
+                if (wasPausedForRedelivery) {
+                    resumeAll();
+                }
+                // Ensure that the paused partitions contains only assigned partitions and repause as necessary
+                context.pausedPartitions().retainAll(consumer.assignment());
+                if (shouldPause())
+                    pauseAll();
+                else if (!context.pausedPartitions().isEmpty())
+                    consumer.pause(context.pausedPartitions());
+            }
+
+            if (partitions.isEmpty()) {
+                return;
+            }
 
             // Instead of invoking the assignment callback on initialization, we guarantee the consumer is ready upon
             // task start. Since this callback gets invoked during that initial setup before we've started the task, we
