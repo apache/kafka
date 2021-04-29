@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -35,8 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
-import java.util.function.Predicate;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
 class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
@@ -80,9 +81,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
-        private final Predicate<Windowed<KeyAndJoinSide<K>>> recordWindowHasClosed =
-            windowedKey -> windowedKey.window().start() + joinAfterMs + joinGraceMs < maxObservedStreamTime.get();
-
         private WindowStore<K, V2> otherWindowStore;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
@@ -95,7 +93,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             metrics = (StreamsMetricsImpl) context.metrics();
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
-            outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
+
+            if (StreamsConfig.InternalConfig.getBoolean(context().appConfigs(), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+                outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
+            }
         }
 
         @Override
