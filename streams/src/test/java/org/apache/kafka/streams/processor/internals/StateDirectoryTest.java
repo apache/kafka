@@ -429,37 +429,6 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLockGlobalStateDirectory() throws IOException {
-        try (
-            final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)
-        ) {
-            directory.lockGlobalState();
-            assertThrows(OverlappingFileLockException.class, channel::lock);
-        } finally {
-            directory.unlockGlobalState();
-        }
-    }
-
-    @Test
-    public void shouldUnlockGlobalStateDirectory() throws IOException {
-        directory.lockGlobalState();
-        directory.unlockGlobalState();
-
-        try (
-            final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)
-        ) {
-            // should lock without any exceptions
-            channel.lock();
-        }
-    }
-
-    @Test
     public void shouldNotLockStateDirLockedByAnotherThread() throws Exception {
         final TaskId taskId = new TaskId(0, 0);
         final Thread thread = new Thread(() -> directory.lock(taskId));
@@ -546,12 +515,6 @@ public class StateDirectoryTest {
         initializeStateDirectory(false);
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(directory.lock(taskId));
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
-        initializeStateDirectory(false);
-        assertTrue(directory.lockGlobalState());
     }
 
     @Test
