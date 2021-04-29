@@ -83,6 +83,7 @@ object DynamicBrokerConfig {
     Set(KafkaConfig.MetricReporterClassesProp) ++
     Set(KafkaConfig.AutoCreateTopicsEnableProp) ++
     Set(KafkaConfig.AllowPreferredControllerFallbackProp) ++
+    Set(KafkaConfig.LiCombinedControlRequestEnableProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs
 
