@@ -314,7 +314,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
+    public void shouldCleanupObsoleteTaskDirectoriesAndDeleteTheDirectoryItself() {
         final File dir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0));
         assertTrue(new File(dir, "store").mkdir());
         assertEquals(1, directory.listAllTaskDirectories().length);
@@ -323,24 +323,12 @@ public class StateDirectoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
-            assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertFalse(dir.exists());
+            assertEquals(0, directory.listAllTaskDirectories().length);
             assertEquals(0, directory.listNonEmptyTaskDirectories().length);
             assertThat(
                 appender.getMessages(),
                 hasItem(containsString("Deleting obsolete state directory"))
-            );
-        }
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
-            time.sleep(5000);
-            directory.cleanRemovedTasks(0);
-            assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
-            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
-            assertThat(
-                appender.getMessages(),
-                not(hasItem(containsString("Deleting obsolete state directory")))
             );
         }
     }
