@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.raft.BatchReader.Batch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
@@ -74,7 +73,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             int readEpoch = 0;
 
             while (reader.hasNext()) {
-                BatchReader.Batch<Integer> batch = reader.next();
+                Batch<Integer> batch = reader.next();
                 log.debug(
                     "Handle commit of batch with records {} at base offset {}",
                     batch.records(),

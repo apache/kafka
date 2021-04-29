@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -31,13 +32,13 @@ class MemoryBatchReaderTest {
 
     @Test
     public void testIteration() {
-        BatchReader.Batch<String> batch1 = BatchReader.Batch.of(
+        Batch<String> batch1 = Batch.of(
             0L, 1, Arrays.asList("a", "b", "c")
         );
-        BatchReader.Batch<String> batch2 = BatchReader.Batch.of(
+        Batch<String> batch2 = Batch.of(
             3L, 2, Arrays.asList("d", "e")
         );
-        BatchReader.Batch<String> batch3 = BatchReader.Batch.of(
+        Batch<String> batch3 = Batch.of(
             5L, 2, Arrays.asList("f", "g", "h", "i")
         );
 

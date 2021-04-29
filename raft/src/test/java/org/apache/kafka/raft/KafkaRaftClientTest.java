@@ -2240,6 +2240,7 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
+        List<List<String>> expectedBatches = Arrays.asList(batch1, batch2, batch3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
@@ -2271,23 +2272,24 @@ public class KafkaRaftClientTest {
         // watermark advances and we can start sending committed data to the
         // listener. Note that the `LeaderChange` control record is filtered.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 500));
-        context.client.poll();
-        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
-        assertEquals(1, context.listener.numCommittedBatches());
-        assertEquals(batch1, context.listener.commitWithBaseOffset(0L));
+        context.pollUntil(() -> {
+            int committedBatches = context.listener.numCommittedBatches();
+            long baseOffset = 0;
+            for (int index = 0; index < committedBatches; index++) {
+                List<String> expectedBatch = expectedBatches.get(index);
+                assertEquals(expectedBatch, context.listener.commitWithBaseOffset(baseOffset));
+                baseOffset += expectedBatch.size();
+            }
 
-        context.client.poll();
-        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
-        assertEquals(2, context.listener.numCommittedBatches());
-        assertEquals(batch2, context.listener.commitWithBaseOffset(3L));
+            return context.listener.currentClaimedEpoch().isPresent();
+        });
 
-        // Now that the listener has caught up to the start of the leader epoch,
-        // we expect the `handleClaim` callback.
-        context.client.poll();
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        assertEquals(3, context.listener.numCommittedBatches());
-        assertEquals(batch3, context.listener.commitWithBaseOffset(6L));
-        assertEquals(OptionalLong.of(8L), context.listener.lastCommitOffset());
+        // Note that last committed offset is inclusive, hence we subtract 1.
+        assertEquals(
+            OptionalLong.of(expectedBatches.stream().mapToInt(List::size).sum() - 1),
+            context.listener.lastCommitOffset()
+        );
     }
 
     @Test

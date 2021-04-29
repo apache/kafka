@@ -315,7 +315,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> {
                         return new IllegalStateException(
                             String.format(
-                                "Snapshot expected when next offset is %s, log start offset is %s and high-watermark is %s",
+                                "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
+                                listenerContext.listener.getClass().getTypeName(),
                                 nextExpectedOffset,
                                 log.startOffset(),
                                 highWatermark
@@ -2446,7 +2447,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * followers.
          */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
-            BatchReader.Batch<T> batch = BatchReader.Batch.of(baseOffset, epoch, records);
+            Batch<T> batch = Batch.of(baseOffset, epoch, records);
             MemoryBatchReader<T> reader = new MemoryBatchReader<>(Collections.singletonList(batch), this);
             fireHandleCommit(reader);
         }

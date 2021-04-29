@@ -362,6 +362,7 @@ public class MockLog implements ReplicatedLog {
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
+        int batchCount = 0;
         LogOffsetMetadata batchStartOffset = null;
 
         for (LogBatch batch : batches) {
@@ -371,9 +372,17 @@ public class MockLog implements ReplicatedLog {
             // batch returned in a fetch response.
             if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
                 buffer = batch.writeTo(buffer);
-                batchStartOffset = batch.entries.get(0).logOffsetMetadata();
 
-                break;
+                if (batchStartOffset == null) {
+                    batchStartOffset = batch.entries.get(0).logOffsetMetadata();
+                }
+
+                // Read on the mock log should return at most 2 batches. This is a simple solution
+                // for testing interesting partial read scenarios.
+                batchCount += 1;
+                if (batchCount >= 2) {
+                    break;
+                }
             }
         }
 
@@ -445,11 +454,6 @@ public class MockLog implements ReplicatedLog {
         boolean updated = false;
         if (snapshots.containsKey(snapshotId)) {
             snapshots.headMap(snapshotId, false).clear();
-
-            // Update the high watermark if it is less than the new log start offset
-            if (snapshotId.offset > highWatermark.offset) {
-                updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
-            }
 
             batches.removeIf(entry -> entry.lastOffset() < snapshotId.offset);
 

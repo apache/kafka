@@ -350,6 +350,7 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new MonotonicEpoch(cluster));
         scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
         scheduler.addInvariant(new SingleLeader(cluster));
+        scheduler.addInvariant(new SnapshotAtLogStart(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
@@ -966,6 +967,54 @@ public class RaftEventSimulationTest {
         }
     }
 
+    private static class SnapshotAtLogStart implements Invariant {
+        final Cluster cluster;
+
+        private SnapshotAtLogStart(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                int nodeId = nodeEntry.getKey();
+                ReplicatedLog log = nodeEntry.getValue().log;
+                log.earliestSnapshotId().ifPresent(earliestSnapshotId  -> {
+                    assertTrue(
+                        log.startOffset() <= earliestSnapshotId.offset,
+                        String.format(
+                            "invalid log start offset (%s) and snapshotId offset (%s): nodeId = %s",
+                            log.startOffset(),
+                            earliestSnapshotId.offset,
+                            nodeId
+                        )
+                    );
+                    assertEquals(
+                        log.validateOffsetAndEpoch(
+                            earliestSnapshotId.offset,
+                            earliestSnapshotId.epoch
+                        ).kind(),
+                        ValidOffsetAndEpoch.Kind.VALID,
+                        String.format("invalid offset and epoch for ealiest snapshot: nodeId = %s", nodeId)
+                    );
+
+                    if (log.startOffset() > 0) {
+                        assertEquals(
+                            log.startOffset(),
+                            earliestSnapshotId.offset,
+                            String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                        );
+                        assertEquals(
+                            ValidOffsetAndEpoch.valid(earliestSnapshotId),
+                            log.validateOffsetAndEpoch(earliestSnapshotId.offset, earliestSnapshotId.epoch),
+                            String.format("invalid leader epoch cache: nodeId = %s", nodeId)
+                        );
+                    }
+                });
+            }
+        }
+    }
+
     /**
      * Validating the committed data is expensive, so we do this as a {@link Validation}. We depend
      * on the following external invariants:
@@ -1009,7 +1058,7 @@ public class RaftEventSimulationTest {
                         SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
-                    BatchReader.Batch<Integer> batch = snapshot.next();
+                    Batch<Integer> batch = snapshot.next();
                     assertFalse(snapshot.hasNext());
                     assertEquals(1, batch.records().size());
 

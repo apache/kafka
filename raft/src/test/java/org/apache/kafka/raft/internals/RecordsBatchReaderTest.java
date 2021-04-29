@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,7 +50,7 @@ class RecordsBatchReaderTest {
     public void testReadFromMemoryRecords(CompressionType compressionType) {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
         MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         testBatchReader(baseOffset, memRecords, batches);
@@ -60,7 +61,7 @@ class RecordsBatchReaderTest {
     public void testReadFromFileRecords(CompressionType compressionType) throws Exception {
         long baseOffset = 57;
 
-        List<BatchReader.Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
+        List<Batch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
         MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
@@ -72,7 +73,7 @@ class RecordsBatchReaderTest {
     private void testBatchReader(
         long baseOffset,
         Records records,
-        List<BatchReader.Batch<String>> expectedBatches
+        List<Batch<String>> expectedBatches
     ) {
         BufferSupplier bufferSupplier = Mockito.mock(BufferSupplier.class);
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -102,7 +103,7 @@ class RecordsBatchReaderTest {
             closeListener
         );
 
-        for (BatchReader.Batch<String> batch : expectedBatches) {
+        for (Batch<String> batch : expectedBatches) {
             assertTrue(reader.hasNext());
             assertEquals(batch, reader.next());
         }

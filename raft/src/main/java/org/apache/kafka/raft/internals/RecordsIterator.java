@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.raft.BatchReader.Batch;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.RecordSerde;
 
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
@@ -121,7 +121,8 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
-        if (memoryRecords.firstBatchSize() < buffer.remaining()) {
+        // firstBatchSize() is always non-null because the minimum buffer is HEADER_SIZE_UP_TO_MAGIC.
+        if (memoryRecords.firstBatchSize() <= buffer.remaining()) {
             return memoryRecords;
         } else {
             // Not enough bytes read; create a bigger buffer

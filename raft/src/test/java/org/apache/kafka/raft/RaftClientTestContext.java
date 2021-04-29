@@ -187,7 +187,7 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+        Builder withEmptySnapshot(OffsetAndEpoch snapshotId) throws IOException {
             try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {
                 snapshot.freeze();
             }
@@ -1052,7 +1052,7 @@ public final class RaftClientTestContext {
     }
 
     static class MockListener implements RaftClient.Listener<String> {
-        private final List<BatchReader.Batch<String>> commits = new ArrayList<>();
+        private final List<Batch<String>> commits = new ArrayList<>();
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
@@ -1067,7 +1067,7 @@ public final class RaftClientTestContext {
             return claimedEpochStartOffsets.get(epoch);
         }
 
-        BatchReader.Batch<String> lastCommit() {
+        Batch<String> lastCommit() {
             if (commits.isEmpty()) {
                 return null;
             } else {
@@ -1103,7 +1103,7 @@ public final class RaftClientTestContext {
                 .orElse(null);
         }
 
-        Optional<SnapshotReader<String>> takeSnapshot() {
+        Optional<SnapshotReader<String>> drainHandledSnapshot() {
             Optional<SnapshotReader<String>> temp = snapshot;
             snapshot = Optional.empty();
             return temp;
@@ -1126,7 +1126,7 @@ public final class RaftClientTestContext {
                 while (reader.hasNext()) {
                     long nextOffset = lastCommitOffset().isPresent() ?
                         lastCommitOffset().getAsLong() + 1 : 0L;
-                    BatchReader.Batch<String> batch = reader.next();
+                    Batch<String> batch = reader.next();
                     // We expect monotonic offsets, but not necessarily sequential
                     // offsets since control records will be filtered.
                     assertTrue(batch.baseOffset() >= nextOffset,

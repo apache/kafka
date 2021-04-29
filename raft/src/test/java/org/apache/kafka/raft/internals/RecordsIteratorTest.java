@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -36,7 +34,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.RecordSerde;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -69,7 +67,7 @@ public final class RecordsIteratorTest {
         @ForAll CompressionType compressionType,
         @ForAll long seed
     ) {
-        List<BatchReader.Batch<String>> batches = createBatches(seed);
+        List<Batch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
         testIterator(batches, memRecords);
@@ -80,7 +78,7 @@ public final class RecordsIteratorTest {
         @ForAll CompressionType compressionType,
         @ForAll long seed
     ) throws IOException {
-        List<BatchReader.Batch<String>> batches = createBatches(seed);
+        List<Batch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
         FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
@@ -90,7 +88,7 @@ public final class RecordsIteratorTest {
     }
 
     private void testIterator(
-        List<BatchReader.Batch<String>> expectedBatches,
+        List<Batch<String>> expectedBatches,
         Records records
     ) {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -100,7 +98,7 @@ public final class RecordsIteratorTest {
             mockBufferSupplier(allocatedBuffers)
         );
 
-        for (BatchReader.Batch<String> batch : expectedBatches) {
+        for (Batch<String> batch : expectedBatches) {
             assertTrue(iterator.hasNext());
             assertEquals(batch, iterator.next());
         }
@@ -135,13 +133,13 @@ public final class RecordsIteratorTest {
         return bufferSupplier;
     }
 
-    public static List<BatchReader.Batch<String>> createBatches(long seed) {
+    public static List<Batch<String>> createBatches(long seed) {
         Random random = new Random(seed);
         long baseOffset = random.nextInt(100);
         int epoch = random.nextInt(3) + 1;
 
         int numberOfBatches = random.nextInt(100) + 1;
-        List<BatchReader.Batch<String>> batches = new ArrayList<>(numberOfBatches);
+        List<Batch<String>> batches = new ArrayList<>(numberOfBatches);
         for (int i = 0; i < numberOfBatches; i++) {
             int numberOfRecords = random.nextInt(100) + 1;
             List<String> records = random
@@ -149,7 +147,7 @@ public final class RecordsIteratorTest {
                 .mapToObj(String::valueOf)
                 .collect(Collectors.toList());
 
-            batches.add(BatchReader.Batch.of(baseOffset, epoch, records));
+            batches.add(Batch.of(baseOffset, epoch, records));
             baseOffset += records.size();
             if (i % 5 == 0) {
                 epoch += random.nextInt(3);
@@ -161,11 +159,11 @@ public final class RecordsIteratorTest {
 
     public static MemoryRecords buildRecords(
         CompressionType compressionType,
-        List<BatchReader.Batch<String>> batches
+        List<Batch<String>> batches
     ) {
         ByteBuffer buffer = ByteBuffer.allocate(102400);
 
-        for (BatchReader.Batch<String> batch : batches) {
+        for (Batch<String> batch : batches) {
             BatchBuilder<String> builder = new BatchBuilder<>(
                 buffer,
                 STRING_SERDE,

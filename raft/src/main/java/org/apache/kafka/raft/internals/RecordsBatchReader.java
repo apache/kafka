@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RecordSerde;
 

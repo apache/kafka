@@ -58,7 +58,7 @@ final public class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
-            .withSnapshot(snapshotId)
+            .withEmptySnapshot(snapshotId)
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
@@ -73,7 +73,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
@@ -90,7 +90,7 @@ final public class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
-            .withSnapshot(snapshotId)
+            .withEmptySnapshot(snapshotId)
             .deleteBeforeSnapshot(snapshotId)
             .withElectedLeader(epoch, leaderId)
             .build();
@@ -110,7 +110,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch);
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
@@ -127,7 +127,7 @@ final public class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
-            .withSnapshot(snapshotId)
+            .withEmptySnapshot(snapshotId)
             .withElectedLeader(epoch, leaderId)
             .build();
 
@@ -150,7 +150,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.client.poll();
 
         // Check that the second listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = secondListener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = secondListener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
@@ -167,7 +167,7 @@ final public class KafkaRaftClientSnapshotTest {
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
             .appendToLog(snapshotId.epoch, Arrays.asList("g", "h", "i"))
-            .withSnapshot(snapshotId)
+            .withEmptySnapshot(snapshotId)
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
@@ -185,7 +185,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
@@ -202,7 +202,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.client.poll();
         // Check that listener was notified of the second snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(secondSnapshot, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
@@ -915,7 +915,7 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }
@@ -1019,7 +1019,7 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
+        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
             SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }

@@ -19,7 +19,7 @@ package org.apache.kafka.snapshot;
 
 import java.util.Iterator;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.raft.BatchReader.Batch;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
 import org.apache.kafka.raft.internals.RecordsIterator;
