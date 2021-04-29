@@ -107,8 +107,7 @@ public class KStreamImplValueJoinerWithKeyTest {
         ).to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
         // Left KV A, 3, Right KV A, 5
         // TTD pipes records to left stream first, then right
-        // with TTD there's no caching, so join emits immediately with "A, 3, null" then "A, 3, 5"
-        final List<KeyValue<String, String>> expectedResults = Arrays.asList(KeyValue.pair("A", "A:3"), KeyValue.pair("A", "A:5"));
+        final List<KeyValue<String, String>> expectedResults = Arrays.asList(KeyValue.pair("A", "A:5"));
         runJoinTopology(builder,
                 expectedResults,
                 false,
@@ -127,8 +126,7 @@ public class KStreamImplValueJoinerWithKeyTest {
 
         // Left KV A, 3, Right KV A, 5
         // TTD pipes records to left stream first, then right
-        // with TTD there's no caching, so join emits immediately with "A, 3, null" then "A, 3, 5"
-        final List<KeyValue<String, String>> expectedResults = Arrays.asList(KeyValue.pair("A", "A:3"), KeyValue.pair("A", "A:5"));
+        final List<KeyValue<String, String>> expectedResults = Arrays.asList(KeyValue.pair("A", "A:5"));
         runJoinTopology(builder,
                 expectedResults,
                 false,
