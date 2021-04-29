@@ -39,7 +39,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -285,7 +284,7 @@ public class StateDirectoryTest {
 
             files = Arrays.stream(
                 Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1, dir2), files);
+            assertEquals(mkSet(dir0, dir1), files);
 
             files = Arrays.stream(
                 Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
@@ -309,13 +308,13 @@ public class StateDirectoryTest {
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
-        assertTrue(dir.exists());
-        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertFalse(dir.exists());
+        assertEquals(0, directory.listAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
     }
 
     @Test
-    public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
+    public void shouldCleanupObsoleteTaskDirectoriesAndDeleteTheDirectoryItself() {
         final File dir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0));
         assertTrue(new File(dir, "store").mkdir());
         assertEquals(1, directory.listAllTaskDirectories().length);
@@ -324,24 +323,12 @@ public class StateDirectoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
-            assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertFalse(dir.exists());
+            assertEquals(0, directory.listAllTaskDirectories().length);
             assertEquals(0, directory.listNonEmptyTaskDirectories().length);
             assertThat(
                 appender.getMessages(),
                 hasItem(containsString("Deleting obsolete state directory"))
-            );
-        }
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
-            time.sleep(5000);
-            directory.cleanRemovedTasks(0);
-            assertTrue(dir.exists());
-            assertEquals(1, directory.listAllTaskDirectories().length);
-            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
-            assertThat(
-                appender.getMessages(),
-                not(hasItem(containsString("Deleting obsolete state directory")))
             );
         }
     }
@@ -426,37 +413,6 @@ public class StateDirectoryTest {
         final File taskDir = stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectory() throws IOException {
-        try (
-            final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)
-        ) {
-            directory.lockGlobalState();
-            assertThrows(OverlappingFileLockException.class, channel::lock);
-        } finally {
-            directory.unlockGlobalState();
-        }
-    }
-
-    @Test
-    public void shouldUnlockGlobalStateDirectory() throws IOException {
-        directory.lockGlobalState();
-        directory.unlockGlobalState();
-
-        try (
-            final FileChannel channel = FileChannel.open(
-                new File(directory.globalStateDir(), LOCK_FILE_NAME).toPath(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)
-        ) {
-            // should lock without any exceptions
-            channel.lock();
-        }
     }
 
     @Test
@@ -546,12 +502,6 @@ public class StateDirectoryTest {
         initializeStateDirectory(false);
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(directory.lock(taskId));
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
-        initializeStateDirectory(false);
-        assertTrue(directory.lockGlobalState());
     }
 
     @Test
@@ -685,6 +635,7 @@ public class StateDirectoryTest {
         @JsonProperty
         private final String newField;
 
+        // required by jackson -- do not remove, your IDE may be warning that this is unused but it's lying to you
         public FutureStateDirectoryProcessFile() {
             this.processId = null;
             this.newField = null;
