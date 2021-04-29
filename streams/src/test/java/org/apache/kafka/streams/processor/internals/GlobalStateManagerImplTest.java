@@ -151,12 +151,6 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldLockGlobalStateDirectory() {
-        stateManager.initialize();
-        assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
-    }
-
-    @Test
     public void shouldReadCheckpointOffsets() throws IOException {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
 

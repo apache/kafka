@@ -284,7 +284,7 @@ public class StateDirectoryTest {
 
             files = Arrays.stream(
                 Objects.requireNonNull(directory.listAllTaskDirectories())).collect(Collectors.toSet());
-            assertEquals(mkSet(dir0, dir1, dir2), files);
+            assertEquals(mkSet(dir0, dir1), files);
 
             files = Arrays.stream(
                 Objects.requireNonNull(directory.listNonEmptyTaskDirectories())).collect(Collectors.toSet());
@@ -308,8 +308,8 @@ public class StateDirectoryTest {
 
         time.sleep(cleanupDelayMs + 1000);
         directory.cleanRemovedTasks(cleanupDelayMs);
-        assertTrue(dir.exists());
-        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertFalse(dir.exists());
+        assertEquals(0, directory.listAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
     }
 
