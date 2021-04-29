@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -105,6 +106,27 @@ public class ReplicationControlManagerTest {
         ReplicationControlTestContext() {
             clusterControl.activate();
         }
+
+        CreatableTopicResult createTestTopic(String name, int[][] replicas) throws Exception {
+            assertFalse(replicas.length == 0);
+            CreateTopicsRequestData request = new CreateTopicsRequestData();
+            CreatableTopic topic = new CreatableTopic().setName(name);
+            topic.setNumPartitions(-1).setReplicationFactor((short) -1);
+            for (int i = 0; i < replicas.length; i++) {
+                topic.assignments().add(new CreatableReplicaAssignment().
+                    setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
+            }
+            request.topics().add(topic);
+            ControllerResult<CreateTopicsResponseData> result =
+                replicationControl.createTopics(request);
+            CreatableTopicResult topicResult = result.response().topics().find(name);
+            assertNotNull(topicResult);
+            assertEquals((short) 0, topicResult.errorCode());
+            assertEquals(replicas.length, topicResult.numPartitions());
+            assertEquals(replicas[0].length, topicResult.replicationFactor());
+            replay(result.records());
+            return topicResult;
+        }
     }
 
     private static void registerBroker(int brokerId, ReplicationControlTestContext ctx) {
@@ -125,7 +147,7 @@ public class ReplicationControlManagerTest {
                 setBrokerId(brokerId).setBrokerEpoch(brokerId + 100).setCurrentMetadataOffset(1).
                 setWantFence(false).setWantShutDown(false), 0);
         assertEquals(new BrokerHeartbeatReply(true, false, false, false), result.response());
-        ControllerTestUtils.replayAll(ctx.clusterControl, result.records());
+        ctx.replay(result.records());
     }
 
     @Test
@@ -157,7 +179,7 @@ public class ReplicationControlManagerTest {
             setErrorMessage(null).setErrorCode((short) 0).
             setTopicId(result2.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse2, result2.response());
-        ControllerTestUtils.replayAll(replicationControl, result2.records());
+        ctx.replay(result2.records());
         assertEquals(new PartitionControlInfo(new int[] {2, 0, 1},
             new int[] {2, 0, 1}, null, null, 2, 0, 0),
             replicationControl.getPartition(
@@ -197,29 +219,6 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedTopicErrors, topicErrors);
     }
 
-    private static CreatableTopicResult createTestTopic(
-            ReplicationControlManager replicationControl, String name,
-            int[][] replicas) throws Exception {
-        assertFalse(replicas.length == 0);
-        CreateTopicsRequestData request = new CreateTopicsRequestData();
-        CreatableTopic topic = new CreatableTopic().setName(name);
-        topic.setNumPartitions(-1).setReplicationFactor((short) -1);
-        for (int i = 0; i < replicas.length; i++) {
-            topic.assignments().add(new CreatableReplicaAssignment().
-                setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
-        }
-        request.topics().add(topic);
-        ControllerResult<CreateTopicsResponseData> result =
-            replicationControl.createTopics(request);
-        CreatableTopicResult topicResult = result.response().topics().find(name);
-        assertNotNull(topicResult);
-        assertEquals((short) 0, topicResult.errorCode());
-        assertEquals(replicas.length, topicResult.numPartitions());
-        assertEquals(replicas[0].length, topicResult.replicationFactor());
-        ControllerTestUtils.replayAll(replicationControl, result.records());
-        return topicResult;
-    }
-
     @Test
     public void testRemoveLeaderships() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
@@ -228,7 +227,7 @@ public class ReplicationControlManagerTest {
             registerBroker(i, ctx);
             unfenceBroker(i, ctx);
         }
-        CreatableTopicResult result = createTestTopic(replicationControl, "foo",
+        CreatableTopicResult result = ctx.createTestTopic("foo",
             new int[][] {
                 new int[] {0, 1, 2},
                 new int[] {1, 2, 3},
@@ -241,8 +240,8 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedPartitions, ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        replicationControl.handleNodeDeactivated(0, records);
-        ControllerTestUtils.replayAll(replicationControl, records);
+        replicationControl.handleBrokerFenced(0, records);
+        ctx.replay(records);
         assertEquals(Collections.emptySet(), ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
     }
@@ -255,7 +254,7 @@ public class ReplicationControlManagerTest {
             registerBroker(i, ctx);
             unfenceBroker(i, ctx);
         }
-        CreatableTopicResult createTopicResult = createTestTopic(replicationControl, "foo",
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
             new int[][] {new int[] {0, 1, 2}});
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
@@ -287,7 +286,7 @@ public class ReplicationControlManagerTest {
             registerBroker(i, ctx);
             unfenceBroker(i, ctx);
         }
-        CreatableTopicResult createTopicResult = createTestTopic(replicationControl, "foo",
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
             new int[][] {new int[] {0, 1, 2}});
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
@@ -651,5 +650,43 @@ public class ReplicationControlManagerTest {
                 "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
                     ctx.replicationControl.validateManualPartitionAssignment(Arrays.asList(1, 2),
                         OptionalInt.of(3))).getMessage());
+    }
+
+    @Test
+    public void testElectionWasClean() {
+        assertTrue(ReplicationControlManager.electionWasClean(1, new int[] {1, 2}));
+        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {0, 2}));
+        assertFalse(ReplicationControlManager.electionWasClean(1, new int[] {}));
+        assertTrue(ReplicationControlManager.electionWasClean(3, new int[] {1, 2, 3, 4, 5, 6}));
+    }
+
+    @Test
+    public void testPartitionControlInfoMergeAndDiff() {
+        PartitionControlInfo a = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{1, 2}, null, null, 1, 0, 0);
+        PartitionControlInfo b = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{3}, null, null, 3, 1, 1);
+        PartitionControlInfo c = new PartitionControlInfo(
+            new int[]{1, 2, 3}, new int[]{1}, null, null, 1, 0, 1);
+        assertEquals(b, a.merge(new PartitionChangeRecord().
+            setLeader(3).setIsr(Arrays.asList(3))));
+        assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
+            b.diff(a));
+        assertEquals("isr: [1, 2] -> [1], partitionEpoch: 0 -> 1",
+            c.diff(a));
+    }
+
+    @Test
+    public void testBestLeader() {
+        assertEquals(2, ReplicationControlManager.bestLeader(
+            new int[]{1, 2, 3, 4}, new int[]{4, 2, 3}, false, __ -> true));
+        assertEquals(3, ReplicationControlManager.bestLeader(
+            new int[]{3, 2, 1, 4}, new int[]{4, 2, 3}, false, __ -> true));
+        assertEquals(4, ReplicationControlManager.bestLeader(
+            new int[]{3, 2, 1, 4}, new int[]{4, 2, 3}, false, r -> r == 4));
+        assertEquals(-1, ReplicationControlManager.bestLeader(
+            new int[]{3, 4, 5}, new int[]{1, 2}, false, r -> r == 4));
+        assertEquals(4, ReplicationControlManager.bestLeader(
+            new int[]{3, 4, 5}, new int[]{1, 2}, true, r -> r == 4));
     }
 }

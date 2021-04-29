@@ -185,7 +185,7 @@ public class QuorumControllerTest {
                 topicPartitionFuture = active.appendReadEvent(
                     "debugGetPartition", () -> {
                         Iterator<TopicIdPartition> iterator = active.
-                            replicationControl().brokersToIsrs().noLeaderIterator();
+                            replicationControl().brokersToIsrs().partitionsWithNoLeader();
                         assertTrue(iterator.hasNext());
                         return iterator.next();
                     });
