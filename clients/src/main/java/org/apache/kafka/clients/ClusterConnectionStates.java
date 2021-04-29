@@ -105,11 +105,13 @@ final class ClusterConnectionStates {
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
-        if (state.state.isDisconnected()) {
+        if (state.state == ConnectionState.CONNECTING) {
+            return connectionSetupTimeoutMs(id);
+        } else if (state.state.isDisconnected()) {
             long timeWaited = now - state.lastConnectAttemptMs;
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
-            // When connecting or connected, we should be able to delay indefinitely since other events (connection or
+            // When connected, we should be able to delay indefinitely since other events (connection or
             // data acked) will cause a wakeup once data can be sent.
             return Long.MAX_VALUE;
         }
@@ -273,6 +275,7 @@ final class ClusterConnectionStates {
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
+        connectingNodes.remove(id);
     }
 
     /**
