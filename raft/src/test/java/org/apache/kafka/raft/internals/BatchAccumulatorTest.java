@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -63,6 +64,133 @@ class BatchAccumulatorTest {
             CompressionType.NONE,
             serde
         );
+    }
+
+    @Test
+    public void testLeaderChangeMessageWritten() {
+        int leaderEpoch = 17;
+        long baseOffset = 0;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
+
+        acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+        assertTrue(acc.needsDrain(time.milliseconds()));
+
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertEquals(1, batches.size());
+
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        batch.release();
+        Mockito.verify(memoryPool).release(buffer);
+    }
+
+    @Test
+    public void testForceDrain() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            acc.forceDrain();
+            assertTrue(acc.needsDrain(time.milliseconds()));
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+           
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            assertEquals(1, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+        });
+    }
+
+    @Test
+    public void testForceDrainBeforeAppendLeaderChangeMessage() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+            Mockito.when(memoryPool.tryAllocate(256))
+                .thenReturn(ByteBuffer.allocate(256));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            assertFalse(acc.needsDrain(time.milliseconds()));
+           
+            // Append a leader change message
+            acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+
+            assertTrue(acc.needsDrain(time.milliseconds()));
+
+            // Test that drain status is FINISHED
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            // Should have 2 batches, one consisting of `records` and one `leaderChangeMessage`
+            assertEquals(2, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+        });
     }
 
     @Test
@@ -202,7 +330,7 @@ class BatchAccumulatorTest {
             assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records);
+            assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
         });
     }

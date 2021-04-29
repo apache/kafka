@@ -80,6 +80,7 @@ public class KafkaRaftClientTest {
             .withElectedLeader(initialEpoch, localId)
             .build();
 
+        context.pollUntil(() -> context.log.endOffset().offset == 1L);
         assertEquals(1L, context.log.endOffset().offset);
         assertEquals(initialEpoch + 1, context.log.lastFetchedEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.of(localId), initialEpoch + 1),
@@ -392,7 +393,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
 
         // Become leader after receiving the vote
-        context.client.poll();
+        context.pollUntil(() -> context.log.endOffset().offset == 1L);
         context.assertElectedLeader(1, localId);
         long electionTimestamp = context.time.milliseconds();
 
@@ -410,7 +411,7 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(otherNodeId, localId),
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
             Arrays.asList(otherNodeId, localId), record.key(), record.value());
     }
 
@@ -432,7 +433,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(correlationId, firstNodeId, context.voteResponse(true, Optional.empty(), 1));
 
         // Become leader after receiving the vote
-        context.client.poll();
+        context.pollUntil(() -> context.log.endOffset().offset == 1L);
         context.assertElectedLeader(1, localId);
         long electionTimestamp = context.time.milliseconds();
 
@@ -450,7 +451,7 @@ public class KafkaRaftClientTest {
 
         Record record = batch.iterator().next();
         assertEquals(electionTimestamp, record.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(firstNodeId, secondNodeId, localId),
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
             Arrays.asList(firstNodeId, localId), record.key(), record.value());
     }
 
@@ -586,8 +587,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -615,8 +619,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -645,8 +652,11 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -1983,6 +1993,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         long now = context.time.milliseconds();
 
+        context.pollUntil(() -> context.log.endOffset().offset == 1L);
         context.assertElectedLeader(1, localId);
 
         // We still write the leader change message
@@ -2069,6 +2080,7 @@ public class KafkaRaftClientTest {
         int epoch = 1;
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
             .build();
+        context.pollUntil(() -> context.log.endOffset().offset == 1L);
 
         assertNotNull(getMetric(context.metrics, "current-state"));
         assertNotNull(getMetric(context.metrics, "current-leader"));
