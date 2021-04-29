@@ -199,29 +199,33 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int num_nodes: the number of nodes in the service.  There are 4 possibilities:
             1) Zookeeper quorum:
                 The number of brokers is defined by this parameter.
+                The broker.id values will be 1..num_nodes.
             2) Co-located Raft quorum:
                 The number of nodes having a broker role is defined by this parameter.
+                The node.id values will be 1..num_nodes
                 The number of nodes having a controller role will by default be 1, 3, or 5 depending on num_nodes
                 (1 if num_nodes < 3, otherwise 3 if num_nodes < 5, otherwise 5).  This calculation
                 can be overridden via controller_num_nodes_override, which must be between 1 and num_nodes,
                 inclusive, when non-zero.  Here are some possibilities:
                 num_nodes = 1:
-                    node 0: broker.roles=broker+controller
+                    broker having node.id=1: broker.roles=broker+controller
                 num_nodes = 2:
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker
                 num_nodes = 3:
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker+controller
-                    node 2: broker.roles=broker+controller
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker+controller
+                    broker having node.id=3: broker.roles=broker+controller
                 num_nodes = 3, controller_num_nodes_override = 1
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker
-                    node 2: broker.roles=broker
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker
+                    broker having node.id=3: broker.roles=broker
             3) Remote Raft quorum when instantiating the broker service:
                 The number of nodes, all of which will have broker.roles=broker, is defined by this parameter.
+                The node.id values will be 1..num_nodes
             4) Remote Raft quorum when instantiating the controller service:
                 The number of nodes, all of which will have broker.roles=controller, is defined by this parameter.
+                The node.id values will be 3001..(3000 + num_nodes)
                 The value passed in is determined by the broker service when that is instantiated, and it uses the
                 same algorithm as described above: 1, 3, or 5 unless controller_num_nodes_override is provided.
         :param ZookeeperService zk:
