@@ -121,6 +121,7 @@ public class RecordCollectorImpl implements RecordCollector {
             } catch (final KafkaException fatal) {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
+                //Named
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
                     "' for task " + taskId + " due to " + fatal.toString(),
                     fatal
@@ -129,6 +130,8 @@ public class RecordCollectorImpl implements RecordCollector {
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
             } else {
+                //Named
+
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
                     ". This can happen if the topic does not exist.");
             }
@@ -158,6 +161,7 @@ public class RecordCollectorImpl implements RecordCollector {
         } catch (final ClassCastException exception) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            //Named
             throw new StreamsException(
                 String.format(
                     "ClassCastException while producing data to topic %s. " +
@@ -174,6 +178,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 exception);
         } catch (final RuntimeException exception) {
             final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
+            //Named
             throw new StreamsException(errorMessage, exception);
         }
 
@@ -206,6 +211,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
         if (isFatalException(exception)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
+            //Named
             sendException.set(new StreamsException(errorMessage, exception));
         } else if (exception instanceof ProducerFencedException ||
                 exception instanceof InvalidProducerEpochException ||

@@ -177,6 +177,7 @@ public class StateDirectory {
 
         if (!lockStateDirectory()) {
             log.error("Unable to obtain lock as state directory is already locked by another process");
+            //Named
             throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
                                            "Kafka Streams are running in the same state directory");
         }
@@ -370,6 +371,7 @@ public class StateDirectory {
                 stateDirLockChannel = null;
             } catch (final IOException e) {
                 log.error("Unexpected exception while unlocking the state dir", e);
+                //Named
                 throw new StreamsException("Failed to release the lock on the state directory", e);
             }
 
@@ -387,6 +389,7 @@ public class StateDirectory {
         try {
             cleanRemovedTasksCalledByUser();
         } catch (final Exception e) {
+            //Named
             throw new StreamsException(e);
         }
 
@@ -400,6 +403,7 @@ public class StateDirectory {
                     logPrefix(), appId),
                 exception
             );
+            //Named
             throw new StreamsException(exception);
         }
     }

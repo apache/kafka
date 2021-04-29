@@ -140,6 +140,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             } catch (final IOException e1) {
                 log.error("Failed to unlock the global state directory", e);
             }
+            //Named
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
 
@@ -339,6 +340,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 return supplier.get();
             } catch (final TimeoutException retriableException) {
                 if (taskTimeoutMs == 0L) {
+                    //Named
+
                     throw new StreamsException(
                         String.format(
                             "Retrying is disabled. You can enable it by setting `%s` to a value larger than zero.",

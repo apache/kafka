@@ -240,6 +240,8 @@ public class InternalTopicManager {
                         log.info("Retrieving data for internal topic {} timed out.", topicName);
                     } else {
                         log.error("Unexpected error during internal topic validation: ", cause);
+                        //Named
+
                         throw new StreamsException(
                             String.format("Could not validate internal topic %s for the following reason: ", topicName),
                             cause
@@ -445,6 +447,8 @@ public class InternalTopicManager {
                         } else {
                             log.error("Unexpected error during topic creation for {}.\n" +
                                 "Error message was: {}", topicName, cause.toString());
+                            //Named
+
                             throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                         }
                     } catch (final TimeoutException retriableException) {
@@ -515,6 +519,8 @@ public class InternalTopicManager {
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
+                    //Named
+
                     throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                 }
             } catch (final TimeoutException retriableException) {
@@ -545,6 +551,7 @@ public class InternalTopicManager {
             final Optional<Integer> numberOfPartitions = topicsMap.get(topicName).numberOfPartitions();
             if (!numberOfPartitions.isPresent()) {
                 log.error("Found undefined number of partitions for topic {}", topicName);
+                //Named
                 throw new StreamsException("Topic " + topicName + " number of partitions not defined");
             }
             if (existedTopicPartition.containsKey(topicName)) {
@@ -554,6 +561,8 @@ public class InternalTopicManager {
                             "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
                         topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
+                    //Named
+
                     throw new StreamsException(errorMsg);
                 }
             } else {
@@ -637,7 +646,9 @@ public class InternalTopicManager {
                             cleanUpCreatedTopics(createdTopics);
                             log.error("Unexpected error during creation of internal topic: ", cause);
                             throw new StreamsException(
-                                String.format("Could not create internal topic %s for the following reason: ", topicName),
+                                    //Named
+
+                                    String.format("Could not create internal topic %s for the following reason: ", topicName),
                                 cause
                             );
                         }

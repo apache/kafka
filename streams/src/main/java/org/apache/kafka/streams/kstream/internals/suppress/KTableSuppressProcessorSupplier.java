@@ -178,6 +178,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                         buffer.evictWhile(this::overCapacity, this::emit);
                         return;
                     case SHUT_DOWN:
+                        //Named
                         throw new StreamsException(String.format(
                             "%s buffer exceeded its max capacity. Currently [%d/%d] records and [%d/%d] bytes.",
                             internalProcessorContext.currentNode().name(),

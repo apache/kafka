@@ -256,6 +256,7 @@ class ActiveTaskCreator {
             try {
                 threadProducer.close();
             } catch (final RuntimeException e) {
+                //Named
                 throw new StreamsException("Thread producer encounter error trying to close.", e);
             }
         }
@@ -267,6 +268,7 @@ class ActiveTaskCreator {
             try {
                 taskProducer.close();
             } catch (final RuntimeException e) {
+                //Named
                 throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e);
             }
         }

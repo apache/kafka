@@ -76,6 +76,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
         public void process(final K key, final Change<V> value) {
             // the keys should never be null
             if (key == null) {
+                //Named
                 throw new StreamsException("Record key for KTable reduce operator with state " + storeName + " should not be null.");
             }
 

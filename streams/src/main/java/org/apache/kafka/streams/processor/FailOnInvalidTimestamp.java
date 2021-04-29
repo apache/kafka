@@ -68,6 +68,7 @@ public class FailOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
             "Use a different TimestampExtractor to process this data.";
 
         log.error(message);
+        //Named
         throw new StreamsException(message);
     }
 
