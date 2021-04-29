@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
@@ -1516,6 +1517,8 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
+     * @throws StreamsNotStartedException If Streams state is {@link KafkaStreams.State#CREATED CREATED}. Just
+     *         retry and wait until to {@link KafkaStreams.State#RUNNING RUNNING}.
      * @throws UnknownStateStoreException If the specified store name does not exist in the topology.
      * @throws InvalidStateStoreException If the Streams instance isn't in a queryable state.
      *                                    If the store's type does not match the QueryableStoreType,
@@ -1524,6 +1527,12 @@ public class KafkaStreams implements AutoCloseable {
      *                                    an InvalidStateStoreException is thrown upon store access.
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                throw new StreamsNotStartedException("KafkaStreams is not started, you can retry and wait until to running.");
+            }
+        }
+
         final String storeName = storeQueryParameters.storeName();
         if ((taskTopology == null || !taskTopology.hasStore(storeName))
             && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
