@@ -80,6 +80,7 @@ public class StreamsProducerTest {
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"))
     );
 
+    @SuppressWarnings("deprecation")
     private final StreamsConfig eosAlphaConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
@@ -89,7 +90,7 @@ public class StreamsProducerTest {
     private final StreamsConfig eosBetaConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA))
+        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
     );
 
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
@@ -311,7 +312,7 @@ public class StreamsProducerTest {
             () -> nonEosStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled [test]"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -321,7 +322,7 @@ public class StreamsProducerTest {
             () -> eosAlphaStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled [test]"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
 
@@ -330,7 +331,7 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
-    public void shouldNotSetTransactionIdIfEosDisable() {
+    public void shouldNotSetTransactionIdIfEosDisabled() {
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
         expect(mockConfig.getProducerConfigs("threadId-producer")).andReturn(mock(Map.class));
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE).anyTimes();
@@ -441,6 +442,7 @@ public class StreamsProducerTest {
         assertThat(eosBetaStreamsProducer.eosEnabled(), is(true));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetTransactionIdUsingTaskIdIfEosAlphaEnabled() {
         final Map<String, Object> mockMap = mock(Map.class);
@@ -467,7 +469,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldSetTransactionIdUsingProcessIdIfEosBetaEnable() {
+    public void shouldSetTransactionIdUsingProcessIdIfEosV2Enabled() {
         final UUID processId = UUID.randomUUID();
 
         final Map<String, Object> mockMap = mock(Map.class);
@@ -477,7 +479,7 @@ public class StreamsProducerTest {
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
         expect(mockConfig.getProducerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_BETA).anyTimes();
+        expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_V2).anyTimes();
 
         replay(mockMap, mockConfig);
 
@@ -682,7 +684,7 @@ public class StreamsProducerTest {
                 logContext)
         );
 
-        assertThat(thrown.getMessage(), is("processId cannot be null for exactly-once beta"));
+        assertThat(thrown.getMessage(), is("processId cannot be null for exactly-once v2"));
     }
 
     @Test
