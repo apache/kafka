@@ -104,7 +104,8 @@ public class ClientCompatibilityTest {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("client-compatibility-test")
+            .newFor("client-compatibility-test")
+            .build()
             .defaultHelp(true)
             .description("This tool is used to verify client compatibility guarantees.");
         parser.addArgument("--topic")
