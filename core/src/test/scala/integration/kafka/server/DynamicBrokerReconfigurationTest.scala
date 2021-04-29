@@ -512,6 +512,25 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
+  private def verifyLiCombinedControlRequestEnable(expected: Boolean): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      servers.forall(server => server.config.liCombinedControlRequestEnable == expected)
+    }, s"The LiCombinedControlRequestEnable does not reach the expected state $expected")
+  }
+
+  @Test
+  def testLiCombinedControlRequestEnable(): Unit = {
+    verifyLiCombinedControlRequestEnable(false)
+    val props = new Properties
+    props.put(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LiCombinedControlRequestEnableProp, "true"))
+    verifyLiCombinedControlRequestEnable(true)
+
+    props.put(KafkaConfig.LiCombinedControlRequestEnableProp, "false")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LiCombinedControlRequestEnableProp, "false"))
+    verifyLiCombinedControlRequestEnable(false)
+  }
+
   @Test
   def testConsecutiveConfigChange(): Unit = {
     val topic2 = "testtopic2"
