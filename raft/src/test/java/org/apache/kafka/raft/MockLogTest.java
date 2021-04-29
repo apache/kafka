@@ -235,8 +235,9 @@ public class MockLogTest {
         final long initialOffset = 0;
         final int currentEpoch = 3;
         LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
+        ByteBuffer buffer = ByteBuffer.allocate(256);
         log.appendAsLeader(
-            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, messageData),
+            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, buffer, messageData),
             currentEpoch
         );
 
