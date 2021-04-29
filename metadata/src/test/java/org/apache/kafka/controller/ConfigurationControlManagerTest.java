@@ -84,7 +84,7 @@ public class ConfigurationControlManagerTest {
     public void testReplay() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), 0, snapshotRegistry, CONFIGS);
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -142,7 +142,7 @@ public class ConfigurationControlManagerTest {
     public void testIncrementalAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), 0, snapshotRegistry, CONFIGS);
         assertEquals(
             ControllerResult.atomicOf(
                 Collections.singletonList(
@@ -185,7 +185,7 @@ public class ConfigurationControlManagerTest {
     public void testIsSplittable() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), 0, snapshotRegistry, CONFIGS);
         assertTrue(manager.isSplittable(BROKER, "foo.bar"));
         assertFalse(manager.isSplittable(BROKER, "baz"));
         assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
@@ -197,7 +197,7 @@ public class ConfigurationControlManagerTest {
     public void testGetConfigValueDefault() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), 0, snapshotRegistry, CONFIGS);
         assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
         assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
         assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
@@ -208,7 +208,7 @@ public class ConfigurationControlManagerTest {
     public void testLegacyAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), 0, snapshotRegistry, CONFIGS);
         List<ApiMessageAndVersion> expectedRecords1 = Arrays.asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").

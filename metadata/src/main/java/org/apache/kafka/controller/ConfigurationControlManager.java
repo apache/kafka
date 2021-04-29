@@ -42,23 +42,38 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.Function;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 
 
 public class ConfigurationControlManager {
+    static final ConfigResource DEFAULT_NODE_RESOURCE = new ConfigResource(Type.BROKER, "");
+
     private final Logger log;
+    private final int nodeId;
+    private final ConfigResource currentNodeResource;
     private final SnapshotRegistry snapshotRegistry;
     private final Map<ConfigResource.Type, ConfigDef> configDefs;
+    private final TimelineHashMap<String, String> emptyMap;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
+    private final Function<String, String> topicUncleanConfigAccessor;
 
     ConfigurationControlManager(LogContext logContext,
+                                int nodeId,
                                 SnapshotRegistry snapshotRegistry,
                                 Map<ConfigResource.Type, ConfigDef> configDefs) {
         this.log = logContext.logger(ConfigurationControlManager.class);
+        this.nodeId = nodeId;
+        this.currentNodeResource = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.snapshotRegistry = snapshotRegistry;
         this.configDefs = configDefs;
+        this.emptyMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.topicUncleanConfigAccessor = topicName ->
+            configData.getOrDefault(new ConfigResource(Type.TOPIC, topicName), emptyMap).
+                get(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
     }
 
     /**
@@ -372,6 +387,20 @@ public class ConfigurationControlManager {
 
     void deleteTopicConfigs(String name) {
         configData.remove(new ConfigResource(Type.TOPIC, name));
+    }
+
+    ConfigResource currentNodeResource() {
+        return currentNodeResource;
+    }
+
+    ElectionStrategizer createElectionStrategizer() {
+        ElectionStrategizer strategizer = new ElectionStrategizer(nodeId).
+            setNodeUncleanConfig(configData.getOrDefault(currentNodeResource, emptyMap).
+                get(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)).
+            setClusterUncleanConfig(configData.getOrDefault(DEFAULT_NODE_RESOURCE, emptyMap).
+                get(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)).
+            setTopicUncleanConfigAccessor(topicUncleanConfigAccessor);
+        return strategizer;
     }
 
     class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {

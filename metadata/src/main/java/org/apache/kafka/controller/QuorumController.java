@@ -919,7 +919,7 @@ public final class QuorumController implements Controller {
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
-        this.configurationControl = new ConfigurationControlManager(logContext,
+        this.configurationControl = new ConfigurationControlManager(logContext, nodeId,
             snapshotRegistry, configDefs);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
@@ -1018,7 +1018,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly) {
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges);
+                replicationControl.incrementalAlterConfigs(configChanges);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1051,7 +1051,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs);
+                replicationControl.legacyAlterConfigs(newConfigs);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {

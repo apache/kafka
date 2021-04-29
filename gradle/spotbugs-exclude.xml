@@ -475,4 +475,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Package name="org.apache.kafka.jmh.metadata.generated"/>
     </Match>
 
+    <Match>
+        <!-- Suppress warnings related to returning null for a Boolean -->
+        <Class name="org.apache.kafka.controller.ElectionStrategizer"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>
