@@ -34,16 +34,12 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,6 +68,7 @@ public class StateDirectory {
         @JsonProperty
         private final UUID processId;
 
+        // required by jackson -- do not remove, your IDE may be warning that this is unused but it's lying to you
         public StateDirectoryProcessFile() {
             this.processId = null;
         }
@@ -242,10 +239,10 @@ public class StateDirectory {
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
         final File taskDir = getOrCreateDirectoryForTask(taskId);
 
-        return taskDirEmpty(taskDir);
+        return taskDirIsEmpty(taskDir);
     }
 
-    private boolean taskDirEmpty(final File taskDir) {
+    private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
                 !pathname.getName().equals(CHECKPOINT_FILE_NAME));
 
@@ -475,7 +472,7 @@ public class StateDirectory {
                     if (!pathname.isDirectory() || !TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches()) {
                         return false;
                     } else {
-                        return !taskDirEmpty(pathname);
+                        return !taskDirIsEmpty(pathname);
                     }
                 });
         }

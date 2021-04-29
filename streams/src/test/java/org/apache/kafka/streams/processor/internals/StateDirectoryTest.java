@@ -648,6 +648,7 @@ public class StateDirectoryTest {
         @JsonProperty
         private final String newField;
 
+        // required by jackson -- do not remove, your IDE may be warning that this is unused but it's lying to you
         public FutureStateDirectoryProcessFile() {
             this.processId = null;
             this.newField = null;
