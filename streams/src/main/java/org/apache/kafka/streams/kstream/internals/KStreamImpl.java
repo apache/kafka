@@ -93,6 +93,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
+    static final String OUTERSHARED_NAME = "KSTREAM-OUTERSHARED-";
+
     static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
     static final String SINK_NAME = "KSTREAM-SINK-";
