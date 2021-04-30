@@ -43,6 +43,8 @@ class Tasks {
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
+    private final Collection<Task> misbehavingTasks = new HashSet<>();
+    private final Collection<Task> taskJail = new HashSet<>();
 
     // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
@@ -253,6 +255,14 @@ class Tasks {
         return readOnlyTasks;
     }
 
+    Collection<Task> misbehavingTasks() {
+        return Collections.unmodifiableCollection(misbehavingTasks);
+    }
+
+    Collection<Task> brokenTasks() {
+        return Collections.unmodifiableCollection(taskJail);
+    }
+
     Set<TaskId> activeTaskIds() {
         return readOnlyActiveTaskIds;
     }
@@ -303,5 +313,27 @@ class Tasks {
             standbyTasksPerId.put(task.id(), task);
         }
         allTasksPerId.put(task.id(), task);
+    }
+
+    public void deprioritizeNamedTopology(final String name) {
+        for (final Task task: readOnlyTasks) {
+            if (task.id().namedTopology().equals(name)) {
+                misbehavingTasks.add(task);
+            }
+        }
+        for (final Task task: misbehavingTasks) {
+            misbehavingTasks.remove(task);
+            taskJail.add(task);
+            task.suspend();
+        }
+    }
+
+    public void reprioritizeTasks() {
+        misbehavingTasks.clear();
+        for (final Task task: taskJail) {
+            task.resume();
+            misbehavingTasks.add(task);
+            taskJail.remove(task);
+        }
     }
 }

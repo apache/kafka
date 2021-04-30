@@ -837,6 +837,10 @@ public class StreamThread extends Thread {
         }
     }
 
+    public void deprioritizeNamedTopology(final String name) {
+        taskManager.deprioritizeNamedTopology(name);
+    }
+
     private void initializeAndRestorePhase() {
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
