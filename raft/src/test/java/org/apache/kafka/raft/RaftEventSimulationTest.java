@@ -988,7 +988,7 @@ public class RaftEventSimulationTest {
 
                     assertTrue(
                         logStartOffset <= earliestSnapshotId.offset,
-                        String.format(
+                        () -> String.format(
                             "invalid log start offset (%s) and snapshotId offset (%s): nodeId = %s",
                             logStartOffset,
                             earliestSnapshotId.offset,
@@ -998,19 +998,18 @@ public class RaftEventSimulationTest {
                     assertEquals(
                         ValidOffsetAndEpoch.valid(earliestSnapshotId),
                         validateOffsetAndEpoch,
-                        String.format("invalid leader epoch cache: nodeId = %s", nodeId)
+                        () -> String.format("invalid leader epoch cache: nodeId = %s", nodeId)
                     );
 
                     if (logStartOffset > 0) {
                         assertEquals(
                             logStartOffset,
                             earliestSnapshotId.offset,
-                            String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
                 });
             }
-
         }
     }
 
