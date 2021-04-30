@@ -1545,10 +1545,10 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List active transactions in the cluster. This will query all potential transaction
-     * coordinators in the cluster and collect the state of all transactionalIds. Users
+     * coordinators in the cluster and collect the state of all transactions. Users
      * should typically attempt to reduce the size of the result set using
-     * {@link ListTransactionsOptions#filterProducerIds(Set)} or
-     * {@link ListTransactionsOptions#filterStates(Set)}
+     * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
+     * {@link ListTransactionsOptions#filterStates(Collection)}
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result

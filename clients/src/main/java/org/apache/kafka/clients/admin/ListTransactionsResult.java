@@ -67,11 +67,8 @@ public class ListTransactionsResult {
             }
 
             Set<Integer> remainingResponses = new HashSet<>(map.keySet());
-            for (Map.Entry<Integer, KafkaFutureImpl<Collection<TransactionListing>>> entry : map.entrySet()) {
-                Integer brokerId = entry.getKey();
-                KafkaFutureImpl<Collection<TransactionListing>> future = entry.getValue();
+            map.forEach((brokerId, future) -> {
                 future.whenComplete((listings, brokerException) -> {
-
                     if (brokerException != null) {
                         allFuture.completeExceptionally(brokerException);
                     } else if (!allFuture.isDone()) {
@@ -83,7 +80,7 @@ public class ListTransactionsResult {
                         }
                     }
                 });
-            }
+            });
         });
 
         return allFuture;

@@ -34,23 +34,48 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
+    /**
+     * Filter only the transactions that are in a specific set of states. If no filter
+     * is specified or if the passed set of states is empty, then transactions in all
+     * states will be returned.
+     *
+     * @param states the set of states to filter by
+     * @return this object
+     */
     public ListTransactionsOptions filterStates(Collection<TransactionState> states) {
         this.filteredStates = new HashSet<>(states);
         return this;
     }
 
+    /**
+     * Filter only the transactions from producers in a specific set of producerIds.
+     * If no filter is specified or if the passed collection of producerIds is empty,
+     * then the transactions of all producerIds will be returned.
+     *
+     * @param producerIdFilters the set of producerIds to filter by
+     * @return this object
+     */
     public ListTransactionsOptions filterProducerIds(Collection<Long> producerIdFilters) {
         this.filteredProducerIds = new HashSet<>(producerIdFilters);
         return this;
     }
 
     /**
-     * Returns the list of States that are requested or empty if no states have been specified
+     * Returns the set of states to be filtered or empty if no states have been specified.
+     *
+     * @return the current set of filtered states (empty means that no states are filtered and all
+     *         all transactions will be returned)
      */
     public Set<TransactionState> filteredStates() {
         return filteredStates;
     }
 
+    /**
+     * Returns the set of producerIds that are being filtered or empty if none have been specified.
+     *
+     * @return the current set of filtered states (empty means that no producerIds are filtered and
+     *         all transactions will be returned)
+     */
     public Set<Long> filteredProducerIds() {
         return filteredProducerIds;
     }

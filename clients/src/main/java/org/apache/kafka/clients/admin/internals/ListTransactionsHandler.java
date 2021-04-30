@@ -116,12 +116,12 @@ public class ListTransactionsHandler implements AdminApiHandler<AllBrokersStrate
         int brokerId
     ) {
         if (keys.size() != 1) {
-            throw new IllegalArgumentException("Unexpected key set" + keys);
+            throw new IllegalArgumentException("Unexpected key set: " + keys);
         }
 
         AllBrokersStrategy.BrokerKey key = keys.iterator().next();
         if (!key.brokerId.isPresent() || key.brokerId.getAsInt() != brokerId) {
-            throw new IllegalArgumentException("Unexpected broker key" + key);
+            throw new IllegalArgumentException("Unexpected broker key: " + key);
         }
 
         return key;
