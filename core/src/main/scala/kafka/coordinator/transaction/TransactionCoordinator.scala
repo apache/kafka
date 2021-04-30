@@ -289,23 +289,28 @@ class TransactionCoordinator(brokerId: Int,
         case Right(Some(coordinatorEpochAndMetadata)) =>
           val txnMetadata = coordinatorEpochAndMetadata.transactionMetadata
           txnMetadata.inLock {
-            txnMetadata.topicPartitions.foreach { topicPartition =>
-              var topicData = transactionState.topics.find(topicPartition.topic)
-              if (topicData == null) {
-                topicData = new DescribeTransactionsResponseData.TopicData()
-                  .setTopic(topicPartition.topic)
-                transactionState.topics.add(topicData)
+            if (txnMetadata.state == Dead) {
+              // The transaction state is being expired, so ignore it
+              transactionState.setErrorCode(Errors.TRANSACTIONAL_ID_NOT_FOUND.code)
+            } else {
+              txnMetadata.topicPartitions.foreach { topicPartition =>
+                var topicData = transactionState.topics.find(topicPartition.topic)
+                if (topicData == null) {
+                  topicData = new DescribeTransactionsResponseData.TopicData()
+                    .setTopic(topicPartition.topic)
+                  transactionState.topics.add(topicData)
+                }
+                topicData.partitions.add(topicPartition.partition)
               }
-              topicData.partitions.add(topicPartition.partition)
-            }
 
-            transactionState
-              .setErrorCode(Errors.NONE.code)
-              .setProducerId(txnMetadata.producerId)
-              .setProducerEpoch(txnMetadata.producerEpoch)
-              .setTransactionState(txnMetadata.state.name)
-              .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
-              .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
+              transactionState
+                .setErrorCode(Errors.NONE.code)
+                .setProducerId(txnMetadata.producerId)
+                .setProducerEpoch(txnMetadata.producerEpoch)
+                .setTransactionState(txnMetadata.state.name)
+                .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
+                .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
+            }
           }
       }
     }

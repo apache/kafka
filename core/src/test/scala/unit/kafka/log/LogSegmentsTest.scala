@@ -18,10 +18,11 @@ package kafka.log
 
 import java.io.File
 
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class LogSegmentsTest {
 
@@ -33,6 +34,16 @@ class LogSegmentsTest {
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
     LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+  }
+
+  @BeforeEach
+  def setup(): Unit = {
+    logDir = TestUtils.tempDir()
+  }
+
+  @AfterEach
+  def teardown(): Unit = {
+    Utils.delete(logDir)
   }
 
   private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[java.lang.Long, LogSegment]): Unit = {
@@ -89,11 +100,14 @@ class LogSegmentsTest {
     assertFalse(segments.nonEmpty)
     assertEquals(0, segments.numberOfSegments)
     assertFalse(segments.contains(offset1))
+
+    segments.close()
   }
 
   @Test
   def testSegmentAccess(): Unit = {
     val segments = new LogSegments(topicPartition)
+
     val offset1 = 1
     val seg1 = createSegment(offset1)
     val offset2 = 2
@@ -130,11 +144,13 @@ class LogSegmentsTest {
     assertEquals(Seq(), segments.values(4, 4).toSeq)
     assertEquals(Seq(seg4), segments.values(4, 5).toSeq)
 
+    segments.close()
   }
 
   @Test
   def testClosestMatchOperations(): Unit = {
     val segments = new LogSegments(topicPartition)
+
     val seg1 = createSegment(1)
     val seg2 = createSegment(3)
     val seg3 = createSegment(5)
@@ -159,5 +175,7 @@ class LogSegmentsTest {
     assertEntry(seg3, segments.higherEntry(4).get)
     assertEquals(Some(seg4), segments.higherSegment(5))
     assertEntry(seg4, segments.higherEntry(5).get)
+
+    segments.close()
   }
 }

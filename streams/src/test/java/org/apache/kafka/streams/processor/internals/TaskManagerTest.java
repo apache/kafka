@@ -575,12 +575,12 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosBetaEnabled() {
+    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
         replay(activeTaskCreator);
 
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         taskManager.handleLostAll();
 
@@ -941,7 +941,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1079,7 +1079,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1355,9 +1355,9 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosBeta() {
+    public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         final StreamsProducer producer = mock(StreamsProducer.class);
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -2221,7 +2221,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitViaProducerIfEosBetaEnabled() {
+    public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andReturn(producer);
 
@@ -2234,7 +2234,7 @@ public class TaskManagerTest {
         producer.commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
         expectLastCall();
 
-        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_BETA, producer, offsetsT01, offsetsT02);
+        shouldCommitViaProducerIfEosEnabled(StreamThread.ProcessingMode.EXACTLY_ONCE_V2, producer, offsetsT01, offsetsT02);
     }
 
     private void shouldCommitViaProducerIfEosEnabled(final StreamThread.ProcessingMode processingMode,
@@ -3059,8 +3059,8 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosBeta() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+    public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosV2() {
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer())

@@ -104,9 +104,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    // visible for testing
-    volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
-
     protected volatile boolean open = false;
 
     RocksDBStore(final String name,
@@ -239,11 +236,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
@@ -252,11 +248,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
-        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        context.register(root, new RocksDBBatchingRestoreCallback(this));
     }
 
     @Override
@@ -347,6 +342,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         put(key, null);
         return oldValue;
+    }
+
+    void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+
+        validateStoreOpen();
+
+        // End of key is exclusive, so we increment it by 1 byte to make keyTo inclusive
+        dbAccessor.deleteRange(keyFrom.get(), Bytes.increment(keyTo).get());
     }
 
     @Override
@@ -524,6 +529,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                               final Bytes to,
                                               final boolean forward);
 
+        /**
+         * Deletes keys entries in the range ['from', 'to'], including 'from' and excluding 'to'.
+         */
+        void deleteRange(final byte[] from,
+                         final byte[] to);
+
         KeyValueIterator<Bytes, byte[]> all(final boolean forward);
 
         KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
@@ -601,6 +612,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 forward,
                 true
             );
+        }
+
+        @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(columnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
         }
 
         @Override

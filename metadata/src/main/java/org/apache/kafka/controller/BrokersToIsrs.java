@@ -311,8 +311,16 @@ public class BrokersToIsrs {
         return new PartitionsOnReplicaIterator(topicMap, leadersOnly);
     }
 
-    PartitionsOnReplicaIterator noLeaderIterator() {
+    PartitionsOnReplicaIterator partitionsWithNoLeader() {
         return iterator(NO_LEADER, true);
+    }
+
+    PartitionsOnReplicaIterator partitionsLedByBroker(int brokerId) {
+        return iterator(brokerId, true);
+    }
+
+    PartitionsOnReplicaIterator partitionsWithBrokerInIsr(int brokerId) {
+        return iterator(brokerId, false);
     }
 
     boolean hasLeaderships(int brokerId) {

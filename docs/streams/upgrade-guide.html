@@ -53,16 +53,18 @@
     </ul>
 
     <p>
-        Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2, which is configurable by setting 
-        <code>processing.guarantee</code> to <code>"exactly_once_beta"</code>.
-        <b>NOTE:</b> The <code>"exactly_once_beta"</code> processing mode is ready for production (<i>i.e.</i>, it's not "beta" software). 
+        Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
+        by setting <code>"processing.guarantee"</code> to <code>"exactly_once"</code> for
+        application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
-        A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
-        only possible if the application is on version 2.6.x.
-        If you want to upgrade your application from an older version and enable this feature,
-        you first need to upgrade your application to version 2.6.x, staying on <code>"exactly_once"</code>,
-        and then do second round of rolling bounces to switch to <code>"exactly_once_beta"</code>.
-        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_beta"</code> to
+        If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
+        you first need to upgrade your application to version 3.0.x, staying on <code>"exactly_once"</code>,
+        and then do second round of rolling bounces to switch to <code>"exactly_once_v2"</code>. If you
+        are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these
+        same steps but with the config <code>"exactly_once_beta"</code> instead. No special steps are required
+        to upgrade an application using <code>"exactly_once_beta"</code> from version 2.6+ to 3.0 or higher: you can
+        just change the config from <code>"exactly_once_beta"</code> to <code>"exactly_once_v2"</code> during the rolling upgrade.
+        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_v2"</code> to
         <code>"exactly_once"</code> to disable the feature in your 2.6.x application.
         Afterward, you can downgrade your application to a pre-2.6.x version.
     </p>
@@ -94,6 +96,17 @@
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
     <p>
+        A new exception may be thrown from <code>KafkaStreams#store()</code>. If the specified store name does not exist in the topology, an UnknownStateStoreException will be thrown instead of the former InvalidStateStoreException. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-216%3A+IQ+should+throw+different+exceptions+for+different+errors">KIP-216</a> for more information.
+    </p>
+    <p>
+      We deprecated the StreamsConfig <code>processing.guarantee</code> configuration value <code>"exactly_once"</code> (for EOS version 1) in favor of the improved EOS version 2, formerly configured via
+      <code>"exactly_once_beta</code>. To avoid confusion about the term "beta" in the config name and highlight the production-readiness of EOS version 2, we have also renamed "eos-beta" to "eos-v2"
+      and deprecated the configuration value <code>"exactly_once_beta"</code>, replacing it with a new configuration value <code>"exactly_once_v2"</code>
+      Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
+      from the release of 3.0, whichever comes last. Note that eos-v2 requires broker version 2.5 or higher, like eos-beta, so users should begin to upgrade their kafka cluster if necessary. See
+      <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
+    </p>
+    <p>
         We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
     </p>
     <p>
@@ -107,6 +120,7 @@
         <li> Overloaded <code>JoinWindows#of, before, after</code>, <code>SessionWindows#with</code>, <code>TimeWindows#of, advanceBy</code>, <code>UnlimitedWindows#startOn</code> and <code>KafkaStreams#close</code> with <code>long</code> typed parameters: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>).</li>
         <li> Overloaded <code>KStream#groupBy, groupByKey</code> and <code>KTable#groupBy</code> with <code>Serialized</code> parameter: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-372%3A+Naming+Repartition+Topics+for+Joins+and+Grouping">KIP-372</a>).</li>
         <li> <code>Joined#named, name</code>: deprecated in Kafka 2.3.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</a>).</li>
+        <li> <code>TopologyTestDriver#pipeInput, readOutput</code>, <code>OutputVerifier</code> and <code>ConsumerRecordFactory</code> classes (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements">KIP-470</a>).</li>
         <li> <code>KafkaClientSupplier#getAdminClient</code>: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-476%3A+Add+Java+AdminClient+Interface">KIP-476</a>).</li>
         <li> Overloaded <code>KStream#join, leftJoin, outerJoin</code> with <code>KStream</code> and <code>Joined</code> parameters: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>).</li>
         <li> Overloaded <code>KafkaStreams#metadataForKey</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a>).</li>

@@ -43,13 +43,11 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.UUID;
@@ -79,6 +77,7 @@ public class StateDirectory {
         @JsonProperty
         private final UUID processId;
 
+        // required by jackson -- do not remove, your IDE may be warning that this is unused but it's lying to you
         public StateDirectoryProcessFile() {
             this.processId = null;
         }
@@ -99,13 +98,6 @@ public class StateDirectory {
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
-
-    private FileChannel globalStateChannel;
-    private FileLock globalStateLock;
-
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
-        this(config, time, hasPersistentStores, false);
-    }
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -151,7 +143,9 @@ public class StateDirectory {
         }
     }
 
-
+    StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
+        this(config, time, hasPersistentStores, false);
+    }
 
     private void configurePermissions(final File file) {
         final Path path = file.toPath();
@@ -262,16 +256,34 @@ public class StateDirectory {
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
         final File taskDir = getOrCreateDirectoryForTask(taskId);
 
-        return taskDirEmpty(taskDir);
+        return taskDirIsEmpty(taskDir);
     }
 
-    private boolean taskDirEmpty(final File taskDir) {
+    private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
-            !pathname.getName().equals(LOCK_FILE_NAME) &&
                 !pathname.getName().equals(CHECKPOINT_FILE_NAME));
 
+        boolean taskDirEmpty = true;
+
         // if the task is stateless, storeDirs would be null
-        return storeDirs == null || storeDirs.length == 0;
+        if (storeDirs != null && storeDirs.length > 0) {
+            for (final File file : storeDirs) {
+                // We removed the task directory locking but some upgrading applications may still have old lock files on disk,
+                // we just lazily delete those in this method since it's the only thing that would be affected by these
+                if (file.getName().endsWith(LOCK_FILE_NAME)) {
+                    if (!file.delete()) {
+                        // If we hit an error deleting this just ignore it and move on, we'll retry again at some point
+                        log.warn("Error encountered deleting lock file in {}", taskDir);
+                    }
+                } else {
+                    // If it's not a lock file then the directory is not empty,
+                    // but finish up the loop in case there's a lock file left to delete
+                    log.trace("TaskDir {} was not empty, found {}", taskDir, file);
+                    taskDirEmpty = false;
+                }
+            }
+        }
+        return taskDirEmpty;
     }
 
     /**
@@ -323,51 +335,6 @@ public class StateDirectory {
         }
     }
 
-    synchronized boolean lockGlobalState() throws IOException {
-        if (!hasPersistentStores) {
-            return true;
-        }
-
-        if (globalStateLock != null) {
-            log.trace("{} Found cached state dir lock for the global task", logPrefix());
-            return true;
-        }
-
-        final File lockFile = new File(globalStateDir(), LOCK_FILE_NAME);
-        final FileChannel channel;
-        try {
-            channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        } catch (final NoSuchFileException e) {
-            // FileChannel.open(..) could throw NoSuchFileException when there is another thread
-            // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
-            // file, in this case we will return immediately indicating locking failed.
-            return false;
-        }
-        final FileLock fileLock = tryLock(channel);
-        if (fileLock == null) {
-            channel.close();
-            return false;
-        }
-        globalStateChannel = channel;
-        globalStateLock = fileLock;
-
-        log.debug("{} Acquired global state dir lock", logPrefix());
-
-        return true;
-    }
-
-    synchronized void unlockGlobalState() throws IOException {
-        if (globalStateLock == null) {
-            return;
-        }
-        globalStateLock.release();
-        globalStateChannel.close();
-        globalStateLock = null;
-        globalStateChannel = null;
-
-        log.debug("{} Released global state dir lock", logPrefix());
-    }
-
     /**
      * Unlock the state directory for the given {@link TaskId}.
      */
@@ -395,9 +362,6 @@ public class StateDirectory {
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
             if (!lockedTasksToOwner.isEmpty()) {
                 log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", lockedTasksToOwner);
-            }
-            if (globalStateLock != null) {
-                log.error("Global state lock is present while closing the state, this indicates unclean shutdown");
             }
         }
     }
@@ -450,7 +414,7 @@ public class StateDirectory {
                         if (now > lastModifiedMs + cleanupDelayMs) {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
-                            Utils.delete(taskDir.file(), Collections.singletonList(new File(taskDir.file(), LOCK_FILE_NAME)));
+                            Utils.delete(taskDir.file());
                         }
                     }
                 } catch (final IOException exception) {
@@ -476,7 +440,7 @@ public class StateDirectory {
                     if (lock(id)) {
                         log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
                             logPrefix(), dirName, id);
-                        Utils.delete(taskDir.file(), Collections.singletonList(new File(taskDir.file(), LOCK_FILE_NAME)));
+                        Utils.delete(taskDir.file());
                     } else {
                         log.warn("{} Could not get lock for state directory {} for task {} as user calling cleanup.",
                             logPrefix(), dirName, id);
@@ -520,7 +484,7 @@ public class StateDirectory {
             if (!pathname.isDirectory() || !TASK_DIR_PATH_NAME.matcher(pathname.getName()).matches()) {
                 return false;
             } else {
-                return !taskDirEmpty(pathname);
+                return !taskDirIsEmpty(pathname);
             }
         });
     }

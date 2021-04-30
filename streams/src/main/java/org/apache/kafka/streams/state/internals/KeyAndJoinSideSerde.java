@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.streams.state.internals;
 
-/**
- * An non-sampled cumulative total maintained over all time.
- * This is a non-sampled version of {@link WindowedSum}.
- *
- * See also {@link CumulativeCount} if you just want to increment the value by 1 on each recording.
- *
- * @deprecated since 2.4 . Use {@link CumulativeSum} instead.
- */
-@Deprecated
-public class Total extends CumulativeSum {
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
+
+public class KeyAndJoinSideSerde<K> extends WrappingNullableSerde<KeyAndJoinSide<K>, K, Void> {
+    public KeyAndJoinSideSerde(final Serde<K> keySerde) {
+        super(
+            new KeyAndJoinSideSerializer<>(keySerde != null ? keySerde.serializer() : null),
+            new KeyAndJoinSideDeserializer<>(keySerde != null ? keySerde.deserializer() : null)
+        );
+    }
 }

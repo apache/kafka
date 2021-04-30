@@ -32,8 +32,6 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
@@ -169,32 +167,24 @@ object RequestChannel extends Logging {
 
       bodyAndSize.request match {
         case alterConfigs: AlterConfigsRequest =>
-          val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
-            val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
-                new AlterConfigsRequest.ConfigEntry(entry.name, KafkaConfig.loggableValue(resource.`type`, entry.name, entry.value))
-            }.asJavaCollection)
-            (resource, loggableEntries)
-          }.asJava
-          new AlterConfigsRequest.Builder(loggableConfigs, alterConfigs.validateOnly).build(alterConfigs.version())
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new AlterConfigsRequest(newData, alterConfigs.version())
 
         case alterConfigs: IncrementalAlterConfigsRequest =>
-          val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
-          alterConfigs.data.resources.forEach { resource =>
-            val newResource = new AlterConfigsResource()
-              .setResourceName(resource.resourceName)
-              .setResourceType(resource.resourceType)
-            resource.configs.forEach { config =>
-              newResource.configs.add(new AlterableConfig()
-                .setName(config.name)
-                .setValue(KafkaConfig.loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
-                .setConfigOperation(config.configOperation))
-            }
-            resources.add(newResource)
-          }
-          val data = new IncrementalAlterConfigsRequestData()
-            .setValidateOnly(alterConfigs.data.validateOnly())
-            .setResources(resources)
-          new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new IncrementalAlterConfigsRequest.Builder(newData).build(alterConfigs.version())
 
         case _ =>
           bodyAndSize.request

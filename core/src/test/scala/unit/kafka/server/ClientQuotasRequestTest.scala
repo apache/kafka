@@ -17,10 +17,14 @@
 
 package kafka.server
 
-import integration.kafka.server.IntegrationTestUtils
-import kafka.test.ClusterInstance
-
 import java.net.InetAddress
+import java.util
+import java.util.concurrent.{ExecutionException, TimeUnit}
+
+import kafka.test.ClusterInstance
+import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
@@ -29,12 +33,6 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-
-import java.util
-import java.util.concurrent.{ExecutionException, TimeUnit}
-import kafka.utils.TestUtils
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
 
 import scala.jdk.CollectionConverters._
 
@@ -597,7 +595,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     sendAlterClientQuotasRequest(entries, validateOnly).complete(response)
     val result = response.asScala
     assertEquals(request.size, result.size)
-    request.foreach(e => assertTrue(result.get(e._1).isDefined))
+    request.foreach(e => assertTrue(result.contains(e._1)))
     result
   }
 
