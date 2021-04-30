@@ -36,6 +36,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.util.Objects;
+
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -161,6 +163,7 @@ public class MeteredWindowStore<K, V>
     public void put(final K key,
                     final V value,
                     final long windowStartTimestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(
                 () -> wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp),
@@ -177,6 +180,7 @@ public class MeteredWindowStore<K, V>
     @Override
     public V fetch(final K key,
                    final long timestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
         return maybeMeasureLatency(
             () -> {
                 final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
@@ -195,6 +199,7 @@ public class MeteredWindowStore<K, V>
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
                                         final long timeTo) {
+        Objects.requireNonNull(key, "key cannot be null");
         return new MeteredWindowStoreIterator<>(
             wrapped().fetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
@@ -208,6 +213,7 @@ public class MeteredWindowStore<K, V>
     public WindowStoreIterator<V> backwardFetch(final K key,
                                                 final long timeFrom,
                                                 final long timeTo) {
+        Objects.requireNonNull(key, "key cannot be null");
         return new MeteredWindowStoreIterator<>(
             wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
@@ -223,6 +229,8 @@ public class MeteredWindowStore<K, V>
                                                   final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
@@ -236,6 +244,8 @@ public class MeteredWindowStore<K, V>
                                                           final K keyTo,
                                                           final long timeFrom,
                                                           final long timeTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
