@@ -38,7 +38,7 @@ import java.nio.ByteOrder;
  *
  * Example spec:
  * {
- *    "type": "timestampRandom",
+ *    "type": "timestamp",
  *    "histogramMaxMs": 10000,
  *    "histogramMinMs": 0,
  *    "histogramStepMs": 1
