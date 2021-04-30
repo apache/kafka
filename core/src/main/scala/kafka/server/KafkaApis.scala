@@ -686,7 +686,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       forgottenTopics,
       topicIds)
 
-
     val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
       // Fetch API version 11 added preferred replica logic
       Some(new DefaultClientMetadata(
