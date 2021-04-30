@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -48,7 +47,6 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 final public class KafkaRaftClientSnapshotTest {
     @Test
@@ -1314,7 +1312,7 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     @Test
-    public void testCreateSnapshotWithInvalidSnapshotId() throws Exception {
+    public void testCreateSnapshotAsLeaderWithInvalidSnapshotId() throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -1331,26 +1329,92 @@ final public class KafkaRaftClientSnapshotTest {
         context.becomeLeader();
         int currentEpoch = context.currentEpoch();
 
-        // When creating snapshot:
+        // When leader creating snapshot:
         // 1.1 high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
 
         // 1.2 high watermark must larger than or equal to the snapshotId's endOffset
         advanceHighWatermark(context, currentEpoch, currentEpoch, otherNodeId, localId);
-        assertNotEquals(OptionalLong.empty(), context.client.highWatermark());
+        // append some more records to make the LEO > high watermark
+        List<String> newRecords = Arrays.asList("d", "e", "f");
+        context.client.scheduleAppend(currentEpoch, newRecords);
+        context.time.sleep(context.appendLingerMs());
+        context.client.poll();
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong() + newRecords.size());
+
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
-        assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
 
         // 2 the quorum epoch must larger than or equal to the snapshotId's epoch
         OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
-        assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
 
         // 3 the snapshotId should be validated against endOffsetForEpoch
-        OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(currentEpoch);
-        assertEquals(currentEpoch, endOffsetForEpoch.epoch);
-        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, currentEpoch);
-        assertThrows(KafkaException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
+        OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(epoch);
+        assertEquals(epoch, endOffsetForEpoch.epoch);
+        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, epoch);
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
+    }
+
+    @Test
+    public void testCreateSnapshotAsFollowerWithInvalidSnapshotId() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .withElectedLeader(epoch, otherNodeId)
+                .build();
+        context.assertElectedLeader(epoch, otherNodeId);
+
+        // When follower creating snapshot:
+        // 1.1) high watermark cannot be empty
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(0, 0);
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1));
+
+        // Poll for our first fetch request
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        assertTrue(voters.contains(fetchRequest.destinationId()));
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+
+        // The response does not advance the high watermark
+        List<String> records1 = Arrays.asList("a", "b", "c");
+        MemoryRecords batch1 = context.buildBatch(0L, 3, records1);
+        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
+                context.fetchResponse(epoch, otherNodeId, batch1, 0L, Errors.NONE));
+        context.client.poll();
+
+        // 1.2) high watermark must larger than or equal to the snapshotId's endOffset
+        int currentEpoch = context.currentEpoch();
+        OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2));
+
+        // 2) the quorum epoch must larger than or equal to the snapshotId's epoch
+        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch + 1);
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3));
+
+        // The high watermark advances to be larger than log.endOffsetForEpoch(3), to test the case 3
+        context.pollUntilRequest();
+        fetchRequest = context.assertSentFetchRequest();
+        assertTrue(voters.contains(fetchRequest.destinationId()));
+        context.assertFetchRequestData(fetchRequest, epoch, 3L, 3);
+
+        List<String> records2 = Arrays.asList("d", "e", "f");
+        MemoryRecords batch2 = context.buildBatch(3L, 4, records2);
+        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
+                context.fetchResponse(epoch, otherNodeId, batch2, 4L, Errors.NONE));
+        context.client.poll();
+        assertEquals(4L, context.client.highWatermark().getAsLong());
+
+        // 3) the snapshotId should be validated against endOffsetForEpoch
+        OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(3);
+        assertEquals(3, endOffsetForEpoch.epoch);
+        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset + 1, epoch);
+        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4));
     }
 
     private void advanceHighWatermark(RaftClientTestContext context,
