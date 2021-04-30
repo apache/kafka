@@ -42,8 +42,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -77,7 +75,6 @@ public class FetchSessionBenchmark {
         topicIds = new HashMap<>();
         FetchSessionHandler.Builder builder = handler.newBuilder();
 
-        List<FetchResponseData.FetchableTopicResponse> unresolvedTopicData = new LinkedList<>();
         Uuid id = Uuid.randomUuid();
         topicIds.put("foo", id);
 
@@ -95,7 +92,7 @@ public class FetchSessionBenchmark {
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(FetchResponse.prepareResponse(Errors.NONE, respMap, unresolvedTopicData, topicIds, 0, 1), ApiKeys.FETCH.latestVersion());
+        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap, topicIds), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {

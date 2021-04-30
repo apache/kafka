@@ -82,7 +82,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
 import scala.collection.Iterator;
 import scala.collection.JavaConverters;
-import scala.compat.java8.OptionConverters;
 import scala.collection.Map;
 
 import java.io.File;
@@ -91,10 +90,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -118,7 +115,7 @@ public class ReplicaFetcherThreadBenchmark {
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
-    private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
+    private Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -153,7 +150,6 @@ public class ReplicaFetcherThreadBenchmark {
 
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
         HashMap<String, Uuid> topicIds = new HashMap<>();
-        List<FetchResponseData.FetchableTopicResponse> unresolvedTopicData = new LinkedList<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
@@ -215,7 +211,7 @@ public class ReplicaFetcherThreadBenchmark {
         ZkMetadataCache metadataCache = new ZkMetadataCache(0);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
-        replicaManager = new ReplicaManager(config, metrics, new MockTime(), OptionConverters.toScala(Optional.of(Mockito.mock(KafkaZkClient.class))), scheduler, logManager, new AtomicBoolean(false),
+        replicaManager = new ReplicaManager(config, metrics, new MockTime(), Option.apply(Mockito.mock(KafkaZkClient.class)), scheduler, logManager, new AtomicBoolean(false),
                 Mockito.mock(QuotaFactory.QuotaManagers.class), brokerTopicStats, metadataCache, new LogDirFailureChannel(logDirs.size()), TestUtils.createAlterIsrManager(), new CachedConfigRepository(), Option.empty());
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);
@@ -223,7 +219,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.prepareResponse(Errors.NONE, initialFetched, unresolvedTopicData, topicIds, 0, 999), ApiKeys.FETCH.latestVersion());
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999,  initialFetched, topicIds), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)
@@ -327,7 +323,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         @Override
         public Option<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return OptionConverters.toScala(Optional.of(new OffsetAndEpoch(0, 0)));
+            return Option.apply(new OffsetAndEpoch(0, 0));
         }
 
         @Override

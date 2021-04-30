@@ -635,7 +635,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                Map<TopicPartition, FetchRequest.PartitionData> fetchData = request.fetchDataAndError(topicNames).fetchData();
+                Map<TopicPartition, FetchRequest.PartitionData> fetchData = request.fetchData(topicNames);
                 return fetchData.keySet().equals(singleton(tp0)) &&
                         fetchData.get(tp0).fetchOffset == 50L;
 
@@ -1682,7 +1682,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchDataAndError(topicNames).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+            && ((FetchRequest) body).fetchData(topicNames).containsKey(tp0), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -2318,8 +2318,7 @@ public class KafkaConsumerTest {
                     .setLogStartOffset(logStartOffset)
                     .setRecords(records));
         }
-        return FetchResponse.prepareResponse(Errors.NONE, tpResponses, Collections.emptyList(), topicIds,
-                0, INVALID_SESSION_ID);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses, topicIds);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

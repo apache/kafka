@@ -824,10 +824,8 @@ public class RequestResponseTest {
                         .setLogStartOffset(-1)
                         .setRecords(records));
 
-        FetchResponse v0Response = FetchResponse.prepareResponse(Errors.NONE, responseData, Collections.emptyList(),
-                topicIds, 0, INVALID_SESSION_ID);
-        FetchResponse v1Response = FetchResponse.prepareResponse(Errors.NONE, responseData, Collections.emptyList(),
-                topicIds, 10, INVALID_SESSION_ID);
+        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData, topicIds);
+        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData, topicIds);
         FetchResponse v0Deserialized = FetchResponse.parse(v0Response.serialize((short) 0), (short) 0);
         FetchResponse v1Deserialized = FetchResponse.parse(v1Response.serialize((short) 1), (short) 1);
         assertEquals(0, v0Deserialized.throttleTimeMs(), "Throttle time must be zero");
@@ -835,8 +833,7 @@ public class RequestResponseTest {
         assertEquals(responseData, v0Deserialized.responseData(topicNames, (short) 0), "Response data does not match");
         assertEquals(responseData, v1Deserialized.responseData(topicNames, (short) 1), "Response data does not match");
 
-        FetchResponse idTestResponse = FetchResponse.prepareResponse(Errors.NONE, responseData, Collections.emptyList(),
-                topicIds, 0, INVALID_SESSION_ID);
+        FetchResponse idTestResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData, topicIds);
         FetchResponse v12Deserialized = FetchResponse.parse(idTestResponse.serialize((short) 12), (short) 12);
         FetchResponse newestDeserialized = FetchResponse.parse(idTestResponse.serialize(FETCH.latestVersion()), FETCH.latestVersion());
         assertTrue(v12Deserialized.topicIds().isEmpty());
@@ -877,7 +874,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(6)
                         .setRecords(records));
 
-        FetchResponse response = FetchResponse.prepareResponse(Errors.NONE, responseData, Collections.emptyList(), topicIds, 10, INVALID_SESSION_ID);
+        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData, topicIds);
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData, deserialized.responseData(topicNames, (short) 4));
     }
@@ -1259,10 +1256,11 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
         return FetchResponse.parse(
-                FetchResponse.prepareResponse(error, new LinkedHashMap<>(),
-                        new LinkedList<>(), new HashMap<>(),
-                        25, sessionId)
-                        .serialize(FETCH.latestVersion()), FETCH.latestVersion());
+                FetchResponse.of(error,
+                        25,
+                        sessionId,
+                        new LinkedHashMap<>(),
+                        new HashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
@@ -1282,9 +1280,8 @@ public class RequestResponseTest {
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
-        return FetchResponse.parse(FetchResponse.prepareResponse(Errors.NONE, responseData,
-                Collections.emptyList(), topicIds,
-                25, sessionId).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+        return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
+                responseData, topicIds).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
@@ -1306,9 +1303,8 @@ public class RequestResponseTest {
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
-        return FetchResponse.parse(FetchResponse.prepareResponse(Errors.NONE, responseData, Collections.emptyList(),
-                Collections.singletonMap("test", Uuid.randomUuid()),
-                25, INVALID_SESSION_ID).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+        return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
+                responseData, Collections.singletonMap("test", Uuid.randomUuid())).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

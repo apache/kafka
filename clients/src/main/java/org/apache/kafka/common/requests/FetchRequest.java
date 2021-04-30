@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -31,7 +32,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -119,98 +119,20 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    // Only used when version is lower than 13.
-    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
-        Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
-        fetchableTopics.forEach(fetchTopic -> fetchTopic.partitions().forEach(fetchPartition -> {
-            result.put(new TopicPartition(fetchTopic.topic(), fetchPartition.partition()),
-                    new PartitionData(
-                            fetchPartition.fetchOffset(),
-                            fetchPartition.logStartOffset(),
-                            fetchPartition.partitionMaxBytes(),
-                            optionalEpoch(fetchPartition.currentLeaderEpoch()),
-                            optionalEpoch(fetchPartition.lastFetchedEpoch())
-                    ));
-        }));
-        return Collections.unmodifiableMap(result);
-    }
-
-    /**
-     *  The following methods are new to version 13. They support sending Fetch requests using topic ID rather
-     *  than topic name. Since the sender and receiver of the fetch request may have different topic IDs in
-     *  their caches, there is a possibility for some topic IDs to be unresolved on the receiving end. These
-     *  methods and classes try to resolve the topic IDs and keep track of unresolved partitions and their errors.
-     */
-
-    // Holds information on partitions whose topic IDs were unable to be resolved when the Fetch request
-    // was received.
-    public static final class UnresolvedPartitions {
-        private final Uuid id;
-        private final Map<Integer, PartitionData> partitionData;
-
-        public UnresolvedPartitions(Uuid id, Map<Integer, PartitionData> partitionData) {
-            this.id = id;
-            this.partitionData = partitionData;
-        }
-
-        public Uuid id() {
-            return id;
-        }
-
-        public Map<Integer, PartitionData> partitionData() {
-            return partitionData;
-        }
-    }
-
-    // For Fetch versions 13+, this object holds the fetchData map used in previous Fetch iterations,
-    // a list of UnresolvedPartitions, and a map containing all unresolved IDs.
-    // For Fetch versions < 13, this will only wrap the fetchData map.
-    public static final class FetchDataAndError {
-        private final Map<TopicPartition, PartitionData> fetchData;
-        private final List<UnresolvedPartitions> unresolvedPartitions;
-
-        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions) {
-            this.fetchData = fetchData;
-            this.unresolvedPartitions = unresolvedPartitions;
-        }
-
-        public final Map<TopicPartition, PartitionData> fetchData() {
-            return fetchData;
-        }
-
-        public final List<UnresolvedPartitions> unresolvedPartitions() {
-            return unresolvedPartitions;
-        }
-    }
-
-    // Only used when Fetch is version 13 or greater and ID errors can be ignored.
-    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics, Map<Uuid, String> topicNames) {
-        Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
-        fetchableTopics.forEach(fetchTopic -> {
-            String name = topicNames.get(fetchTopic.topicId());
-            if (name != null) {
-                fetchTopic.partitions().forEach(fetchPartition ->
-                    result.put(new TopicPartition(name, fetchPartition.partition()),
-                        new PartitionData(
-                                fetchPartition.fetchOffset(),
-                                fetchPartition.logStartOffset(),
-                                fetchPartition.partitionMaxBytes(),
-                                optionalEpoch(fetchPartition.currentLeaderEpoch()),
-                                optionalEpoch(fetchPartition.lastFetchedEpoch())
-                        )
-                    )
-                );
-            }
-        });
-        return Collections.unmodifiableMap(result);
-    }
-
-    // Only used when Fetch is version 13 or greater.
-    private FetchDataAndError toPartitionDataMapAndError(List<FetchRequestData.FetchTopic> fetchableTopics, Map<Uuid, String> topicNames) {
+    // For versions < 13, builds the partitionData map using only the FetchRequestData.
+    // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
+    // Throws UnknownTopicIdException for versions 13+ if the topic ID was unknown to the server.
+    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics,
+                                                                  Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
-        List<UnresolvedPartitions> unresolvedPartitions = new LinkedList<>();
+        short version = version();
         fetchableTopics.forEach(fetchTopic -> {
-            String name = topicNames.get(fetchTopic.topicId());
+            String name;
+            if (version < 13) {
+                name = fetchTopic.topic(); // can't be null
+            } else {
+                name = topicNames.get(fetchTopic.topicId());
+            }
             if (name != null) {
                 // If topic name is resolved, simply add to fetchData map
                 fetchTopic.partitions().forEach(fetchPartition ->
@@ -225,17 +147,10 @@ public class FetchRequest extends AbstractRequest {
                         )
                 );
             } else {
-                // If topic name is not resolved, add to unresolvedPartitions list
-                unresolvedPartitions.add(new UnresolvedPartitions(fetchTopic.topicId(), fetchTopic.partitions().stream().collect(Collectors.toMap(
-                        FetchRequestData.FetchPartition::partition, fetchPartition -> new PartitionData(
-                        fetchPartition.fetchOffset(),
-                        fetchPartition.logStartOffset(),
-                        fetchPartition.partitionMaxBytes(),
-                        optionalEpoch(fetchPartition.currentLeaderEpoch()),
-                        optionalEpoch(fetchPartition.lastFetchedEpoch()))))));
+                throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", fetchTopic.topicId()));
             }
         });
-        return new FetchDataAndError(fetchData, unresolvedPartitions);
+        return Collections.unmodifiableMap(fetchData);
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
@@ -383,11 +298,11 @@ public class FetchRequest extends AbstractRequest {
         super(ApiKeys.FETCH, version);
         if (version < 13) {
             this.data = fetchRequestData;
-            this.fetchData = toPartitionDataMap(fetchRequestData.topics());
+            this.fetchData = toPartitionDataMap(fetchRequestData.topics(), Collections.emptyMap());
             this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
         } else {
             this.data = fetchRequestData;
-            // We need topic name map to fill these data structures, so we will build on fetchData() and toForget()
+            // We need topic name map to fill this data structures, so we will build the map on fetchData()
             this.fetchData = Collections.emptyMap();
             this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
         }
@@ -407,7 +322,7 @@ public class FetchRequest extends AbstractRequest {
             for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
                 responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
             }
-            return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData);
+            return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData, Collections.emptyMap());
         }
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         data.topics().forEach(topic -> {
@@ -440,23 +355,24 @@ public class FetchRequest extends AbstractRequest {
         return data.maxBytes();
     }
 
-    // Ignores unresolved topic IDs when request version is 13+.
-    public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) {
+    // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
+    public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         if (version() < 13)
             return fetchData;
         return toPartitionDataMap(data.topics(), topicNames);
     }
 
-    public FetchDataAndError fetchDataAndError(Map<Uuid, String> topicNames) {
-        if (version() < 13)
-            return new FetchDataAndError(fetchData, Collections.emptyList());
-        return toPartitionDataMapAndError(data.topics(), topicNames);
-    }
-
-    public List<FetchRequestData.ForgottenTopic> forgottenTopics(Map<Uuid, String> topicNames) {
-        if (version() >= 13)
-          data.forgottenTopicsData().forEach(forgottenTopic ->
-                  forgottenTopic.setTopic(topicNames.getOrDefault(forgottenTopic.topicId(), "")));
+    // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
+    public List<FetchRequestData.ForgottenTopic> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+        if (version() >= 13) {
+            data.forgottenTopicsData().forEach(forgottenTopic -> {
+                String name = topicNames.get(forgottenTopic.topicId());
+                if (name == null) {
+                    throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", forgottenTopic.topicId()));
+                }
+                forgottenTopic.setTopic(topicNames.getOrDefault(forgottenTopic.topicId(), ""));
+            });
+        }
         return data.forgottenTopicsData();
     }
 

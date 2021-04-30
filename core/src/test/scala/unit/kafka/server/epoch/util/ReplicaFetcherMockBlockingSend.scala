@@ -18,7 +18,6 @@ package kafka.server.epoch.util
 
 import java.net.SocketTimeoutException
 import java.util
-import java.util.Collections
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
@@ -107,8 +106,9 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         topicIds.foreach { case (name, id) => topicIdsForRequest.put(name, id)}
         fetchPartitionData = Map.empty
         topicIds = Map.empty
-        FetchResponse.prepareResponse(Errors.NONE, partitionData, Collections.emptyList(), topicIdsForRequest, 0,
-          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
+        FetchResponse.of(Errors.NONE, 0,
+          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1,
+          partitionData, topicIdsForRequest)
 
       case _ =>
         throw new UnsupportedOperationException

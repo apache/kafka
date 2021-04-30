@@ -64,34 +64,26 @@ class FetchSessionTest {
     cacheMap
   }
 
-  private def dummyCreateUnresolved(size: Int): FetchSession.UNRESOLVED_CACHE = {
-    val cacheMap = new FetchSession.UNRESOLVED_CACHE
-    for (i <- 0 until size) {
-      cacheMap.add(new CachedUnresolvedPartition(Uuid.randomUuid(), i))
-    }
-    cacheMap
-  }
-
   @Test
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
     assertEquals(0, cache.size)
-    val id1 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(5), () => dummyCreateUnresolved(5))
-    val id2 = cache.maybeCreateSession(10, false, 20, () => dummyCreate(15), () => dummyCreateUnresolved(5))
-    val id3 = cache.maybeCreateSession(20, false, 30, () => dummyCreate(25), () => dummyCreateUnresolved(5))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 45, () => dummyCreate(40), () => dummyCreateUnresolved(5)))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 10, () => dummyCreate(5), () => dummyCreateUnresolved(5)))
+    val id1 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(10))
+    val id2 = cache.maybeCreateSession(10, false, 20, () => dummyCreate(20))
+    val id3 = cache.maybeCreateSession(20, false, 30, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
-    val id4 = cache.maybeCreateSession(210, false, 11, () => dummyCreate(6), () => dummyCreateUnresolved(5))
+    val id4 = cache.maybeCreateSession(210, false, 11, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
-    val id5 = cache.maybeCreateSession(410, false, 50, () => dummyCreate(45), () => dummyCreateUnresolved(5))
+    val id5 = cache.maybeCreateSession(410, false, 50, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, () => dummyCreate(2), () => dummyCreateUnresolved(3)))
-    val id6 = cache.maybeCreateSession(410, true, 5, () => dummyCreate(3), () => dummyCreateUnresolved(2))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, () => dummyCreate(5)))
+    val id6 = cache.maybeCreateSession(410, true, 5, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
   }
 
@@ -101,7 +93,7 @@ class FetchSessionTest {
     assertEquals(0, cache.totalPartitions)
     assertEquals(0, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id1 = cache.maybeCreateSession(0, false, 2, () => dummyCreate(1), () => dummyCreateUnresolved(1))
+    val id1 = cache.maybeCreateSession(0, false, 2, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
@@ -109,7 +101,7 @@ class FetchSessionTest {
     assertEquals(2, cache.totalPartitions)
     assertEquals(1, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id2 = cache.maybeCreateSession(0, false, 4, () => dummyCreate(3), () => dummyCreateUnresolved(1))
+    val id2 = cache.maybeCreateSession(0, false, 4, () => dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
@@ -118,7 +110,7 @@ class FetchSessionTest {
     assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
-    val id3 = cache.maybeCreateSession(200, false, 5, () => dummyCreate(4), () => dummyCreateUnresolved(1))
+    val id3 = cache.maybeCreateSession(200, false, 5, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
     assertEquals(9, cache.totalPartitions)
@@ -170,7 +162,7 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
@@ -184,9 +176,8 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNames),
+      request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     val epochs1 = cachedLeaderEpochs(context1)
@@ -220,9 +211,8 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     val epochs2 = cachedLeaderEpochs(context2)
@@ -242,9 +232,8 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
-      request3.fetchDataAndError(topicNames),
+      request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     val epochs3 = cachedLeaderEpochs(context3)
@@ -267,13 +256,13 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
     def cachedLastFetchedEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachResolvedPartition((tp, data) => mapBuilder += tp -> data.lastFetchedEpoch)
+      context.foreachPartition((tp, data) => mapBuilder += tp -> data.lastFetchedEpoch)
       mapBuilder.result()
     }
 
@@ -287,9 +276,8 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNames),
+      request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(Map(tp0 -> Optional.empty, tp1 -> Optional.of(1), tp2 -> Optional.of(2)),
@@ -323,9 +311,8 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(Map(tp0 -> Optional.empty, tp1 -> Optional.of(1), tp2 -> Optional.of(2)), cachedLeaderEpochs(context2))
@@ -344,9 +331,8 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
-      request3.fetchDataAndError(topicNames),
+      request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(Map(tp0 -> Optional.of(6), tp1 -> Optional.empty, tp2 -> Optional.of(3)),
@@ -369,9 +355,8 @@ class FetchSessionTest {
       request.version,
       request.metadata,
       request.isFromFollower,
-      request.fetchDataAndError(topicNames),
+      request.fetchData(topicNames),
       request.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[SessionlessFetchContext], context.getClass)
@@ -387,14 +372,13 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
-    context2.foreachResolvedPartition((topicPart, data) => {
+    context2.foreachPartition((topicPart, data) => {
       val entry = reqData2Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
@@ -425,9 +409,8 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
-      request3.fetchDataAndError(topicNames),
+      request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[SessionErrorContext], context3.getClass)
@@ -440,9 +423,8 @@ class FetchSessionTest {
       request4.version,
       request4.metadata,
       request4.isFromFollower,
-      request4.fetchDataAndError(topicNames),
+      request4.fetchData(topicNames),
       request4.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(Errors.FETCH_SESSION_ID_NOT_FOUND,
@@ -455,14 +437,13 @@ class FetchSessionTest {
       request5.version,
       request5.metadata,
       request5.isFromFollower,
-      request5.fetchDataAndError(topicNames),
+      request5.fetchData(topicNames),
       request5.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[IncrementalFetchContext], context5.getClass)
     val reqData5Iter = reqData2.entrySet().iterator()
-    context5.foreachResolvedPartition((topicPart, data) => {
+    context5.foreachPartition((topicPart, data) => {
       val entry = reqData5Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
@@ -479,9 +460,8 @@ class FetchSessionTest {
       request6.version,
       request6.metadata,
       request6.isFromFollower,
-      request6.fetchDataAndError(topicNames),
+      request6.fetchData(topicNames),
       request6.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[SessionErrorContext], context6.getClass)
@@ -495,9 +475,8 @@ class FetchSessionTest {
       request7.version,
       request7.metadata,
       request7.isFromFollower,
-      request7.fetchDataAndError(topicNames),
+      request7.fetchData(topicNames),
       request7.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     val resp7 = context7.getThrottledResponse(100)
@@ -519,9 +498,8 @@ class FetchSessionTest {
         request8.version,
         request8.metadata,
         request8.isFromFollower,
-        request8.fetchDataAndError(topicNames),
+        request8.fetchData(topicNames),
         request8.forgottenTopics(topicNames),
-        topicNames,
         topicIds
       )
       assertEquals(classOf[SessionlessFetchContext], context8.getClass)
@@ -564,9 +542,8 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNames),
+      request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
@@ -597,15 +574,14 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("foo", 1), new TopicPartition("bar", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachResolvedPartition((topicPart, _) => {
+    context2.foreachPartition((topicPart, _) => {
       assertEquals(reqData2Iter.next(), topicPart)
     })
     assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
@@ -629,141 +605,9 @@ class FetchSessionTest {
     assertTrue(resp2.sessionId > 0)
   }
 
-  @Test
-  def testIncrementalFetchSessionWithIds(): Unit = {
-    val time = new MockTime()
-    val cache = new FetchSessionCache(10, 1000)
-    val fetchManager = new FetchManager(time, cache)
-    val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
-    val topicIds = topicNames.asScala.map(_.swap).asJava
-
-    // Create a new fetch session with foo-0 and foo-1
-    val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
-      Optional.empty()))
-    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
-      Optional.empty()))
-    val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, topicIds, EMPTY_PART_LIST, false)
-    // Simulate unknown topic ID for foo
-    val topicNamesOnlyBar = Collections.singletonMap(topicIds.get("bar"), "bar")
-    val topicIdsOnlyBar = Collections.singletonMap("bar", topicIds.get("bar"))
-    val context1 = fetchManager.newContext(
-      request1.version,
-      request1.metadata,
-      request1.isFromFollower,
-      request1.fetchDataAndError(topicNamesOnlyBar),
-      request1.forgottenTopics(topicNamesOnlyBar),
-      topicNamesOnlyBar,
-      topicIdsOnlyBar
-    )
-    assertEquals(classOf[FullFetchContext], context1.getClass)
-    // respData is empty since the server will not resolve the topic IDs.
-    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
-    assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    // There will be no topics with resolved names
-    assertEquals(0, resp1.data().responses().asScala.filter(!_.topic().equals("")).length)
-    // There will be two unresolved partitions
-    assertEquals(2, resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
-    resp1.responseData(topicNames, request1.version).forEach( (_, resp) => assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp.errorCode))
-    val unresolvedTopics = context1.getUnresolvedTopicData()
-    assertEquals(1, unresolvedTopics.size())
-    unresolvedTopics.forEach( topic => {
-      assertEquals(topicIds.get("foo"), topic.topicId())
-      assertEquals(List(0,1), topic.partitions().asScala.map(_.partitionIndex()))
-    })
-
-    // Create an incremental fetch request that removes foo-0 and adds bar-0
-    val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(15, 0, 0,
-      Optional.empty()))
-    val removed2 = new util.ArrayList[TopicPartition]
-    removed2.add(new TopicPartition("foo", 0))
-    val request2 = createRequest(new JFetchMetadata(resp1.sessionId(), 1), reqData2, topicIds, removed2, false)
-    // Simulate unknown topic ID for foo
-    val context2 = fetchManager.newContext(
-        request2.version,
-        request2.metadata,
-        request2.isFromFollower,
-        request2.fetchDataAndError(topicNamesOnlyBar),
-        request2.forgottenTopics(topicNamesOnlyBar),
-        topicNamesOnlyBar,
-        topicIdsOnlyBar
-      )
-    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
-    val parts2 = Set(new TopicPartition("bar", 0))
-    val reqData2Iter = parts2.iterator
-    context2.foreachResolvedPartition((topicPart, _) => {
-      assertEquals(reqData2Iter.next(), topicPart)
-    })
-    assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
-    assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 1)))
-    assertEquals(15, context2.getFetchOffset(new TopicPartition("bar", 0)).get)
-    assertEquals(None, context2.getFetchOffset(new TopicPartition("bar", 2)))
-    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    respData2.put(new TopicPartition("bar", 0), new FetchResponseData.PartitionData()
-        .setPartitionIndex(0)
-        .setHighWatermark(10)
-        .setLastStableOffset(10)
-        .setLogStartOffset(10))
-    val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(Errors.NONE, resp2.error)
-    // There will be one topic with a resolved name
-    assertEquals(1, resp2.data().responses().asScala.filter(!_.topic().equals("")).length)
-    // There will be one unresolved partition
-    assertEquals(2, resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).size())
-    assertTrue(resp2.sessionId > 0)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp2.responseData(topicNames, request2.version).get(new TopicPartition("foo", 1)).errorCode)
-    val unresolvedTopics2 = context2.getUnresolvedTopicData()
-    assertEquals(1, unresolvedTopics2.size())
-    unresolvedTopics2.forEach( topic => {
-      assertEquals(topicIds.get("foo"), topic.topicId())
-      assertEquals(List(1), topic.partitions().asScala.map(_.partitionIndex()))
-    })
-
-    // Create an incremental fetch request that resolves foo-0's topic ID
-    val reqData3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    val request3 = createRequest(new JFetchMetadata(resp1.sessionId(), 2), reqData3, topicIds, EMPTY_PART_LIST, false)
-    val context3 = fetchManager.newContext(
-      request3.version,
-      request3.metadata,
-      request3.isFromFollower,
-      request3.fetchDataAndError(topicNames),
-      request3.forgottenTopics(topicNames),
-      topicNames,
-      topicIds
-    )
-    assertEquals(classOf[IncrementalFetchContext], context3.getClass)
-    // Order switches since we don't order partitions that once had error.
-    val parts3 = Set(new TopicPartition("bar", 0), new TopicPartition("foo", 1))
-    val reqData3Iter = parts3.iterator
-    context3.foreachResolvedPartition((topicPart, _) => {
-      assertEquals(reqData3Iter.next(), topicPart)
-    })
-    assertEquals(None, context3.getFetchOffset(new TopicPartition("foo", 0)))
-    assertEquals(10, context3.getFetchOffset(new TopicPartition("foo", 1)).get)
-    assertEquals(15, context3.getFetchOffset(new TopicPartition("bar", 0)).get)
-    assertEquals(None, context3.getFetchOffset(new TopicPartition("bar", 2)))
-    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    respData3.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
-        .setPartitionIndex(1)
-        .setHighWatermark(10)
-        .setLastStableOffset(10)
-        .setLogStartOffset(10))
-    val resp3 = context3.updateAndGenerateResponseData(respData3)
-    assertEquals(Errors.NONE, resp3.error)
-    // There will be 1 topic with a resolved name
-    assertEquals(1, resp3.data().responses().asScala.filter(!_.topic().equals("")).length)
-    // There are no unresolved partitions
-    assertEquals(1, resp3.responseData(topicNames, request3.version).size())
-    assertTrue(resp3.sessionId > 0)
-    assertEquals(0, context3.getUnresolvedTopicData().size())
-  }
-
   // This test simulates a request without IDs sent to a broker with IDs.
   @Test
-  def testFetchSessionWithIdErrorOldRequestVersion(): Unit = {
+  def testFetchSessionWithUnknownIdOldRequestVersion(): Unit = {
     val time = new MockTime()
     val cache = new FetchSessionCache(10, 1000)
     val fetchManager = new FetchManager(time, cache)
@@ -777,16 +621,16 @@ class FetchSessionTest {
     reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
       Optional.empty()))
     val request1 = createRequestWithoutTopicIds(JFetchMetadata.INITIAL, reqData1, topicIds, EMPTY_PART_LIST, false)
-    // Simulate unknown topic ID for foo
+    // Simulate unknown topic ID for foo.
     val topicNamesOnlyBar = Collections.singletonMap(topicIds.get("bar"), "bar")
     val topicIdsOnlyBar = Collections.singletonMap("bar", topicIds.get("bar"))
+    // We should not throw error since we have an older request version.
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNamesOnlyBar),
+      request1.fetchData(topicNamesOnlyBar),
       request1.forgottenTopics(topicNamesOnlyBar),
-      topicNamesOnlyBar,
       topicIdsOnlyBar
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
@@ -802,15 +646,14 @@ class FetchSessionTest {
       .setLastStableOffset(10)
       .setLogStartOffset(10))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
+    // Since we are ignoring IDs, we should have no errors.
     assertEquals(Errors.NONE, resp1.error())
     assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, resp1.responseData(topicNames, request1.version).size)
-    // Since we are ignoring IDs, we should have no ID errors.
     resp1.responseData(topicNames, request1.version).forEach( (_, resp) => assertEquals(Errors.NONE.code, resp.errorCode))
-    assertEquals(0, context1.getUnresolvedTopicData().size())
   }
 
-  // This test simulates a request with IDs sent to a broker without IDs and switching over to using IDs.
+  // This test simulates a session where the topic ID changes -- as though the topic is deleted and recreated.
   @Test
   def testFetchSessionUpdatesWithTopicIds(): Unit = {
     val time = new MockTime()
@@ -826,113 +669,72 @@ class FetchSessionTest {
     reqData1.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100,
       Optional.empty()))
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, topicIds, EMPTY_PART_LIST, false)
-    val emptyNameMap = Collections.emptyMap[Uuid, String]()
-    val emptyIdMap = Collections.emptyMap[String, Uuid]()
-    // Simulate a context that does not have topic IDs.
+    // Start a fetch session. Simulate unknown partition foo-0.
     val context1 = fetchManager.newContext(
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(emptyNameMap),
-      request1.forgottenTopics(emptyNameMap),
-      emptyNameMap,
-      emptyIdMap
+      request1.fetchData(topicNames),
+      request1.forgottenTopics(topicNames),
+      topicIds
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
-    assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    assertEquals(2, resp1.responseData(topicNames, request1.version).size)
-    // We should have 2 ID errors
-    assertEquals(2, context1.getUnresolvedTopicData().size())
-    resp1.data().responses().forEach(topicResponse => topicResponse.partitions().forEach( partition =>
-      assertEquals(Errors.UNSUPPORTED_VERSION.code(), partition.errorCode())))
-
-    // Create an incremental fetch request that adds topic Ids
-    val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    val request2 = createRequest(new JFetchMetadata(resp1.sessionId(), 1), reqData2, topicIds, EMPTY_PART_LIST, false)
-    // Simulate unknown topic ID for bar
-    val topicNamesFoo =  Collections.singletonMap(topicIds.get("foo"), "foo")
-    val topicIdsFoo = Collections.singletonMap("foo", topicIds.get("foo"))
-    val context2 = fetchManager.newContext(
-      request2.version,
-      request2.metadata,
-      request2.isFromFollower,
-      request2.fetchDataAndError(topicNamesFoo),
-      request2.forgottenTopics(topicNamesFoo),
-      topicNamesFoo,
-      topicIdsFoo
-    )
-    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
-    val parts2 = Set(new TopicPartition("foo", 0))
-    val reqData2Iter = parts2.iterator
-    context2.foreachResolvedPartition((topicPart, _) => {
-      assertEquals(reqData2Iter.next(), topicPart)
-    })
-    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    respData2.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+    respData1.put(new TopicPartition("bar", 1), new FetchResponseData.PartitionData()
+      .setPartitionIndex(1)
+      .setHighWatermark(10)
+      .setLastStableOffset(10)
+      .setLogStartOffset(10))
+    respData1.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
       .setPartitionIndex(0)
       .setHighWatermark(-1)
       .setLastStableOffset(-1)
       .setLogStartOffset(-1)
       .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
-    val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(Errors.NONE, resp2.error)
-    assertTrue(resp2.sessionId > 0)
-    // We get two responses. One is from a resolved partition foo, the other is from unresolved partition bar
-    assertEquals(2, resp2.responseData(topicNames, request2.version).size)
-    assertEquals(1, context2.getUnresolvedTopicData().size())
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp2.responseData(topicNamesFoo, request2.version).get(new TopicPartition("bar", 1)).errorCode)
+    val resp1 = context1.updateAndGenerateResponseData(respData1)
+    assertEquals(Errors.NONE, resp1.error())
+    assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
+    assertEquals(2, resp1.responseData(topicNames, request1.version).size)
 
-    // Create an incremental fetch request that removes foo-0 as though the topic was deleted and recreated
-    // Also resolve bar's ID.
-    val reqData3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    val request3 = createRequest(new JFetchMetadata(resp1.sessionId(), 2), reqData3, topicIds, EMPTY_PART_LIST, false)
+    // Create an incremental fetch request that removes foo-0 as though the topic was deleted and recreated.
+    // We will not fail with unknown ID since the partition is already in the session. Instead, we remove the partition from the session.
+    val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    val request2 = createRequest(new JFetchMetadata(resp1.sessionId(), 1), reqData2, topicIds, EMPTY_PART_LIST, false)
     // Simulate ID changing on server.
     val topicNamesFooChanged =  Map(topicIds.get("bar") -> "bar", Uuid.randomUuid() -> "foo").asJava
     val topicIdsFooChanged = topicNamesFooChanged.asScala.map(_.swap).asJava
-    val context3 = fetchManager.newContext(
-      request3.version,
-      request3.metadata,
-      request3.isFromFollower,
-      request3.fetchDataAndError(topicNamesFooChanged),
-      request3.forgottenTopics(topicNamesFooChanged),
-      topicNamesFooChanged,
+    val context2 = fetchManager.newContext(
+      request2.version,
+      request2.metadata,
+      request2.isFromFollower,
+      request2.fetchData(topicNamesFooChanged),
+      request2.forgottenTopics(topicNamesFooChanged),
       topicIdsFooChanged
     )
-    assertEquals(classOf[IncrementalFetchContext], context3.getClass)
-    var parts3 = Set(new TopicPartition("foo", 0), new TopicPartition("bar", 1))
-    var reqData3Iter = parts3.iterator
+    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
+    var parts2 = Set(new TopicPartition("bar", 1), new TopicPartition("foo", 0))
+    var reqData2Iter = parts2.iterator
     // Before sending the response, foo is still in partitionMap
-    context3.foreachResolvedPartition((topicPart, _) => {
-      assertEquals(reqData3Iter.next(), topicPart)
+    context2.foreachPartition((topicPart, _) => {
+      assertEquals(reqData2Iter.next(), topicPart)
     })
-    assertEquals(0, context3.getFetchOffset(new TopicPartition("foo", 0)).get)
-    assertEquals(10, context3.getFetchOffset(new TopicPartition("bar", 1)).get)
-    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-    respData3.put(new TopicPartition("bar", 1), new FetchResponseData.PartitionData()
-      .setPartitionIndex(1)
-      .setHighWatermark(10)
-      .setLastStableOffset(10)
-      .setLogStartOffset(10))
-    respData3.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    respData2.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
       .setPartitionIndex(0)
       .setHighWatermark(100)
       .setLastStableOffset(100)
       .setLogStartOffset(100))
-    val resp3 = context3.updateAndGenerateResponseData(respData3)
+    val resp2 = context2.updateAndGenerateResponseData(respData2)
     // foo should now be removed since the ID changed.
-    parts3 = Set(new TopicPartition("bar", 1))
-    reqData3Iter = parts3.iterator
-    context3.foreachResolvedPartition((topicPart, _) => {
-      assertEquals(reqData3Iter.next(), topicPart)
+    parts2 = Set(new TopicPartition("bar", 1))
+    reqData2Iter = parts2.iterator
+    context2.foreachPartition((topicPart, _) => {
+      assertEquals(reqData2Iter.next(), topicPart)
     })
 
-    assertEquals(Errors.NONE, resp3.error)
-    assertTrue(resp3.sessionId > 0)
-    assertEquals(1, resp3.responseData(topicNames, request3.version).size)
-    assertEquals(0, context3.getUnresolvedTopicData().size())
+    assertEquals(Errors.NONE, resp2.error)
+    assertTrue(resp2.sessionId > 0)
+    assertEquals(0, resp2.responseData(topicNames, request2.version).size)
   }
 
   @Test
@@ -955,9 +757,8 @@ class FetchSessionTest {
       session1request1.version,
       session1request1.metadata,
       session1request1.isFromFollower,
-      session1request1.fetchDataAndError(topicNames),
+      session1request1.fetchData(topicNames),
       session1request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session1context1.getClass)
@@ -992,9 +793,8 @@ class FetchSessionTest {
       session2request1.version,
       session2request1.metadata,
       session2request1.isFromFollower,
-      session2request1.fetchDataAndError(topicNames),
+      session2request1.fetchData(topicNames),
       session2request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session2context.getClass)
@@ -1029,9 +829,8 @@ class FetchSessionTest {
       session1request2.version,
       session1request2.metadata,
       session1request2.isFromFollower,
-      session1request2.fetchDataAndError(topicNames),
+      session1request2.fetchData(topicNames),
       session1request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[IncrementalFetchContext], context1v2.getClass)
@@ -1052,9 +851,8 @@ class FetchSessionTest {
       session3request1.version,
       session3request1.metadata,
       session3request1.isFromFollower,
-      session3request1.fetchDataAndError(topicNames),
+      session3request1.fetchData(topicNames),
       session3request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session3context.getClass)
@@ -1100,9 +898,8 @@ class FetchSessionTest {
       session1request.version,
       session1request.metadata,
       session1request.isFromFollower,
-      session1request.fetchDataAndError(topicNames),
+      session1request.fetchData(topicNames),
       session1request.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session1context.getClass)
@@ -1137,9 +934,8 @@ class FetchSessionTest {
       session2request.version,
       session2request.metadata,
       session2request.isFromFollower,
-      session2request.fetchDataAndError(topicNames),
+      session2request.fetchData(topicNames),
       session2request.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session2context.getClass)
@@ -1178,9 +974,8 @@ class FetchSessionTest {
       session3request.version,
       session3request.metadata,
       session3request.isFromFollower,
-      session3request.fetchDataAndError(topicNames),
+      session3request.fetchData(topicNames),
       session3request.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session3context.getClass)
@@ -1222,9 +1017,8 @@ class FetchSessionTest {
       session4request.version,
       session4request.metadata,
       session4request.isFromFollower,
-      session4request.fetchDataAndError(topicNames),
+      session4request.fetchData(topicNames),
       session4request.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], session4context.getClass)
@@ -1271,9 +1065,8 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNames),
+      request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
@@ -1304,9 +1097,8 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[SessionlessFetchContext], context2.getClass)
@@ -1337,9 +1129,8 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
-      request1.fetchDataAndError(topicNames),
+      request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
@@ -1368,9 +1159,8 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
-      request2.fetchDataAndError(topicNames),
+      request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
-      topicNames,
       topicIds
     )
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
@@ -1422,7 +1212,7 @@ class FetchSessionTest {
 
     // Full fetch context returns all partitions in the response
     val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false,
-      new FetchRequest.FetchDataAndError(reqData, Collections.emptyList()), Collections.emptyList(), topicNames, topicIds)
+     reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[FullFetchContext], context1.getClass)
 
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
@@ -1450,7 +1240,7 @@ class FetchSessionTest {
     // Incremental fetch context returns partitions with changes but only deprioritizes
     // the partitions with records
     val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), false,
-      new FetchRequest.FetchDataAndError(reqData, Collections.emptyList()), Collections.emptyList(), topicNames, topicIds)
+      reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
 
     // Partitions are ordered in the session as per last response
@@ -1494,7 +1284,7 @@ class FetchSessionTest {
 
   private def assertPartitionsOrder(context: FetchContext, partitions: Seq[TopicPartition]): Unit = {
     val partitionsInContext = ArrayBuffer.empty[TopicPartition]
-    context.foreachResolvedPartition { (tp, _) =>
+    context.foreachPartition { (tp, _) =>
       partitionsInContext += tp
     }
     assertEquals(partitions, partitionsInContext.toSeq)
