@@ -344,10 +344,16 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void validateIsRunningOrRebalancing() {
-        if (!isRunningOrRebalancing()) {
-            throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                throw new StreamsNotStartedException("KafkaStreams is not started, you can retry and wait until to running.");
+            }
+            if (!isRunningOrRebalancing()) {
+                throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
+            }
         }
     }
+
     /**
      * Listen to {@link State} change events.
      */
@@ -1527,12 +1533,7 @@ public class KafkaStreams implements AutoCloseable {
      *                                    an InvalidStateStoreException is thrown upon store access.
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
-        synchronized (stateLock) {
-            if (state == State.CREATED) {
-                throw new StreamsNotStartedException("KafkaStreams is not started, you can retry and wait until to running.");
-            }
-        }
-
+        validateIsRunningOrRebalancing();
         final String storeName = storeQueryParameters.storeName();
         if ((taskTopology == null || !taskTopology.hasStore(storeName))
             && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
@@ -1540,7 +1541,6 @@ public class KafkaStreams implements AutoCloseable {
                 "Cannot get state store " + storeName + " because no such store is registered in the topology."
             );
         }
-        validateIsRunningOrRebalancing();
         return queryableStoreProvider.getStore(storeQueryParameters);
     }
 
