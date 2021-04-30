@@ -980,38 +980,37 @@ public class RaftEventSimulationTest {
                 int nodeId = nodeEntry.getKey();
                 ReplicatedLog log = nodeEntry.getValue().log;
                 log.earliestSnapshotId().ifPresent(earliestSnapshotId  -> {
+                    long logStartOffset = log.startOffset();
+                    ValidOffsetAndEpoch validateOffsetAndEpoch = log.validateOffsetAndEpoch(
+                        earliestSnapshotId.offset,
+                        earliestSnapshotId.epoch
+                    );
+
                     assertTrue(
-                        log.startOffset() <= earliestSnapshotId.offset,
+                        logStartOffset <= earliestSnapshotId.offset,
                         String.format(
                             "invalid log start offset (%s) and snapshotId offset (%s): nodeId = %s",
-                            log.startOffset(),
+                            logStartOffset,
                             earliestSnapshotId.offset,
                             nodeId
                         )
                     );
                     assertEquals(
-                        log.validateOffsetAndEpoch(
-                            earliestSnapshotId.offset,
-                            earliestSnapshotId.epoch
-                        ).kind(),
-                        ValidOffsetAndEpoch.Kind.VALID,
-                        String.format("invalid offset and epoch for ealiest snapshot: nodeId = %s", nodeId)
+                        ValidOffsetAndEpoch.valid(earliestSnapshotId),
+                        validateOffsetAndEpoch,
+                        String.format("invalid leader epoch cache: nodeId = %s", nodeId)
                     );
 
-                    if (log.startOffset() > 0) {
+                    if (logStartOffset > 0) {
                         assertEquals(
-                            log.startOffset(),
+                            logStartOffset,
                             earliestSnapshotId.offset,
                             String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
-                        );
-                        assertEquals(
-                            ValidOffsetAndEpoch.valid(earliestSnapshotId),
-                            log.validateOffsetAndEpoch(earliestSnapshotId.offset, earliestSnapshotId.epoch),
-                            String.format("invalid leader epoch cache: nodeId = %s", nodeId)
                         );
                     }
                 });
             }
+
         }
     }
 
