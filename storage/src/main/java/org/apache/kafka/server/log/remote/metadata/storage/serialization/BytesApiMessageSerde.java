@@ -25,7 +25,7 @@ import org.apache.kafka.raft.metadata.AbstractApiMessageSerde;
 import java.nio.ByteBuffer;
 
 /**
- * This class class provides conversion of {@code ApiMessageAndVersion} to bytes and vice versa.. This can be used as serialization protocol for any
+ * This class provides conversion of {@code ApiMessageAndVersion} to bytes and vice versa.. This can be used as serialization protocol for any
  * metadata records derived of {@code ApiMessage}s. It internally uses {@link AbstractApiMessageSerde} for serialization/deserialization
  * mechanism.
  * <p></p>

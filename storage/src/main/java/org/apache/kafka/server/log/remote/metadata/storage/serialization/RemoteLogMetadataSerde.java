@@ -101,5 +101,4 @@ public class RemoteLogMetadataSerde {
 
         return metadataTransform;
     }
-
 }

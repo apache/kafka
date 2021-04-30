@@ -29,9 +29,9 @@ import org.apache.kafka.raft.RecordSerde;
  * This is an implementation of {@code RecordSerde} with {@link ApiMessageAndVersion} but implementors need to implement
  * {@link #apiMessageFor(short)} to return a {@code ApiMessage} instance for the given {@code apiKey}.
  *
- * This can be used as the underlying serialization mechanism for any metadata kind of log storage.
+ * This can be used as the underlying serialization mechanism for records defined with {@link ApiMessage}s.
  * <p></p>
- * Serialization format for the given {@code ApiMessageAndVersion} is like below:
+ * Serialization format for the given {@code ApiMessageAndVersion} is below:
  * <p></p>
  * <pre>
  *     [data_frame_version header message]

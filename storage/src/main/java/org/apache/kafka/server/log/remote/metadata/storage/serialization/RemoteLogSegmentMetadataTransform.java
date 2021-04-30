@@ -45,7 +45,6 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 .setRemoteLogSegmentState(segmentMetadata.state().id());
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
-
     }
 
     private List<RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry> createSegmentLeaderEpochsEntry(RemoteLogSegmentMetadata data) {
