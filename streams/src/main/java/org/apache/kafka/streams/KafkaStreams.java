@@ -346,7 +346,7 @@ public class KafkaStreams implements AutoCloseable {
     private void validateIsRunningOrRebalancing() {
         synchronized (stateLock) {
             if (state == State.CREATED) {
-                throw new StreamsNotStartedException("KafkaStreams is not started, you can retry and wait until to running.");
+                throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
             }
             if (!isRunningOrRebalancing()) {
                 throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
