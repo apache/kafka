@@ -106,6 +106,19 @@ object LogLoader extends Logging {
       loadSegmentFiles(params)
     })
 
+    try params.segments.lastSegment.get.activeSegmentSanityCheck
+    catch {
+      case _: NoSuchFileException =>
+        error(s"${params.logIdentifier} Could not find offset index file corresponding to log file" +
+          s" ${params.segments.lastSegment.get.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
+        recoverSegment(params.segments.lastSegment.get, params)
+      case e: CorruptIndexException =>
+        warn(s"${params.logIdentifier} Found a corrupted index file corresponding to log file" +
+          s" ${params.segments.lastSegment.get.log.file.getAbsolutePath} due to ${e.getMessage}}, recovering segment and" +
+          " rebuilding index files...")
+        recoverSegment(params.segments.lastSegment.get, params)
+    }
+
     completeSwapOperations(swapFiles, params)
 
     val (newRecoveryPoint: Long, nextOffset: Long) = {

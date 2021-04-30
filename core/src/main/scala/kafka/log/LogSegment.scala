@@ -93,6 +93,15 @@ class LogSegment private[log] (val log: FileRecords,
     else throw new NoSuchFileException(s"Offset index file ${lazyOffsetIndex.file.getAbsolutePath} does not exist")
   }
 
+  def activeSegmentSanityCheck: Unit = {
+    if (offsetIndex.file.exists) {
+      offsetIndex.sanityCheck()
+      timeIndex.sanityCheck()
+      txnIndex.sanityCheck()
+    }
+    else throw new NoSuchFileException(s"Offset index file ${offsetIndex.file.getAbsolutePath} does not exist")
+  }
+
   private var created = time.milliseconds
 
   /* the number of bytes since we last added an entry in the offset index */
