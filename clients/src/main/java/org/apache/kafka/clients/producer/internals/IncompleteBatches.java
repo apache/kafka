@@ -51,6 +51,14 @@ class IncompleteBatches {
         }
     }
 
+    public Iterable<ProduceRequestResult> requestResults() {
+        synchronized (incomplete) {
+            ArrayList<ProduceRequestResult> results = new ArrayList<>(this.incomplete.size());
+            this.incomplete.forEach(incomplete -> results.add(incomplete.produceFuture));
+            return results;
+        }
+    }
+
     public boolean isEmpty() {
         synchronized (incomplete) {
             return incomplete.isEmpty();

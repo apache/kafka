@@ -710,8 +710,11 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
-                batch.produceFuture.await();
+            // Make a copy of of the request results at the time the flush is called.
+            // We avoid making a copy of the full incomplete batch collections to allow
+            // garbage collection.
+            for (ProduceRequestResult result : this.incomplete.requestResults())
+                result.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
