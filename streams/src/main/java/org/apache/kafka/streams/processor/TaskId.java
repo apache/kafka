@@ -130,20 +130,35 @@ public class TaskId implements Comparable<TaskId> {
         return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
     }
 
-    public void writeTo(final ByteBuffer buf) {
+    public void writeTo(final ByteBuffer buf, final int version) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        if (namedTopology != null) {
-            for (final char c : namedTopology.toCharArray()) {
-                buf.putChar(c);
+        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
+            if (namedTopology != null) {
+                buf.putInt(namedTopology.length());
+                for (final char c : namedTopology.toCharArray()) {
+                    buf.putChar(c);
+                }
+            } else {
+                buf.putInt(0);
             }
         }
     }
 
-    public static TaskId readFrom(final ByteBuffer buf) {
+    public static TaskId readFrom(final ByteBuffer buf, final int version) {
         final int topicGroupId = buf.getInt();
         final int partition = buf.getInt();
-        final String namedTopology = buf.asCharBuffer().toString();
+        final String namedTopology;
+        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
+            final int numNamedTopologyChars = buf.getInt();
+            final StringBuilder namedTopologyBuilder = new StringBuilder();
+            for (int i = 0; i < numNamedTopologyChars; ++i) {
+                namedTopologyBuilder.append(buf.getChar());
+            }
+            namedTopology = namedTopologyBuilder.toString();
+        } else {
+            namedTopology = null;
+        }
         return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
     }
 
