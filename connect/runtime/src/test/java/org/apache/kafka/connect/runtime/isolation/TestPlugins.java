@@ -176,8 +176,8 @@ public class TestPlugins {
     }
 
     /**
-     * Gets the path to a single jar containing the test plugin given its resource directory.
-     * @param resourceDir the unique resource directory of the plugin
+     * Gets the path to a single jar containing the test plugin.
+     * @param testPlugin the unique {@link TestPlugin} enum representing the plugin
      * @return a string representing the plugin jar filename, or null if a plugin for the
      *   resourceDir could not be found.
      */
