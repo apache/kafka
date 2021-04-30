@@ -494,10 +494,12 @@ public class MemoryRecordsTest {
             .setLeaderId(leaderId)
             .setVoters(Collections.singletonList(
                 new Voter().setVoterId(voterId)));
+        ByteBuffer buffer = ByteBuffer.allocate(256);
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             initialOffset,
             System.currentTimeMillis(),
             leaderEpoch,
+            buffer,
             leaderChangeMessage
         );
 

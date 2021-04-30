@@ -321,7 +321,7 @@ public class StreamTaskTest {
         ctrl.checkOrder(true);
         ctrl.replay();
 
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE, "100"), true, stateManager);
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true, stateManager);
         task.suspend();
         task.closeDirty();
         task = null;
@@ -525,6 +525,7 @@ public class StreamTaskTest {
         assertFalse(task.process(time.milliseconds()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
         task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
@@ -548,8 +549,8 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosBetaEnabled() {
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_BETA, "0"), StreamsConfig.METRICS_LATEST);
+    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
+        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -736,7 +737,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowTaskCorruptedExceptionOnTimeoutExceptionIfEosEnabled() {
-        createTimeoutTask(StreamsConfig.EXACTLY_ONCE);
+        createTimeoutTask(StreamsConfig.EXACTLY_ONCE_V2);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
 
@@ -1220,6 +1221,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
         assertFalse(task.process(0L));
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
@@ -1227,10 +1230,27 @@ public class StreamTaskTest {
         task.addRecords(partition1, singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
         assertFalse(task.process(0L));
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
 
         task.addRecords(partition2, singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
         assertTrue(task.process(0L));
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
+
+    }
+
+    @Test
+    public void shouldBeRecordIdlingTimeIfSuspended() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.suspend();
+
+        assertThat("task is idling", task.timeCurrentIdlingStarted().isPresent());
+
+        task.resume();
+
+        assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
     }
 
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
@@ -1493,7 +1513,7 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE, "100"), true);
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true);
 
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
