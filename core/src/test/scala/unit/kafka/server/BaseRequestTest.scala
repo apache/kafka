@@ -17,11 +17,6 @@
 
 package kafka.server
 
-import java.io.{DataInputStream, DataOutputStream}
-import java.net.Socket
-import java.nio.ByteBuffer
-import java.util.Properties
-
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils.NotNothing
@@ -31,6 +26,10 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
 
+import java.io.{DataInputStream, DataOutputStream}
+import java.net.Socket
+import java.nio.ByteBuffer
+import java.util.Properties
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.reflect.ClassTag

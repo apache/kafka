@@ -17,11 +17,6 @@
 
 package kafka.server
 
-import java.io.{DataInputStream, DataOutputStream}
-import java.net.Socket
-import java.nio.ByteBuffer
-import java.util.Properties
-
 import kafka.network.SocketServer
 import kafka.utils.{NotNothing, TestUtils}
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -30,19 +25,23 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
+import java.io.{DataInputStream, DataOutputStream}
+import java.net.Socket
+import java.nio.ByteBuffer
+import java.util.Properties
 import scala.annotation.nowarn
 import scala.reflect.ClassTag
 
 object IntegrationTestUtils {
 
-  private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
+  def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length)
     outgoing.write(request)
     outgoing.flush()
   }
 
-  def sendWithHeader(request: AbstractRequest, header: RequestHeader, socket: Socket): Unit = {
+  private def sendWithHeader(request: AbstractRequest, header: RequestHeader, socket: Socket): Unit = {
     val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
     sendRequest(socket, serializedBytes)
   }
