@@ -165,11 +165,16 @@ public class TaskId implements Comparable<TaskId> {
             return false;
         }
         final TaskId taskId = (TaskId) o;
-        return topicGroupId == taskId.topicGroupId &&
-            partition == taskId.partition &&
-            namedTopology == null ?
-            taskId.namedTopology == null :
-            namedTopology.equals(taskId.namedTopology);
+
+        if (topicGroupId != taskId.topicGroupId || partition != taskId.partition) {
+            return false;
+        }
+
+        if (namedTopology != null && taskId.namedTopology != null) {
+            return namedTopology.equals(taskId.namedTopology);
+        } else {
+            return namedTopology == null && taskId.namedTopology == null;
+        }
     }
 
     @Override
