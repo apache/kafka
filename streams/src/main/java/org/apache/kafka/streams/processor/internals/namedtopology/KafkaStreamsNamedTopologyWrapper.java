@@ -23,7 +23,7 @@ import java.util.Properties;
 
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
-    public KafkaStreamsNamedTopologyWrapper(NamedTopology topology, Properties props, KafkaClientSupplier clientSupplier) {
+    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
         super(topology.topology(), props, clientSupplier);
     }
 
