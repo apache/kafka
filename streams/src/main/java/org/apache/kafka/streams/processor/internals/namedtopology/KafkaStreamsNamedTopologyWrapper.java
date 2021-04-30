@@ -23,8 +23,9 @@ import java.util.Properties;
 
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
+    //TODO It should be possible to start up streams with no NamedTopology (or regular Topology) at all, in the meantime we can just pass in an empty NamedTopology
     public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
-        super(topology.topology(), props, clientSupplier);
+        super(topology, props, clientSupplier);
     }
 
     public NamedTopology getTopologyByName(final String name) {

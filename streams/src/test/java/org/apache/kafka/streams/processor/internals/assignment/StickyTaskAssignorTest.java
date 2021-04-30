@@ -172,7 +172,7 @@ public class StickyTaskAssignorTest {
 
         // one client should get 3 tasks and the other should have 4
         assertThat(
-            (client1Tasks.size() == 3 && client2Tasks.size() == 4)||
+            (client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
                 (client1Tasks.size() == 4 && client2Tasks.size() == 3),
             is(true));
         allTasks.removeAll(client1Tasks);
