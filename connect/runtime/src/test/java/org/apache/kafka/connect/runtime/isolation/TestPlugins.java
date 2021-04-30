@@ -127,10 +127,6 @@ public class TestPlugins {
     }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    /**
-     * A mapping from test plugin resource directory and class name to the jar file containing the
-     * specified test class.
-     */
     private static final Map<TestPlugin, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
