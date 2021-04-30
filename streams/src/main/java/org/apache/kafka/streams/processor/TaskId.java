@@ -65,7 +65,7 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public String toString() {
-        return namedTopology == null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
+        return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
     public String toTaskDirString() {
