@@ -108,6 +108,17 @@ public final class RaftClientTestContext {
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
 
+    public static void advanceHighWatermark(RaftClientTestContext context,
+                                            int currentEpoch,
+                                            int lastFetchedEpoch,
+                                            int replicaId,
+                                            int localId) throws InterruptedException {
+        context.deliverRequest(context.fetchRequest(currentEpoch, replicaId, context.log.endOffset().offset, lastFetchedEpoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, currentEpoch, OptionalInt.of(localId));
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
+    }
+
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
@@ -168,12 +179,12 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withAppendLingerMs(int appendLingerMs) {
+        public Builder withAppendLingerMs(int appendLingerMs) {
             this.appendLingerMs = appendLingerMs;
             return this;
         }
 
-        Builder appendToLog(int epoch, List<String> records) {
+        public Builder appendToLog(int epoch, List<String> records) {
             MemoryRecords batch = buildBatch(
                 time.milliseconds(),
                 log.endOffset().offset,
@@ -337,7 +348,7 @@ public final class RaftClientTestContext {
         return context;
     }
 
-    void becomeLeader() throws Exception {
+    public void becomeLeader() throws Exception {
         int currentEpoch = currentEpoch();
         time.sleep(electionTimeoutMs * 2);
         expectAndGrantVotes(currentEpoch + 1);
@@ -348,7 +359,7 @@ public final class RaftClientTestContext {
         return currentLeaderAndEpoch().leaderId;
     }
 
-    int currentEpoch() {
+    public int currentEpoch() {
         return currentLeaderAndEpoch().epoch;
     }
 
