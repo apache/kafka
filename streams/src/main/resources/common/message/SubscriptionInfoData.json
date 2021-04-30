@@ -33,7 +33,6 @@
       "versions": "1+",
       "type": "uuid"
     },
-    /***** Protocol version 1-6 only (after 6 this is encoded in task offset sum map) *****/
     {
       "name": "prevTasks",
       "versions": "1-6",
@@ -44,7 +43,6 @@
       "versions": "1-6",
       "type": "[]TaskId"
     },
-    /***************/
     {
       "name": "userEndPoint",
       "versions": "2+",
@@ -67,7 +65,6 @@
     }
   ],
   "commonStructs": [
-    // TaskId was only used from 1-6, after 6 we encode each field of the TaskId separately along with the other information for that map entry
     {
       "name": "TaskId",
       "versions": "1+",
