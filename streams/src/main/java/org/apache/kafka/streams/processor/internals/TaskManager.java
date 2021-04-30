@@ -36,11 +36,9 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -683,11 +681,9 @@ public class TaskManager {
         // current set of actually-locked tasks.
         lockedTaskDirectories.clear();
 
-        for (final TaskDirectory taskDir : stateDirectory.listNonEmptyTaskDirectories()) {
-            final File dir = taskDir.file();
-            final String namedTopology = taskDir.namedTopology();
+        for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
-                final TaskId id = TaskId.parseTaskDirectoryName(dir.getName(), namedTopology);
+                final TaskId id = TaskId.parseTaskDirectoryName(dir.getName(), null);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
                     if (!tasks.owned(id)) {

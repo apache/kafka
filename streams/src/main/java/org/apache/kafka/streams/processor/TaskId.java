@@ -17,13 +17,10 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.errors.TaskIdFormatException;
-import org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,8 +40,8 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    /** */
-    public final Optional<String> namedTopology;
+    /** The namedTopology that this task belongs to, or null if it does not belong to one */
+    private final String namedTopology;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
@@ -53,16 +50,22 @@ public class TaskId implements Comparable<TaskId> {
     public TaskId(final int topicGroupId, final int partition, final String namedTopology) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        if (namedTopology != null) {
-            this.namedTopology = Optional.of(namedTopology);
+        if (namedTopology != null && namedTopology.length() == 0) {
+            LOG.warn("Empty string passed in for task's namedTopology, since NamedTopology name cannot be empty, we "
+                         + "assume this task does not belong to a NamedTopology and downgrade this to null");
+            this.namedTopology = null;
         } else {
-            this.namedTopology = Optional.empty();
+            this.namedTopology = namedTopology;
         }
+    }
+
+    public Optional<String> namedTopology() {
+        return namedTopology == null ? Optional.empty() : Optional.of(namedTopology);
     }
 
     @Override
     public String toString() {
-        return namedTopology.map(s -> s + topicGroupId + "_" + partition).orElseGet(() -> topicGroupId + "_" + partition);
+        return namedTopology == null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
     public String toTaskDirString() {
@@ -98,9 +101,9 @@ public class TaskId implements Comparable<TaskId> {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
         if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (namedTopology.isPresent()) {
-                out.writeInt(namedTopology.get().length());
-                out.writeBytes(namedTopology.get());
+            if (namedTopology != null) {
+                out.writeInt(namedTopology.length());
+                out.writeBytes(namedTopology);
             } else {
                 out.writeInt(0);
             }
@@ -114,7 +117,7 @@ public class TaskId implements Comparable<TaskId> {
         final int topicGroupId = in.readInt();
         final int partition = in.readInt();
         final String namedTopology;
-        if (version > MIN_NAMED_TOPOLOGY_VERSION) {
+        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
             final int numNamedTopologyChars = in.readInt();
             final StringBuilder namedTopologyBuilder = new StringBuilder();
             for (int i = 0; i < numNamedTopologyChars; ++i) {
@@ -124,14 +127,16 @@ public class TaskId implements Comparable<TaskId> {
         } else {
             namedTopology = null;
         }
-        return new TaskId(topicGroupId, partition, namedTopology);
+        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
     }
 
     public void writeTo(final ByteBuffer buf) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        for (final char c : namedTopology.orElse("").toCharArray()) {
-            buf.putChar(c);
+        if (namedTopology != null) {
+            for (final char c : namedTopology.toCharArray()) {
+                buf.putChar(c);
+            }
         }
     }
 
@@ -139,7 +144,16 @@ public class TaskId implements Comparable<TaskId> {
         final int topicGroupId = buf.getInt();
         final int partition = buf.getInt();
         final String namedTopology = buf.asCharBuffer().toString();
-        return new TaskId(topicGroupId, partition, namedTopology);
+        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
+    }
+
+    /**
+     * @return the namedTopology name, or null if the passed in namedTopology is null or the empty string
+     */
+    private static String getNamedTopologyOrElseNull(final String namedTopology) {
+        return (namedTopology == null || namedTopology.length() == 0) ?
+            null :
+            namedTopology;
     }
 
     @Override
@@ -153,6 +167,8 @@ public class TaskId implements Comparable<TaskId> {
         final TaskId taskId = (TaskId) o;
         return topicGroupId == taskId.topicGroupId &&
             partition == taskId.partition &&
+            namedTopology == null ?
+            taskId.namedTopology == null :
             namedTopology.equals(taskId.namedTopology);
     }
 
@@ -163,12 +179,12 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int compareTo(final TaskId other) {
-        if (namedTopology.isPresent() && other.namedTopology.isPresent()) {
-            final int comparingNamedTopologies = namedTopology.get().compareTo(other.namedTopology.get());
+        if (namedTopology != null && other.namedTopology != null) {
+            final int comparingNamedTopologies = namedTopology.compareTo(other.namedTopology);
             if (comparingNamedTopologies != 0) {
                 return comparingNamedTopologies;
             }
-        } else if (namedTopology.isPresent() || other.namedTopology.isPresent()) {
+        } else if (namedTopology != null || other.namedTopology != null) {
             LOG.error("Tried to compare this = {} with other = {}, but only one had a valid named topology", this, other);
             throw new IllegalStateException("Can't compare a TaskId with a namedTopology to one without");
         }
