@@ -101,7 +101,7 @@ public class ConstantThroughputGenerator implements ThroughputGenerator {
         if (messageTracker >= messagesPerWindow) {
 
             // Wait the difference in time between now and when the next window starts.
-            while(nextWindowStarts > Time.SYSTEM.milliseconds()) {
+            while (nextWindowStarts > Time.SYSTEM.milliseconds()) {
                 wait(nextWindowStarts - Time.SYSTEM.milliseconds());
             }
         }
