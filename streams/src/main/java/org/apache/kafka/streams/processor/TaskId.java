@@ -103,7 +103,7 @@ public class TaskId implements Comparable<TaskId> {
         if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
             if (namedTopology != null) {
                 out.writeInt(namedTopology.length());
-                out.writeBytes(namedTopology);
+                out.writeChars(namedTopology);
             } else {
                 out.writeInt(0);
             }
