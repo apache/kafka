@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -185,6 +186,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public V get(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
         } catch (final ProcessorStateException e) {
@@ -196,6 +198,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void put(final K key,
                     final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
             maybeRecordE2ELatency();
@@ -208,6 +211,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         final V currentValue = maybeMeasureLatency(
             () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
             time,
@@ -219,11 +223,13 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
+        entries.forEach(entry -> Objects.requireNonNull(entry.key, "key cannot be null"));
         maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
     }
 
     @Override
     public V delete(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), time, deleteSensor);
         } catch (final ProcessorStateException e) {
@@ -234,13 +240,16 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
-
+        Objects.requireNonNull(prefix, "key cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> range(final K from,
                                         final K to) {
+        Objects.requireNonNull(from, "keyFrom cannot be null");
+        Objects.requireNonNull(to, "keyTo cannot be null");
         return new MeteredKeyValueIterator(
             wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeSensor
@@ -250,6 +259,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public KeyValueIterator<K, V> reverseRange(final K from,
                                                final K to) {
+        Objects.requireNonNull(from, "keyFrom cannot be null");
+        Objects.requireNonNull(to, "keyTo cannot be null");
         return new MeteredKeyValueIterator(
             wrapped().reverseRange(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeSensor
