@@ -389,9 +389,9 @@ public class StateDirectoryTest {
         assertEquals(mkSet(taskDir1), Arrays.stream(
             directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
 
-        Utils.delete(taskDir1, Collections.singletonList(new File(taskDir1, LOCK_FILE_NAME)));
+        Utils.delete(taskDir1);
 
-        assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
+        assertEquals(mkSet(taskDir2), Arrays.stream(
             directory.listAllTaskDirectories()).collect(Collectors.toSet()));
         assertEquals(Collections.emptySet(), Arrays.stream(
             directory.listNonEmptyTaskDirectories()).collect(Collectors.toSet()));
