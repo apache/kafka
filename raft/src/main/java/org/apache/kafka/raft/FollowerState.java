@@ -159,6 +159,8 @@ public class FollowerState implements EpochState {
             ", epoch=" + epoch +
             ", leaderId=" + leaderId +
             ", voters=" + voters +
+            ", highWatermark=" + highWatermark +
+            ", fetchingSnapshot=" + fetchingSnapshot +
             ')';
     }
 

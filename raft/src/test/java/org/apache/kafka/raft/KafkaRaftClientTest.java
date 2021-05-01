@@ -39,6 +39,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -2013,11 +2014,29 @@ public class KafkaRaftClientTest {
 
         // Now try reading it
         int otherNodeId = 1;
-        context.deliverRequest(context.fetchRequest(1, otherNodeId, 0L, 0, 500));
-        context.pollUntilResponse();
+        List<MutableRecordBatch> batches = new ArrayList<>(2);
+        boolean appended = true;
 
-        MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, 1, OptionalInt.of(localId));
-        List<MutableRecordBatch> batches = Utils.toList(fetchedRecords.batchIterator());
+        // Continue to fetch until the leader returns an empty response
+        while (appended) {
+            long fetchOffset = 0;
+            int lastFetchedEpoch = 0;
+            if (!batches.isEmpty()) {
+                MutableRecordBatch lastBatch = batches.get(batches.size() - 1);
+                fetchOffset = lastBatch.lastOffset() + 1;
+                lastFetchedEpoch = lastBatch.partitionLeaderEpoch();
+            }
+
+            context.deliverRequest(context.fetchRequest(1, otherNodeId, fetchOffset, lastFetchedEpoch, 0));
+            context.pollUntilResponse();
+
+            MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, 1, OptionalInt.of(localId));
+            List<MutableRecordBatch> fetchedBatch = Utils.toList(fetchedRecords.batchIterator());
+            batches.addAll(fetchedBatch);
+
+            appended = !fetchedBatch.isEmpty();
+        }
+
         assertEquals(2, batches.size());
 
         MutableRecordBatch leaderChangeBatch = batches.get(0);
@@ -2233,6 +2252,7 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
+        List<List<String>> expectedBatches = Arrays.asList(batch1, batch2, batch3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
@@ -2264,18 +2284,24 @@ public class KafkaRaftClientTest {
         // watermark advances and we can start sending committed data to the
         // listener. Note that the `LeaderChange` control record is filtered.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 500));
-        context.client.poll();
-        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
-        assertEquals(3, context.listener.numCommittedBatches());
-        assertEquals(batch1, context.listener.commitWithBaseOffset(0L));
-        assertEquals(batch2, context.listener.commitWithBaseOffset(3L));
-        assertEquals(batch3, context.listener.commitWithBaseOffset(6L));
-        assertEquals(OptionalLong.of(8L), context.listener.lastCommitOffset());
+        context.pollUntil(() -> {
+            int committedBatches = context.listener.numCommittedBatches();
+            long baseOffset = 0;
+            for (int index = 0; index < committedBatches; index++) {
+                List<String> expectedBatch = expectedBatches.get(index);
+                assertEquals(expectedBatch, context.listener.commitWithBaseOffset(baseOffset));
+                baseOffset += expectedBatch.size();
+            }
 
-        // Now that the listener has caught up to the start of the leader epoch,
-        // we expect the `handleClaim` callback.
-        context.client.poll();
+            return context.listener.currentClaimedEpoch().isPresent();
+        });
+
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
+        // Note that last committed offset is inclusive, hence we subtract 1.
+        assertEquals(
+            OptionalLong.of(expectedBatches.stream().mapToInt(List::size).sum() - 1),
+            context.listener.lastCommitOffset()
+        );
     }
 
     @Test
@@ -2302,20 +2328,21 @@ public class KafkaRaftClientTest {
 
         // Let the initial listener catch up
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
-        context.client.poll();
+        context.pollUntil(() -> OptionalInt.of(epoch).equals(context.listener.currentClaimedEpoch()));
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
-        context.client.poll();
+        assertEquals(OptionalLong.of(8L), context.listener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
+        // Ensure that the `handleClaim` callback was not fired early
+        assertEquals(9L, context.listener.claimedEpochStartOffset(epoch));
 
         // Register a second listener and allow it to catch up to the high watermark
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener();
         context.client.register(secondListener);
-        context.client.poll();
+        context.pollUntil(() -> OptionalInt.of(epoch).equals(secondListener.currentClaimedEpoch()));
         assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-
         // Ensure that the `handleClaim` callback was not fired early
-        assertEquals(9L, context.listener.claimedEpochStartOffset(epoch));
+        assertEquals(9L, secondListener.claimedEpochStartOffset(epoch));
     }
 
     @Test
@@ -2406,6 +2433,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(candidateEpoch, otherNodeId);
 
         // Note the offset is 8 because the record at offset 9 is a control record
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
         assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
     }
@@ -2455,6 +2483,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Note the offset is 8 because the record at offset 9 is a control record
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
         assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
     }

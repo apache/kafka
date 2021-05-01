@@ -17,14 +17,12 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedRecords;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Iterator;
 
 public final class FileRawSnapshotReader implements RawSnapshotReader {
     private final FileRecords fileRecords;
@@ -46,12 +44,13 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
     }
 
     @Override
-    public Iterator<RecordBatch> iterator() {
-        return Utils.covariantCast(fileRecords.batchIterator());
+    public UnalignedRecords slice(long position, int size) {
+        return fileRecords.sliceUnaligned(Math.toIntExact(position), size);
     }
 
-    public UnalignedRecords read(long position, int size) {
-        return fileRecords.sliceUnaligned(Math.toIntExact(position), size);
+    @Override
+    public Records records() {
+        return fileRecords;
     }
 
     @Override
