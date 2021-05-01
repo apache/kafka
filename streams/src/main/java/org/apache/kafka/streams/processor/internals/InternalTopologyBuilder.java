@@ -2013,6 +2013,11 @@ public class InternalTopologyBuilder {
         setRegexMatchedTopicToStateStore();
     }
 
+
+    public synchronized List<String> fullSourceTopicNames() {
+        return maybeDecorateInternalSourceTopics(sourceTopicNames);
+    }
+
     // following functions are for test only
     public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;

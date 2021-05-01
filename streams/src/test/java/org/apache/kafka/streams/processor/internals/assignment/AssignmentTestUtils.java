@@ -85,6 +85,11 @@ public final class AssignmentTestUtils {
     public static final TaskId TASK_2_2 = new TaskId(2, 2);
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
 
+    public static final TaskId NAMED_TASK_0_0 = new TaskId(0, 0, "topology0");
+    public static final TaskId NAMED_TASK_0_1 = new TaskId(0, 1, "topology0");
+    public static final TaskId NAMED_TASK_1_0 = new TaskId(1, 0, "topology1");
+    public static final TaskId NAMED_TASK_1_1 = new TaskId(1, 1, "topology1");
+
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
 

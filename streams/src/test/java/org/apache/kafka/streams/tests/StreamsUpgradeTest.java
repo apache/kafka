@@ -330,8 +330,8 @@ public class StreamsUpgradeTest {
             buf.putInt(version); // used version
             buf.putInt(version); // supported version
             LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId);
-            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks);
-            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks, version);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks, version);
             LegacySubscriptionInfoSerde.encodeUserEndPoint(buf, endPointBytes);
 
             buf.rewind();

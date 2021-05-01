@@ -14,16 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.assignment;
+package org.apache.kafka.streams.processor.internals.namedtopology;
 
-public final class StreamsAssignmentProtocolVersions {
-    public static final int UNKNOWN = -1;
-    public static final int EARLIEST_PROBEABLE_VERSION = 3;
-    public static final int MIN_NAMED_TOPOLOGY_VERSION = 10;
-    public static final int LATEST_SUPPORTED_VERSION = 9;
-    // When changing the versions:
-    // 1) Update the version_probing_message and end_of_upgrade_message in streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
-    // 2) Add a unit test in SubscriptionInfoTest and/or AssignmentInfoTest
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
 
-    private StreamsAssignmentProtocolVersions() {}
+import java.util.Properties;
+
+public class NamedTopologyStreamsBuilder extends StreamsBuilder {
+
+    final String topologyName;
+
+    public NamedTopologyStreamsBuilder(final String topologyName) {
+        super();
+        this.topologyName = topologyName;
+    }
+
+    public synchronized NamedTopology buildNamedTopology(final Properties props) {
+        super.build(props);
+        final NamedTopology namedTopology = (NamedTopology) super.topology;
+        namedTopology.setTopologyName(topologyName);
+        return namedTopology;
+    }
+
+    @Override
+    public Topology getNewTopology() {
+        return new NamedTopology();
+    }
 }

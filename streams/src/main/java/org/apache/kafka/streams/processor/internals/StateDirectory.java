@@ -388,7 +388,7 @@ public class StateDirectory {
     private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
         for (final File taskDir : listNonEmptyTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parse(dirName);
+            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
@@ -417,7 +417,7 @@ public class StateDirectory {
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parse(dirName);
+            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
