@@ -149,7 +149,7 @@ public class ConfigEntry {
 
         ConfigEntry that = (ConfigEntry) o;
 
-        return Objects.equals(this.name, that.name) &&
+        return this.name.equals(that.name) &&
                 Objects.equals(this.value, that.value) &&
                 this.isSensitive == that.isSensitive &&
                 this.isReadOnly == that.isReadOnly &&
@@ -163,7 +163,7 @@ public class ConfigEntry {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + Objects.hashCode(name);
+        result = prime * result + name.hashCode();
         result = prime * result + Objects.hashCode(value);
         result = prime * result + (isSensitive ? 1 : 0);
         result = prime * result + (isReadOnly ? 1 : 0);

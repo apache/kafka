@@ -803,9 +803,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
           new AlterConfigOp(newConfigEntry("min.insync.replicas", "2"), AlterConfigOp.OpType.SET),
           new AlterConfigOp(newConfigEntry("unclean.leader.election.enable", ""), AlterConfigOp.OpType.DELETE)
         )
-        assertEquals(expectedConfigOps.size, alterConfigOps.size())
+        assertEquals(expectedConfigOps.size, alterConfigOps.size)
         expectedConfigOps.foreach { expectedOp =>
-          val actual = alterConfigOps.asScala.find(_.configEntry().name() == expectedOp.configEntry().name())
+          val actual = alterConfigOps.asScala.find(_.configEntry.name == expectedOp.configEntry.name)
           assertNotEquals(actual, None)
           assertEquals(expectedOp.opType, actual.get.opType)
           assertEquals(expectedOp.configEntry.name, actual.get.configEntry.name)
