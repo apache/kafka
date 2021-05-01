@@ -29,7 +29,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, LiDecomposedControlRequestUtils, Logging}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation._
@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsP
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.message.LiCombinedControlResponseData.StopReplicaPartitionError
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -69,7 +70,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{LiCombinedControlTransformer, ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
@@ -234,6 +235,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // LinkedIn internal request types
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
+        case ApiKeys.LI_COMBINED_CONTROL => handleLiCombinedControlRequest(request, requestLocal)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -270,10 +272,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"when the current broker epoch is ${zkSupport.controller.brokerEpoch}")
       requestHelper.sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
-      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest,
-        RequestHandlerHelper.onLeadershipChange(groupCoordinator, txnCoordinator, _, _))
+      val response = doHandleLeaderAndIsrRequest(correlationId, leaderAndIsrRequest)
       requestHelper.sendResponseExemptThrottle(request, response)
     }
+  }
+
+  private def doHandleLeaderAndIsrRequest(correlationId: Int, leaderAndIsrRequest: LeaderAndIsrRequest): LeaderAndIsrResponse = {
+    replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest,
+      RequestHandlerHelper.onLeadershipChange(groupCoordinator, txnCoordinator, _, _))
   }
 
   def handleStopReplicaRequest(request: RequestChannel.Request): Unit = {
@@ -292,49 +298,55 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(
         new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
-      val partitionStates = stopReplicaRequest.partitionStates().asScala
-      val (result, error) = replicaManager.stopReplicas(
-        request.context.correlationId,
-        stopReplicaRequest.controllerId,
-        stopReplicaRequest.controllerEpoch,
-        partitionStates)
-      // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
-      // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
-      result.forKeyValue { (topicPartition, error) =>
-        if (error == Errors.NONE) {
-          val partitionState = partitionStates(topicPartition)
-          if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
-              && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              Some(partitionState.leaderEpoch)
-            else
-              None
-            groupCoordinator.onResignation(topicPartition.partition, leaderEpoch)
-          } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
-                     && partitionState.deletePartition) {
-            val leaderEpoch = if (partitionState.leaderEpoch >= 0)
-              Some(partitionState.leaderEpoch)
-            else
-              None
-            txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = leaderEpoch)
-          }
-        }
-      }
-
-      def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
-        new StopReplicaResponseData.StopReplicaPartitionError()
-          .setTopicName(tp.topic)
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(error.code)
-
-      requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
-        .setErrorCode(error.code)
-        .setPartitionErrors(result.map {
-          case (tp, error) => toStopReplicaPartition(tp, error)
-        }.toBuffer.asJava)))
+      val response: StopReplicaResponse = doHandleStopReplicaRequest(request, stopReplicaRequest)
+      requestHelper.sendResponseExemptThrottle(request, response)
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
+  }
+
+
+  private def doHandleStopReplicaRequest(request: RequestChannel.Request, stopReplicaRequest: StopReplicaRequest) = {
+    val partitionStates = stopReplicaRequest.partitionStates().asScala
+    val (result, error) = replicaManager.stopReplicas(
+      request.context.correlationId,
+      stopReplicaRequest.controllerId,
+      stopReplicaRequest.controllerEpoch,
+      partitionStates)
+    // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
+    // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
+    result.forKeyValue { (topicPartition, error) =>
+      if (error == Errors.NONE) {
+        val partitionState = partitionStates(topicPartition)
+        if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
+          && partitionState.deletePartition) {
+          val leaderEpoch = if (partitionState.leaderEpoch >= 0)
+            Some(partitionState.leaderEpoch)
+          else
+            None
+          groupCoordinator.onResignation(topicPartition.partition, leaderEpoch)
+        } else if (topicPartition.topic == TRANSACTION_STATE_TOPIC_NAME
+          && partitionState.deletePartition) {
+          val leaderEpoch = if (partitionState.leaderEpoch >= 0)
+            Some(partitionState.leaderEpoch)
+          else
+            None
+          txnCoordinator.onResignation(topicPartition.partition, coordinatorEpoch = leaderEpoch)
+        }
+      }
+    }
+
+    def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
+      new StopReplicaResponseData.StopReplicaPartitionError()
+        .setTopicName(tp.topic)
+        .setPartitionIndex(tp.partition)
+        .setErrorCode(error.code)
+
+    new StopReplicaResponse(new StopReplicaResponseData()
+      .setErrorCode(error.code)
+      .setPartitionErrors(result.map {
+        case (tp, error) => toStopReplicaPartition(tp, error)
+      }.toBuffer.asJava))
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
@@ -352,33 +364,40 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseExemptThrottle(request,
         new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
-      val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
-      if (deletedPartitions.nonEmpty)
-        groupCoordinator.handleDeletedPartitions(deletedPartitions, requestLocal)
-
-      if (zkSupport.adminManager.hasDelayedTopicOperations) {
-        updateMetadataRequest.partitionStates.forEach { partitionState =>
-          zkSupport.adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
-        }
-      }
-
-      quotas.clientQuotaCallback.foreach { callback =>
-        if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
-          quotas.fetch.updateQuotaMetricConfigs()
-          quotas.produce.updateQuotaMetricConfigs()
-          quotas.request.updateQuotaMetricConfigs()
-          quotas.controllerMutation.updateQuotaMetricConfigs()
-        }
-      }
-      if (replicaManager.hasDelayedElectionOperations) {
-        updateMetadataRequest.partitionStates.forEach { partitionState =>
-          val tp = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-          replicaManager.tryCompleteElection(TopicPartitionOperationKey(tp))
-        }
-      }
-      requestHelper.sendResponseExemptThrottle(request, new UpdateMetadataResponse(
-        new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code)))
+      val response: UpdateMetadataResponse = doHandleUpdateMetadataRequest(request, requestLocal, zkSupport, correlationId, updateMetadataRequest)
+      requestHelper.sendResponseExemptThrottle(request, response)
     }
+  }
+
+  private def doHandleUpdateMetadataRequest(request: RequestChannel.Request, requestLocal: RequestLocal,
+                                            zkSupport: ZkSupport, correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) = {
+    val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
+    if (deletedPartitions.nonEmpty)
+      groupCoordinator.handleDeletedPartitions(deletedPartitions, requestLocal)
+
+    if (zkSupport.adminManager.hasDelayedTopicOperations) {
+      updateMetadataRequest.partitionStates.forEach { partitionState =>
+        zkSupport.adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
+      }
+    }
+
+    quotas.clientQuotaCallback.foreach { callback =>
+      if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
+        quotas.fetch.updateQuotaMetricConfigs()
+        quotas.produce.updateQuotaMetricConfigs()
+        quotas.request.updateQuotaMetricConfigs()
+        quotas.controllerMutation.updateQuotaMetricConfigs()
+      }
+    }
+    if (replicaManager.hasDelayedElectionOperations) {
+      updateMetadataRequest.partitionStates.forEach { partitionState =>
+        val tp = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
+        replicaManager.tryCompleteElection(TopicPartitionOperationKey(tp))
+      }
+    }
+    val response = new UpdateMetadataResponse(
+      new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code))
+    response
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
@@ -3497,6 +3516,51 @@ class KafkaApis(val requestChannel: RequestChannel,
       // about the new broker epoch and sends a control request with this epoch before the broker learns about it
       brokerEpochInRequest < zkSupport.controller.brokerEpoch
     } else false
+  }
+
+  def handleLiCombinedControlRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+    val correlationId = request.header.correlationId
+    val liCombinedControlRequest = request.body[LiCombinedControlRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+    val decomposedRequest = LiDecomposedControlRequestUtils.decomposeRequest(liCombinedControlRequest, zkSupport.controller.brokerEpoch, config)
+
+    val responseData = new LiCombinedControlResponseData()
+
+    decomposedRequest.leaderAndIsrRequest match {
+      case Some(leaderAndIsrRequest) => {
+        val leaderAndIsrResponse = doHandleLeaderAndIsrRequest(correlationId, leaderAndIsrRequest)
+        responseData.setLeaderAndIsrErrorCode(leaderAndIsrResponse.errorCode());
+
+        //  .setLeaderAndIsrPartitionErrors(LiCombinedControlTransformer.transformLeaderAndIsrPartitionErrors(leaderAndIsrResponse.partitionErrors()))
+        if (liCombinedControlRequest.version() == 0) {
+          responseData.setLeaderAndIsrPartitionErrors(LiCombinedControlTransformer.transformLeaderAndIsrPartitionErrors(leaderAndIsrResponse.rawPartitionErrors()))
+        } else {
+          responseData.setLeaderAndIsrTopics(LiCombinedControlTransformer.transformLeaderAndIsrTopicErrors(leaderAndIsrResponse.rawTopics()))
+        }
+      }
+      case _ => // do nothing
+    }
+
+    decomposedRequest.updateMetadataRequest match {
+      case Some(updateMetadataRequest) => {
+        val updateMetadataResponse = doHandleUpdateMetadataRequest(request, requestLocal, zkSupport, correlationId, updateMetadataRequest)
+        responseData.setUpdateMetadataErrorCode(updateMetadataResponse.errorCode())
+      }
+      case _ => // do nothing
+    }
+
+    val stopReplicaRequests = decomposedRequest.stopReplicaRequests
+    val stopReplicaPartitionErrors = new util.ArrayList[StopReplicaPartitionError]()
+    stopReplicaRequests.foreach{ stopReplicaRequest => {
+      val stopReplicaResponse = doHandleStopReplicaRequest(request, stopReplicaRequest)
+      responseData.setStopReplicaErrorCode(stopReplicaResponse.errorCode())
+      stopReplicaPartitionErrors.addAll(LiCombinedControlTransformer.transformStopReplicaPartitionErrors(stopReplicaResponse.partitionErrors()))
+    }}
+    responseData.setStopReplicaPartitionErrors(stopReplicaPartitionErrors)
+
+    requestHelper.sendResponseExemptThrottle(request, new LiCombinedControlResponse(responseData, liCombinedControlRequest.version()))
   }
 }
 

@@ -30,7 +30,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LiCombinedControlRequestData;
 import org.apache.kafka.common.message.LiCombinedControlResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -288,6 +287,10 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
 
     public List<LiCombinedControlRequestData.StopReplicaPartitionState> stopReplicaPartitionStates() {
         return data.stopReplicaPartitionStates();
+    }
+
+    public List<LiCombinedControlRequestData.StopReplicaTopicState> stopReplicaTopicStates() {
+        return data.stopReplicaTopicStates();
     }
 
     public static LiCombinedControlRequest parse(ByteBuffer buffer, short version) {

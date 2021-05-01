@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LiCombinedControlRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.{LiCombinedControlRequestData, StopReplicaRequestData}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataPartitionState}
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{LeaderAndIsrRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}

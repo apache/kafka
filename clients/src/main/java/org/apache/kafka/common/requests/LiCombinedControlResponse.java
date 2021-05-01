@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.message.LiCombinedControlResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -101,9 +100,13 @@ public class LiCombinedControlResponse extends AbstractResponse {
         Map<Errors, Integer> leaderAndIsrErrorCount;
         if (leaderAndIsrError != Errors.NONE) {
             // Minor optimization since the top-level error applies to all partitions
-            leaderAndIsrErrorCount = Collections.singletonMap(leaderAndIsrError, data.leaderAndIsrPartitionErrors().size());
+            leaderAndIsrErrorCount =
+                Collections.singletonMap(leaderAndIsrError, data.leaderAndIsrPartitionErrors().size());
         } else {
-            leaderAndIsrErrorCount = errorCounts(data.leaderAndIsrPartitionErrors().stream().map(l -> Errors.forCode(l.errorCode())).collect(Collectors.toList()));
+            leaderAndIsrErrorCount = errorCounts(data.leaderAndIsrPartitionErrors()
+                .stream()
+                .map(l -> Errors.forCode(l.errorCode()))
+                .collect(Collectors.toList()));
         }
 
         Map<Errors, Integer> updateMetadataErrorCount = errorCounts(updateMetadataError());
@@ -113,7 +116,10 @@ public class LiCombinedControlResponse extends AbstractResponse {
             // Minor optimization since the top-level error applies to all partitions
             stopReplicaErrorCount = Collections.singletonMap(error(), data.stopReplicaPartitionErrors().size());
         } else {
-            stopReplicaErrorCount = errorCounts(data.stopReplicaPartitionErrors().stream().map(p -> Errors.forCode(p.errorCode())).collect(Collectors.toList()));
+            stopReplicaErrorCount = errorCounts(data.stopReplicaPartitionErrors()
+                .stream()
+                .map(p -> Errors.forCode(p.errorCode()))
+                .collect(Collectors.toList()));
         }
 
         // merge the several count maps into one result

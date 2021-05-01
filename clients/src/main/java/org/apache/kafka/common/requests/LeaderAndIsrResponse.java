@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class LeaderAndIsrResponse extends AbstractResponse {
@@ -49,6 +50,10 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
     public LeaderAndIsrTopicErrorCollection topics() {
         return this.data.topics();
+    }
+
+    public short errorCode() {
+        return data.errorCode();
     }
 
     public Errors error() {
@@ -73,6 +78,14 @@ public class LeaderAndIsrResponse extends AbstractResponse {
                 Errors.forCode(l.errorCode())));
         updateErrorCounts(errors, Errors.NONE);
         return errors;
+    }
+
+    public List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> rawPartitionErrors() {
+        return data.partitionErrors();
+    }
+
+    public LeaderAndIsrTopicErrorCollection rawTopics() {
+        return data.topics();
     }
 
     public Map<TopicPartition, Errors> partitionErrors(Map<Uuid, String> topicNames) {

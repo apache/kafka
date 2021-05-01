@@ -131,6 +131,22 @@ public class LiCombinedControlTransformer {
                         .setErrorCode(error.errorCode())).collect(Collectors.toList());
     }
 
+    public static LiCombinedControlResponseData.LeaderAndIsrTopicErrorCollection transformLeaderAndIsrTopicErrors(LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection sourceTopicErrors) {
+        LiCombinedControlResponseData.LeaderAndIsrTopicErrorCollection transformedTopicErrors = new LiCombinedControlResponseData.LeaderAndIsrTopicErrorCollection();
+
+        List<LiCombinedControlResponseData.LeaderAndIsrTopicError> topicErrorList = sourceTopicErrors.stream().map(topicError -> {
+            List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> partitionErrors = topicError.partitionErrors().stream().map(partitionError ->
+                    new LiCombinedControlResponseData.LeaderAndIsrPartitionError().setTopicName(partitionError.topicName())
+                            .setPartitionIndex(partitionError.partitionIndex())
+                            .setErrorCode(partitionError.errorCode())).collect(Collectors.toList());
+
+            return new LiCombinedControlResponseData.LeaderAndIsrTopicError().setTopicId(topicError.topicId())
+                    .setPartitionErrors(partitionErrors);
+        }).collect(Collectors.toList());
+        transformedTopicErrors.addAll(topicErrorList);
+        return transformedTopicErrors;
+    }
+
     public static List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> restoreLeaderAndIsrPartitionErrors(
             List<LiCombinedControlResponseData.LeaderAndIsrPartitionError> errors) {
         return errors.stream().map(error ->

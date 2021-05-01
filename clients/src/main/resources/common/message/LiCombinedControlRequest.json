@@ -16,6 +16,7 @@
 {
   "apiKey": 1001,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "LiCombinedControlRequest",
   // version 1 adds the LeaderAndIsrType
   //                TopicId within LeaderAndIsrTopicState
@@ -78,8 +79,15 @@
         "about": "The rack which this broker belongs to." }
     ]},
     // fields from the StopReplica
-    { "name": "StopReplicaPartitionStates", "type": "[]StopReplicaPartitionState", "versions": "0+",
-      "about": "The topics to stop."}
+    { "name": "StopReplicaPartitionStates", "type": "[]StopReplicaPartitionState", "versions": "0",
+      "about": "The topics to stop."},
+    { "name": "StopReplicaTopicStates", "type": "[]StopReplicaTopicState", "versions": "1+",
+      "about": "Each topic.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "1+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionStates", "type": "[]StopReplicaPartitionState", "versions": "1+",
+        "about": "The state of each partition"}
+    ]}
   ],
   "commonStructs": [
     { "name": "StopReplicaPartitionState", "versions": "0+", "fields": [
