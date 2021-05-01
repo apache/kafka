@@ -50,6 +50,10 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return data.partitionErrors();
     }
 
+    public short errorCode() {
+        return data.errorCode();
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
