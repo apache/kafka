@@ -34,7 +34,7 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.38.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '6.1.1'
+  id 'org.owasp.dependencycheck' version '6.1.6'
   id 'org.nosphere.apache.rat' version "0.7.0"
 
   id "com.github.spotbugs" version '4.7.1' apply false
