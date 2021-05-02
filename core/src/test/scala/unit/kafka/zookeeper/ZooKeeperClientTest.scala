@@ -103,7 +103,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   def testConnectionViaNettyClient(): Unit = {
     // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
-    // to kafka.zk.EmbeddedZoopeeper
+    // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
     val propKey = KafkaConfig.ZkClientCnxnSocketProp
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"

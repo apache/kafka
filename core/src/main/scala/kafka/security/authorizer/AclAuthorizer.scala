@@ -175,9 +175,11 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(kafkaConfig, configs)
     val time = Time.SYSTEM
+    // createChrootIfNecessary=true is necessary in case we are running in a KRaft cluster
+    // because such a cluster will not create any chroot path in ZooKeeper (it doesn't connect to ZooKeeper)
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
       zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),
-      zkClientConfig = zkClientConfig)
+      zkClientConfig = zkClientConfig, createChrootIfNecessary = true)
     zkClient.createAclPaths()
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1

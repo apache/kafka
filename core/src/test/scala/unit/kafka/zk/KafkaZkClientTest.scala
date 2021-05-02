@@ -19,7 +19,6 @@ package kafka.zk
 import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
@@ -53,6 +52,8 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -96,7 +97,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testConnectionViaNettyClient(): Unit = {
     // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
-    // to kafka.zk.EmbeddedZoopeeper
+    // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
     val propKey = KafkaConfig.ZkClientCnxnSocketProp
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
@@ -111,6 +112,29 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertThrows(classOf[Exception],
         () => KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
           zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig)))
+    } finally {
+      client.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testChroot(createChrootIfNecessary: Boolean): Unit = {
+    val chroot = "/chroot"
+    val clientConfig = new ZKClientConfig()
+    val client = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig), createChrootIfNecessary = createChrootIfNecessary)
+    try {
+      client.createTopLevelPaths()
+      if (!createChrootIfNecessary) {
+        fail("We should not have been able to create top-level paths with a chroot when not explicitly creating the chroot path, but we were able to do so")
+      }
+    } catch {
+      case e: Exception =>
+        if (createChrootIfNecessary) {
+          fail("We should have been able to create top-level paths with a chroot when explicitly creating the chroot path, but we failed to do so",
+            e)
+        }
     } finally {
       client.close()
     }

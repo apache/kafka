@@ -22,7 +22,7 @@ from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.security.kafka_acls import ACLs
 
-class SimpleAuthorizerTest(Test):
+class ZooKeeperAuthorizerTest(Test):
     """Tests that the ZooKeeper-based Authorizer works wth both ZooKeeper-based and KRaft clusters.
     Alters client quotas, making sure it works.
     Rolls Kafka with an authorizer.
@@ -33,7 +33,7 @@ class SimpleAuthorizerTest(Test):
     """
 
     def __init__(self, test_context):
-        super(SimpleAuthorizerTest, self).__init__(test_context=test_context)
+        super(ZooKeeperAuthorizerTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
         # setup ZooKeeper even with KRaft
@@ -69,7 +69,7 @@ class SimpleAuthorizerTest(Test):
         # set authorizer, restart with broker as super user
         self.kafka.logger.info("Restarting Kafka with authorizer and broker principal as super user")
         self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
-        self.kafka.server_prop_overides = [["super.users", broker_principal]] # for broker to work with an authorizer
+        self.kafka.server_prop_overrides = [["super.users", broker_principal]] # for broker to work with an authorizer
         self.kafka.restart_cluster()
 
         # the alter client quotas command should now fail
