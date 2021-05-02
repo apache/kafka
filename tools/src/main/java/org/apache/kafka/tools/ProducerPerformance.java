@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +47,11 @@ import org.apache.kafka.common.utils.Utils;
 public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
+        ProducerPerformance perf = new ProducerPerformance();
+        perf.start(args);
+    }
+    
+    public void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
         try {
@@ -71,41 +77,11 @@ public class ProducerPerformance {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = new ArrayList<>();
-            if (payloadFilePath != null) {
-                Path path = Paths.get(payloadFilePath);
-                System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
-                }
+            List<byte[]> payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
 
-                String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
+            Properties props = readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
-                System.out.println("Number of messages read: " + payloadList.length);
-
-                for (String payload : payloadList) {
-                    payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Properties props = new Properties();
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+            KafkaProducer<byte[], byte[]> producer = createKafkaProducer(props);
 
             if (transactionsEnabled)
                 producer.initTransactions();
@@ -190,8 +166,53 @@ public class ProducerPerformance {
 
     }
 
+    public KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
+        return new KafkaProducer<>(props);
+    }
+    
+    public static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
+            boolean transactionsEnabled) throws IOException {
+        Properties props = new Properties();
+        if (producerConfig != null) {
+            props.putAll(Utils.loadProps(producerConfig));
+        }
+        if (producerProps != null)
+            for (String prop : producerProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (transactionsEnabled)
+            props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        return props;
+    }
+
+    public static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
+        List<byte[]> payloadByteList = new ArrayList<>();
+        if (payloadFilePath != null) {
+            Path path = Paths.get(payloadFilePath);
+            System.out.println("Reading payloads from: " + path.toAbsolutePath());
+            if (Files.notExists(path) || Files.size(path) == 0)  {
+                throw new IllegalArgumentException("File does not exist or empty file provided.");
+            }
+
+            String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
+
+            System.out.println("Number of messages read: " + payloadList.length);
+
+            for (String payload : payloadList) {
+                payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return payloadByteList;
+    }
+
     /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
+    public static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("producer-performance")
                 .defaultHelp(true)
