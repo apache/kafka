@@ -1491,6 +1491,49 @@ public interface Admin extends AutoCloseable {
     DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
     /**
+     * Describe the state of a set of transactional IDs. See
+     * {@link #describeTransactions(Collection, DescribeTransactionsOptions)} for more details.
+     *
+     * @param transactionalIds The set of transactional IDs to query
+     * @return The result
+     */
+    default DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds) {
+        return describeTransactions(transactionalIds, new DescribeTransactionsOptions());
+    }
+
+    /**
+     * Describe the state of a set of transactional IDs from the respective transaction coordinators,
+     * which are dynamically discovered.
+     *
+     * @param transactionalIds The set of transactional IDs to query
+     * @param options Options to control the method behavior
+     * @return The result
+     */
+    DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options);
+
+    /**
+     * Forcefully abort a transaction which is open on a topic partition. See
+     * {@link #abortTransaction(AbortTransactionSpec, AbortTransactionOptions)} for more details.
+     *
+     * @param spec The transaction specification including topic partition and producer details
+     * @return The result
+     */
+    default AbortTransactionResult abortTransaction(AbortTransactionSpec spec) {
+        return abortTransaction(spec, new AbortTransactionOptions());
+    }
+
+    /**
+     * Forcefully abort a transaction which is open on a topic partition. This will
+     * send a `WriteTxnMarkers` request to the partition leader in order to abort the
+     * transaction. This requires administrative privileges.
+     *
+     * @param spec The transaction specification including topic partition and producer details
+     * @param options Options to control the method behavior (including filters)
+     * @return The result
+     */
+    AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

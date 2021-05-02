@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
@@ -92,7 +92,7 @@ class ActiveTaskCreator {
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
             taskProducers = new HashMap<>();
-        } else { // non-eos and eos-beta
+        } else { // non-eos and eos-v2
             log.info("Creating thread producer client");
 
             final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
@@ -115,7 +115,7 @@ class ActiveTaskCreator {
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
         if (processingMode != EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Producer per thread is used.");
+            throw new IllegalStateException("Expected EXACTLY_ONCE to be enabled, but the processing mode was " + processingMode);
         }
 
         final StreamsProducer taskProducer = taskProducers.get(taskId);
@@ -126,8 +126,8 @@ class ActiveTaskCreator {
     }
 
     StreamsProducer threadProducer() {
-        if (processingMode != EXACTLY_ONCE_BETA) {
-            throw new IllegalStateException("Exactly-once beta is not enabled.");
+        if (processingMode != EXACTLY_ONCE_V2) {
+            throw new IllegalStateException("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was " + processingMode);
         }
         return threadProducer;
     }

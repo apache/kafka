@@ -641,12 +641,9 @@ public class MemoryRecords extends AbstractRecords {
         long initialOffset,
         long timestamp,
         int leaderEpoch,
+        ByteBuffer buffer,
         LeaderChangeMessage leaderChangeMessage
     ) {
-        // To avoid calling message toStruct multiple times, we supply a fixed message size
-        // for leader change, as it happens rare and the buffer could still grow if not sufficient in
-        // certain edge cases.
-        ByteBuffer buffer = ByteBuffer.allocate(256);
         writeLeaderChangeMessage(buffer, initialOffset, timestamp, leaderEpoch, leaderChangeMessage);
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);

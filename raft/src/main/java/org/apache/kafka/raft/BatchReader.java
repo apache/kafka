@@ -17,8 +17,6 @@
 package org.apache.kafka.raft;
 
 import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
@@ -32,7 +30,7 @@ import java.util.OptionalLong;
  *
  * @param <T> record type (see {@link org.apache.kafka.raft.RecordSerde})
  */
-public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoCloseable {
+public interface BatchReader<T> extends Iterator<Batch<T>>, AutoCloseable {
 
     /**
      * Get the base offset of the readable batches. Note that this value is a constant
@@ -59,57 +57,4 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoClos
      */
     @Override
     void close();
-
-    class Batch<T> {
-        private final long baseOffset;
-        private final int epoch;
-        private final List<T> records;
-
-        public Batch(long baseOffset, int epoch, List<T> records) {
-            this.baseOffset = baseOffset;
-            this.epoch = epoch;
-            this.records = records;
-        }
-
-        public long lastOffset() {
-            return baseOffset + records.size() - 1;
-        }
-
-        public long baseOffset() {
-            return baseOffset;
-        }
-
-        public List<T> records() {
-            return records;
-        }
-
-        public int epoch() {
-            return epoch;
-        }
-
-        @Override
-        public String toString() {
-            return "Batch(" +
-                "baseOffset=" + baseOffset +
-                ", epoch=" + epoch +
-                ", records=" + records +
-                ')';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Batch<?> batch = (Batch<?>) o;
-            return baseOffset == batch.baseOffset &&
-                epoch == batch.epoch &&
-                Objects.equals(records, batch.records);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(baseOffset, epoch, records);
-        }
-    }
-
 }

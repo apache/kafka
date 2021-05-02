@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -67,7 +66,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Time time;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final File baseDir;
-    private final StateDirectory stateDirectory;
     private final Set<String> globalStoreNames = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final StateRestoreListener stateRestoreListener;
@@ -103,7 +101,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         log = logContext.logger(GlobalStateManagerImpl.class);
         this.globalConsumer = globalConsumer;
-        this.stateDirectory = stateDirectory;
         this.stateRestoreListener = stateRestoreListener;
 
         final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
@@ -125,21 +122,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     @Override
     public Set<String> initialize() {
         try {
-            if (!stateDirectory.lockGlobalState()) {
-                throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
-            }
-        } catch (final IOException e) {
-            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir), e);
-        }
-
-        try {
             checkpointFileCache.putAll(checkpointFile.read());
         } catch (final IOException e) {
-            try {
-                stateDirectory.unlockGlobalState();
-            } catch (final IOException e1) {
-                log.error("Failed to unlock the global state directory", e);
-            }
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
 
@@ -161,11 +145,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     tp.topic(),
                     checkpointFile.toString()
                 );
-                try {
-                    stateDirectory.unlockGlobalState();
-                } catch (final IOException e) {
-                    log.error("Failed to unlock the global state directory", e);
-                }
                 throw new StreamsException("Encountered a topic-partition not associated with any global state store");
             }
         });
@@ -394,35 +373,31 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void close() throws IOException {
-        try {
-            if (globalStores.isEmpty()) {
-                return;
-            }
-            final StringBuilder closeFailed = new StringBuilder();
-            for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
-                if (entry.getValue().isPresent()) {
-                    log.debug("Closing global storage engine {}", entry.getKey());
-                    try {
-                        entry.getValue().get().close();
-                    } catch (final RuntimeException e) {
-                        log.error("Failed to close global state store {}", entry.getKey(), e);
-                        closeFailed.append("Failed to close global state store:")
-                                   .append(entry.getKey())
-                                   .append(". Reason: ")
-                                   .append(e)
-                                   .append("\n");
-                    }
-                    globalStores.put(entry.getKey(), Optional.empty());
-                } else {
-                    log.info("Skipping to close non-initialized store {}", entry.getKey());
+    public void close() {
+        if (globalStores.isEmpty()) {
+            return;
+        }
+        final StringBuilder closeFailed = new StringBuilder();
+        for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                log.debug("Closing global storage engine {}", entry.getKey());
+                try {
+                    entry.getValue().get().close();
+                } catch (final RuntimeException e) {
+                    log.error("Failed to close global state store {}", entry.getKey(), e);
+                    closeFailed.append("Failed to close global state store:")
+                        .append(entry.getKey())
+                        .append(". Reason: ")
+                        .append(e)
+                        .append("\n");
                 }
+                globalStores.put(entry.getKey(), Optional.empty());
+            } else {
+                log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
-            if (closeFailed.length() > 0) {
-                throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
-            }
-        } finally {
-            stateDirectory.unlockGlobalState();
+        }
+        if (closeFailed.length() > 0) {
+            throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
         }
     }
 

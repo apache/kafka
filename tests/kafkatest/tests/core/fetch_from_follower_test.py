@@ -47,7 +47,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                           "replication-factor": 3,
                                           "configs": {"min.insync.replicas": 1}},
                                   },
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       ["replica.selector.class", self.RACK_AWARE_REPLICA_SELECTOR]
                                   ],
                                   per_node_server_prop_overrides={
