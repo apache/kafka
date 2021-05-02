@@ -1674,7 +1674,6 @@ class KafkaApisTest {
       EasyMock.eq(request.context.correlationId),
       EasyMock.eq(controllerId),
       EasyMock.eq(controllerEpoch),
-      EasyMock.eq(brokerEpoch),
       EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
     )).andReturn(
       (mutable.Map(
@@ -2900,7 +2899,6 @@ class KafkaApisTest {
       EasyMock.eq(request.context.correlationId),
       EasyMock.eq(controllerId),
       EasyMock.eq(controllerEpoch),
-      EasyMock.eq(brokerEpochInRequest),
       EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
     )).andStubReturn(
       (mutable.Map(
