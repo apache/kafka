@@ -41,8 +41,10 @@ import org.apache.kafka.metalog.MetaLogLeader;
 import org.apache.kafka.metalog.MetaLogListener;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.slf4j.Logger;
@@ -83,7 +85,7 @@ public final class MetadataNodeManager implements AutoCloseable {
             try {
                 // TODO: handle lastOffset
                 while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    Batch<ApiMessageAndVersion> batch = reader.next();
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                         handleMessage(messageAndVersion.message());
                     }
@@ -103,6 +105,20 @@ public final class MetadataNodeManager implements AutoCloseable {
                     handleMessage(message);
                 }
             }, null);
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            try {
+                while (reader.hasNext()) {
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    for (ApiMessageAndVersion messageAndVersion : batch) {
+                        handleMessage(messageAndVersion.message());
+                    }
+                }
+            } finally {
+                reader.close();
+            }
         }
 
         @Override

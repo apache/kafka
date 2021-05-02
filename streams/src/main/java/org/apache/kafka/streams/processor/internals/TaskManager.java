@@ -683,7 +683,7 @@ public class TaskManager {
 
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
-                final TaskId id = TaskId.parse(dir.getName());
+                final TaskId id = TaskId.parseTaskDirectoryName(dir.getName(), null);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
                     if (!tasks.owned(id)) {
