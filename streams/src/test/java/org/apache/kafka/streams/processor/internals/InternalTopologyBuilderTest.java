@@ -768,6 +768,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    public void shouldNotSetStreamsConfigToNull() {
+        assertThrows(NullPointerException.class, () -> builder.setStreamsConfig(null));
+    }
+
+    @Test
     public void shouldNotAddNullStateStoreSupplier() {
         assertThrows(NullPointerException.class, () -> builder.addStateStore(null));
     }
@@ -903,6 +908,13 @@ public class InternalTopologyBuilderTest {
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-A"));
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-B"));
         assertTrue(topicGroups.get(2).sourceTopics.contains("topic-3"));
+    }
+
+    @Test
+    public void shouldSetStreamsConfigOnRewriteTopology() {
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
+        assertThat(topologyBuilder.getStreamsConfig(), equalTo(config));
     }
 
     @Test
