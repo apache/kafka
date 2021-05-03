@@ -107,7 +107,7 @@ class LogCleanerTest {
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val loadedLog = LogLoader.load(LoadLogParams(
       dir,
       topicPartition,
       config,
@@ -122,20 +122,12 @@ class LogCleanerTest {
       leaderEpochCache,
       producerStateManager))
 
-    val log = new Log(dir,
-                      config = config,
-                      segments = logSegments,
-                      logStartOffset = offsets.logStartOffset,
-                      recoveryPoint = offsets.recoveryPoint,
-                      nextOffsetMetadata = offsets.nextOffsetMetadata,
-                      scheduler = time.scheduler,
+    val log = new Log(loadedLog.logStartOffset,
+                      loadedLog.localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      time,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-                      topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      logDirFailureChannel = logDirFailureChannel,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
@@ -802,7 +794,7 @@ class LogCleanerTest {
 
     // Decrease the log's max message size
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
-    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+    log.updateConfig(LogConfig.fromProps(logConfig.originals, logProps))
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
