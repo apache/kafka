@@ -161,6 +161,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
   }
 
   @Test
+  @Ignore
   def testIllegalRequiredAcks(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
