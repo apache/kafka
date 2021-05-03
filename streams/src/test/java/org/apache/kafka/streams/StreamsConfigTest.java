@@ -856,11 +856,20 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
-        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
-        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
-        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+    public void shouldUseCorrectTimestampExtractorDefaultsWhenNoneSpecified() {
+        final StreamsConfig config = new StreamsConfig(getStreamsConfig(Serdes.String(), Serdes.String()));
+
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+    }
+
+    @Test
+    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
+        try {
+            final StreamsConfig config = new StreamsConfig(getStreamsConfig());
+            fail("Test should throw a NullPointerException");
+        } catch (final NullPointerException e) {
+            assertEquals(NullPointerException.class, e.getClass());
+        }
     }
 
     @Test

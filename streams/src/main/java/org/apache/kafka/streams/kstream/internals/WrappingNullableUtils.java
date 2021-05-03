@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 
 /**
  * If a component's serdes are Wrapping serdes, then they require a little extra setup
@@ -47,6 +48,12 @@ public class WrappingNullableUtils {
         return serializerToUse;
     }
 
+    //need to intercept the null before it gets invoked
+    //set serde to null and see what happens
+    //probably put the check in key/value serde
+    // a few cases where we would need to do null checks
+    // add to wrapping nullable utiliziers, get serializer if not null
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde, final boolean isKey) {
         Serde<T> serdeToUse = specificSerde;
@@ -67,10 +74,16 @@ public class WrappingNullableUtils {
     }
 
     public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
+        if (specificSerializer == null && contextKeySerializer == null) {
+            throw new StreamsException("Please specify a key serde or set one through the default.key.serde config");
+        }
         return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, true);
     }
 
     public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
+        if (specificSerializer == null && contextValueSerializer == null) {
+            throw new StreamsException("Please specify a value serde or set one through the default.value.serde config");
+        }
         return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, false);
     }
 
