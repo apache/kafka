@@ -25,13 +25,13 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
-  case object Fetch extends QuotaType
-  case object Produce extends QuotaType
-  case object Request extends QuotaType
-  case object ControllerMutation extends QuotaType
-  case object LeaderReplication extends QuotaType
-  case object FollowerReplication extends QuotaType
-  case object AlterLogDirsReplication extends QuotaType
+  final case object Fetch extends QuotaType
+  final case object Produce extends QuotaType
+  final case object Request extends QuotaType
+  final case object ControllerMutation extends QuotaType
+  final case object LeaderReplication extends QuotaType
+  final case object FollowerReplication extends QuotaType
+  final case object AlterLogDirsReplication extends QuotaType
 
   def toClientQuotaType(quotaType: QuotaType): ClientQuotaType = {
     quotaType match {

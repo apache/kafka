@@ -968,8 +968,8 @@ object ConsumerGroupCommand extends Logging {
 
   object LogOffsetResult {
     case class LogOffset(value: Long) extends LogOffsetResult
-    case object Unknown extends LogOffsetResult
-    case object Ignore extends LogOffsetResult
+    final case object Unknown extends LogOffsetResult
+    final case object Ignore extends LogOffsetResult
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {

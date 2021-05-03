@@ -1275,7 +1275,7 @@ object ConnectionQuotas {
     override def metricTags: Map[String, String] = Map(ListenerMetricTag -> listenerName)
   }
 
-  private case object BrokerQuotaEntity extends ConnectionQuotaEntity {
+  final private case object BrokerQuotaEntity extends ConnectionQuotaEntity {
     override def sensorName: String = ConnectionRateSensorName
     override def sensorExpiration: Long = Long.MaxValue
     override def metricName: String = s"broker-$ConnectionRateMetricName"

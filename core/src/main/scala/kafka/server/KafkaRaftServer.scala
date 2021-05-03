@@ -137,8 +137,8 @@ object KafkaRaftServer {
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
-  case object BrokerRole extends ProcessRole
-  case object ControllerRole extends ProcessRole
+  final case object BrokerRole extends ProcessRole
+  final case object ControllerRole extends ProcessRole
 
   /**
    * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]

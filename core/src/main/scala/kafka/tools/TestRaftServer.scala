@@ -148,10 +148,10 @@ class TestRaftServer(
 
     sealed trait RaftEvent
     case class HandleClaim(epoch: Int) extends RaftEvent
-    case object HandleResign extends RaftEvent
+    final case object HandleResign extends RaftEvent
     case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
     case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
-    case object Shutdown extends RaftEvent
+    final case object Shutdown extends RaftEvent
 
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
     private val stats = new WriteStats(metrics, time, printIntervalMs = 5000)

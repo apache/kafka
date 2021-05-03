@@ -435,6 +435,6 @@ object AbstractIndex extends Logging {
 
 sealed trait IndexSearchType
 object IndexSearchType {
-  case object KEY extends IndexSearchType
-  case object VALUE extends IndexSearchType
+  final case object KEY extends IndexSearchType
+  final case object VALUE extends IndexSearchType
 }

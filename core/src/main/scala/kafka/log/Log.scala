@@ -72,9 +72,9 @@ object LogAppendInfo {
 
 sealed trait LeaderHwChange
 object LeaderHwChange {
-  case object Increased extends LeaderHwChange
-  case object Same extends LeaderHwChange
-  case object None extends LeaderHwChange
+  final case object Increased extends LeaderHwChange
+  final case object Same extends LeaderHwChange
+  final case object None extends LeaderHwChange
 }
 
 /**

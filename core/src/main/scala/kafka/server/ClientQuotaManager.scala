@@ -89,13 +89,13 @@ object ClientQuotaManager {
     override def toString: String = s"client-id $clientId"
   }
 
-  case object DefaultUserEntity extends BaseUserEntity {
+  final case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
     override def name: String = ConfigEntityName.Default
     override def toString: String = "default user"
   }
 
-  case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
+  final case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
     override def name: String = ConfigEntityName.Default
     override def toString: String = "default client-id"

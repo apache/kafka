@@ -44,24 +44,24 @@ private[kafka] object AppendOrigin {
    * The log append came through replication from the leader. This typically implies minimal validation.
    * Particularly, we do not decompress record batches in order to validate records individually.
    */
-  case object Replication extends AppendOrigin
+  final case object Replication extends AppendOrigin
 
   /**
    * The log append came from either the group coordinator or the transaction coordinator. We validate
    * producer epochs for normal log entries (specifically offset commits from the group coordinator) and
    * we validate coordinate end transaction markers from the transaction coordinator.
    */
-  case object Coordinator extends AppendOrigin
+  final case object Coordinator extends AppendOrigin
 
   /**
    * The log append came from the client, which implies full validation.
    */
-  case object Client extends AppendOrigin
+  final case object Client extends AppendOrigin
 
   /**
    * The log append come from the raft leader, which implies the offsets has been assigned
    */
-  case object RaftLeader extends AppendOrigin
+  final case object RaftLeader extends AppendOrigin
 }
 
 private[log] object LogValidator extends Logging {

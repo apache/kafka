@@ -24,19 +24,19 @@ object RackAwareMode {
   /**
     * Ignore all rack information in replica assignment. This is an optional mode used in command line.
     */
-  case object Disabled extends RackAwareMode
+  final case object Disabled extends RackAwareMode
 
   /**
     * Assume every broker has rack, or none of the brokers has rack. If only partial brokers have rack, fail fast
     * in replica assignment. This is the default mode in command line tools (TopicCommand and ReassignPartitionsCommand).
     */
-  case object Enforced extends RackAwareMode
+  final case object Enforced extends RackAwareMode
 
   /**
     * Use rack information if every broker has a rack. Otherwise, fallback to Disabled mode. This is used in auto topic
     * creation.
     */
-  case object Safe extends RackAwareMode
+  final case object Safe extends RackAwareMode
 }
 
 sealed trait RackAwareMode

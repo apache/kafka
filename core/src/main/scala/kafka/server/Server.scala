@@ -95,10 +95,10 @@ object Server {
   }
 
   sealed trait ProcessStatus
-  case object SHUTDOWN extends ProcessStatus
-  case object STARTING extends ProcessStatus
-  case object STARTED extends ProcessStatus
-  case object SHUTTING_DOWN extends ProcessStatus
+  final case object SHUTDOWN extends ProcessStatus
+  final case object STARTING extends ProcessStatus
+  final case object STARTED extends ProcessStatus
+  final case object SHUTTING_DOWN extends ProcessStatus
 
   val SUPPORTED_FEATURES = Collections.
     unmodifiableMap[String, VersionRange](Map[String, VersionRange]().asJava)

@@ -813,11 +813,11 @@ sealed trait FeatureZNodeStatus {
 }
 
 object FeatureZNodeStatus {
-  case object Disabled extends FeatureZNodeStatus {
+  final case object Disabled extends FeatureZNodeStatus {
     val id: Int = 0
   }
 
-  case object Enabled extends FeatureZNodeStatus {
+  final case object Enabled extends FeatureZNodeStatus {
     val id: Int = 1
   }
 
