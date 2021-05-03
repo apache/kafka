@@ -2494,19 +2494,20 @@ public class KStreamImplTest {
                 driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.String().deserializer());
 
             inputTopic.pipeInput("A", "01", 5L);
-            inputTopic.pipeInput("B", "02", 100L);
-            inputTopic.pipeInput("C", "03", 0L);
-            inputTopic.pipeInput("D", "04", 0L);
-            inputTopic.pipeInput("A", "05", 10L);
-            inputTopic.pipeInput("A", "06", 8L);
+            inputTopic.pipeInput("B", "02", 10L);
+            inputTopic.pipeInput("C", "03", 20L);
+            inputTopic.pipeInput("D", "04", 30L);
+            inputTopic.pipeInput("D", "05", 20L); // dropped
+            inputTopic.pipeInput("A", "05", 40L);
+            inputTopic.pipeInput("A", "06", 50L);
 
             final List<TestRecord<String, String>> outputExpectRecords = new ArrayList<>();
             outputExpectRecords.add(new TestRecord<>("A", "01", Instant.ofEpochMilli(5L)));
-            outputExpectRecords.add(new TestRecord<>("B", "02", Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>("C", "03", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("D", "04", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("A", "05", Instant.ofEpochMilli(10L)));
-            outputExpectRecords.add(new TestRecord<>("A", "06", Instant.ofEpochMilli(8L)));
+            outputExpectRecords.add(new TestRecord<>("B", "02", Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>("C", "03", Instant.ofEpochMilli(20L)));
+            outputExpectRecords.add(new TestRecord<>("D", "04", Instant.ofEpochMilli(30L)));
+            outputExpectRecords.add(new TestRecord<>("A", "05", Instant.ofEpochMilli(40L)));
+            outputExpectRecords.add(new TestRecord<>("A", "06", Instant.ofEpochMilli(50L)));
 
             assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }
@@ -2603,19 +2604,20 @@ public class KStreamImplTest {
                 driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
 
             inputTopic.pipeInput("A", "01", 5L);
-            inputTopic.pipeInput("B", "02", 100L);
-            inputTopic.pipeInput("C", "03", 0L);
-            inputTopic.pipeInput("D", "04", 0L);
-            inputTopic.pipeInput("A", "05", 10L);
-            inputTopic.pipeInput("A", "06", 8L);
+            inputTopic.pipeInput("B", "02", 10L);
+            inputTopic.pipeInput("C", "03", 20L);
+            inputTopic.pipeInput("D", "04", 30L);
+            inputTopic.pipeInput("D", "05", 20L); // dropped
+            inputTopic.pipeInput("A", "05", 40L);
+            inputTopic.pipeInput("A", "06", 50L);
 
             final List<TestRecord<Integer, String>> outputExpectRecords = new ArrayList<>();
             outputExpectRecords.add(new TestRecord<>(0, "01", Instant.ofEpochMilli(5L)));
-            outputExpectRecords.add(new TestRecord<>(1, "02", Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>(2, "03", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>(3, "04", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>(0, "05", Instant.ofEpochMilli(10L)));
-            outputExpectRecords.add(new TestRecord<>(0, "06", Instant.ofEpochMilli(8L)));
+            outputExpectRecords.add(new TestRecord<>(1, "02", Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>(2, "03", Instant.ofEpochMilli(20L)));
+            outputExpectRecords.add(new TestRecord<>(3, "04", Instant.ofEpochMilli(30L)));
+            outputExpectRecords.add(new TestRecord<>(0, "05", Instant.ofEpochMilli(40L)));
+            outputExpectRecords.add(new TestRecord<>(0, "06", Instant.ofEpochMilli(50L)));
 
             assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }
@@ -2951,19 +2953,20 @@ public class KStreamImplTest {
                 driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Long().deserializer());
 
             inputTopic.pipeInput("A", "green", 10L);
-            inputTopic.pipeInput("B", "green", 9L);
+            inputTopic.pipeInput("B", "green", 9L); // dropped
+            inputTopic.pipeInput("B", "green", 11L);
             inputTopic.pipeInput("A", "blue", 12L);
             inputTopic.pipeInput("C", "yellow", 15L);
-            inputTopic.pipeInput("D", "green", 11L);
+            inputTopic.pipeInput("D", "green", 16L);
 
             assertEquals(
                 asList(
                     new TestRecord<>("green", 1L, Instant.ofEpochMilli(10)),
-                    new TestRecord<>("green", 2L, Instant.ofEpochMilli(10)),
+                    new TestRecord<>("green", 2L, Instant.ofEpochMilli(11)),
                     new TestRecord<>("green", 1L, Instant.ofEpochMilli(12)),
                     new TestRecord<>("blue", 1L, Instant.ofEpochMilli(12)),
                     new TestRecord<>("yellow", 1L, Instant.ofEpochMilli(15)),
-                    new TestRecord<>("green", 2L, Instant.ofEpochMilli(12))),
+                    new TestRecord<>("green", 2L, Instant.ofEpochMilli(16))),
                 outputTopic.readRecordsToList());
         }
     }
@@ -3017,10 +3020,11 @@ public class KStreamImplTest {
             final KeyValueStore<String, Integer> store = driver.getKeyValueStore(storeName);
 
             inputTopic.pipeInput("A", "green", 10L);
-            inputTopic.pipeInput("B", "green", 9L);
+            inputTopic.pipeInput("B", "green", 11L);
+            inputTopic.pipeInput("B", "blue", 9L); // dropped
             inputTopic.pipeInput("A", "blue", 12L);
             inputTopic.pipeInput("C", "yellow", 15L);
-            inputTopic.pipeInput("D", "green", 11L);
+            inputTopic.pipeInput("D", "green", 16L);
 
             final Map<String, Integer> expectedStore = new HashMap<>();
             expectedStore.putIfAbsent("A", 1);
@@ -3033,10 +3037,10 @@ public class KStreamImplTest {
             assertEquals(
                 asList(
                     new TestRecord<>("A", 6, Instant.ofEpochMilli(10)),
-                    new TestRecord<>("B", 6, Instant.ofEpochMilli(9)),
+                    new TestRecord<>("B", 6, Instant.ofEpochMilli(11)),
                     new TestRecord<>("A", 1, Instant.ofEpochMilli(12)),
                     new TestRecord<>("C", 24, Instant.ofEpochMilli(15)),
-                    new TestRecord<>("D", 6, Instant.ofEpochMilli(11))),
+                    new TestRecord<>("D", 6, Instant.ofEpochMilli(16))),
                 outputTopic.readRecordsToList());
 
         }

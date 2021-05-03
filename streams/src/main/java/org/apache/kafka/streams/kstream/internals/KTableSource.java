@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -37,13 +38,17 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private final String storeName;
     private String queryableName;
     private boolean sendOldValues;
+    private boolean globalKTable;
 
-    public KTableSource(final String storeName, final String queryableName) {
+    public KTableSource(final String storeName,
+                        final String queryableName,
+                        final boolean globalKTable) {
         Objects.requireNonNull(storeName, "storeName can't be null");
 
         this.storeName = storeName;
         this.queryableName = queryableName;
         this.sendOldValues = false;
+        this.globalKTable = globalKTable;
     }
 
     public String queryableName() {
@@ -52,7 +57,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        return new KTableSourceProcessor();
+        return new KTableSourceProcessor(globalKTable);
     }
 
     // when source ktable requires sending old values, we just
@@ -73,20 +78,49 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
+        private final boolean globalKTable;
 
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
-        private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
+        private boolean dropOutOfOrderRecords = true;
 
-        @SuppressWarnings("unchecked")
+        private KTableSourceProcessor(final boolean globalKTable) {
+            this.globalKTable = globalKTable;
+        }
+
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+
+            if (globalKTable) {
+                dropOutOfOrderRecords = false;
+            } else {
+                final Object internalOutOfOrderConfig =
+                    context.appConfigs().get(InternalConfig.ENABLE_KTABLE_OUT_OF_ORDER_HANDLING);
+
+                if (internalOutOfOrderConfig instanceof Boolean) {
+                    dropOutOfOrderRecords = ((Boolean) internalOutOfOrderConfig);
+                } else if (internalOutOfOrderConfig instanceof String) {
+                    dropOutOfOrderRecords = Boolean.parseBoolean((String) internalOutOfOrderConfig);
+                } else if (internalOutOfOrderConfig != null) {
+                    LOG.warn(
+                        "Cannot parse internal config {}. Must be boolean or String type: {}",
+                        InternalConfig.ENABLE_KTABLE_OUT_OF_ORDER_HANDLING,
+                        internalOutOfOrderConfig
+                    );
+                }
+            }
+
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                (StreamsMetricsImpl) context.metrics()
+            );
+
+
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                store = context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
@@ -106,16 +140,20 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 droppedRecordsSensor.record();
                 return;
             }
+            if (dropOutOfOrderRecords && context().timestamp() < context().currentStreamTimeMs()) {
+                LOG.trace(
+                    "Dropping out-of-order KTable update for {} at offset {}, partition {}.",
+                    context.topic(), context().offset(), context().partition()
+                );
+                droppedRecordsSensor.record();
+                return;
+            }
 
             if (queryableName != null) {
                 final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(key);
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
-                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
-                        LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
-                            store.name(), context().offset(), context().partition());
-                    }
                 } else {
                     oldValue = null;
                 }

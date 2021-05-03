@@ -92,25 +92,34 @@ public class KStreamKTableJoinTest {
         driver.close();
     }
 
-    private void pushToStream(final int messageCount, final String valuePrefix) {
+    private void pushToStream(final int messageCount,
+                              final String valuePrefix,
+                              final long startTimestampMs) {
         for (int i = 0; i < messageCount; i++) {
-            inputStreamTopic.pipeInput(expectedKeys[i], valuePrefix + expectedKeys[i], i);
+            inputStreamTopic.pipeInput(
+                expectedKeys[i],
+                valuePrefix + expectedKeys[i],
+                startTimestampMs + i
+            );
         }
     }
 
-    private void pushToTable(final int messageCount, final String valuePrefix) {
+    private void pushToTable(final int messageCount,
+                             final String valuePrefix,
+                             final long startTimestampMs) {
         final Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < messageCount; i++) {
             inputTableTopic.pipeInput(
                 expectedKeys[i],
                 valuePrefix + expectedKeys[i],
-                r.nextInt(Integer.MAX_VALUE));
+                startTimestampMs + i
+            );
         }
     }
 
-    private void pushNullValueToTable() {
+    private void pushNullValueToTable(final long startTimestampMs) {
         for (int i = 0; i < 2; i++) {
-            inputTableTopic.pipeInput(expectedKeys[i], null);
+            inputTableTopic.pipeInput(expectedKeys[i], null, startTimestampMs + i);
         }
     }
 
@@ -158,74 +167,84 @@ public class KStreamKTableJoinTest {
     @Test
     public void shouldNotJoinWithEmptyTableOnStreamUpdates() {
         // push two items to the primary stream. the table is empty
-        pushToStream(2, "X");
+        pushToStream(2, "X", 0L);
         processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldNotJoinOnTableUpdates() {
         // push two items to the primary stream. the table is empty
-        pushToStream(2, "X");
+        pushToStream(2, "X", 0L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push two items to the table. this should not produce any item.
-        pushToTable(2, "Y");
+        pushToTable(2, "Y", 10L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
-        pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1));
+        pushToStream(4, "X", 20L);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 20L),
+            new KeyValueTimestamp<>(1, "X1+Y1", 21L)
+        );
 
         // push all items to the table. this should not produce any item
-        pushToTable(4, "YY");
+        pushToTable(4, "YY", 30L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
-        pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+YY0", 0),
-                new KeyValueTimestamp<>(1, "X1+YY1", 1),
-                new KeyValueTimestamp<>(2, "X2+YY2", 2),
-                new KeyValueTimestamp<>(3, "X3+YY3", 3));
+        pushToStream(4, "X", 40L);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+YY0", 40L),
+            new KeyValueTimestamp<>(1, "X1+YY1", 41L),
+            new KeyValueTimestamp<>(2, "X2+YY2", 42L),
+            new KeyValueTimestamp<>(3, "X3+YY3", 43L)
+        );
 
         // push all items to the table. this should not produce any item
-        pushToTable(4, "YYY");
+        pushToTable(4, "YYY", 50L);
         processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldJoinOnlyIfMatchFoundOnStreamUpdates() {
         // push two items to the table. this should not produce any item.
-        pushToTable(2, "Y");
+        pushToTable(2, "Y", 0L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
-        pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1));
+        pushToStream(4, "X", 10L);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 10L),
+            new KeyValueTimestamp<>(1, "X1+Y1", 11L)
+        );
     }
 
     @Test
     public void shouldClearTableEntryOnNullValueUpdates() {
         // push all four items to the table. this should not produce any item.
-        pushToTable(4, "Y");
+        pushToTable(4, "Y", 0L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
-        pushToStream(4, "X");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1),
-                new KeyValueTimestamp<>(2, "X2+Y2", 2),
-                new KeyValueTimestamp<>(3, "X3+Y3", 3));
+        pushToStream(4, "X", 10L);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 10L),
+            new KeyValueTimestamp<>(1, "X1+Y1", 11L),
+            new KeyValueTimestamp<>(2, "X2+Y2", 12L),
+            new KeyValueTimestamp<>(3, "X3+Y3", 13L)
+        );
 
         // push two items with null to the table as deletes. this should not produce any item.
-        pushNullValueToTable();
+        pushNullValueToTable(20L);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
-        pushToStream(4, "XX");
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2+Y2", 2),
-                new KeyValueTimestamp<>(3, "XX3+Y3", 3));
+        pushToStream(4, "XX", 30L);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(2, "XX2+Y2", 32L),
+            new KeyValueTimestamp<>(3, "XX3+Y3", 33L)
+        );
     }
 
     @Test
