@@ -17,7 +17,7 @@
 package kafka.raft
 
 import java.io.File
-import java.nio.file.{Files, NoSuchFileException}
+import java.nio.file.{Files, NoSuchFileException, Path}
 import java.util.{Optional, Properties}
 
 import kafka.api.ApiVersion
@@ -341,15 +341,10 @@ final class KafkaMetadataLog private (
       Snapshots.markForDelete(log.dir.toPath, snapshotId)
     }
 
-    if (!expiredSnapshots.isEmpty) {
+    if (expiredSnapshots.nonEmpty) {
       scheduler.schedule(
-        "delete-snapshot-file",
-        () => {
-          expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
-            snapshotReader.foreach(_.close())
-            Snapshots.deleteIfExists(log.dir.toPath, snapshotId)
-          }
-        },
+        "delete-snapshot-files",
+        KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots),
         fileDeleteDelayMs
       )
     }
@@ -358,11 +353,7 @@ final class KafkaMetadataLog private (
   override def close(): Unit = {
     log.close()
     snapshots synchronized {
-      snapshots.foreach { case (_, value) =>
-        value.foreach { snapshot =>
-          snapshot.close()
-        }
-      }
+      snapshots.values.flatten.foreach(_.close())
       snapshots.clear()
     }
   }
@@ -448,4 +439,13 @@ object KafkaMetadataLog {
     snapshots
   }
 
+  private def deleteSnapshotFiles(
+    logDir: Path,
+    expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+  )(): Unit = {
+    expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
+      snapshotReader.foreach(_.close())
+      Snapshots.deleteIfExists(logDir, snapshotId)
+    }
+  }
 }
