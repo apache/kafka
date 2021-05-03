@@ -47,7 +47,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         # reassignment for upto one replica per partition, which is not
         # desirable for this test in particular.
         self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       [config_property.LOG_ROLL_TIME_MS, "5000"],
                                       [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"]
                                   ],

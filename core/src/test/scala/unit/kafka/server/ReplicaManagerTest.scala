@@ -47,12 +47,13 @@ import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito
-
 import java.io.File
 import java.net.InetAddress
+import java.nio.file.Files
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Collections, Optional, Properties}
+
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1360,7 +1361,7 @@ class ReplicaManagerTest {
 
     // We have a fetch in purgatory, now receive a stop replica request and
     // assert that the fetch returns with a NOT_LEADER error
-    replicaManager.stopReplicas(2, 0, 0, brokerEpoch,
+    replicaManager.stopReplicas(2, 0, 0,
       mutable.Map(tp0 -> new StopReplicaPartitionState()
         .setPartitionIndex(tp0.partition)
         .setDeletePartition(true)
@@ -1400,7 +1401,7 @@ class ReplicaManagerTest {
 
     Mockito.when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
 
-    replicaManager.stopReplicas(2, 0, 0, brokerEpoch,
+    replicaManager.stopReplicas(2, 0, 0,
       mutable.Map(tp0 -> new StopReplicaPartitionState()
         .setPartitionIndex(tp0.partition)
         .setDeletePartition(true)
@@ -1479,23 +1480,46 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     props.asScala ++= extraProps.asScala
     val config = KafkaConfig.fromProps(props)
-
+    val logConfig = LogConfig()
+    val logDir = new File(new File(config.logDirs.head), s"$topic-$topicPartition")
+    Files.createDirectories(logDir.toPath)
     val mockScheduler = new MockScheduler(time)
     val mockBrokerTopicStats = new BrokerTopicStats
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
+    val tp = new TopicPartition(topic, topicPartition)
+    val maxProducerIdExpirationMs = 30000
+    val segments = new LogSegments(tp)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      logDir,
+      tp,
+      logConfig,
+      mockScheduler,
+      time,
+      mockLogDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
     val mockLog = new Log(
-      _dir = new File(new File(config.logDirs.head), s"$topic-0"),
-      config = LogConfig(),
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
+      _dir = logDir,
+      config = logConfig,
+      segments = segments,
+      logStartOffset = offsets.logStartOffset,
+      recoveryPoint = offsets.recoveryPoint,
+      nextOffsetMetadata = offsets.nextOffsetMetadata,
       scheduler = mockScheduler,
       brokerTopicStats = mockBrokerTopicStats,
       time = time,
-      maxProducerIdExpirationMs = 30000,
+      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = new TopicPartition(topic, topicPartition),
-      producerStateManager = new ProducerStateManager(new TopicPartition(topic, topicPartition),
-        new File(new File(config.logDirs.head), s"$topic-$topicPartition"), 30000),
+      topicPartition = tp,
+      leaderEpochCache = leaderEpochCache,
+      producerStateManager = producerStateManager,
       logDirFailureChannel = mockLogDirFailureChannel,
       topicId = topicId,
       keepPartitionMetadataFile = true) {
@@ -2007,7 +2031,7 @@ class ReplicaManagerTest {
       .setDeletePartition(false)
     )
 
-    val (_, error) = replicaManager.stopReplicas(1, 0, 0, brokerEpoch, partitionStates)
+    val (_, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
     assertEquals(Errors.STALE_CONTROLLER_EPOCH, error)
   }
 
@@ -2035,7 +2059,7 @@ class ReplicaManagerTest {
       .setDeletePartition(false)
     )
 
-    val (result, error) = replicaManager.stopReplicas(1, 0, 0, brokerEpoch, partitionStates)
+    val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
     assertEquals(Errors.NONE, error)
     assertEquals(Map(tp0 -> Errors.KAFKA_STORAGE_ERROR), result)
   }
@@ -2075,7 +2099,7 @@ class ReplicaManagerTest {
       .setDeletePartition(deletePartitions)
     )
 
-    val (result, error) = replicaManager.stopReplicas(1, 0, 0, brokerEpoch, partitionStates)
+    val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
     assertEquals(Errors.NONE, error)
 
     if (throwIOException && deletePartitions) {
@@ -2202,7 +2226,7 @@ class ReplicaManagerTest {
       .setDeletePartition(deletePartition)
     )
 
-    val (result, error) = replicaManager.stopReplicas(1, 0, 0, brokerEpoch, partitionStates)
+    val (result, error) = replicaManager.stopReplicas(1, 0, 0, partitionStates)
     assertEquals(Errors.NONE, error)
     assertEquals(Map(tp0 -> expectedOutput), result)
 

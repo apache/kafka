@@ -20,9 +20,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -37,6 +40,7 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockValueJoiner;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -687,6 +691,261 @@ public class TopologyTest {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
         assertThat(topology.describe(), equalTo(expectedDescription));
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+    }
+
+    @Test
+    public void streamStreamJoinTopologyWithDefaultStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.join(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n" +
+                "      --> KSTREAM-JOINTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n" +
+                "      --> KSTREAM-JOINOTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n",
+            describe.toString());
+    }
+
+    @Test
+    public void streamStreamJoinTopologyWithCustomStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.join(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withStoreName("custom-name"));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [custom-name-this-join-store])\n" +
+                "      --> KSTREAM-JOINTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [custom-name-other-join-store])\n" +
+                "      --> KSTREAM-JOINOTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [custom-name-this-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [custom-name-other-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n",
+            describe.toString());
+    }
+
+    @Test
+    public void streamStreamLeftJoinTopologyWithDefaultStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n" +
+                "      --> KSTREAM-JOINTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
+                "      --> KSTREAM-OUTEROTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-OUTEROTHER-0000000005\n\n",
+            describe.toString());
+    }
+
+    @Test
+    public void streamStreamLeftJoinTopologyWithCustomStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.leftJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withStoreName("custom-name"));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [custom-name-this-join-store])\n" +
+                "      --> KSTREAM-JOINTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [custom-name-outer-other-join-store])\n" +
+                "      --> KSTREAM-OUTEROTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [custom-name-outer-other-join-store, custom-name-left-shared-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-this-join-store, custom-name-left-shared-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-OUTEROTHER-0000000005\n\n",
+            describe.toString());
+    }
+
+    @Test
+    public void streamStreamOuterJoinTopologyWithDefaultStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-OUTERTHIS-0000000004-store])\n" +
+                "      --> KSTREAM-OUTERTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-OUTEROTHER-0000000005-store])\n" +
+                "      --> KSTREAM-OUTEROTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-OUTERTHIS-0000000004-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [KSTREAM-OUTEROTHER-0000000005-store, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-OUTERTHIS-0000000004, KSTREAM-OUTEROTHER-0000000005\n\n",
+            describe.toString());
+    }
+
+    @Test
+    public void streamStreamOuterJoinTopologyWithCustomStoresNames() {
+        final StreamsBuilder builder  = new StreamsBuilder();
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+
+        stream1 = builder.stream("input-topic1");
+        stream2 = builder.stream("input-topic2");
+
+        stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withStoreName("custom-name"));
+
+        final TopologyDescription describe = builder.build().describe();
+
+        assertEquals(
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic1])\n" +
+                "      --> KSTREAM-WINDOWED-0000000002\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic2])\n" +
+                "      --> KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [custom-name-outer-this-join-store])\n" +
+                "      --> KSTREAM-OUTERTHIS-0000000004\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [custom-name-outer-other-join-store])\n" +
+                "      --> KSTREAM-OUTEROTHER-0000000005\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [custom-name-outer-this-join-store, custom-name-outer-shared-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000003\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [custom-name-outer-other-join-store, custom-name-outer-shared-join-store])\n" +
+                "      --> KSTREAM-MERGE-0000000006\n" +
+                "      <-- KSTREAM-WINDOWED-0000000002\n" +
+                "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-OUTERTHIS-0000000004, KSTREAM-OUTEROTHER-0000000005\n\n",
+            describe.toString());
     }
 
     @Test

@@ -40,6 +40,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -223,5 +224,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             numberOfKeysReturned++;
         }
         assertThat(numberOfKeysReturned, is(0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
+        assertThrows(NullPointerException.class, () -> byteStore.prefixScan("bb", null));
     }
 }

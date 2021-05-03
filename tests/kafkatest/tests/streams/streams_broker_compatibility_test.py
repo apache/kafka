@@ -48,7 +48,7 @@ class StreamsBrokerCompatibility(Test):
                                       self.input: {'partitions': 1, 'replication-factor': 1},
                                       self.output: {'partitions': 1, 'replication-factor': 1}
                                   },
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       ["transaction.state.log.replication.factor", "1"],
                                       ["transaction.state.log.min.isr", "1"]
                                   ])

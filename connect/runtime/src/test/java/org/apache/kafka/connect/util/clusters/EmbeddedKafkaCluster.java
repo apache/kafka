@@ -337,18 +337,28 @@ public class EmbeddedKafkaCluster {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions) {
-        createTopic(topic, partitions, 1, new HashMap<>());
+        createTopic(topic, partitions, 1, Collections.emptyMap());
+    }
+
+    /**
+     * Create a Kafka topic with given partition, replication factor, and topic config.
+     *
+     * @param topic The name of the topic.
+     */
+    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
+        createTopic(topic, partitions, replication, topicConfig, new Properties());
     }
 
     /**
      * Create a Kafka topic with the given parameters.
      *
-     * @param topic       The name of the topic.
-     * @param partitions  The number of partitions for this topic.
-     * @param replication The replication factor for (partitions of) this topic.
-     * @param topicConfig Additional topic-level configuration settings.
+     * @param topic             The name of the topic.
+     * @param partitions        The number of partitions for this topic.
+     * @param replication       The replication factor for (partitions of) this topic.
+     * @param topicConfig       Additional topic-level configuration settings.
+     * @param adminClientConfig Additional admin client configuration settings.
      */
-    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
+    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig, Properties adminClientConfig) {
         if (replication > brokers.length) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
                     + brokers.length + ") for desired replication (" + replication + ")");
@@ -359,7 +369,7 @@ public class EmbeddedKafkaCluster {
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
         newTopic.configs(topicConfig);
 
-        try (final Admin adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient(adminClientConfig)) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
@@ -383,8 +393,7 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    public Admin createAdminClient() {
-        final Properties adminClientConfig = new Properties();
+    public Admin createAdminClient(Properties adminClientConfig) {
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         final Object listeners = brokerConfig.get(KafkaConfig$.MODULE$.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
@@ -393,6 +402,10 @@ public class EmbeddedKafkaCluster {
             adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
         return Admin.create(adminClientConfig);
+    }
+
+    public Admin createAdminClient() {
+        return createAdminClient(new Properties());
     }
 
     /**

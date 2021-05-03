@@ -1688,7 +1688,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     assertThrows(classOf[GroupAuthorizationException],
-      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, group))
+      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
   @Test
@@ -1702,7 +1702,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
 
     assertThrows(classOf[GroupAuthorizationException],
-      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, group))
+      () => producer.sendOffsetsToTransaction(Map(tp -> new OffsetAndMetadata(0L)).asJava, new ConsumerGroupMetadata(group)))
   }
 
   @Test
@@ -1916,7 +1916,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     removeAllClientAcls()
     assertThrows(classOf[TransactionalIdAuthorizationException], () => {
       val offsets = Map(tp -> new OffsetAndMetadata(1L)).asJava
-      producer.sendOffsetsToTransaction(offsets, group)
+      producer.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(group))
       producer.commitTransaction()
     })
   }

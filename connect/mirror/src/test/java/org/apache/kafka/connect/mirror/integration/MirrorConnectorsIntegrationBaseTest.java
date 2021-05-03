@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -83,7 +84,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     private static final int CHECKPOINT_DURATION_MS = 20_000;
     private static final int RECORD_CONSUME_DURATION_MS = 20_000;
     private static final int OFFSET_SYNC_DURATION_MS = 30_000;
-    private static final int TOPIC_SYNC_DURATION_MS = 30_000;
+    private static final int TOPIC_SYNC_DURATION_MS = 60_000;
+    private static final int REQUEST_TIMEOUT_DURATION_MS = 60_000;
     private static final int NUM_WORKERS = 3;
     private static final Duration CONSUMER_POLL_TIMEOUT_MS = Duration.ofMillis(500);
     protected static final String PRIMARY_CLUSTER_ALIAS = "primary";
@@ -165,10 +167,18 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         primary.start();
         primary.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Workers of " + PRIMARY_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
+
+        waitForTopicCreated(primary, "mm2-status.backup.internal");
+        waitForTopicCreated(primary, "mm2-offsets.backup.internal");
+        waitForTopicCreated(primary, "mm2-configs.backup.internal");
         
         backup.start();
         backup.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
                 "Workers of " + BACKUP_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
+
+        waitForTopicCreated(backup, "mm2-status.primary.internal");
+        waitForTopicCreated(backup, "mm2-offsets.primary.internal");
+        waitForTopicCreated(backup, "mm2-configs.primary.internal");
 
         createTopics();
  
@@ -602,13 +612,19 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     private void createTopics() {
         // to verify topic config will be sync-ed across clusters
         Map<String, String> topicConfig = Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        Map<String, String> emptyMap = Collections.emptyMap();
+
+        // increase admin client request timeout value to make the tests reliable.
+        Properties adminClientConfig = new Properties();
+        adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_DURATION_MS);
+
         // create these topics before starting the connectors so we don't need to wait for discovery
-        primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig);
-        primary.kafka().createTopic("backup.test-topic-1", 1);
-        primary.kafka().createTopic("heartbeats", 1);
-        backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
-        backup.kafka().createTopic("primary.test-topic-1", 1);
-        backup.kafka().createTopic("heartbeats", 1);
+        primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig, adminClientConfig);
+        primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+        primary.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
+        backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, emptyMap, adminClientConfig);
+        backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+        backup.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
     }
 
     /*

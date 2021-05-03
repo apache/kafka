@@ -900,7 +900,7 @@ public class KafkaProducerTest {
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupId);
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(groupId));
             producer.commitTransaction();
         }
     }
