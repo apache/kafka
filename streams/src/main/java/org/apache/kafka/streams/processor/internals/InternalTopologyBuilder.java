@@ -127,6 +127,8 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
+    private StreamsConfig config = null;
+
     public static class StateStoreFactory<S extends StateStore> {
         private final StoreBuilder<S> builder;
         private final Set<String> users = new HashSet<>();
@@ -339,6 +341,18 @@ public class InternalTopologyBuilder {
         return this;
     }
 
+    public synchronized final InternalTopologyBuilder setStreamsConfig(final StreamsConfig config) {
+        Objects.requireNonNull(config, "config can't be null");
+        this.config = config;
+
+        return this;
+    }
+
+    public synchronized final StreamsConfig getStreamsConfig() {
+        return config;
+    }
+
+
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
@@ -360,6 +374,9 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder<?> storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
+
+        // set streams config
+        setStreamsConfig(config);
 
         return this;
     }

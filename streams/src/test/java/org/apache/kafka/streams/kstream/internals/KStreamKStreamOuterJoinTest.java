@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -28,6 +29,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -43,15 +45,85 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamOuterJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
-
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    @Test
+    public void testOuterJoinWithInvalidSpuriousResultFixFlag() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 5);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
+            assertThat(appender.getMessages(), hasItem("Invalid value (5) on internal configuration " +
+                "'" + ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX + "'. Please specify a true/false value."));
+        }
+    }
+
+    @Test
+    public void testOuterJoinDuplicatesWithFixDisabled() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100)).grace(ofMillis(10)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+        joined.process(supplier);
+
+        props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, false);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            inputTopic1.pipeInput(0, "A0", 0);
+            inputTopic1.pipeInput(0, "A0-0", 0);
+            inputTopic2.pipeInput(0, "a0", 0);
+            inputTopic2.pipeInput(1, "b1", 0);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 0),
+                new KeyValueTimestamp<>(0, "A0-0+null", 0),
+                new KeyValueTimestamp<>(0, "A0+a0", 0),
+                new KeyValueTimestamp<>(0, "A0-0+a0", 0),
+                new KeyValueTimestamp<>(1, "null+b1", 0));
+        }
+    }
+
 
     @Test
     public void testOuterJoinDuplicates() {
