@@ -128,7 +128,7 @@ public class ActiveTaskCreatorTest {
             () -> activeTaskCreator.streamsProducerForTask(null)
         );
 
-        assertThat(thrown.getMessage(), is("Producer per thread is used."));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -140,7 +140,7 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -163,6 +163,7 @@ public class ActiveTaskCreatorTest {
 
     // functional test
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnStreamsProducerPerTaskIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -170,6 +171,7 @@ public class ActiveTaskCreatorTest {
         shouldReturnStreamsProducerPerTask();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldConstructProducerMetricsWithEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -177,6 +179,7 @@ public class ActiveTaskCreatorTest {
         shouldConstructProducerMetricsPerTask();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldConstructClientIdWithEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -188,6 +191,7 @@ public class ActiveTaskCreatorTest {
         assertThat(clientIds, is(mkSet("clientId-StreamThread-0-0_0-producer", "clientId-StreamThread-0-0_1-producer")));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNoOpCloseThreadProducerIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -200,6 +204,7 @@ public class ActiveTaskCreatorTest {
         assertThat(mockClientSupplier.producers.get(1).closed(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCloseTaskProducersIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -221,6 +226,7 @@ public class ActiveTaskCreatorTest {
 
     // error handling
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldFailForUnknownTaskOnStreamsProducerPerTaskIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -246,6 +252,7 @@ public class ActiveTaskCreatorTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldFailOnGetThreadProducerIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -258,9 +265,10 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled."));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowStreamsExceptionOnErrorCloseTaskProducerIfEosAlphaEnabled() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -282,13 +290,13 @@ public class ActiveTaskCreatorTest {
 
 
 
-    // eos-beta test
+    // eos-v2 test
 
     // functional test
 
     @Test
-    public void shouldReturnThreadProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldReturnThreadProducerIfEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
 
         createTasks();
@@ -300,16 +308,16 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldConstructProducerMetricsWithEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldConstructProducerMetricsWithEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
 
         shouldConstructThreadProducerMetric();
     }
 
     @Test
-    public void shouldConstructClientIdWithEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldConstructClientIdWithEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
 
@@ -319,8 +327,8 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldCloseThreadProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldCloseThreadProducerIfEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
 
@@ -330,8 +338,8 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldNoOpCloseTaskProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldNoOpCloseTaskProducerIfEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
 
         createTasks();
@@ -345,8 +353,8 @@ public class ActiveTaskCreatorTest {
     // error handling
 
     @Test
-    public void shouldFailOnStreamsProducerPerTaskIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldFailOnStreamsProducerPerTaskIfEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
 
         createTasks();
@@ -356,12 +364,12 @@ public class ActiveTaskCreatorTest {
             () -> activeTaskCreator.streamsProducerForTask(null)
         );
 
-        assertThat(thrown.getMessage(), is("Producer per thread is used."));
+        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE to be enabled, but the processing mode was EXACTLY_ONCE_V2"));
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosBetaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosV2Enabled() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
         mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");

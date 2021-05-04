@@ -21,9 +21,11 @@ import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metalog.MetaLogLeader;
 import org.apache.kafka.metalog.MetaLogListener;
 import org.apache.kafka.metalog.MetaLogManager;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.snapshot.SnapshotReader;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -113,7 +115,7 @@ public class MetaLogRaftShim implements MetaLogManager {
                 // not a leader. We want to move this IO to the state machine so that
                 // it does not block Raft replication
                 while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    Batch<ApiMessageAndVersion> batch = reader.next();
                     List<ApiMessage> records = batch.records().stream()
                         .map(ApiMessageAndVersion::message)
                         .collect(Collectors.toList());
@@ -122,6 +124,11 @@ public class MetaLogRaftShim implements MetaLogManager {
             } finally {
                 reader.close();
             }
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            reader.close();
         }
 
         @Override

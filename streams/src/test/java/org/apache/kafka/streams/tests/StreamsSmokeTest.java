@@ -38,6 +38,7 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsSmokeTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
@@ -60,10 +61,14 @@ public class StreamsSmokeTest {
         if ("process".equals(command)) {
             if (!StreamsConfig.AT_LEAST_ONCE.equals(processingGuarantee) &&
                 !StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee) &&
-                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee)) {
+                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)) {
 
-                System.err.println("processingGuarantee must be either " + StreamsConfig.AT_LEAST_ONCE + ", " +
-                    StreamsConfig.EXACTLY_ONCE + ", or " + StreamsConfig.EXACTLY_ONCE_BETA);
+                System.err.println("processingGuarantee must be either " +
+                                       StreamsConfig.AT_LEAST_ONCE + ", " +
+                                       StreamsConfig.EXACTLY_ONCE + ", or " +
+                                       StreamsConfig.EXACTLY_ONCE_BETA + ", or " +
+                                       StreamsConfig.EXACTLY_ONCE_V2);
 
                 Exit.exit(1);
             }

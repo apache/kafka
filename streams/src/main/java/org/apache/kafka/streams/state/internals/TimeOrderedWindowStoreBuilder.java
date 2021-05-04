@@ -77,8 +77,4 @@ public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K,
             TimeOrderedKeySchema::toStoreKeyBinary
         );
     }
-
-    public long retentionPeriod() {
-        return storeSupplier.retentionPeriod();
-    }
 }

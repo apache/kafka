@@ -436,6 +436,57 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
+    public void shouldThrowNullPointerOnGetIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.get(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.put(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfAbsentIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putIfAbsent(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnDeleteIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.delete(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutAllIfAnyKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range("from", null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
+    }
+
+    @Test
     public void shouldGetRecordsWithPrefixKey() {
         final StringSerializer stringSerializer = new StringSerializer();
         expect(inner.prefixScan(KEY, stringSerializer))

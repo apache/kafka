@@ -523,6 +523,11 @@ public class WorkerConfig extends AbstractConfig {
                 }
             }
         }
+
+        @Override
+        public String toString() {
+            return "List of comma-separated URIs, ex: http://localhost:8080,https://localhost:8443.";
+        }
     }
 
     private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {

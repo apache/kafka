@@ -66,43 +66,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * |   A   |     25     |    35    |
      * +--------------------------------
      * </pre>
-     * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
-     * <p>
-     * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
-     * available window to the newest/latest window.
-     *
-     * @param key      the key to fetch
-     * @param timeFrom time range start (inclusive), where iteration starts.
-     * @param timeTo   time range end (inclusive), where iteration ends.
-     * @return an iterator over key-value pairs {@code <timestamp, value>}, from beginning to end of time.
-     * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       if {@code null} is used for key.
-     * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
-     */
-    @Deprecated
-    WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
-
-    /**
-     * Get all the key-value pairs with the given key and the time range from all the existing windows.
-     * <p>
-     * This iterator must be closed after use.
-     * <p>
-     * The time range is inclusive and applies to the starting timestamp of the window.
-     * For example, if we have the following windows:
-     * <pre>
-     * +-------------------------------+
-     * |  key  | start time | end time |
-     * +-------+------------+----------+
-     * |   A   |     10     |    20    |
-     * +-------+------------+----------+
-     * |   A   |     15     |    25    |
-     * +-------+------------+----------+
-     * |   A   |     20     |    30    |
-     * +-------+------------+----------+
-     * |   A   |     25     |    35    |
-     * +--------------------------------
-     * </pre>
      * And we call {@code store.fetch("A", Instant.ofEpochMilli(10), Instant.ofEpochMilli(20))} then the results will contain the first
      * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
@@ -171,23 +134,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key.
-     * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
-     */
-    @Deprecated
-    KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom, long timeTo);
-
-    /**
-     * Get all the key-value pairs in the given key range and time range from all the existing windows.
-     * <p>
-     * This iterator must be closed after use.
-     *
-     * @param keyFrom     the first key in the range
-     * @param keyTo       the last key in the range
-     * @param timeFrom time range start (inclusive), where iteration starts.
-     * @param timeTo   time range end (inclusive), where iteration ends.
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
-     * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       if {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, Instant timeFrom, Instant timeTo)
@@ -232,19 +178,6 @@ public interface ReadOnlyWindowStore<K, V> {
     default KeyValueIterator<Windowed<K>, V> backwardAll() {
         throw new UnsupportedOperationException();
     }
-
-    /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
-     *
-     * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration starts.
-     * @param timeTo   the end of the time slot from which to search (inclusive), where iteration ends.
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
-     * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       if {@code null} is used for any key
-     * @deprecated Use {@link #fetchAll(Instant, Instant)} instead
-     */
-    @Deprecated
-    KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.

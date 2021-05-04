@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -31,17 +32,22 @@ class MemoryBatchReaderTest {
 
     @Test
     public void testIteration() {
-        BatchReader.Batch<String> batch1 = new BatchReader.Batch<>(0L, 1,
-            Arrays.asList("a", "b", "c"));
-        BatchReader.Batch<String> batch2 = new BatchReader.Batch<>(3L, 2,
-            Arrays.asList("d", "e"));
-        BatchReader.Batch<String> batch3 = new BatchReader.Batch<>(5L, 2,
-            Arrays.asList("f", "g", "h", "i"));
+        Batch<String> batch1 = Batch.of(
+            0L, 1, Arrays.asList("a", "b", "c")
+        );
+        Batch<String> batch2 = Batch.of(
+            3L, 2, Arrays.asList("d", "e")
+        );
+        Batch<String> batch3 = Batch.of(
+            5L, 2, Arrays.asList("f", "g", "h", "i")
+        );
 
         @SuppressWarnings("unchecked")
         CloseListener<BatchReader<String>> listener = Mockito.mock(CloseListener.class);
         MemoryBatchReader<String> reader = new MemoryBatchReader<>(
-            Arrays.asList(batch1, batch2, batch3), listener);
+            Arrays.asList(batch1, batch2, batch3),
+            listener
+        );
 
         assertEquals(0L, reader.baseOffset());
         assertEquals(OptionalLong.of(8L), reader.lastOffset());
