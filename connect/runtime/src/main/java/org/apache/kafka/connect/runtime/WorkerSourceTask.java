@@ -370,7 +370,7 @@ class WorkerSourceTask extends WorkerTask {
                     (recordMetadata, e) -> {
                         if (e != null) {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             producerSendException.compareAndSet(null, e);
                         } else {
                             recordSent(producerRecord);
@@ -396,7 +396,7 @@ class WorkerSourceTask extends WorkerTask {
             } catch (ConnectException e) {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
-                log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
+                log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
