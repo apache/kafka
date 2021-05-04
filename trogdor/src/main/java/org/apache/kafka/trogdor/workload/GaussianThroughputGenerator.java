@@ -53,7 +53,7 @@ import java.util.Random;
 
 public class GaussianThroughputGenerator implements ThroughputGenerator {
     private final int messagesPerWindowAverage;
-    private final int messagesPerWindowDeviation;
+    private final double messagesPerWindowDeviation;
     private final int windowsUntilRateChange;
     private final long windowSizeMs;
 
@@ -66,7 +66,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
 
     @JsonCreator
     public GaussianThroughputGenerator(@JsonProperty("messagesPerWindowAverage") int messagesPerWindowAverage,
-                                       @JsonProperty("messagesPerWindowDeviation") int messagesPerWindowDeviation,
+                                       @JsonProperty("messagesPerWindowDeviation") double messagesPerWindowDeviation,
                                        @JsonProperty("windowsUntilRateChange") int windowsUntilRateChange,
                                        @JsonProperty("windowSizeMs") long windowSizeMs) {
         // Calculate the default values.
@@ -88,7 +88,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
     }
 
     @JsonProperty
-    public long messagesPerWindowDeviation() {
+    public double messagesPerWindowDeviation() {
         return messagesPerWindowDeviation;
     }
 

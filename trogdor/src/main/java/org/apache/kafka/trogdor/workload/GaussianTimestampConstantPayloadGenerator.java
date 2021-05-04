@@ -57,7 +57,7 @@ import java.util.Random;
 
 public class GaussianTimestampConstantPayloadGenerator implements PayloadGenerator {
     private final int messageSizeAverage;
-    private final int messageSizeDeviation;
+    private final double messageSizeDeviation;
     private final int messagesUntilSizeChange;
     private final long seed;
 
@@ -69,7 +69,7 @@ public class GaussianTimestampConstantPayloadGenerator implements PayloadGenerat
 
     @JsonCreator
     public GaussianTimestampConstantPayloadGenerator(@JsonProperty("messageSizeAverage") int messageSizeAverage,
-                                                     @JsonProperty("messageSizeDeviation") int messageSizeDeviation,
+                                                     @JsonProperty("messageSizeDeviation") double messageSizeDeviation,
                                                      @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
                                                      @JsonProperty("seed") long seed) {
         this.messageSizeAverage = messageSizeAverage;
@@ -86,7 +86,7 @@ public class GaussianTimestampConstantPayloadGenerator implements PayloadGenerat
     }
 
     @JsonProperty
-    public long messageSizeDeviation() {
+    public double messageSizeDeviation() {
         return messageSizeDeviation;
     }
 

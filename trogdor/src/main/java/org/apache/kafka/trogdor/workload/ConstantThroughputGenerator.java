@@ -36,6 +36,8 @@ import org.apache.kafka.common.utils.Time;
  *
  * This will produce a workload that runs 500 messages per second, with a maximum resolution of 50 messages per 100
  * millisecond.
+ *
+ * If `messagesPerWindow` is less than or equal to 0, `throttle` will not throttle at all and will return immediately.
  */
 
 public class ConstantThroughputGenerator implements ThroughputGenerator {
