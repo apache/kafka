@@ -35,7 +35,7 @@ public abstract class RemoteLogMetadata {
      */
     private final long eventTimestampMs;
 
-    public RemoteLogMetadata(int brokerId, long eventTimestampMs) {
+    protected RemoteLogMetadata(int brokerId, long eventTimestampMs) {
         this.brokerId = brokerId;
         this.eventTimestampMs = eventTimestampMs;
     }
