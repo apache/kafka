@@ -115,8 +115,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                                   final K keyTo,
                                                   final Instant timeFrom,
                                                   final Instant timeTo) {
-        Objects.requireNonNull(keyFrom, "from can't be null");
-        Objects.requireNonNull(keyTo, "to can't be null");
+        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
+        Objects.requireNonNull(keyTo, "keyTo can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
