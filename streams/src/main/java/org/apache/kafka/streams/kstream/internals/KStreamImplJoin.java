@@ -144,19 +144,7 @@ class KStreamImplJoin {
 
         Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
         if (leftOuter) {
-            final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
-            final boolean persistent = thisStoreSupplier == null || thisStoreSupplier.get().persistent();
-
-            // Get the suffix index of the joinThisGeneratedName to build the outer join store name.
-            final String outerJoinStoreGeneratedName = KStreamImpl.OUTERSHARED_NAME
-                + joinThisGeneratedName.substring(
-                    rightOuter
-                        ? KStreamImpl.OUTERTHIS_NAME.length()
-                        : KStreamImpl.JOINTHIS_NAME.length());
-
-            final String outerJoinStoreName = userProvidedBaseStoreName == null ? outerJoinStoreGeneratedName : userProvidedBaseStoreName + outerJoinSuffix;
-
-            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(outerJoinStoreName, windows, streamJoinedInternal, persistent));
+            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(windows, streamJoinedInternal, joinThisGeneratedName));
         }
 
         // Time shared between joins to keep track of the maximum stream time
@@ -264,11 +252,25 @@ class KStreamImplJoin {
         return builder;
     }
 
+    private <K, V1, V2> String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
+        if (streamJoinedInternal.storeName() != null) {
+            return streamJoinedInternal.storeName() + (rightOuter ? "-outer-shared-join" : "-left-shared-join");
+        } else {
+            return KStreamImpl.OUTERSHARED_NAME
+                + joinThisGeneratedName.substring(
+                rightOuter
+                    ? KStreamImpl.OUTERTHIS_NAME.length()
+                    : KStreamImpl.JOINTHIS_NAME.length());
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private static <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final String storeName,
-                                                                                                                                        final JoinWindows windows,
-                                                                                                                                        final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
-                                                                                                                                        final boolean persistent) {
+    private <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
+                                                                                                                                 final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+                                                                                                                                 final String joinThisGeneratedName) {
+        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
+        final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName);
+
         final KeyAndJoinSideSerde keyAndJoinSideSerde = new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde());
         final LeftOrRightValueSerde leftOrRightValueSerde = new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde());
 
@@ -287,7 +289,7 @@ class KStreamImplJoin {
         } else {
             builder = Stores.windowStoreBuilder(
                 Stores.inMemoryWindowStore(
-                    storeName + "-memory-store",
+                    storeName + "-store",
                     Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                     Duration.ofMillis(windows.size()),
                     false
