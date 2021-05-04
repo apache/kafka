@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Stack;
 
-import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -275,37 +274,6 @@ public class SerializationTest {
             listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)),
             "Should get the original collection of strings list with null entries "
                 + "after serialization and deserialization");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void listSerdeShouldRoundtripInputWithNullIndexListSerializationStrategy() {
-        List<Integer> testData = Arrays.asList(1, null, 3);
-        Serde<List<Integer>> listSerde = Serdes
-            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.CONSTANT_SIZE);
-        byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
-        assertEquals(21,
-            listSerde.serializer().serialize(topic, testData).length,
-            "Should get length of 21 bytes (serialization flag + size of the null index list "
-                + "+ 1 null index entry + size of the input list + 2 integer entries) after serialization");
-        assertEquals(testData, listSerde.deserializer().deserialize(topic, serializedPayload),
-            "Should get the original collection of integer primitives with null entries "
-                + "after serialization and deserialization with null index list serialization strategy");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void listSerdeShouldRoundtripInputWithNegativeSizeSerializationStrategy() {
-        List<Integer> testData = Arrays.asList(1, null, 3);
-        Serde<List<Integer>> listSerde = Serdes
-            .ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.VARIABLE_SIZE);
-        byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
-        assertEquals(25, listSerde.serializer().serialize(topic, testData).length,
-            "Should get length of 25 bytes (serialization flag + size of the input list + 2 integer entries "
-                + "+ 1 negative size entry) after serialization");
-        assertEquals(testData, listSerde.deserializer().deserialize(topic, serializedPayload),
-            "Should get the original collection of integer primitives with null entries "
-                + "after serialization and deserialization with negative size serialization strategy");
     }
 
     @SuppressWarnings("unchecked")

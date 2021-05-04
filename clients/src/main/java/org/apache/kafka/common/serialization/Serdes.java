@@ -145,10 +145,6 @@ public class Serdes {
             super(new ListSerializer<>(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
         }
 
-        public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde, SerializationStrategy serStrategy) {
-            super(new ListSerializer<>(serde.serializer(), serStrategy), new ListDeserializer<>(listClass, serde.deserializer()));
-        }
-
     }
 
     @SuppressWarnings("unchecked")
@@ -295,19 +291,10 @@ public class Serdes {
     /*
      * A serde for {@code List} type
      */
-    public static <L extends List<Inner>, Inner> Serde<List<Inner>>
+    static public <L extends List<Inner>, Inner> Serde<List<Inner>>
         ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
 
         return new ListSerde<>(listClass, innerSerde);
-    }
-
-    /*
-     * A serde for {@code List} type
-     */
-    public static <L extends List<Inner>, Inner> Serde<List<Inner>>
-        ListSerde(Class<L> listClass, Serde<Inner> innerSerde, ListSerde.SerializationStrategy serStrategy) {
-
-        return new ListSerde<>(listClass, innerSerde, serStrategy);
     }
 
 }

@@ -37,11 +37,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
-    private Deserializer<Inner> inner;
-    private Class<?> listClass;
-    private Integer primitiveSize;
-
-    private static Map<Class<? extends Deserializer<?>>, Integer> fixedLengthDeserializers = mkMap(
+    private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = mkMap(
         mkEntry(ShortDeserializer.class, Short.BYTES),
         mkEntry(IntegerDeserializer.class, Integer.BYTES),
         mkEntry(FloatDeserializer.class, Float.BYTES),
@@ -50,15 +46,19 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         mkEntry(UUIDDeserializer.class, 36)
     );
 
+    private Deserializer<Inner> inner;
+    private Class<?> listClass;
+    private Integer primitiveSize;
+
     public ListDeserializer() {}
 
-    public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> innerDeserializer) {
-        if (listClass == null || innerDeserializer == null) {
+    public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> inner) {
+        if (listClass == null || inner == null) {
             throw new IllegalArgumentException("ListDeserializer requires both \"listClass\" and \"innerDeserializer\" parameters to be provided during initialization");
         }
         this.listClass = listClass;
-        this.inner = innerDeserializer;
-        this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
+        this.inner = inner;
+        this.primitiveSize = FIXED_LENGTH_DESERIALIZERS.get(inner.getClass());
     }
 
     public Deserializer<Inner> getInnerDeserializer() {
@@ -109,6 +109,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 throw new KafkaException("Could not determine the inner serde class instance using \"" + innerSerdePropertyName + "\" property.");
             }
             inner.configure(configs, isKey);
+            primitiveSize = FIXED_LENGTH_DESERIALIZERS.get(inner.getClass());
         } catch (final ClassNotFoundException e) {
             throw new ConfigException(innerSerdePropertyName, innerSerdeClassOrName, "Deserializer's inner serde class \"" + innerSerdeClassOrName + "\" could not be found.");
         }

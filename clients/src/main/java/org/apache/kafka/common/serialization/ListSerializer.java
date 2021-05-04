@@ -34,11 +34,7 @@ import static org.apache.kafka.common.serialization.Serdes.ListSerde.Serializati
 
 public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
-    private Serializer<Inner> inner;
-    private SerializationStrategy serStrategy;
-    private boolean isFixedLength;
-
-    static private List<Class<? extends Serializer<?>>> fixedLengthSerializers = Arrays.asList(
+    private static final List<Class<? extends Serializer<?>>> FIXED_LENGTH_SERIALIZERS = Arrays.asList(
         ShortSerializer.class,
         IntegerSerializer.class,
         FloatSerializer.class,
@@ -46,20 +42,19 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         DoubleSerializer.class,
         UUIDSerializer.class);
 
+    private Serializer<Inner> inner;
+    private SerializationStrategy serStrategy;
+    private boolean isFixedLength;
+
     public ListSerializer() {}
 
-    public ListSerializer(Serializer<Inner> serializer) {
-        if (serializer == null) {
+    public ListSerializer(Serializer<Inner> inner) {
+        if (inner == null) {
             throw new IllegalArgumentException("ListSerializer requires \"serializer\" parameter to be provided during initialization");
         }
-        this.inner = serializer;
-        this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
+        this.inner = inner;
+        this.isFixedLength = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass());
         this.serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
-    }
-
-    public ListSerializer(Serializer<Inner> serializer, SerializationStrategy serStrategy) {
-        this(serializer);
-        this.serStrategy = serStrategy;
     }
 
     public Serializer<Inner> getInnerSerializer() {
@@ -86,6 +81,8 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
                 throw new KafkaException("Could not create a serializer class instance using \"" + innerSerdePropertyName + "\" property.");
             }
             inner.configure(configs, isKey);
+            isFixedLength = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass());
+            serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
         } catch (final ClassNotFoundException e) {
             throw new ConfigException(innerSerdePropertyName, innerSerdeClassOrName, "Serializer class " + innerSerdeClassOrName + " could not be found.");
         }
