@@ -818,6 +818,24 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             }
         }*/
 
+        public static void assertThat(final AtomicBoolean pass,
+                                                     final StringBuilder failures,
+                                                     final String message,
+                                                     final boolean passed,
+                                                 final String expected) {
+            if (!passed) {
+                if (failures != null) {
+                    final StringBuffer description = new StringBuffer(failures);
+                    description.append("\n" + message)
+                            .append("\nExpected: ")
+                            .append(expected)
+                            .append("\n     but: ");
+                    description.append("\n");
+                }
+                pass.set(false);
+            }
+        }
+
         static boolean verifySync(final boolean logResults,
                                   final Map<Integer, Article> consumedArticles,
                                   final Map<Integer, Comment> consumedComments,
@@ -826,95 +844,95 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             final AtomicBoolean pass = new AtomicBoolean(true);
             final StringBuilder report = logResults ? new StringBuilder() : null;
 
-            //assertThat(pass, report, "one article", consumedArticles.size(), greaterThan(0));
-            //assertThat(pass, report, "one comment", consumedComments.size(), greaterThan(0));
+            assertThat(pass, report, "one article", consumedArticles.size() > 0, "greater than 0");
+            assertThat(pass, report, "one comment", consumedComments.size() > 0, "greater than 0");
 
-           /* assertThat(
+           assertThat(
                 pass,
                 report,
                 "article size",
-                consumedAugmentedArticles.size(),
-                is(consumedArticles.size())
+                consumedAugmentedArticles.size() == consumedArticles.size(),
+                   "to have " + consumedArticles.size() + " articles"
             );
             assertThat(
                 pass,
                 report,
                 "comment size",
-                consumedAugmentedComments.size(),
-                is(consumedComments.size())
-            );*/
+                consumedAugmentedComments.size() == consumedComments.size(),
+                    "to have " + consumedComments.size() + " comments"
+            );
 
             final Map<Integer, Long> commentCounts = new TreeMap<>();
 
             for (final RelationalSmokeTest.AugmentedComment augmentedComment : consumedAugmentedComments.values()) {
                 final int key = augmentedComment.getKey();
-                /*assertThat(pass,
+                assertThat(pass,
                            report,
                            "comment missing, but found in augmentedComment: " + key,
-                           consumedComments,
-                           hasKey(key));*/
+                           consumedComments.containsKey(key),
+                           "to contain " + key);
 
                 final Comment comment = consumedComments.get(key);
                 if (comment != null) {
-                    /*assertThat(
+                    assertThat(
                         pass,
                         report,
                         "comment articleId [" + comment.getArticleId() + "] didn't match " +
                             "augmentedComment articleId [" + augmentedComment.getArticleId() + "]",
-                        comment.getArticleId(),
-                        is(augmentedComment.getArticleId())
-                    );*/
+                        comment.getArticleId() == augmentedComment.getArticleId(),
+                        "article id " + comment.getArticleId()
+                    );
                 }
                 commentCounts.put(augmentedComment.getArticleId(),
                                   commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1);
 
-                /*assertThat(
+                assertThat(
                     pass,
                     report,
                     "augmentedArticle [" + augmentedComment.getArticleId() + "] " +
                         "missing for augmentedComment [" + augmentedComment.getKey() + "]",
-                    consumedAugmentedArticles,
-                    hasKey(augmentedComment.getArticleId())
-                );*/
+                    consumedAugmentedArticles.containsKey(augmentedComment.getArticleId()),
+                    "to have article " + augmentedComment.getArticleId()
+                );
                 final AugmentedArticle augmentedArticle = consumedAugmentedArticles.get(augmentedComment.getArticleId());
                 if (augmentedArticle != null) {
-                   /* assertThat(
+                    assertThat(
                         pass,
                         report,
                         "articlePrefix didn't match augmentedArticle: " + augmentedArticle.getText(),
-                        augmentedArticle.getText(),
-                        startsWith(augmentedComment.getArticlePrefix())
-                    );*/
+                        augmentedArticle.getText().startsWith(augmentedComment.getArticlePrefix()),
+                        "comment to start with " + augmentedComment.getArticlePrefix()
+                    );
                 }
 
-                /*assertThat(
+                assertThat(
                     pass,
                     report,
                     "article " + augmentedComment.getArticleId() + " missing from consumedArticles",
-                    consumedArticles,
-                    hasKey(augmentedComment.getArticleId())
-                );*/
+                    consumedArticles.containsKey(augmentedComment.getArticleId()),
+                    "to see article " + augmentedComment.getArticleId()
+                );
                 final Article article = consumedArticles.get(augmentedComment.getArticleId());
                 if (article != null) {
-                   /* assertThat(
+                    assertThat(
                         pass,
                         report,
                         "articlePrefix didn't match article: " + article.getText(),
-                        article.getText(),
-                        startsWith(augmentedComment.getArticlePrefix())
-                    );*/
+                        article.getText().startsWith(augmentedComment.getArticlePrefix()),
+                        "article to start with " + augmentedComment.getArticlePrefix()
+                    );
                 }
             }
 
 
             for (final RelationalSmokeTest.AugmentedArticle augmentedArticle : consumedAugmentedArticles.values()) {
-               /* assertThat(
+                assertThat(
                     pass,
                     report,
                     "article " + augmentedArticle.getKey() + " comment count mismatch",
-                    augmentedArticle.getCommentCount(),
-                    is(commentCounts.getOrDefault(augmentedArticle.getKey(), 0L))
-                );*/
+                    augmentedArticle.getCommentCount() == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L),
+                    "comment count to be " + commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
+                );
             }
 
             if (logResults) {
