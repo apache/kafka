@@ -374,6 +374,10 @@ public class ConfigurationControlManager {
         configData.remove(new ConfigResource(Type.TOPIC, name));
     }
 
+    boolean uncleanLeaderElectionEnabledForTopic(String name) {
+        return false; // TODO: support configuring unclean leader election.
+    }
+
     class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {
         private final long epoch;
         private final Iterator<Entry<ConfigResource, TimelineHashMap<String, String>>> iterator;

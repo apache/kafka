@@ -89,7 +89,7 @@ import static org.junit.Assert.assertFalse;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
-public class EosBetaUpgradeIntegrationTest {
+public class EosV2UpgradeIntegrationTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Boolean[]> data() {
@@ -180,15 +180,16 @@ public class EosBetaUpgradeIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldUpgradeFromEosAlphaToEosBeta() throws Exception {
-        // We use two KafkaStreams clients that we upgrade from eos-alpha to eos-beta. During the upgrade,
+    public void shouldUpgradeFromEosAlphaToEosV2() throws Exception {
+        // We use two KafkaStreams clients that we upgrade from eos-alpha to eos-V2. During the upgrade,
         // we ensure that there are pending transaction and verify that data is processed correctly.
         //
         // We either close clients cleanly (`injectError = false`) or let them crash (`injectError = true`) during
         // the upgrade. For both cases, EOS should not be violated.
         //
-        // Additionally, we inject errors while one client is on eos-alpha while the other client is on eos-beta:
+        // Additionally, we inject errors while one client is on eos-alpha while the other client is on eos-V2:
         // For this case, we inject the error during task commit phase, i.e., after offsets are appended to a TX,
         // and before the TX is committed. The goal is to verify that the written but uncommitted offsets are not
         // picked up, i.e., GroupCoordinator fencing works correctly.
@@ -209,22 +210,22 @@ public class EosBetaUpgradeIntegrationTest {
         //      - crash case:
         //        * the pending transactions of the crashed client got aborted
         //        * the second client will have four pending transactions
-        // 5.  restart the first client with eos-beta enabled and wait until rebalance stabilizes
+        // 5.  restart the first client with eos-V2 enabled and wait until rebalance stabilizes
         //       - the rebalance should result in a commit of all tasks
         // 6.  write 5 record per input topic partition
         //       - stop case:
         //         * verify that the result was committed
         //       - crash case:
         //         * fail the second (i.e., eos-alpha) client during commit
-        //         * the eos-beta client should not pickup the pending offsets
+        //         * the eos-V2 client should not pickup the pending offsets
         //         * verify uncommitted and committed result
         // 7.  only for crash case:
         //     7a. restart the second client in eos-alpha mode and wait until rebalance stabilizes
         //     7b. write 10 records per input topic partition
-        //         * fail the first (i.e., eos-beta) client during commit
+        //         * fail the first (i.e., eos-V2) client during commit
         //         * the eos-alpha client should not pickup the pending offsets
         //         * verify uncommitted and committed result
-        //     7c. restart the first client in eos-beta mode and wait until rebalance stabilizes
+        //     7c. restart the first client in eos-V2 mode and wait until rebalance stabilizes
         // 8.  write 5 records per input topic partition to get pending transactions (verified via "read_uncommitted" mode)
         //      - 2 transaction are base on a task producer; one transaction is based on a thread producer
         //      - we will get 4 pending writes for the crash case as we crash processing the 5th record
@@ -235,19 +236,19 @@ public class EosBetaUpgradeIntegrationTest {
         //      - crash case:
         //        * the pending transactions of the crashed client got aborted
         //        * the first client will have one pending transactions
-        // 10. restart the second client with eos-beta enabled and wait until rebalance stabilizes
+        // 10. restart the second client with eos-V2 enabled and wait until rebalance stabilizes
         //       - the rebalance should result in a commit of all tasks
         // 11. write 5 record per input topic partition and verify that the result was committed
 
         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> stateTransitions1 = new LinkedList<>();
         KafkaStreams streams1Alpha = null;
-        KafkaStreams streams1Beta = null;
-        KafkaStreams streams1BetaTwo = null;
+        KafkaStreams streams1V2 = null;
+        KafkaStreams streams1V2Two = null;
 
         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> stateTransitions2 = new LinkedList<>();
         KafkaStreams streams2Alpha = null;
         KafkaStreams streams2AlphaTwo = null;
-        KafkaStreams streams2Beta = null;
+        KafkaStreams streams2V2 = null;
 
         try {
             // phase 1: start both clients
@@ -428,17 +429,17 @@ public class EosBetaUpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams1Beta = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
-            streams1Beta.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
+            streams1V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams1V2.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
             assignmentListener.prepareForRebalance();
-            streams1Beta.start();
+            streams1V2.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
             final Set<Long> newlyCommittedKeys;
             if (!injectError) {
-                newlyCommittedKeys = keysFromInstance(streams1Beta);
+                newlyCommittedKeys = keysFromInstance(streams1V2);
                 newlyCommittedKeys.removeAll(keysFirstClientAlpha);
             } else {
                 newlyCommittedKeys = mkSet(0L, 1L, 2L, 3L);
@@ -464,7 +465,7 @@ public class EosBetaUpgradeIntegrationTest {
             //   p-2: 10 rec + C   +   5 rec     ---> 5 rec + C
             //   p-3: 10 rec + C   +   5 rec     ---> 5 rec + C
             // crash case: (second/alpha client fails and both TX are aborted)
-            //             (first/beta client reprocessed the 10 records and commits TX)
+            //             (first/V2 client reprocessed the 10 records and commits TX)
             //   p-0: 10 rec + C   +   4 rec + A + 5 rec + C ---> 5 rec + C
             //   p-1: 10 rec + C   +   5 rec + A + 5 rec + C ---> 5 rec + C
             //   p-2: 10 rec + C   +   5 rec + C             ---> 5 rec + A + 5 rec + C
@@ -491,11 +492,11 @@ public class EosBetaUpgradeIntegrationTest {
                     computeExpectedResult(committedInputDataDuringUpgrade, committedState);
                 verifyCommitted(expectedCommittedResult);
             } else {
-                final Set<Long> keysFirstClientBeta = keysFromInstance(streams1Beta);
+                final Set<Long> keysFirstClientV2 = keysFromInstance(streams1V2);
                 final Set<Long> keysSecondClientAlpha = keysFromInstance(streams2Alpha);
 
                 final List<KeyValue<Long, Long>> committedInputDataAfterFirstUpgrade =
-                    prepareData(15L, 20L, keysFirstClientBeta.toArray(new Long[0]));
+                    prepareData(15L, 20L, keysFirstClientV2.toArray(new Long[0]));
                 writeInputData(committedInputDataAfterFirstUpgrade);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultBeforeFailure =
@@ -554,10 +555,10 @@ public class EosBetaUpgradeIntegrationTest {
             // 7. only for crash case:
             //     7a. restart the failed second client in eos-alpha mode and wait until rebalance stabilizes
             //     7b. write third batch of input data
-            //         * fail the first (i.e., eos-beta) client during commit
+            //         * fail the first (i.e., eos-V2) client during commit
             //         * the eos-alpha client should not pickup the pending offsets
             //         * verify uncommitted and committed result
-            //     7c. restart the first client in eos-beta mode and wait until rebalance stabilizes
+            //     7c. restart the first client in eos-V2 mode and wait until rebalance stabilizes
             //
             // crash case:
             //   p-0: 10 rec + C   +   4 rec + A + 5 rec + C + 5 rec + C ---> 10 rec + A + 10 rec + C
@@ -583,7 +584,7 @@ public class EosBetaUpgradeIntegrationTest {
                 waitForRunning(stateTransitions2);
 
                 // 7b. write third batch of input data
-                final Set<Long> keysFirstClientBeta = keysFromInstance(streams1Beta);
+                final Set<Long> keysFirstClientV2 = keysFromInstance(streams1V2);
                 final Set<Long> keysSecondClientAlphaTwo = keysFromInstance(streams2AlphaTwo);
 
                 final List<KeyValue<Long, Long>> committedInputDataBetweenUpgrades =
@@ -597,12 +598,12 @@ public class EosBetaUpgradeIntegrationTest {
 
                 commitCounterClient2.set(0);
 
-                final Iterator<Long> it = keysFirstClientBeta.iterator();
+                final Iterator<Long> it = keysFirstClientV2.iterator();
                 final Long otherKey = it.next();
                 final Long failingKey = it.next();
 
                 final List<KeyValue<Long, Long>> uncommittedInputDataBetweenUpgrade =
-                    prepareData(20L, 29L, keysFirstClientBeta.toArray(new Long[0]));
+                    prepareData(20L, 29L, keysFirstClientV2.toArray(new Long[0]));
                 uncommittedInputDataBetweenUpgrade.addAll(prepareData(29L, 30L, otherKey));
                 writeInputData(uncommittedInputDataBetweenUpgrade);
 
@@ -633,7 +634,7 @@ public class EosBetaUpgradeIntegrationTest {
 
                 commitErrorInjectedClient1.set(false);
                 stateTransitions1.clear();
-                streams1Beta.close();
+                streams1V2.close();
                 assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
@@ -641,13 +642,13 @@ public class EosBetaUpgradeIntegrationTest {
                 verifyCommitted(expectedCommittedResultAfterFailure);
                 expectedUncommittedResult.addAll(expectedCommittedResultAfterFailure);
 
-                // 7c. restart the first client in eos-beta mode and wait until rebalance stabilizes
+                // 7c. restart the first client in eos-V2 mode and wait until rebalance stabilizes
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                streams1BetaTwo = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
-                streams1BetaTwo.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
+                streams1V2Two = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+                streams1V2Two.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
                 assignmentListener.prepareForRebalance();
-                streams1BetaTwo.start();
+                streams1V2Two.start();
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
                 waitForRunning(stateTransitions1);
                 waitForRunning(stateTransitions2);
@@ -765,12 +766,12 @@ public class EosBetaUpgradeIntegrationTest {
             // the state below indicate the case for which the "original" tasks of client2 are migrated back to client2
             // if a task "switch" happens, we might get additional commits (omitted in the comment for brevity)
             //
-            // stop case: (client 1 (beta) will commit all four tasks if at least one revoked and migrate task needs committing back to client 2)
+            // stop case: (client 1 (V2) will commit all four tasks if at least one revoked and migrate task needs committing back to client 2)
             //   p-0: 10 rec + C   +   5 rec + C + 5 rec + C   +   5 rec ---> C
             //   p-1: 10 rec + C   +   5 rec + C + 5 rec + C   +   5 rec ---> C
             //   p-2: 10 rec + C   +   5 rec + C + 5 rec + C   +   5 rec + C
             //   p-3: 10 rec + C   +   5 rec + C + 5 rec + C   +   5 rec + C
-            // crash case: (client 1 (beta) will commit all four tasks even only two are migrate back to client 2)
+            // crash case: (client 1 (V2) will commit all four tasks even only two are migrate back to client 2)
             //   p-0: 10 rec + C   +   4 rec + A + 5 rec + C + 5 rec + C   +   10 rec + A + 10 rec + C   +   5 rec ---> C
             //   p-1: 10 rec + C   +   5 rec + A + 5 rec + C + 5 rec + C   +   10 rec + A + 10 rec + C   +   5 rec ---> C
             //   p-2: 10 rec + C   +   5 rec + C + 5 rec + A + 5 rec + C   +   10 rec + C                +   4 rec + A + 5 rec ---> C
@@ -778,19 +779,19 @@ public class EosBetaUpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams2Beta = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
-            streams2Beta.setStateListener(
+            streams2V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams2V2.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
             assignmentListener.prepareForRebalance();
-            streams2Beta.start();
+            streams2V2.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
             newlyCommittedKeys.clear();
             if (!injectError) {
-                newlyCommittedKeys.addAll(keysFromInstance(streams2Beta));
+                newlyCommittedKeys.addAll(keysFromInstance(streams2V2));
                 newlyCommittedKeys.removeAll(keysSecondClientAlphaTwo);
             } else {
                 newlyCommittedKeys.addAll(mkSet(0L, 1L, 2L, 3L));
@@ -843,11 +844,11 @@ public class EosBetaUpgradeIntegrationTest {
             if (streams1Alpha != null) {
                 streams1Alpha.close();
             }
-            if (streams1Beta != null) {
-                streams1Beta.close();
+            if (streams1V2 != null) {
+                streams1V2.close();
             }
-            if (streams1BetaTwo != null) {
-                streams1BetaTwo.close();
+            if (streams1V2Two != null) {
+                streams1V2Two.close();
             }
             if (streams2Alpha != null) {
                 streams2Alpha.close();
@@ -855,8 +856,8 @@ public class EosBetaUpgradeIntegrationTest {
             if (streams2AlphaTwo != null) {
                 streams2AlphaTwo.close();
             }
-            if (streams2Beta != null) {
-                streams2Beta.close();
+            if (streams2V2 != null) {
+                streams2V2.close();
             }
         }
     }
@@ -886,7 +887,7 @@ public class EosBetaUpgradeIntegrationTest {
                     @Override
                     public void init(final ProcessorContext context) {
                         this.context = context;
-                        state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
+                        state = context.getStateStore(storeName);
                         final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
                         if (APP_DIR_1.equals(clientId)) {
                             crash = errorInjectedClient1;

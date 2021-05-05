@@ -16,16 +16,16 @@
  */
 package kafka.server
 
-import java.util.Properties
-
 import kafka.test.ClusterInstance
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
+import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
@@ -49,7 +49,9 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
     val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
-      IntegrationTestUtils.sendWithHeader(request, overrideHeader, socket)
+      val serializedBytes = Utils.toArray(
+        RequestUtils.serialize(overrideHeader.data, overrideHeader.headerVersion, request.data, request.version))
+      IntegrationTestUtils.sendRequest(socket, serializedBytes)
       IntegrationTestUtils.receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
     } finally socket.close()
   }

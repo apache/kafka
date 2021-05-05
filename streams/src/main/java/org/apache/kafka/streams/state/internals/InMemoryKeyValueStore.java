@@ -32,7 +32,6 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.Objects;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
@@ -107,8 +106,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
-        Objects.requireNonNull(prefix, "prefix cannot be null");
-        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
 
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = Bytes.increment(from);

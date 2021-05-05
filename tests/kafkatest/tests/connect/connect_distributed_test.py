@@ -84,7 +84,7 @@ class ConnectDistributedTest(Test):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics, version=broker_version,
-                                  server_prop_overides=[["auto.create.topics.enable", str(auto_create_topics)]])
+                                  server_prop_overrides=[["auto.create.topics.enable", str(auto_create_topics)]])
         if timestamp_type is not None:
             for node in self.kafka.nodes:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
