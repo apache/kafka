@@ -837,9 +837,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 pass,
                 report,
                 "Mismatched article size between augmented articles (size "
-                        + consumedAugmentedArticles.size() +
-                        ") and consumed articles (size "
-                        + consumedArticles.size() + ")",
+                    + consumedAugmentedArticles.size() +
+                    ") and consumed articles (size "
+                    + consumedArticles.size() + ")",
                 consumedAugmentedArticles.size() == consumedArticles.size()
             );
             assertThat(
@@ -867,13 +867,14 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     assertThat(
                         pass,
                         report,
-                        "comment articleId [" + comment.getArticleId() + "] didn't match " +
-                            "augmentedComment articleId [" + augmentedComment.getArticleId() + "]",
-                        comment.getArticleId() == augmentedComment.getArticleId()
+                        "comment missing, but found in augmentedComment: " + key,
+                        consumedComments.containsKey(key)
                     );
                 }
-                commentCounts.put(augmentedComment.getArticleId(),
-                                      commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1);
+                commentCounts.put(
+                    augmentedComment.getArticleId(),
+                    commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1
+                );
 
                 assertThat(
                     pass,
@@ -916,8 +917,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     pass,
                     report,
                     "article " + augmentedArticle.getKey() + " comment count mismatch",
-                    augmentedArticle.getCommentCount()
-                            == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
+                    augmentedArticle.getCommentCount() == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
                 );
             }
 
