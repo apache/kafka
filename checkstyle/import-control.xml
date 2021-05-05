@@ -267,11 +267,13 @@
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="com.fasterxml.jackson" />
 
     <subpackage name="log">
       <allow pkg="org.apache.kafka.server.log" />
+      <allow pkg="org.apache.kafka.metadata" />
+      <allow pkg="org.apache.kafka.raft.metadata" />
     </subpackage>
-
   </subpackage>
 
   <subpackage name="shell">
