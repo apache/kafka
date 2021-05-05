@@ -138,10 +138,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                        .putInt(data.getKey())
-                        .putLong(data.getTimestamp())
-                        .putInt(serialText.length)
-                        .put(serialText);
+                              .putInt(data.getKey())
+                              .putLong(data.getTimestamp())
+                              .putInt(serialText.length)
+                              .put(serialText);
 
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
@@ -228,11 +228,11 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                        .putInt(data.key)
-                        .putLong(data.timestamp)
-                        .putInt(serialText.length)
-                        .put(serialText)
-                        .putInt(data.articleId);
+                              .putInt(data.key)
+                              .putLong(data.timestamp)
+                              .putInt(serialText.length)
+                              .put(serialText)
+                              .putInt(data.articleId);
 
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
@@ -464,8 +464,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 final int length = serializedArticle.length + Long.BYTES;
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                        .put(serializedArticle)
-                        .putLong(data.getCommentCount());
+                              .put(serializedArticle)
+                              .putLong(data.getCommentCount());
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
         }
@@ -540,9 +540,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 final int length = serializedComment.length + Integer.BYTES + serializedPrefix.length;
                 final ByteBuffer buffer =
                     ByteBuffer.allocate(length)
-                        .put(serializedComment)
-                        .putInt(serializedPrefix.length)
-                        .put(serializedPrefix);
+                              .put(serializedComment)
+                              .putInt(serializedPrefix.length)
+                              .put(serializedPrefix);
                 return Serdes.ByteBuffer().serializer().serialize(topic, buffer);
             }
         }
@@ -607,22 +607,22 @@ public class RelationalSmokeTest extends SmokeTestUtil {
 
             final KTable<Integer, Long> commentCounts =
                 comments.groupBy((key, value) -> new KeyValue<>(value.getArticleId(), (short) 1),
-                    Grouped.with(Serdes.Integer(), Serdes.Short()))
-                    .count();
+                                 Grouped.with(Serdes.Integer(), Serdes.Short()))
+                        .count();
 
             articles
                 .leftJoin(commentCounts,
-                    AugmentedArticle.joiner(),
-                    Materialized.with(null, new AugmentedArticle.AugmentedArticleSerde()))
+                          AugmentedArticle.joiner(),
+                          Materialized.with(null, new AugmentedArticle.AugmentedArticleSerde()))
                 .toStream()
                 .to(ARTICLE_RESULT_SINK);
 
             comments.join(articles,
-                Comment::getArticleId,
-                AugmentedComment.joiner(),
-                Materialized.with(null, new AugmentedComment.AugmentedCommentSerde()))
-                .toStream()
-                .to(COMMENT_RESULT_SINK);
+                          Comment::getArticleId,
+                          AugmentedComment.joiner(),
+                          Materialized.with(null, new AugmentedComment.AugmentedCommentSerde()))
+                    .toStream()
+                    .to(COMMENT_RESULT_SINK);
 
             return streamsBuilder.build();
         }
@@ -799,25 +799,6 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             }
         }
 
-        /*public static <T> void assertThat(final AtomicBoolean pass,
-                                          final StringBuilder failures,
-                                          final String message,
-                                          final T actual,
-                                          final Matcher<? super T> matcher) {
-            if (!matcher.matches(actual)) {
-                if (failures != null) {
-                    final Description description = new StringDescription(failures);
-                    description.appendText("\n" + message)
-                               .appendText("\nExpected: ")
-                               .appendDescriptionOf(matcher)
-                               .appendText("\n     but: ");
-                    matcher.describeMismatch(actual, description);
-                    description.appendText("\n");
-                }
-                pass.set(false);
-            }
-        }*/
-
         public static void assertThat(final AtomicBoolean pass,
                                       final StringBuilder failures,
                                       final String message,
@@ -855,13 +836,19 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             assertThat(
                 pass,
                 report,
-                "Mismatched article size between augmented articles (size " + consumedAugmentedArticles.size() + ") and consumed articles (size " + consumedArticles.size() + ")",
+                "Mismatched article size between augmented articles (size "
+                        + consumedAugmentedArticles.size() +
+                        ") and consumed articles (size "
+                        + consumedArticles.size() + ")",
                 consumedAugmentedArticles.size() == consumedArticles.size()
             );
             assertThat(
                 pass,
                 report,
-                "Mismatched comments size between augmented comments (size " + consumedAugmentedComments.size() + ") and consumed comments (size " + consumedComments.size() + ")",
+                "Mismatched comments size between augmented comments (size "
+                        + consumedAugmentedComments.size() +
+                        ") and consumed comments (size " +
+                        consumedComments.size() + ")",
                 consumedAugmentedComments.size() == consumedComments.size()
             );
 
@@ -870,9 +857,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             for (final RelationalSmokeTest.AugmentedComment augmentedComment : consumedAugmentedComments.values()) {
                 final int key = augmentedComment.getKey();
                 assertThat(pass,
-                    report,
-                    "comment missing, but found in augmentedComment: " + key,
-                    consumedComments.containsKey(key)
+                        report,
+                        "comment missing, but found in augmentedComment: " + key,
+                        consumedComments.containsKey(key)
                 );
 
                 final Comment comment = consumedComments.get(key);
@@ -886,7 +873,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     );
                 }
                 commentCounts.put(augmentedComment.getArticleId(),
-                    commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1);
+                                      commentCounts.getOrDefault(augmentedComment.getArticleId(), 0L) + 1);
 
                 assertThat(
                     pass,
@@ -895,7 +882,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         "missing for augmentedComment [" + augmentedComment.getKey() + "]",
                     consumedAugmentedArticles.containsKey(augmentedComment.getArticleId())
                 );
-                final AugmentedArticle augmentedArticle = consumedAugmentedArticles.get(augmentedComment.getArticleId());
+                final AugmentedArticle augmentedArticle =
+                        consumedAugmentedArticles.get(augmentedComment.getArticleId());
                 if (augmentedArticle != null) {
                     assertThat(
                         pass,
@@ -928,7 +916,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     pass,
                     report,
                     "article " + augmentedArticle.getKey() + " comment count mismatch",
-                    augmentedArticle.getCommentCount() == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
+                    augmentedArticle.getCommentCount()
+                            == commentCounts.getOrDefault(augmentedArticle.getKey(), 0L)
                 );
             }
 
