@@ -34,7 +34,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testDownstreamTopicRenaming() {
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), null, Collections.emptyMap(), Collections.emptyMap());
+            new DefaultReplicationPolicy(), null, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
         assertEquals(new TopicPartition("source1.topic3", 4),
             mirrorCheckpointTask.renameTopicPartition(new TopicPartition("topic3", 4)));
         assertEquals(new TopicPartition("topic3", 5),
@@ -47,7 +47,7 @@ public class MirrorCheckpointTaskTest {
     public void testCheckpoint() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
+            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 2), 3L, 4L);
         offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
         Checkpoint checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
@@ -73,8 +73,98 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testSyncOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<TopicPartition, Long> topicPartitionEndOffset = new HashMap<>();
         Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
+        testSyncOffsetCommon(idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+            new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+        TopicPartition t1p0 = new TopicPartition("topic1", 0);
+        TopicPartition t2p0 = new TopicPartition("topic2", 0);
+        assertEquals(101, output.get("consumer1").get(t1p0).offset());
+        assertEquals(51, output.get("consumer2").get(t2p0).offset());
+    }
+    
+    @Test
+    public void testSyncOffsetTopicOutOfRetentionUpstream() {
+        // test scenario:
+        // 1. Create a topic with 1 partition on the source cluster, with short `retention.ms`
+        // 2. Create a consumer that consumes from the source topic
+        // 3. Send X messages to the source topic. These should get consumed by the source consumer
+        // 4. Offset for this consumer on source cluster should be X
+        // 5. Wait until the retention policy deletes the records
+        // 6. Start MM2 with `source->target.sync.group.offsets.enabled = true`
+        // 7. Observe on the target cluster that consumer offset should be 0, log-end-offset is 0, and lag is 0.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<TopicPartition, Long> topicPartitionEndOffset = new HashMap<>();
+        Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+
+        testSyncOffsetCommon(idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+        
+        TopicPartition t1p0 = new TopicPartition("topic1", 0);
+        TopicPartition t2p0 = new TopicPartition("topic2", 0);
+        // assume when mirrormaker starts, the messages from upstream topic have been deleted due to retention policy
+        // thus mirrormaker does not mirror any message, end offsets are 0
+        topicPartitionEndOffset.put(t1p0, 0L);
+        topicPartitionEndOffset.put(t2p0, 0L);
+        
+        // also downstream consumer does not have consumer info
+        idleConsumerGroupsOffset.clear();
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+            new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+        // due to no message is mirrored by mirrormaker and downstream consumer does not exist yet, sync offset to 0 to let 
+        // downstream consumer (auto.offset.reset) decide where to start consume in this case
+        assertEquals(0, output.get("consumer1").get(t1p0).offset());
+        assertEquals(0, output.get("consumer2").get(t2p0).offset());
+    }
+    
+    @Test
+    public void testSyncOffsetNewPartitionUpstream() {
+        // test scenario:
+        // 1. Alter the source topic by increasing number of partitions by 1
+        // 2. Create a consumer that consumes from the source topic
+        // 3. Send some messages to the source topic. Assume Y messages are consumed by the source consumer from new partition
+        // 4. Offset for this consumer on the new source partition should be Y
+        // 5. Wait until the retention policy deletes the records of source topic
+        // 6. Start MM2 with `source->target.sync.group.offsets.enabled = true`
+        // 7. Observe on the target cluster that consumer offset of the new partition should be 0, log-end-offset is 0, and lag is 0.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<TopicPartition, Long> topicPartitionEndOffset = new HashMap<>();
+        Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+
+        testSyncOffsetCommon(idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+        
+        // new partition from upstream cluster
+        TopicPartition t2p1 = new TopicPartition("topic2", 1);
+        // new partition from downstream cluster, assume just 60 messages are mirrored
+        topicPartitionEndOffset.put(t2p1, 60L);
+
+        // 'cpC2T2p1' denotes 'checkpoint' of topic2, partition1 for consumer 2
+        // assume 61 messages have been consumed from upstream cluster
+        Checkpoint cpC2T2P1 = new Checkpoint("consumer2", t2p1, 60, 61, "metadata");
+        checkpointsPerConsumerGroup.get("consumer2").add(cpC2T2P1);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+            new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup, topicPartitionEndOffset);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+        TopicPartition t1p0 = new TopicPartition("topic1", 0);
+        TopicPartition t2p0 = new TopicPartition("topic2", 0);
+        assertEquals(101, output.get("consumer1").get(t1p0).offset());
+        assertEquals(51, output.get("consumer2").get(t2p0).offset());
+        // due to converted offset (61) is larger than end offset of downstream topic, sync offset to 0 to let 
+        // downstream consumer (auto.offset.reset) decide where to start consume in this case
+        assertEquals(0, output.get("consumer2").get(t2p1).offset());
+    }
+    
+    private void testSyncOffsetCommon(Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset, 
+            Map<String, List<Checkpoint>> checkpointsPerConsumerGroup, Map<TopicPartition, Long> topicPartitionEndOffset) {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
@@ -92,16 +182,13 @@ public class MirrorCheckpointTaskTest {
         TopicPartition t2p0 = new TopicPartition(topic2, 0);
 
         c2t2.put(t2p0, new OffsetAndMetadata(50));
-
-        idleConsumerGroupsOffset.put(consumer1, c1t1);
-        idleConsumerGroupsOffset.put(consumer2, c2t2);
-
+        
         // 'cpC1T1P0' denotes 'checkpoint' of topic1, partition 0 for consumer1
-        Checkpoint cpC1T1P0 = new Checkpoint(consumer1, new TopicPartition(topic1, 0), 200, 101, "metadata");
+        Checkpoint cpC1T1P0 = new Checkpoint(consumer1, t1p0, 200, 101, "metadata");
 
         // 'cpC2T2p0' denotes 'checkpoint' of topic2, partition 0 for consumer2
-        Checkpoint cpC2T2P0 = new Checkpoint(consumer2, new TopicPartition(topic2, 0), 100, 51, "metadata");
-
+        Checkpoint cpC2T2P0 = new Checkpoint(consumer2, t2p0, 100, 51, "metadata");
+        
         // 'checkpointListC1' denotes 'checkpoint' list for consumer1
         List<Checkpoint> checkpointListC1 = new ArrayList<>();
         checkpointListC1.add(cpC1T1P0);
@@ -112,13 +199,11 @@ public class MirrorCheckpointTaskTest {
 
         checkpointsPerConsumerGroup.put(consumer1, checkpointListC1);
         checkpointsPerConsumerGroup.put(consumer2, checkpointListC2);
-
-        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
-
-        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
-
-        assertEquals(101, output.get(consumer1).get(t1p0).offset());
-        assertEquals(51, output.get(consumer2).get(t2p0).offset());
+        
+        idleConsumerGroupsOffset.put(consumer1, c1t1);
+        idleConsumerGroupsOffset.put(consumer2, c2t2);
+        
+        topicPartitionEndOffset.put(t1p0, 101L);
+        topicPartitionEndOffset.put(t2p0, 51L);
     }
 }

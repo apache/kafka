@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
@@ -63,25 +64,29 @@ public class MirrorCheckpointTask extends SourceTask {
     private MirrorMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
+    private Map<TopicPartition, Long> topicPartitionEndOffset;
     private Map<String, List<Checkpoint>> checkpointsPerConsumerGroup;
+    private MirrorTaskConfig config;
     public MirrorCheckpointTask() {}
 
     // for testing
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
-            Map<String, List<Checkpoint>> checkpointsPerConsumerGroup) {
+            Map<String, List<Checkpoint>> checkpointsPerConsumerGroup,
+            Map<TopicPartition, Long> topicPartitionEndOffset) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.offsetSyncStore = offsetSyncStore;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
+        this.topicPartitionEndOffset = topicPartitionEndOffset;
     }
 
     @Override
     public void start(Map<String, String> props) {
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        config = new MirrorTaskConfig(props);
         stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
@@ -96,8 +101,11 @@ public class MirrorCheckpointTask extends SourceTask {
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
+        topicPartitionEndOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
         scheduler = new Scheduler(MirrorCheckpointTask.class, config.adminTimeout());
+        scheduler.scheduleRepeating(this::refreshTopicPartitionEndOffset, config.syncGroupOffsetsInterval(),
+                "refreshing end offset of each topic partition pair at target cluster");
         scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                                     "refreshing idle consumers group offsets at target cluster");
         scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
@@ -243,6 +251,45 @@ public class MirrorCheckpointTask extends SourceTask {
             }
         }
     }
+    
+    private void refreshTopicPartitionEndOffset() {
+
+        Map<TopicPartition, Long> topicPartitionOffsets = new HashMap<>();
+        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : getConvertedUpstreamOffset().entrySet()) {
+            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = group.getValue();
+            for (Entry<TopicPartition, OffsetAndMetadata> offset : convertedUpstreamOffset.entrySet()) {
+                topicPartitionOffsets.put(offset.getKey(), offset.getValue().offset());
+            }
+        }
+        if (topicPartitionOffsets.keySet().size() != 0) {
+            KafkaConsumer<byte[], byte[]> consumer = MirrorUtils.newConsumer(config.targetConsumerConfig());
+            consumer.assign(topicPartitionOffsets.keySet());
+            topicPartitionOffsets.forEach(consumer::seek);
+            consumer.poll(Duration.ofMillis(500));
+            topicPartitionEndOffset = consumer.endOffsets(topicPartitionOffsets.keySet());
+            consumer.close();
+        }
+    }
+    
+    void updateOffsetToSync(TopicPartition topicPartition, OffsetAndMetadata convertedOffset, 
+            Map<TopicPartition, OffsetAndMetadata> offsetToSync) {
+        if (topicPartitionEndOffset.containsKey(topicPartition)) {
+            Long endOffset = topicPartitionEndOffset.get(topicPartition);
+            log.debug("convertedOffset = {}, endOffset = {}", convertedOffset.offset(), endOffset);
+            if (convertedOffset.offset() > endOffset) {
+                log.debug("Converted consumer offset {}, is larger than end offset {} for "
+                    + "TopicPartition {}. Reset consumer offset to 0", convertedOffset.offset(), 
+                    topicPartitionEndOffset.get(topicPartition), topicPartition);
+                offsetToSync.put(topicPartition, new OffsetAndMetadata(0));
+            } else {
+                offsetToSync.put(topicPartition, convertedOffset);
+            }
+        } else {
+            log.debug("End offset does not exist in target cluster for "
+                + "TopicPartition {}. Reset consumer offset to 0", topicPartition);
+            offsetToSync.put(topicPartition, new OffsetAndMetadata(0));
+        }
+    }
 
     Map<String, Map<TopicPartition, OffsetAndMetadata>> syncGroupOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetToSyncAll = new HashMap<>();
@@ -257,9 +304,14 @@ public class MirrorCheckpointTask extends SourceTask {
             Map<TopicPartition, OffsetAndMetadata> offsetToSync = new HashMap<>();
             Map<TopicPartition, OffsetAndMetadata> targetConsumerOffset = idleConsumerGroupsOffset.get(consumerGroupId);
             if (targetConsumerOffset == null) {
-                // this is a new consumer, just sync the offset to target
-                syncGroupOffset(consumerGroupId, convertedUpstreamOffset);
-                offsetToSyncAll.put(consumerGroupId, convertedUpstreamOffset);
+                // this is a new consumer, sync the offset to target
+                for (Entry<TopicPartition, OffsetAndMetadata> convertedEntry : convertedUpstreamOffset.entrySet()) {
+                    TopicPartition topicPartition = convertedEntry.getKey();
+                    OffsetAndMetadata convertedOffset = convertedUpstreamOffset.get(topicPartition);
+                    updateOffsetToSync(topicPartition, convertedOffset, offsetToSync);
+                }
+                syncGroupOffset(consumerGroupId, offsetToSync);
+                offsetToSyncAll.put(consumerGroupId, offsetToSync);
                 continue;
             }
 
@@ -268,8 +320,8 @@ public class MirrorCheckpointTask extends SourceTask {
                 TopicPartition topicPartition = convertedEntry.getKey();
                 OffsetAndMetadata convertedOffset = convertedUpstreamOffset.get(topicPartition);
                 if (!targetConsumerOffset.containsKey(topicPartition)) {
-                    // if is a new topicPartition from upstream, just sync the offset to target
-                    offsetToSync.put(topicPartition, convertedOffset);
+                    // if is a new topicPartition from upstream, sync the offset to target
+                    updateOffsetToSync(topicPartition, convertedOffset, offsetToSync);
                     continue;
                 }
 
@@ -281,7 +333,7 @@ public class MirrorCheckpointTask extends SourceTask {
                         + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
                     continue;
                 }
-                offsetToSync.put(topicPartition, convertedOffset);
+                updateOffsetToSync(topicPartition, convertedOffset, offsetToSync);
             }
 
             if (offsetToSync.size() == 0) {
@@ -293,6 +345,7 @@ public class MirrorCheckpointTask extends SourceTask {
             offsetToSyncAll.put(consumerGroupId, offsetToSync);
         }
         idleConsumerGroupsOffset.clear();
+        topicPartitionEndOffset.clear();
         return offsetToSyncAll;
     }
 

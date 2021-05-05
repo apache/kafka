@@ -256,6 +256,17 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
+    
+    Map<String, Object> targetConsumerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + CONSUMER_CLIENT_PREFIX));
+        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return props;
+    }
 
     Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions) {
         Map<String, String> props = originalsStrings();
