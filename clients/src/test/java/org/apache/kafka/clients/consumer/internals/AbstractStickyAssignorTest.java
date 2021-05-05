@@ -276,11 +276,11 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
         assertEquals(partitions(tp(topic2, 0)), assignment.get(consumer3));
 
-        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -309,11 +309,11 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
         assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer3));
 
-        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
