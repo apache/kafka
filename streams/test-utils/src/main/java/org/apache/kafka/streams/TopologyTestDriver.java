@@ -43,17 +43,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.StreamsProducer;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
-import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
@@ -71,9 +66,11 @@ import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -83,6 +80,9 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
+import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.TestRecord;
 import org.slf4j.Logger;
@@ -101,6 +101,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -113,7 +114,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -191,7 +192,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
  * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
  * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
- * trigger manually via {@link #advanceWallClockTime(long)}.
+ * trigger manually via {@link #advanceWallClockTime(Duration)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
  * {@link org.apache.kafka.streams.processor.Processor processors}.
@@ -281,23 +282,6 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Instant initialWallClockTimeMs) {
         this(topology, new Properties(), initialWallClockTimeMs);
-    }
-
-
-    /**
-     * Create a new test diver instance.
-     *
-     * @deprecated Since 2.4 use {@link #TopologyTestDriver(Topology, Properties, Instant)}
-     *
-     * @param topology               the topology to be tested
-     * @param config                 the configuration for the topology
-     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
-     */
-    @Deprecated
-    public TopologyTestDriver(final Topology topology,
-                              final Properties config,
-                              final long initialWallClockTimeMs) {
-        this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
     }
 
     /**
@@ -483,6 +467,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void setupTask(final StreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
                            final ThreadCache cache) {
@@ -552,25 +537,6 @@ public class TopologyTestDriver implements Closeable {
         return Collections.unmodifiableMap(metrics.metrics());
     }
 
-    /**
-     * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then
-     * commit the messages.
-     *
-     * @deprecated Since 2.4 use methods of {@link TestInputTopic} instead
-     *
-     * @param consumerRecord the record to be processed
-     */
-    @Deprecated
-    public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        pipeRecord(
-            consumerRecord.topic(),
-            consumerRecord.timestamp(),
-            consumerRecord.key(),
-            consumerRecord.value(),
-            consumerRecord.headers()
-        );
-    }
-
     private void pipeRecord(final String topicName,
                             final long timestamp,
                             final byte[] key,
@@ -606,12 +572,12 @@ public class TopologyTestDriver implements Closeable {
             offset,
             timestamp,
             TimestampType.CREATE_TIME,
-            (long) ConsumerRecord.NULL_CHECKSUM,
             key == null ? ConsumerRecord.NULL_SIZE : key.length,
             value == null ? ConsumerRecord.NULL_SIZE : value.length,
             key,
             value,
-            headers))
+            headers,
+            Optional.empty()))
         );
     }
 
@@ -645,7 +611,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_BETA) {
+        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
         } else {
             consumer.commitSync(offsets);
@@ -663,12 +629,12 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
-            (long) ConsumerRecord.NULL_CHECKSUM,
             key == null ? ConsumerRecord.NULL_SIZE : key.length,
             value == null ? ConsumerRecord.NULL_SIZE : value.length,
             key,
             value,
-            headers)
+            headers,
+            Optional.empty())
         );
         globalStateTask.flushState();
     }
@@ -737,34 +703,6 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Send input messages to the topology and then commit each message individually.
-     *
-     * @deprecated Since 2.4 use methods of {@link TestInputTopic} instead
-     *
-     * @param records a list of records to be processed
-     */
-    @Deprecated
-    public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            pipeInput(record);
-        }
-    }
-
-    /**
-     * Advances the internally mocked wall-clock time.
-     * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
-     *
-     * @deprecated Since 2.4 use {@link #advanceWallClockTime(Duration)} instead
-     *
-     * @param advanceMs the amount of time to advance wall-clock time in milliseconds
-     */
-    @Deprecated
-    public void advanceWallClockTime(final long advanceMs) {
-        advanceWallClockTime(Duration.ofMillis(advanceMs));
-    }
-
-    /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
      * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
@@ -780,48 +718,6 @@ public class TopologyTestDriver implements Closeable {
             task.postCommit(true);
         }
         completeAllProcessableWork();
-    }
-
-    /**
-     * Read the next record from the given topic.
-     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
-     *
-     * @deprecated Since 2.4 use methods of {@link TestOutputTopic} instead
-     *
-     * @param topic the name of the topic
-     * @return the next record on that topic, or {@code null} if there is no record available
-     */
-    @Deprecated
-    public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
-        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
-        if (outputRecords == null) {
-            return null;
-        }
-        return outputRecords.poll();
-    }
-
-    /**
-     * Read the next record from the given topic.
-     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
-     *
-     * @deprecated Since 2.4 use methods of {@link TestOutputTopic} instead
-     *
-     * @param topic             the name of the topic
-     * @param keyDeserializer   the deserializer for the key type
-     * @param valueDeserializer the deserializer for the value type
-     * @return the next record on that topic, or {@code null} if there is no record available
-     */
-    @Deprecated
-    public <K, V> ProducerRecord<K, V> readOutput(final String topic,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer) {
-        final ProducerRecord<byte[], byte[]> record = readOutput(topic);
-        if (record == null) {
-            return null;
-        }
-        final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
-        final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
-        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
@@ -965,7 +861,7 @@ public class TopologyTestDriver implements Closeable {
      * The stores can be a "regular" or global stores.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord)}  process an input message}, and/or to check the store afterward.
      * <p>
      * Note, that {@code StateStore} might be {@code null} if a store is added but not connected to any processor.
      * <p>
@@ -997,7 +893,7 @@ public class TopologyTestDriver implements Closeable {
      * For built-in stores, the corresponding typed methods like {@link #getKeyValueStore(String)} should be used.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the state store, or {@code null} if no store has been registered with the given name
@@ -1073,7 +969,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link #getTimestampedKeyValueStore(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the key value store, or {@code null} if no {@link KeyValueStore} or {@link TimestampedKeyValueStore}
@@ -1100,7 +996,7 @@ public class TopologyTestDriver implements Closeable {
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} has been registered with the given name
@@ -1126,7 +1022,7 @@ public class TopologyTestDriver implements Closeable {
      * {@link #getTimestampedWindowStore(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the key value store, or {@code null} if no {@link WindowStore} or {@link TimestampedWindowStore}
@@ -1153,7 +1049,7 @@ public class TopologyTestDriver implements Closeable {
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the key value store, or {@code null} if no {@link TimestampedWindowStore} has been registered with the given name
@@ -1175,7 +1071,7 @@ public class TopologyTestDriver implements Closeable {
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the key value store, or {@code null} if no {@link SessionStore} has been registered with the given name
@@ -1360,13 +1256,6 @@ public class TopologyTestDriver implements Closeable {
             inner.init(context, root);
         }
 
-        @Deprecated
-        @Override
-        public void put(final K key,
-                        final V value) {
-            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
-        }
-
         @Override
         public void put(final K key,
                         final V value,
@@ -1375,10 +1264,26 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
+        public WindowStoreIterator<V> fetch(final K key,
+                                            final long timeFrom,
+                                            final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
         public WindowStoreIterator<V> backwardFetch(final K key,
                                                     final long timeFrom,
                                                     final long timeTo) {
             return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
+                                                      final long timeFrom,
+                                                      final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom),
+                Instant.ofEpochMilli(timeTo));
         }
 
         @Override
@@ -1390,7 +1295,14 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) {
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
             return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
         }
 
@@ -1425,7 +1337,7 @@ public class TopologyTestDriver implements Closeable {
         public TestDriverProducer(final StreamsConfig config,
                                   final KafkaClientSupplier clientSupplier,
                                   final LogContext logContext) {
-            super(config, "TopologyTestDriver-Thread", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
         }
 
         @Override

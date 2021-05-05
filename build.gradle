@@ -30,14 +30,15 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.10.2'
-  id 'com.github.ben-manes.versions' version '0.36.0'
+  id 'com.diffplug.spotless' version '5.12.4'
+  id 'com.github.ben-manes.versions' version '0.38.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '6.1.1'
+  id 'org.owasp.dependencycheck' version '6.1.6'
+  id 'org.nosphere.apache.rat' version "0.7.0"
 
-  id "com.github.spotbugs" version '4.6.0' apply false
-  id 'org.gradle.test-retry' version '1.2.0' apply false
+  id "com.github.spotbugs" version '4.7.1' apply false
+  id 'org.gradle.test-retry' version '1.2.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '6.1.0' apply false
 }
@@ -46,6 +47,7 @@ spotless {
   scala {
     target 'streams/**/*.scala'
     scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
+    licenseHeaderFile 'checkstyle/java.header', 'package'
   }
 }
 
@@ -134,8 +136,11 @@ ext {
 apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
-  apply from: file('gradle/rat.gradle')
   rat {
+    verbose = true
+    reportDir.set(project.file('build/rat'))
+    stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
+
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
     def repo = Grgit.open(currentDir: project.getRootDir())
@@ -157,11 +162,14 @@ if (file('.git').exists()) {
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
         'streams/streams-scala/logs/*',
-        '**/generated/**'
+        'licenses/*',
+        '**/generated/**',
+        'clients/src/test/resources/serializedData/*'
     ])
   }
+} else {
+  rat.enabled = false
 }
-
 println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 
 subprojects {
@@ -420,7 +428,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -753,7 +761,7 @@ tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" 
 
 project(':core') {
   apply plugin: 'scala'
-  
+
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
   // for the `core` module, this ensures the generated jar doesn't include scaladoc
@@ -773,6 +781,7 @@ project(':core') {
 
     implementation project(':metadata')
     implementation project(':raft')
+    implementation project(':storage')
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -966,13 +975,18 @@ project(':core') {
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
     from(project.file("$rootDir/config")) { into "config/" }
-    from "$rootDir/LICENSE"
+    from(project.file("$rootDir/licenses")) { into "licenses/" }
+    from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
     from "$rootDir/NOTICE"
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':trogdor').jar) { into("libs/") }
+    from(project(':trogdor').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':shell').jar) { into("libs/") }
+    from(project(':shell').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:api').jar) { into("libs/") }
     from(project(':connect:api').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:runtime').jar) { into("libs/") }
@@ -989,6 +1003,10 @@ project(':core') {
     from(project(':connect:mirror').configurations.runtimeClasspath) { into("libs/") }
     from(project(':connect:mirror-client').jar) { into("libs/") }
     from(project(':connect:mirror-client').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':storage').jar) { into("libs/") }
+    from(project(':storage').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':storage:api').jar) { into("libs/") }
+    from(project(':storage:api').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:streams-scala').jar) { into("libs/") }
@@ -1028,9 +1046,13 @@ project(':core') {
   }
 
   sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/generated/java", "src/main/java", "src/main/scala"]
       }
     }
     test {
@@ -1238,7 +1260,6 @@ project(':clients') {
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
-    include "**/org/apache/kafka/server/log/remote/storage/*"
   }
 }
 
@@ -1299,7 +1320,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -1324,8 +1345,189 @@ project(':raft') {
   }
 }
 
+project(':storage:api') {
+  archivesBaseName = "kafka-storage-api"
+
+  dependencies {
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/server/log/remote/storage/*"
+  }
+}
+
+project(':storage') {
+  archivesBaseName = "kafka-storage"
+
+  dependencies {
+    implementation project(':storage:api')
+    implementation project(':clients')
+    implementation project(':metadata')
+    implementation project(':raft')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
+             "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
+             "-i", "src/main/resources/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
+    inputs.dir("src/main/resources/message")
+    outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':tools') {
   archivesBaseName = "kafka-tools"
+
+  dependencies {
+    implementation project(':clients')
+    implementation project(':log4j-appender')
+    implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
+    implementation libs.slf4jApi
+    implementation libs.log4j
+
+    implementation libs.jacksonJaxrsJsonProvider
+
+    testImplementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntimeClasspath) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':trogdor') {
+  archivesBaseName = "trogdor"
 
   dependencies {
     implementation project(':clients')
@@ -1423,18 +1625,9 @@ project(':streams') {
 
   dependencies {
     api project(':clients')
-
-    // use `api` dependency for `connect-json` for compatibility (e.g. users who use `JsonSerializer`/`JsonDeserializer`
-    // at compile-time without an explicit dependency on `connect-json`)
-    // this dependency should be removed after we unify data API
-    api(project(':connect:json')) {
-      // this transitive dependency is not used in Streams, and it breaks SBT builds
-      exclude module: 'javax.ws.rs-api'
-    }
-    
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
-    
+
     implementation libs.slf4jApi
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
@@ -1490,11 +1683,6 @@ project(':streams') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
-      include('*hamcrest*')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -1640,8 +1828,14 @@ project(':streams:examples') {
   archivesBaseName = "kafka-streams-examples"
 
   dependencies {
+    // this dependency should be removed after we unify data API
+    implementation(project(':connect:json')) {
+      // this transitive dependency is not used in Streams, and it breaks SBT builds
+      exclude module: 'javax.ws.rs-api'
+    }
+
     implementation project(':streams')
-    implementation project(':connect:json')  // this dependency should be removed after we unify data API
+
     implementation libs.slf4jlog4j
 
     testImplementation project(':streams:test-utils')

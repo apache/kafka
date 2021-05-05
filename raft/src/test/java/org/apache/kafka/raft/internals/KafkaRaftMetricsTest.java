@@ -29,6 +29,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -49,6 +50,8 @@ public class KafkaRaftMetricsTest {
     private final Metrics metrics = new Metrics(time);
     private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
+
+    private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
 
     @AfterEach
     public void tearDown() {
@@ -92,7 +95,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.candidateStateOrThrow().recordGrantedVote(1);
-        state.transitionToLeader(2L);
+        state.transitionToLeader(2L, accumulator);
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());

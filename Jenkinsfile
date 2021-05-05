@@ -17,28 +17,27 @@
  *
  */
 
-def setupGradle() {
-  // Delete gradle cache to workaround cache corruption bugs, see KAFKA-3167
-  dir('.gradle') {
-    deleteDir()
-  }
-  sh './gradlew -version'
-}
-
 def doValidation() {
-  sh '''
+  sh """
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
-  '''
+  """
 }
 
-def doTest(target = "unitTest integrationTest") {
-  sh """
-    ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-        --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-        -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-  """
+def isChangeRequest(env) {
+  env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
+}
+
+def retryFlagsString(env) {
+    if (isChangeRequest(env)) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
+    else ""
+}
+
+def doTest(env, target = "unitTest integrationTest") {
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+      --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
+      -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -95,10 +94,16 @@ def tryStreamsArchetype() {
 
 pipeline {
   agent none
+  
+  options {
+    disableConcurrentBuilds()
+  }
+  
   stages {
     stage('Build') {
       parallel {
-        stage('JDK 8') {
+
+        stage('JDK 8 and Scala 2.12') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_1.8_latest'
@@ -112,14 +117,13 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             tryStreamsArchetype()
           }
         }
 
-        stage('JDK 11') {
+        stage('JDK 11 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_11_latest'
@@ -132,14 +136,13 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
-       
-        stage('JDK 15') {
+
+        stage('JDK 15 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_15_latest'
@@ -152,9 +155,8 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
@@ -169,12 +171,101 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest('unitTest')
+              doTest(env, 'unitTest')
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
+          }
+        }
+        
+        // To avoid excessive Jenkins resource usage, we only run the stages
+        // above at the PR stage. The ones below are executed after changes
+        // are pushed to trunk and/or release branches. We achieve this via
+        // the `when` clause.
+        
+        stage('JDK 8 and Scala 2.13') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            tryStreamsArchetype()
+          }
+        }
+
+        stage('JDK 11 and Scala 2.12') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
+
+        stage('JDK 15 and Scala 2.12') {
+          when {
+            not { changeRequest() }
+            beforeAgent true
+          }
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_15_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 15'
+          }
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      node('ubuntu') {
+        script {
+          if (!isChangeRequest(env)) {
+            step([$class: 'Mailer',
+                 notifyEveryUnstableBuild: true,
+                 recipients: "dev@kafka.apache.org",
+                 sendToIndividuals: false])
           }
         }
       }

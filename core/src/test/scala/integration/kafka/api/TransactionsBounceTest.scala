@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
@@ -71,6 +72,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   override protected def brokerCount: Int = 4
 
+  @nowarn("cat=deprecation")
   @Test
   def testWithGroupId(): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>

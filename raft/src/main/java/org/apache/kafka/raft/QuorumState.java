@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -146,7 +147,8 @@ public class QuorumState {
                 logEndOffsetAndEpoch.epoch,
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs()
+                randomElectionTimeoutMs(),
+                logContext
             );
         } else if (localId.isPresent() && election.isLeader(localId.getAsInt())) {
             // If we were previously a leader, then we will start out as resigned
@@ -161,7 +163,8 @@ public class QuorumState {
                 election.epoch,
                 voters,
                 randomElectionTimeoutMs(),
-                Collections.emptyList()
+                Collections.emptyList(),
+                logContext
             );
         } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt())) {
             initialState = new CandidateState(
@@ -171,7 +174,8 @@ public class QuorumState {
                 voters,
                 Optional.empty(),
                 1,
-                randomElectionTimeoutMs()
+                randomElectionTimeoutMs(),
+                logContext
             );
         } else if (election.hasVoted()) {
             initialState = new VotedState(
@@ -180,7 +184,8 @@ public class QuorumState {
                 election.votedId(),
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs()
+                randomElectionTimeoutMs(),
+                logContext
             );
         } else if (election.hasLeader()) {
             initialState = new FollowerState(
@@ -189,7 +194,8 @@ public class QuorumState {
                 election.leaderId(),
                 voters,
                 Optional.empty(),
-                fetchTimeoutMs
+                fetchTimeoutMs,
+                logContext
             );
         } else {
             initialState = new UnattachedState(
@@ -197,7 +203,8 @@ public class QuorumState {
                 election.epoch,
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs()
+                randomElectionTimeoutMs(),
+                logContext
             );
         }
 
@@ -271,7 +278,8 @@ public class QuorumState {
             epoch,
             voters,
             randomElectionTimeoutMs(),
-            preferredSuccessors
+            preferredSuccessors,
+            logContext
         );
         log.info("Completed transition to {}", state);
     }
@@ -305,7 +313,8 @@ public class QuorumState {
             epoch,
             voters,
             state.highWatermark(),
-            electionTimeoutMs
+            electionTimeoutMs,
+            logContext
         ));
     }
 
@@ -348,7 +357,8 @@ public class QuorumState {
             candidateId,
             voters,
             state.highWatermark(),
-            randomElectionTimeoutMs()
+            randomElectionTimeoutMs(),
+            logContext
         ));
     }
 
@@ -383,7 +393,8 @@ public class QuorumState {
             leaderId,
             voters,
             state.highWatermark(),
-            fetchTimeoutMs
+            fetchTimeoutMs,
+            logContext
         ));
     }
 
@@ -407,11 +418,12 @@ public class QuorumState {
             voters,
             state.highWatermark(),
             retries,
-            electionTimeoutMs
+            electionTimeoutMs,
+            logContext
         ));
     }
 
-    public void transitionToLeader(long epochStartOffset) throws IOException {
+    public <T> LeaderState<T> transitionToLeader(long epochStartOffset, BatchAccumulator<T> accumulator) throws IOException {
         if (isObserver()) {
             throw new IllegalStateException("Cannot transition to Leader since the local broker.id="  + localId +
                 " is not one of the voters " + voters);
@@ -434,14 +446,17 @@ public class QuorumState {
         // could address this problem by decoupling the local high watermark, but
         // we typically expect the state machine to be caught up anyway.
 
-        transitionTo(new LeaderState(
+        LeaderState<T> state = new LeaderState<>(
             localIdOrThrow(),
             epoch(),
             epochStartOffset,
             voters,
             candidateState.grantingVoters(),
+            accumulator,
             logContext
-        ));
+        );
+        transitionTo(state);
+        return state;
     }
 
     private void transitionTo(EpochState state) throws IOException {
@@ -458,6 +473,10 @@ public class QuorumState {
         if (electionTimeoutMs == 0)
             return 0;
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
+    }
+
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        return state.canGrantVote(candidateId, isLogUpToDate);
     }
 
     public FollowerState followerStateOrThrow() {
@@ -478,9 +497,10 @@ public class QuorumState {
         throw new IllegalStateException("Expected to be Unattached, but current state is " + state);
     }
 
-    public LeaderState leaderStateOrThrow() {
+    @SuppressWarnings("unchecked")
+    public <T> LeaderState<T> leaderStateOrThrow() {
         if (isLeader())
-            return (LeaderState) state;
+            return (LeaderState<T>) state;
         throw new IllegalStateException("Expected to be Leader, but current state is " + state);
     }
 

@@ -437,11 +437,10 @@ public class MemoryRecordsBuilderTest {
                 TimestampType.CREATE_TIME, 0L, LegacyRecord.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        Long checksumOrNull = builder.append(1L, "key".getBytes(), "value".getBytes());
+        builder.append(1L, "key".getBytes(), "value".getBytes());
         MemoryRecords memoryRecords = builder.build();
         List<Record> records = TestUtils.toList(memoryRecords.records());
         assertEquals(1, records.size());
-        assertEquals(checksumOrNull, records.get(0).checksumOrNull());
     }
 
     @ParameterizedTest

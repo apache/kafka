@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,6 +21,7 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.kstream.{
   SessionWindows,
+  SlidingWindows,
   Window,
   Windows,
   KGroupedStream => KGroupedStreamJ,
@@ -156,6 +154,16 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
    */
   def windowedBy[W <: Window](windows: Windows[W]): TimeWindowedKStream[K, V] =
+    new TimeWindowedKStream(inner.windowedBy(windows))
+
+  /**
+   * Create a new [[TimeWindowedKStream]] instance that can be used to perform sliding windowed aggregations.
+   *
+   * @param windows the specification of the aggregation `SlidingWindows`
+   * @return an instance of [[TimeWindowedKStream]]
+   * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
+   */
+  def windowedBy(windows: SlidingWindows): TimeWindowedKStream[K, V] =
     new TimeWindowedKStream(inner.windowedBy(windows))
 
   /**

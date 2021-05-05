@@ -100,19 +100,45 @@ class LogCleanerTest {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024 : java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
     val topicPartition = Log.parseTopicPartitionName(dir)
-    val producerStateManager = new ProducerStateManager(topicPartition, dir)
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val logSegments = new LogSegments(topicPartition)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion)
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val offsets = LogLoader.load(LoadLogParams(
+      dir,
+      topicPartition,
+      config,
+      time.scheduler,
+      time,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      logSegments,
+      0L,
+      0L,
+      maxProducerIdExpirationMs,
+      leaderEpochCache,
+      producerStateManager))
+
     val log = new Log(dir,
-                      config = LogConfig.fromProps(logConfig.originals, logProps),
-                      logStartOffset = 0L,
-                      recoveryPoint = 0L,
+                      config = config,
+                      segments = logSegments,
+                      logStartOffset = offsets.logStartOffset,
+                      recoveryPoint = offsets.recoveryPoint,
+                      nextOffsetMetadata = offsets.nextOffsetMetadata,
                       scheduler = time.scheduler,
-                      brokerTopicStats = new BrokerTopicStats, time,
-                      maxProducerIdExpirationMs = 60 * 60 * 1000,
+                      brokerTopicStats = new BrokerTopicStats,
+                      time,
+                      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       topicPartition = topicPartition,
+                      leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
-                      logDirFailureChannel = new LogDirFailureChannel(10)) {
+                      logDirFailureChannel = logDirFailureChannel,
+                      topicId = None,
+                      keepPartitionMetadataFile = true) {
       override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
@@ -1368,7 +1394,7 @@ class LogCleanerTest {
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
     }
     log = recoverAndCheck(config, allKeys)
 
@@ -1384,7 +1410,7 @@ class LogCleanerTest {
     //    renamed to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")), false)
     }
     log = recoverAndCheck(config, cleanedKeys)
 
@@ -1674,7 +1700,7 @@ class LogCleanerTest {
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
 
   private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,
@@ -1753,7 +1779,7 @@ class LogCleanerTest {
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
   private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
-    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
+    LogTestUtils.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 }
 

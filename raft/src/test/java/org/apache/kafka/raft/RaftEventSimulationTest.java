@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -34,9 +35,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.junit.jupiter.api.Tag;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -53,14 +54,15 @@ import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-
 
 /**
  * The simulation testing framework provides a way to verify quorum behavior under
@@ -83,19 +85,11 @@ import static org.junit.jupiter.api.Assertions.fail;
  * period, followed by some cluster event (such as a node failure), and then some
  * logic to validate behavior after recovery.
  *
- * If any of the tests fail on a particular seed, the easiest way to reproduce
- * the failure is to change the `@Property` annotation to specify the failing seed.
- * For example:
- *
- * <pre>
- * {@code
- * @Property(tries = 1, seed = "-590031835267299290", shrinking = ShrinkingMode.OFF)
- * }
- * </pre>
- *
- * (Note that we disable parameter shrinking since it is not too useful for simulation
- * failures and this allows us to isolate a single execution, which makes the logging
- * more useful if enabled.)
+ * If any of the tests fail, the output will indicate the arguments that failed.
+ * The easiest way to reproduce the failure for debugging is to create a separate
+ * `@Test` case which invokes the `@Property` method with those arguments directly.
+ * This ensures that logging output will only include output from a single
+ * simulation execution.
  */
 @Tag("integration")
 public class RaftEventSimulationTest {
@@ -110,10 +104,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectInitialLeader(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -128,11 +123,12 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectNewLeaderAfterOldLeaderFailure(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers,
         @ForAll boolean isGracefulShutdown
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -167,10 +163,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canRecoverAfterAllNodesKilled(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -199,10 +196,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canElectNewLeaderAfterOldLeaderPartitionedAway(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -230,10 +228,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canMakeProgressIfMajorityIsReachable(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
     ) {
         int numVoters = 5;
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -274,10 +273,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canMakeProgressAfterBackToBackLeaderFailures(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 5) int numObservers
     ) {
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -306,13 +306,14 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100)
     void canRecoverFromSingleNodeCommittedDataLoss(
-        @ForAll Random random,
+        @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 2) int numObservers
     ) {
         // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
         // invariants since the loss of committed data on one node can violate them.
 
+        Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random);
         EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
         scheduler.addInvariant(new MonotonicHighWatermark(cluster));
@@ -349,6 +350,7 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new MonotonicEpoch(cluster));
         scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
         scheduler.addInvariant(new SingleLeader(cluster));
+        scheduler.addInvariant(new SnapshotAtLogStart(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
@@ -494,7 +496,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final MockLog log = new MockLog(METADATA_PARTITION);
+        final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID);
     }
 
     private static class Cluster {
@@ -719,7 +721,8 @@ public class RaftEventSimulationTest {
                 persistentState.store,
                 logContext,
                 time,
-                random
+                random,
+                serde
             );
             node.initialize();
             running.put(nodeId, node);
@@ -737,6 +740,7 @@ public class RaftEventSimulationTest {
         final ReplicatedCounter counter;
         final Time time;
         final Random random;
+        final RecordSerde<Integer> intSerde;
 
         private RaftNode(
             int nodeId,
@@ -747,7 +751,8 @@ public class RaftEventSimulationTest {
             MockQuorumStateStore store,
             LogContext logContext,
             Time time,
-            Random random
+            Random random,
+            RecordSerde<Integer> intSerde
         ) {
             this.nodeId = nodeId;
             this.client = client;
@@ -759,15 +764,12 @@ public class RaftEventSimulationTest {
             this.time = time;
             this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
+            this.intSerde = intSerde;
         }
 
         void initialize() {
-            try {
-                client.register(this.counter);
-                client.initialize();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            client.register(this.counter);
+            client.initialize();
         }
 
         void poll() {
@@ -965,6 +967,52 @@ public class RaftEventSimulationTest {
         }
     }
 
+    private static class SnapshotAtLogStart implements Invariant {
+        final Cluster cluster;
+
+        private SnapshotAtLogStart(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                int nodeId = nodeEntry.getKey();
+                ReplicatedLog log = nodeEntry.getValue().log;
+                log.earliestSnapshotId().ifPresent(earliestSnapshotId  -> {
+                    long logStartOffset = log.startOffset();
+                    ValidOffsetAndEpoch validateOffsetAndEpoch = log.validateOffsetAndEpoch(
+                        earliestSnapshotId.offset,
+                        earliestSnapshotId.epoch
+                    );
+
+                    assertTrue(
+                        logStartOffset <= earliestSnapshotId.offset,
+                        () -> String.format(
+                            "invalid log start offset (%s) and snapshotId offset (%s): nodeId = %s",
+                            logStartOffset,
+                            earliestSnapshotId.offset,
+                            nodeId
+                        )
+                    );
+                    assertEquals(
+                        ValidOffsetAndEpoch.valid(earliestSnapshotId),
+                        validateOffsetAndEpoch,
+                        () -> String.format("invalid leader epoch cache: nodeId = %s", nodeId)
+                    );
+
+                    if (logStartOffset > 0) {
+                        assertEquals(
+                            logStartOffset,
+                            earliestSnapshotId.offset,
+                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                        );
+                    }
+                });
+            }
+        }
+    }
+
     /**
      * Validating the committed data is expensive, so we do this as a {@link Validation}. We depend
      * on the following external invariants:
@@ -988,14 +1036,44 @@ public class RaftEventSimulationTest {
             return (int) Type.INT32.read(value);
         }
 
-        private void assertCommittedData(int nodeId, KafkaRaftClient<Integer> manager, MockLog log) {
+        private void assertCommittedData(RaftNode node) {
+            final int nodeId = node.nodeId;
+            final KafkaRaftClient<Integer> manager = node.client;
+            final MockLog log = node.log;
+
             OptionalLong highWatermark = manager.highWatermark();
             if (!highWatermark.isPresent()) {
                 // We cannot do validation if the current high watermark is unknown
                 return;
             }
 
-            for (LogBatch batch : log.readBatches(0L, highWatermark)) {
+            AtomicLong startOffset = new AtomicLong(0);
+            log.earliestSnapshotId().ifPresent(snapshotId -> {
+                assertTrue(snapshotId.offset <= highWatermark.getAsLong());
+                startOffset.set(snapshotId.offset);
+
+                try (SnapshotReader<Integer> snapshot =
+                        SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                    // Expect only one batch with only one record
+                    assertTrue(snapshot.hasNext());
+                    Batch<Integer> batch = snapshot.next();
+                    assertFalse(snapshot.hasNext());
+                    assertEquals(1, batch.records().size());
+
+                    // The snapshotId offset is an "end offset"
+                    long offset = snapshotId.offset - 1;
+                    int sequence = batch.records().get(0);
+                    committedSequenceNumbers.putIfAbsent(offset, sequence);
+
+                    assertEquals(
+                        committedSequenceNumbers.get(offset),
+                        sequence,
+                        String.format("Committed sequence at offset %s changed on node %s", offset, nodeId)
+                    );
+                }
+            });
+
+            for (LogBatch batch : log.readBatches(startOffset.get(), highWatermark)) {
                 if (batch.isControlBatch) {
                     continue;
                 }
@@ -1017,7 +1095,7 @@ public class RaftEventSimulationTest {
 
         @Override
         public void validate() {
-            cluster.forAllRunning(node -> assertCommittedData(node.nodeId, node.client, node.log));
+            cluster.forAllRunning(this::assertCommittedData);
         }
     }
 
