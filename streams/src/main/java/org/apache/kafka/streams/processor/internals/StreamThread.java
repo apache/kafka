@@ -903,16 +903,13 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
-        final Map<TopicPartition, Long> offsets = new HashMap<>();
         for (final TopicPartition topicPartition: records.partitions()) {
             records
                 .records(topicPartition)
                 .stream()
                 .max(Comparator.comparing(ConsumerRecord::offset))
-                .ifPresent(t -> offsets.put(topicPartition, t.offset()));
+                .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
-
-        taskManager.updateTaskEndMetadata(offsets);
 
         log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 

@@ -1162,12 +1162,10 @@ public class TaskManager {
         }
     }
 
-    public void updateTaskEndMetadata(final Map<TopicPartition, Long> offsets) {
+    public void updateTaskEndMetadata(final TopicPartition topicPartition, final Long offset) {
         for (final Task task: tasks.activeTasks()) {
-            for (final TopicPartition topicPartition: task.inputPartitions()) {
-                if (offsets.containsKey(topicPartition)) {
-                    task.updateEndOffsets(topicPartition, offsets.get(topicPartition));
-                }
+            if (task.inputPartitions().contains(topicPartition)) {
+                task.updateEndOffsets(topicPartition, offset);
             }
         }
     }
