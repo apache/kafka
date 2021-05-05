@@ -805,8 +805,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                       final boolean passed) {
             if (!passed) {
                 if (failures != null) {
-                    final StringBuffer description = new StringBuffer(failures);
-                    description.append("\n" + message);
+                    failures.append("\n").append(message);
                 }
                 pass.set(false);
             }
