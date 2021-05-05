@@ -144,18 +144,7 @@ class KStreamImplJoin {
 
         Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
         if (leftOuter) {
-            final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
-
-            // Get the suffix index of the joinThisGeneratedName to build the outer join store name.
-            final String outerJoinStoreGeneratedName = KStreamImpl.OUTERSHARED_NAME
-                + joinThisGeneratedName.substring(
-                    rightOuter
-                        ? KStreamImpl.OUTERTHIS_NAME.length()
-                        : KStreamImpl.JOINTHIS_NAME.length());
-
-            final String outerJoinStoreName = userProvidedBaseStoreName == null ? outerJoinStoreGeneratedName : userProvidedBaseStoreName + outerJoinSuffix;
-
-            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(outerJoinStoreName, windows, streamJoinedInternal));
+            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(windows, streamJoinedInternal, joinThisGeneratedName));
         }
 
         // Time shared between joins to keep track of the maximum stream time
@@ -263,20 +252,57 @@ class KStreamImplJoin {
         return builder;
     }
 
+    private <K, V1, V2> String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
+        final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
+
+        if (streamJoinedInternal.thisStoreSupplier() != null && !streamJoinedInternal.thisStoreSupplier().name().isEmpty()) {
+            return streamJoinedInternal.thisStoreSupplier().name() + outerJoinSuffix;
+        } else if (streamJoinedInternal.storeName() != null) {
+            return streamJoinedInternal.storeName() + outerJoinSuffix;
+        } else {
+            return KStreamImpl.OUTERSHARED_NAME
+                + joinThisGeneratedName.substring(
+                rightOuter
+                    ? KStreamImpl.OUTERTHIS_NAME.length()
+                    : KStreamImpl.JOINTHIS_NAME.length());
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private static <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final String storeName,
-                                                                                                                                        final JoinWindows windows,
-                                                                                                                                        final StreamJoinedInternal<K, V1, V2> streamJoinedInternal) {
-        final StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder = new TimeOrderedWindowStoreBuilder<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>(
-            persistentTimeOrderedWindowStore(
-                storeName + "-store",
-                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
-                Duration.ofMillis(windows.size())
-            ),
-            new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde()),
-            new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde()),
-            Time.SYSTEM
-        );
+    private <K, V1, V2> StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
+                                                                                                                                 final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+                                                                                                                                 final String joinThisGeneratedName) {
+        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
+        final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName);
+
+        final KeyAndJoinSideSerde keyAndJoinSideSerde = new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde());
+        final LeftOrRightValueSerde leftOrRightValueSerde = new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde());
+
+        final StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder;
+        if (persistent) {
+            builder = new TimeOrderedWindowStoreBuilder<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>(
+                persistentTimeOrderedWindowStore(
+                    storeName + "-store",
+                    Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                    Duration.ofMillis(windows.size())
+                ),
+                keyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+        } else {
+            builder = Stores.windowStoreBuilder(
+                Stores.inMemoryWindowStore(
+                    storeName + "-store",
+                    Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                    Duration.ofMillis(windows.size()),
+                    false
+                ),
+                keyAndJoinSideSerde,
+                leftOrRightValueSerde
+            );
+        }
+
         if (streamJoinedInternal.loggingEnabled()) {
             builder.withLoggingEnabled(streamJoinedInternal.logConfig());
         } else {

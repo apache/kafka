@@ -30,6 +30,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -429,7 +431,32 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
-    public void testLeftJoin() {
+    public void testLeftJoinWithInMemoryCustomSuppliers() {
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store-other",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
+
+        runLeftJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+    }
+
+    @Test
+    public void testLeftJoinWithDefaultSuppliers() {
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+        final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
+
+        runLeftJoin(streamJoined, joinWindows);
+    }
+
+    public void runLeftJoin(final StreamJoined<Integer, String, String> streamJoined,
+                            final JoinWindows joinWindows) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -444,8 +471,8 @@ public class KStreamKStreamLeftJoinTest {
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            joinWindows,
+            streamJoined);
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
