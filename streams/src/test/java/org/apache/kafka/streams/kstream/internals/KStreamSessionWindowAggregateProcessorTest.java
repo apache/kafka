@@ -386,7 +386,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        setup(builtInMetricsVersion, true);
+        setup(builtInMetricsVersion, false);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
         );
