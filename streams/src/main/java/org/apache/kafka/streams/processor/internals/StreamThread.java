@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
@@ -52,6 +53,8 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -899,6 +902,17 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
+
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+        for (final TopicPartition topicPartition: records.partitions()) {
+            records
+                .records(topicPartition)
+                .stream()
+                .max(Comparator.comparing(ConsumerRecord::offset))
+                .ifPresent(t -> offsets.put(topicPartition, t.offset()));
+        }
+
+        taskManager.updateTaskEndMetadata(offsets);
 
         log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 

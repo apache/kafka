@@ -3473,6 +3473,10 @@ public class TaskManagerTest {
         }
 
         @Override
+        public void updateEndOffsets(final TopicPartition topicPartition, final Long offset) {
+        }
+
+        @Override
         public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
             if (isActive()) {
                 final Deque<ConsumerRecord<byte[], byte[]>> partitionQueue =

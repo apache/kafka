@@ -198,6 +198,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         this.committedOffsets = new HashMap<>();
         this.highWatermark = new HashMap<>();
+        for (final TopicPartition topicPartition: inputPartitions) {
+            this.committedOffsets.put(topicPartition, -1L);
+            this.highWatermark.put(topicPartition, -1L);
+        }
         this.timeCurrentIdlingStarted = Optional.empty();
     }
 
@@ -1173,7 +1177,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public Map<TopicPartition, Long> highWaterMark() {
-        highWatermark.putAll(recordCollector.offsets());
         return Collections.unmodifiableMap(highWatermark);
     }
 
@@ -1191,6 +1194,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
         committedOffsets.put(topicPartition, offset);
+    }
+
+    @Override
+    public void updateEndOffsets(final TopicPartition topicPartition, final Long offset) {
+        highWatermark.put(topicPartition, offset);
     }
 
     public boolean hasRecordsQueued() {

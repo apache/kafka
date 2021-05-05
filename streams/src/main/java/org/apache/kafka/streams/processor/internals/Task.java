@@ -255,4 +255,9 @@ public interface Task {
      * @param offset
      */
     void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset);
+
+    /**
+     * Update the end offsets in the Task with the latest consumer lag
+     */
+    void updateEndOffsets(final TopicPartition topicPartition, final Long offset);
 }

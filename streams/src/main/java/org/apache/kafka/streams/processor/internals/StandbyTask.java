@@ -14,7 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.internals;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -28,11 +34,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * A StandbyTask
@@ -299,6 +300,11 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+
+    }
+
+    @Override
+    public void updateEndOffsets(final TopicPartition topicPartition, final Long offset) {
 
     }
 

@@ -1091,7 +1091,7 @@ public class TaskManager {
                     try {
                         tasks.streamsProducerForTask(task.id())
                             .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
-                        updateTaskMetadata(taskToCommit.getValue());
+                        this.updateTaskCommitMetadata(taskToCommit.getValue());
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task %s failed.", task.id()),
@@ -1107,7 +1107,7 @@ public class TaskManager {
                 if (processingMode == EXACTLY_ONCE_V2) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
-                        updateTaskMetadata(allOffsets);
+                        this.updateTaskCommitMetadata(allOffsets);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task(s) %s failed.",
@@ -1125,7 +1125,7 @@ public class TaskManager {
                 } else {
                     try {
                         mainConsumer.commitSync(allOffsets);
-                        updateTaskMetadata(allOffsets);
+                        this.updateTaskCommitMetadata(allOffsets);
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
                                                             "indicating the corresponding thread is no longer part of the group", error);
@@ -1152,7 +1152,7 @@ public class TaskManager {
         }
     }
 
-    private void updateTaskMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
+    private void updateTaskCommitMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
         for (final Task task: tasks.activeTasks()) {
             for (final TopicPartition topicPartition: task.inputPartitions()) {
                 if (allOffsets.containsKey(topicPartition)) {
@@ -1161,6 +1161,17 @@ public class TaskManager {
             }
         }
     }
+
+    public void updateTaskEndMetadata(final Map<TopicPartition, Long> offsets) {
+        for (final Task task: tasks.activeTasks()) {
+            for (final TopicPartition topicPartition: task.inputPartitions()) {
+                if (offsets.containsKey(topicPartition)) {
+                    task.updateEndOffsets(topicPartition, offsets.get(topicPartition));
+                }
+            }
+        }
+    }
+
 
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
