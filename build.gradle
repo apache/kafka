@@ -1411,6 +1411,8 @@ project(':storage') {
   dependencies {
     implementation project(':storage:api')
     implementation project(':clients')
+    implementation project(':metadata')
+    implementation project(':raft')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
@@ -1438,18 +1440,32 @@ project(':storage') {
     }
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", " org.apache.kafka.server.log.remote.metadata.storage.generated",
+             "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
+             "-i", "src/main/resources/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
+    inputs.dir("src/main/resources/message")
+    outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
+  }
+
   sourceSets {
     main {
       java {
-        srcDirs = ["src/main/java"]
+        srcDirs = ["src/generated/java", "src/main/java"]
       }
     }
     test {
       java {
-        srcDirs = ["src/test/java"]
+        srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
   }
+
+  compileJava.dependsOn 'processMessages'
 
   jar {
     dependsOn createVersionFile
