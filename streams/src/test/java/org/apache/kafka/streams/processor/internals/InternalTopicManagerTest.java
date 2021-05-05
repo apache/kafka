@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
@@ -40,7 +41,13 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignmentCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -53,6 +60,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -220,6 +228,55 @@ public class InternalTopicManagerTest {
         topicManager.setup(mkMap(
             mkEntry(topic1, internalTopicConfig)
         ));
+    }
+
+    @Test
+    public void shouldThrowInformativeExceptionForOlderBrokers() {
+        final AdminClient admin = new MockAdminClient() {
+            @Override
+            public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
+                                                   final CreateTopicsOptions options) {
+                final CreatableTopic topicToBeCreated = new CreatableTopic();
+                topicToBeCreated.setAssignments(new CreatableReplicaAssignmentCollection());
+                topicToBeCreated.setNumPartitions((short) 1);
+                // set unsupported replication factor for older brokers
+                topicToBeCreated.setReplicationFactor((short) -1);
+
+                final CreatableTopicCollection topicsToBeCreated = new CreatableTopicCollection();
+                topicsToBeCreated.add(topicToBeCreated);
+
+                try {
+                    new CreateTopicsRequest.Builder(
+                        new CreateTopicsRequestData()
+                            .setTopics(topicsToBeCreated)
+                            .setTimeoutMs(0)
+                            .setValidateOnly(options.shouldValidateOnly()))
+                        .build((short) 3); // pass in old unsupported request version for old brokers
+
+                    throw new IllegalStateException("Building CreateTopicRequest should have thrown.");
+                } catch (final UnsupportedVersionException expected) {
+                    final KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
+                    future.completeExceptionally(expected);
+
+                    return new CreateTopicsResult(Collections.singletonMap(topic1, future)) { };
+                }
+            }
+        };
+
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        final InternalTopicManager topicManager = new InternalTopicManager(Time.SYSTEM, admin, streamsConfig);
+
+        final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
+        topicConfig.setNumberOfPartitions(1);
+
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> topicManager.makeReady(Collections.singletonMap(topic1, topicConfig))
+        );
+        assertThat(
+            exception.getMessage(),
+            equalTo("Could not create topic " + topic1 + ", because brokers don't support configuration replication.factor=-1."
+                + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error."));
     }
 
     @Test
