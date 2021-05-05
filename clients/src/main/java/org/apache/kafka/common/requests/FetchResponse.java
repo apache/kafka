@@ -96,7 +96,7 @@ public class FetchResponse extends AbstractResponse {
 
     // TODO: Should be replaced or cleaned up. The idea is that in KafkaApis we need to reconstruct responseData even though we could have just passed in and out a map.
     //  With topic IDs, recreating the map takes a little more time since we have to get the topic name from the topic ID to name map.
-    //  The refactor somewhat helps in KafkaApis, but we have to recompute the map instead of just returning it.
+    //  The refactor somewhat helps in KafkaApis where we already have the topic names, but we have to recompute the map using topic IDs instead of just returning what we have.
     //  Can be replaced when we remove toMessage and change sizeOf as a part of KAFKA-12410.
     // Used when we can guarantee responseData is populated with all possible partitions
     // This occurs when we have a response version < 13 or we built the FetchResponse with
@@ -106,12 +106,10 @@ public class FetchResponse extends AbstractResponse {
             synchronized (this) {
                 if (responseData == null) {
                     responseData = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse -> {
-                        if (!topicResponse.topic().equals("")) {
-                            topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition));
-                        }
-                    });
+                    data.responses().forEach(topicResponse ->
+                        topicResponse.partitions().forEach(partition ->
+                                responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition))
+                    );
                 }
             }
         }
@@ -168,7 +166,7 @@ public class FetchResponse extends AbstractResponse {
     // Fetch versions 13 and above should have topic IDs for all topics.
     // Fetch versions < 13 should return the empty set.
     public Set<Uuid> topicIds() {
-        return data.responses().stream().map(resp -> resp.topicId()).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
+        return data.responses().stream().map(FetchResponseData.FetchableTopicResponse::topicId).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
     }
 
     /**

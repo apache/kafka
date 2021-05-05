@@ -149,4 +149,5 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }
     new RequestHeader(apiKey, apiVersion, clientId, correlationId)
   }
+
 }

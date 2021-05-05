@@ -228,14 +228,14 @@ public class FetchSessionHandler {
     public class Builder {
         /**
          * The next partitions which we want to fetch.
-         * <p>
+         *
          * It is important to maintain the insertion order of this list by using a LinkedHashMap rather
          * than a regular Map.
-         * <p>
+         *
          * One reason is that when dealing with FULL fetch requests, if there is not enough response
          * space to return data from all partitions, the server will only return data from partitions
          * early in this list.
-         * <p>
+         *
          * Another reason is because we make use of the list ordering to optimize the preparation of
          * incremental fetch requests (see below).
          */
@@ -270,7 +270,7 @@ public class FetchSessionHandler {
             if (nextMetadata.isFull()) {
                 if (log.isDebugEnabled()) {
                     log.debug("Built full fetch {} for node {} with {}.",
-                            nextMetadata, node, partitionsToLogString(next.keySet()));
+                              nextMetadata, node, partitionsToLogString(next.keySet()));
                 }
                 sessionPartitions = next;
                 sessionTopicIds = topicIds;
@@ -292,7 +292,7 @@ public class FetchSessionHandler {
             List<TopicPartition> removed = new ArrayList<>();
             List<TopicPartition> altered = new ArrayList<>();
             for (Iterator<Entry<TopicPartition, PartitionData>> iter =
-                 sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
+                     sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData prevData = entry.getValue();
@@ -331,9 +331,9 @@ public class FetchSessionHandler {
             }
             if (log.isDebugEnabled()) {
                 log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
-                                "out of {}", nextMetadata, node, partitionsToLogString(added),
-                        partitionsToLogString(altered), partitionsToLogString(removed),
-                        partitionsToLogString(sessionPartitions.keySet()));
+                          "out of {}", nextMetadata, node, partitionsToLogString(added),
+                          partitionsToLogString(altered), partitionsToLogString(removed),
+                          partitionsToLogString(sessionPartitions.keySet()));
             }
             Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
@@ -349,8 +349,8 @@ public class FetchSessionHandler {
                 tp -> tp.topic()).collect(Collectors.toSet()));
             next = null;
             topicIds = null;
-            return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
-                    curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
+            return new FetchRequestData(toSend, Collections.unmodifiableList(removed), curSessionPartitions,
+                                        toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
         }
     }
 

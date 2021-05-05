@@ -213,7 +213,7 @@ public class MetadataCache {
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
         this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
-                invalidTopics, internalTopics, controller);
+                invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {

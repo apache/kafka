@@ -226,7 +226,6 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
     _currentImage.partitions.numTopicPartitions(topic)
   }
 
-  // TODO: optimize (maybe make all return types java)
   override def topicNamesToIds(): util.Map[String, Uuid] = {
     _currentImage.partitions.copyReverseIdMap()
   }

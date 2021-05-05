@@ -1256,11 +1256,8 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
         return FetchResponse.parse(
-                FetchResponse.of(error,
-                        25,
-                        sessionId,
-                        new LinkedHashMap<>(),
-                        new HashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>(),
+                             new HashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
@@ -1274,14 +1271,14 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setRecords(records));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
-                new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
+            new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
                         .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
-                responseData, topicIds).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData, topicIds).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
@@ -1304,7 +1301,7 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
-                responseData, Collections.singletonMap("test", Uuid.randomUuid())).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData, Collections.singletonMap("test", Uuid.randomUuid())).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

@@ -850,6 +850,7 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("oldValidTopic", "keepValidTopic")));
         assertEquals(cluster.partitionsForTopic("oldValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 3);
+        assertTrue(cluster.topicIds().containsAll(topicIds.values()));
 
         String newClusterId = "newClusterId";
         int newNodes = oldNodes + 1;
@@ -882,6 +883,20 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("newValidTopic").size(), 4);
+        assertTrue(cluster.topicIds().containsAll(topicIds.values()));
+
+        // Try removing the topic ID from keepValidTopic (simulating receiving a request from a controller with an older IBP)
+        topicIds.remove("keepValidTopic");
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+        assertEquals(metadata.topicIds(), topicIds);
+
+        cluster = metadata.fetch();
+        // We still have the topic, but it just doesn't have an ID.
+        assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
+        assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
+        assertTrue(cluster.topicIds().containsAll(topicIds.values()));
+        assertEquals(Uuid.ZERO_UUID, cluster.topicId("keepValidTopic"));
 
         // Perform another metadata update, but this time all topic metadata should be cleared.
         retainTopics.set(Collections.emptySet());
@@ -896,5 +911,6 @@ public class MetadataTest {
         assertEquals(cluster.invalidTopics(), Collections.emptySet());
         assertEquals(cluster.unauthorizedTopics(), Collections.emptySet());
         assertEquals(cluster.topics(), Collections.emptySet());
+        assertTrue(cluster.topicIds().isEmpty());
     }
 }

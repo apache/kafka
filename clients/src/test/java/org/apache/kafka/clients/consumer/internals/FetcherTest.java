@@ -3326,7 +3326,7 @@ public class FetcherTest {
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(emptyRecords));
-        FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, 123,  partitions1, topicIds);
+        FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, 123, partitions1, topicIds);
         client.prepareResponse(resp1);
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());

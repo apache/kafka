@@ -1311,8 +1311,7 @@ public class Fetcher<K, V> implements Closeable {
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
                        error == Errors.FENCED_LEADER_EPOCH ||
-                       error == Errors.OFFSET_NOT_AVAILABLE ||
-                       error == Errors.UNSUPPORTED_VERSION) {
+                       error == Errors.OFFSET_NOT_AVAILABLE) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {

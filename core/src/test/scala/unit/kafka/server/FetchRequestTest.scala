@@ -864,4 +864,5 @@ class FetchRequestTest extends BaseRequestTest {
     }
     records.map(producer.send(_).get)
   }
+
 }

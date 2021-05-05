@@ -357,9 +357,9 @@ public class FetchRequest extends AbstractRequest {
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
     public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
-        if (version() < 13)
-            return fetchData;
-        return toPartitionDataMap(data.topics(), topicNames);
+        if (version() >= 13)
+            return toPartitionDataMap(data.topics(), topicNames);
+        return fetchData;
     }
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.

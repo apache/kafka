@@ -839,15 +839,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
         unconvertedFetchResponse.data().responses().forEach { topicResponse =>
-          if (topicResponse.topic() != "") {
-            topicResponse.partitions().forEach{ unconvertedPartitionData =>
-              val tp = new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex())
-              val error = Errors.forCode(unconvertedPartitionData.errorCode)
-              if (error != Errors.NONE)
-                debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                  s"on partition $tp failed due to ${error.exceptionName}")
-              convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
-            }
+          topicResponse.partitions().forEach{ unconvertedPartitionData =>
+            val tp = new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex())
+            val error = Errors.forCode(unconvertedPartitionData.errorCode)
+            if (error != Errors.NONE)
+              debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+                s"on partition $tp failed due to ${error.exceptionName}")
+            convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
           }
         }
 
@@ -856,11 +854,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData, topicIds)
         // record the bytes out metrics only when the response is being sent
         response.data().responses().forEach { topicResponse =>
-          if (topicResponse.topic() != "") {
-            topicResponse.partitions().forEach { data =>
-              val tp = new TopicPartition(topicResponse.topic(), data.partitionIndex())
-              brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
-            }
+          topicResponse.partitions().forEach { data =>
+            val tp = new TopicPartition(topicResponse.topic(), data.partitionIndex())
+            brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
           }
         }
         response
