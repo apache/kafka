@@ -253,8 +253,12 @@ class KStreamImplJoin {
     }
 
     private <K, V1, V2> String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
-        if (streamJoinedInternal.storeName() != null) {
-            return streamJoinedInternal.storeName() + (rightOuter ? "-outer-shared-join" : "-left-shared-join");
+        final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
+
+        if (streamJoinedInternal.thisStoreSupplier() != null && !streamJoinedInternal.thisStoreSupplier().name().isEmpty()) {
+            return streamJoinedInternal.thisStoreSupplier().name() + outerJoinSuffix;
+        } else if (streamJoinedInternal.storeName() != null) {
+            return streamJoinedInternal.storeName() + outerJoinSuffix;
         } else {
             return KStreamImpl.OUTERSHARED_NAME
                 + joinThisGeneratedName.substring(

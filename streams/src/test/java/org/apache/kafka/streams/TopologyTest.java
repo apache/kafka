@@ -962,10 +962,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [in-memory-join-store-other, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [in-memory-join-store-other, in-memory-join-store-left-shared-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-OUTERSHARED-0000000004-store, in-memory-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store, in-memory-join-store-left-shared-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
@@ -1101,10 +1101,10 @@ public class TopologyTest {
                 "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [in-memory-join-store-other])\n" +
                 "      --> KSTREAM-OUTEROTHER-0000000005\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [KSTREAM-OUTERSHARED-0000000004-store, in-memory-join-store])\n" +
+                "    Processor: KSTREAM-OUTEROTHER-0000000005 (stores: [in-memory-join-store-outer-shared-join-store, in-memory-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000003\n" +
-                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [in-memory-join-store-other, KSTREAM-OUTERSHARED-0000000004-store])\n" +
+                "    Processor: KSTREAM-OUTERTHIS-0000000004 (stores: [in-memory-join-store-other, in-memory-join-store-outer-shared-join-store])\n" +
                 "      --> KSTREAM-MERGE-0000000006\n" +
                 "      <-- KSTREAM-WINDOWED-0000000002\n" +
                 "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n" +
