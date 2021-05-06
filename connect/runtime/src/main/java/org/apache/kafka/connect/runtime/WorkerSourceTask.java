@@ -370,7 +370,7 @@ class WorkerSourceTask extends WorkerTask {
                     (recordMetadata, e) -> {
                         if (e != null) {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             producerSendException.compareAndSet(null, e);
                         } else {
                             recordSent(producerRecord);
@@ -396,7 +396,7 @@ class WorkerSourceTask extends WorkerTask {
             } catch (ConnectException e) {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
-                log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
+                log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
@@ -475,7 +475,7 @@ class WorkerSourceTask extends WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("{} CRITICAL Saw callback for record that was not present in the outstanding message set: {}", this, record);
+            log.error("{} CRITICAL Saw callback for record from topic {} partition {} that was not present in the outstanding message set: {}", this, record.topic(), record.partition());
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
             this.notifyAll();
