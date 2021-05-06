@@ -1335,9 +1335,9 @@ class Partition(val topicPartition: TopicPartition,
     isrState = proposedIsrState
 
     if (!alterIsrManager.submit(alterIsrItem)) {
-      // If the ISR manager did not accept our update, we need to revert back to previous state.
-      // This can happen if the ISR state was updated by a LeaderAndIsr but we have an AlterIsr request
-      // still in-flight.
+      // If the ISR manager did not accept our update, we need to revert the proposed state.
+      // This can happen if the ISR state was updated by the controller (via LeaderAndIsr in ZK-mode or
+      // ChangePartitionRecord in KRaft mode) but we have an AlterIsr request still in-flight.
       isrState = oldState
       isrChangeListener.markFailed()
       warn(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
