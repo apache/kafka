@@ -304,16 +304,16 @@ class CachingSessionStore
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo) {
-        Objects.requireNonNull(keyFrom, "from cannot be null");
-        Objects.requireNonNull(keyTo, "to cannot be null");
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return findSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
                                                                    final Bytes keyTo) {
-        Objects.requireNonNull(keyFrom, "from cannot be null");
-        Objects.requireNonNull(keyTo, "to cannot be null");
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 

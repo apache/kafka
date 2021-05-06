@@ -83,9 +83,14 @@ public class RocksDBSessionStore
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        return wrapped().get(SessionKeySchema.toBinary(key, earliestSessionEndTime,
-            latestSessionStartTime));
+    public byte[] fetchSession(final Bytes key,
+                               final long earliestSessionEndTime,
+                               final long latestSessionStartTime) {
+        return wrapped().get(SessionKeySchema.toBinary(
+            key,
+            earliestSessionEndTime,
+            latestSessionStartTime
+        ));
     }
 
     @Override
