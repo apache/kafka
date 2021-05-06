@@ -118,12 +118,7 @@ public abstract class GraphNode {
         return this.buildPriority;
     }
 
-    public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
-
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
-        // default call if writeToTopology(builder, props) is not overriden
-        writeToTopology(topologyBuilder);
-    }
+    public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props);
 
     public boolean hasWrittenToTopology() {
         return hasWrittenToTopology;
