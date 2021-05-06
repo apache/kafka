@@ -122,7 +122,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
 
             // Calculate the number of messages allowed in this window using a normal distribution.
             // The formula is: Messages = Gaussian * Deviation + Average
-            throttleMessages = Math.max((int) (random.nextGaussian() * (double) messagesPerWindowDeviation) + messagesPerWindowAverage, 1);
+            throttleMessages = Math.max((int) (random.nextGaussian() * messagesPerWindowDeviation) + messagesPerWindowAverage, 1);
         }
         windowTracker += 1;
     }
