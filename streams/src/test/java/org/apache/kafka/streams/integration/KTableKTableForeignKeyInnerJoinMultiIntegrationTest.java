@@ -194,7 +194,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(60));
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
