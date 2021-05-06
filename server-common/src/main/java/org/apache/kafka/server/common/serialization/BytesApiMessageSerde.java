@@ -14,14 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log.remote.metadata.storage.serialization;
+package org.apache.kafka.server.common.serialization;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.raft.metadata.AbstractApiMessageSerde;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -35,7 +35,7 @@ import java.nio.ByteBuffer;
  */
 public abstract class BytesApiMessageSerde {
 
-    private final AbstractApiMessageSerde metadataRecordSerde = new AbstractApiMessageSerde() {
+    private final AbstractApiMessageSerde apiMessageSerde = new AbstractApiMessageSerde() {
         @Override
         public ApiMessage apiMessageFor(short apiKey) {
             return BytesApiMessageSerde.this.apiMessageFor(apiKey);
@@ -44,9 +44,9 @@ public abstract class BytesApiMessageSerde {
 
     public byte[] serialize(ApiMessageAndVersion messageAndVersion) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = metadataRecordSerde.recordSize(messageAndVersion, cache);
+        int size = apiMessageSerde.recordSize(messageAndVersion, cache);
         ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(size));
-        metadataRecordSerde.write(messageAndVersion, cache, writable);
+        apiMessageSerde.write(messageAndVersion, cache, writable);
 
         return writable.buffer().array();
     }
@@ -54,7 +54,7 @@ public abstract class BytesApiMessageSerde {
     public ApiMessageAndVersion deserialize(byte[] data) {
         Readable readable = new ByteBufferAccessor(ByteBuffer.wrap(data));
 
-        return metadataRecordSerde.read(readable, data.length);
+        return apiMessageSerde.read(readable, data.length);
     }
 
     /**

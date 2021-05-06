@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-
 import kafka.common.{InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
@@ -27,9 +26,9 @@ import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.metadata.ApiMessageAndVersion
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
 

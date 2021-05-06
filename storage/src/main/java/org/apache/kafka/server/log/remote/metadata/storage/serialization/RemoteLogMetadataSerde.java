@@ -17,7 +17,8 @@
 package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.serialization.BytesApiMessageSerde;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.MetadataRecordType;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
