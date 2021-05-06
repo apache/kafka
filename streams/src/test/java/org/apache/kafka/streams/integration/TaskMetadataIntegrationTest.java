@@ -104,7 +104,8 @@ public class TaskMetadataIntegrationTest {
                         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                         mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                         mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10L)
                 )
         );
     }
@@ -125,7 +126,11 @@ public class TaskMetadataIntegrationTest {
             produceMessages(0L, inputTopic, "test1");
             TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 2L, "the record was processed");
+            process.set(true);
 
+            produceMessages(0L, inputTopic, "test1");
+            TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
+            TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 3L, "the record was processed");
         } catch (final Exception e) {
             e.printStackTrace();
         }
@@ -140,13 +145,12 @@ public class TaskMetadataIntegrationTest {
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
             commit.set(false);
 
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 10; i++) {
                 produceMessages(0L, inputTopic, "test");
                 TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
                 process.set(true);
             }
-            assertThat(taskMetadata.committedOffsets().get(topicPartition), equalTo(-1L));
-            assertThat(taskMetadata.endOffsets().get(topicPartition), equalTo(99L));
+            assertThat(taskMetadata.endOffsets().get(topicPartition), equalTo(9L));
 
         } catch (final Exception e) {
             e.printStackTrace();
