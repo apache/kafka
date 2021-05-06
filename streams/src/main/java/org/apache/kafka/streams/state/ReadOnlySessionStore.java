@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.state;
 
 
-import java.time.Instant;
 import org.apache.kafka.streams.kstream.Windowed;
+
+import java.time.Instant;
 
 /**
  * A session store that only supports read operations. Implementations should be thread-safe as
