@@ -60,3 +60,4 @@ raft/src/generated
 raft/.jqwik-database
 core/src/generated
 metadata/src/generated
+storage/src/generated
