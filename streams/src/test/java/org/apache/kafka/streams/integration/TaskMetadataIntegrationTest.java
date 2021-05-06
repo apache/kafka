@@ -105,7 +105,7 @@ public class TaskMetadataIntegrationTest {
                         mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                         mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                         mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10L)
+                        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1L)
                 )
         );
     }
@@ -120,7 +120,7 @@ public class TaskMetadataIntegrationTest {
 
             produceMessages(0L, inputTopic, "test");
             TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
-            assertThat(taskMetadata.committedOffsets().get(topicPartition), equalTo(1L));
+            TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 1L, "the record was processed");
             process.set(true);
 
             produceMessages(0L, inputTopic, "test1");
