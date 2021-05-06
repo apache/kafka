@@ -201,6 +201,7 @@ public class CachingPersistentSessionStoreTest {
     }
 
     private void setUpCloseTests() {
+        underlyingStore.close();
         underlyingStore = EasyMock.createNiceMock(SessionStore.class);
         EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
         EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);

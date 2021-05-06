@@ -23,6 +23,7 @@ import org.junit.runner.RunWith;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
+import org.rocksdb.AbstractWalFilter;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
@@ -45,6 +46,8 @@ import org.rocksdb.SstFileManager;
 import org.rocksdb.StringAppendOperator;
 import org.rocksdb.VectorMemTableConfig;
 import org.rocksdb.WALRecoveryMode;
+import org.rocksdb.WalProcessingOption;
+import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteBufferManager;
 import org.rocksdb.util.BytewiseComparator;
 
@@ -53,6 +56,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
@@ -74,6 +78,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     private final List<String> ignoreMethods = new LinkedList<String>() {
         {
             add("isOwningHandle");
+            add("getNativeHandle");
             add("dispose");
             add("wait");
             add("equals");
@@ -82,6 +87,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notify");
             add("notifyAll");
             add("toString");
+            add("getOptionStringFromProps");
         }
     };
 
@@ -173,6 +179,24 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     break;
                 case "org.rocksdb.WriteBufferManager":
                     parameters[i] = new WriteBufferManager(1L, new LRUCache(1L));
+                    break;
+                case "org.rocksdb.AbstractWalFilter":
+                    class TestWalFilter extends AbstractWalFilter {
+                        @Override
+                        public void columnFamilyLogNumberMap(final Map<Integer, Long> cfLognumber, final Map<String, Integer> cfNameId) {
+                        }
+
+                        @Override
+                        public LogRecordFoundResult logRecordFound(final long logNumber, final String logFileName, final WriteBatch batch, final WriteBatch newBatch) {
+                            return new LogRecordFoundResult(WalProcessingOption.CONTINUE_PROCESSING, false);
+                        }
+
+                        @Override
+                        public String name() {
+                            return "TestWalFilter";
+                        }
+                    }
+                    parameters[i] = new TestWalFilter();
                     break;
                 default:
                     parameters[i] = parameterTypes[i].getConstructor().newInstance();

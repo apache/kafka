@@ -209,6 +209,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -237,6 +239,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -265,6 +269,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             ),
             results
         );
+
+        segments.close();
     }
 
     @Test
@@ -299,6 +305,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 )
             )
         );
+
+        segments.close();
     }
 
     @Test
@@ -329,6 +337,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 )
             )
         );
+
+        segments.close();
     }
 
     @Test
@@ -470,6 +480,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
+
+        bytesStore.close();
     }
 
     private Set<String> segmentDirs() {
