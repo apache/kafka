@@ -439,6 +439,8 @@ public class RocksDBStoreTest {
         final UUID uuid1 = UUID.randomUUID();
         final UUID uuid2 = UUID.randomUUID();
         final String prefix = uuid1.toString().substring(0, 4);
+        final int numMatches = uuid2.toString().substring(0, 4).equals(prefix) ? 2 : 1;
+
         entries.add(new KeyValue<>(
             new Bytes(uuidSerializer.serialize(null, uuid1)),
             stringSerializer.serialize(null, "a")));
@@ -451,17 +453,14 @@ public class RocksDBStoreTest {
         rocksDBStore.flush();
 
         final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer);
-        final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
         while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
+            keysWithPrefix.next();
             numberOfKeysReturned++;
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(valuesWithPrefix.get(0), is("a"));
+        assertThat(numberOfKeysReturned, is(numMatches));
     }
 
     @Test
