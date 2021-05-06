@@ -290,6 +290,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             if (streamGraphNode.allParentsWrittenToTopology() && !streamGraphNode.hasWrittenToTopology()) {
+                if (props != null && !props.isEmpty()) {
+                    internalTopologyBuilder.setStreamsConfig(new StreamsConfig(props));
+                }
+
                 streamGraphNode.writeToTopology(internalTopologyBuilder);
                 streamGraphNode.setHasWrittenToTopology(true);
             }
