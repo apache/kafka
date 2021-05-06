@@ -44,14 +44,14 @@ class ChangeLoggingSessionBytesStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override

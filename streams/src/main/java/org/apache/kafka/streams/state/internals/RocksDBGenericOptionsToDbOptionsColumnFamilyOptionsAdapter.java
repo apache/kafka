@@ -19,7 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractComparator;
+import org.rocksdb.AbstractEventListener;
 import org.rocksdb.AbstractSlice;
+import org.rocksdb.AbstractWalFilter;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.Cache;
@@ -30,6 +32,7 @@ import org.rocksdb.CompactionPriority;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionOptions;
 import org.rocksdb.CompressionType;
+import org.rocksdb.ConcurrentTaskLimiter;
 import org.rocksdb.DBOptions;
 import org.rocksdb.DbPath;
 import org.rocksdb.Env;
@@ -40,9 +43,11 @@ import org.rocksdb.MergeOperator;
 import org.rocksdb.Options;
 import org.rocksdb.RateLimiter;
 import org.rocksdb.SstFileManager;
+import org.rocksdb.SstPartitionerFactory;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WALRecoveryMode;
+import org.rocksdb.WalFilter;
 import org.rocksdb.WriteBufferManager;
 import org.slf4j.LoggerFactory;
 
@@ -99,35 +104,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options prepareForBulkLoad() {
-        /* From https://github.com/facebook/rocksdb/wiki/RocksDB-FAQ
-         *
-         * Q: What's the fastest way to load data into RocksDB?
-         *
-         * A: A fast way to direct insert data to the DB:
-         *
-         *  1. using single writer thread and insert in sorted order
-         *  2. batch hundreds of keys into one write batch
-         *  3. use vector memtable
-         *  4. make sure options.max_background_flushes is at least 4
-         *  5. before inserting the data,
-         *       disable automatic compaction,
-         *       set options.level0_file_num_compaction_trigger,
-         *           options.level0_slowdown_writes_trigger
-         *           and options.level0_stop_writes_trigger to very large.
-         *     After inserting all the data, issue a manual compaction.
-         *
-         * 3-5 will be automatically done if you call Options::PrepareForBulkLoad() to your option
-         */
-        // (1) not in our control
-        // (2) is done via bulk-loading API
-        // (3) skipping because, not done in actual PrepareForBulkLoad() code in https://github.com/facebook/rocksdb/blob/master/options/options.cc
-        //columnFamilyOptions.setMemTableConfig(new VectorMemTableConfig());
-        // (4-5) below:
-        dbOptions.setMaxBackgroundFlushes(4);
-        columnFamilyOptions.setDisableAutoCompactions(true);
-        columnFamilyOptions.setLevel0FileNumCompactionTrigger(1 << 30);
-        columnFamilyOptions.setLevel0SlowdownWritesTrigger(1 << 30);
-        columnFamilyOptions.setLevel0StopWritesTrigger(1 << 30);
+        super.prepareForBulkLoad();
         return this;
     }
 
@@ -185,7 +162,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setComparator(final AbstractComparator<? extends AbstractSlice<?>> comparator) {
+    public Options setComparator(final AbstractComparator comparator) {
         columnFamilyOptions.setComparator(comparator);
         return this;
     }
@@ -342,6 +319,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return this;
     }
 
+    @Deprecated
     @Override
     public int maxBackgroundCompactions() {
         return dbOptions.maxBackgroundCompactions();
@@ -358,6 +336,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.statistics();
     }
 
+    @Deprecated
     @Override
     public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
         dbOptions.setBaseBackgroundCompactions(baseBackgroundCompactions);
@@ -368,6 +347,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.baseBackgroundCompactions();
     }
 
+    @Deprecated
     @Override
     public Options setMaxBackgroundCompactions(final int maxBackgroundCompactions) {
         dbOptions.setMaxBackgroundCompactions(maxBackgroundCompactions);
@@ -375,8 +355,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public void setMaxSubcompactions(final int maxSubcompactions) {
+    public Options setMaxSubcompactions(final int maxSubcompactions) {
         dbOptions.setMaxSubcompactions(maxSubcompactions);
+        return this;
     }
 
     @Override
@@ -384,11 +365,13 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.maxSubcompactions();
     }
 
+    @Deprecated
     @Override
     public int maxBackgroundFlushes() {
         return dbOptions.maxBackgroundFlushes();
     }
 
+    @Deprecated
     @Override
     public Options setMaxBackgroundFlushes(final int maxBackgroundFlushes) {
         dbOptions.setMaxBackgroundFlushes(maxBackgroundFlushes);
@@ -1379,6 +1362,313 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public WriteBufferManager writeBufferManager() {
         return dbOptions.writeBufferManager();
+    }
+
+    @Override
+    public Options setMaxWriteBatchGroupSizeBytes(final long maxWriteBatchGroupSizeBytes) {
+        dbOptions.setMaxWriteBatchGroupSizeBytes(maxWriteBatchGroupSizeBytes);
+        return this;
+    }
+
+    @Override
+    public long maxWriteBatchGroupSizeBytes() {
+        return dbOptions.maxWriteBatchGroupSizeBytes();
+    }
+
+    @Override
+    public Options oldDefaults(final int majorVersion, final int minorVersion) {
+        columnFamilyOptions.oldDefaults(majorVersion, minorVersion);
+        return this;
+    }
+
+    @Override
+    public Options optimizeForSmallDb(final Cache cache) {
+        return super.optimizeForSmallDb(cache);
+    }
+
+    @Override
+    public AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter() {
+        return columnFamilyOptions.compactionFilter();
+    }
+
+    @Override
+    public AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory() {
+        return columnFamilyOptions.compactionFilterFactory();
+    }
+
+    @Override
+    public Options setStatsPersistPeriodSec(final int statsPersistPeriodSec) {
+        dbOptions.setStatsPersistPeriodSec(statsPersistPeriodSec);
+        return this;
+    }
+
+    @Override
+    public int statsPersistPeriodSec() {
+        return dbOptions.statsPersistPeriodSec();
+    }
+
+    @Override
+    public Options setStatsHistoryBufferSize(final long statsHistoryBufferSize) {
+        dbOptions.setStatsHistoryBufferSize(statsHistoryBufferSize);
+        return this;
+    }
+
+    @Override
+    public long statsHistoryBufferSize() {
+        return dbOptions.statsHistoryBufferSize();
+    }
+
+    @Override
+    public Options setStrictBytesPerSync(final boolean strictBytesPerSync) {
+        dbOptions.setStrictBytesPerSync(strictBytesPerSync);
+        return this;
+    }
+
+    @Override
+    public boolean strictBytesPerSync() {
+        return dbOptions.strictBytesPerSync();
+    }
+
+    @Override
+    public Options setListeners(final List<AbstractEventListener> listeners) {
+        dbOptions.setListeners(listeners);
+        return this;
+    }
+
+    @Override
+    public List<AbstractEventListener> listeners() {
+        return dbOptions.listeners();
+    }
+
+    @Override
+    public Options setEnablePipelinedWrite(final boolean enablePipelinedWrite) {
+        dbOptions.setEnablePipelinedWrite(enablePipelinedWrite);
+        return this;
+    }
+
+    @Override
+    public boolean enablePipelinedWrite() {
+        return dbOptions.enablePipelinedWrite();
+    }
+
+    @Override
+    public Options setUnorderedWrite(final boolean unorderedWrite) {
+        dbOptions.setUnorderedWrite(unorderedWrite);
+        return this;
+    }
+
+    @Override
+    public boolean unorderedWrite() {
+        return dbOptions.unorderedWrite();
+    }
+
+    @Override
+    public Options setSkipCheckingSstFileSizesOnDbOpen(final boolean skipCheckingSstFileSizesOnDbOpen) {
+        dbOptions.setSkipCheckingSstFileSizesOnDbOpen(skipCheckingSstFileSizesOnDbOpen);
+        return this;
+    }
+
+    @Override
+    public boolean skipCheckingSstFileSizesOnDbOpen() {
+        return dbOptions.skipCheckingSstFileSizesOnDbOpen();
+    }
+
+    @Override
+    public Options setWalFilter(final AbstractWalFilter walFilter) {
+        dbOptions.setWalFilter(walFilter);
+        return this;
+    }
+
+    @Override
+    public WalFilter walFilter() {
+        return dbOptions.walFilter();
+    }
+
+    @Override
+    public Options setAllowIngestBehind(final boolean allowIngestBehind) {
+        dbOptions.setAllowIngestBehind(allowIngestBehind);
+        return this;
+    }
+
+    @Override
+    public boolean allowIngestBehind() {
+        return dbOptions.allowIngestBehind();
+    }
+
+    @Override
+    public Options setPreserveDeletes(final boolean preserveDeletes) {
+        dbOptions.setPreserveDeletes(preserveDeletes);
+        return this;
+    }
+
+    @Override
+    public boolean preserveDeletes() {
+        return dbOptions.preserveDeletes();
+    }
+
+    @Override
+    public Options setTwoWriteQueues(final boolean twoWriteQueues) {
+        dbOptions.setTwoWriteQueues(twoWriteQueues);
+        return this;
+    }
+
+    @Override
+    public boolean twoWriteQueues() {
+        return dbOptions.twoWriteQueues();
+    }
+
+    @Override
+    public Options setManualWalFlush(final boolean manualWalFlush) {
+        dbOptions.setManualWalFlush(manualWalFlush);
+        return this;
+    }
+
+    @Override
+    public boolean manualWalFlush() {
+        return dbOptions.manualWalFlush();
+    }
+
+    @Override
+    public Options setCfPaths(final Collection<DbPath> cfPaths) {
+        columnFamilyOptions.setCfPaths(cfPaths);
+        return this;
+    }
+
+    @Override
+    public List<DbPath> cfPaths() {
+        return columnFamilyOptions.cfPaths();
+    }
+
+    @Override
+    public Options setBottommostCompressionOptions(final CompressionOptions bottommostCompressionOptions) {
+        columnFamilyOptions.setBottommostCompressionOptions(bottommostCompressionOptions);
+        return this;
+    }
+
+    @Override
+    public CompressionOptions bottommostCompressionOptions() {
+        return columnFamilyOptions.bottommostCompressionOptions();
+    }
+
+    @Override
+    public Options setTtl(final long ttl) {
+        columnFamilyOptions.setTtl(ttl);
+        return this;
+    }
+
+    @Override
+    public long ttl() {
+        return columnFamilyOptions.ttl();
+    }
+
+    @Override
+    public Options setAtomicFlush(final boolean atomicFlush) {
+        dbOptions.setAtomicFlush(atomicFlush);
+        return this;
+    }
+
+    @Override
+    public boolean atomicFlush() {
+        return dbOptions.atomicFlush();
+    }
+
+    @Override
+    public Options setAvoidUnnecessaryBlockingIO(final boolean avoidUnnecessaryBlockingIO) {
+        dbOptions.setAvoidUnnecessaryBlockingIO(avoidUnnecessaryBlockingIO);
+        return this;
+    }
+
+    @Override
+    public boolean avoidUnnecessaryBlockingIO() {
+        return dbOptions.avoidUnnecessaryBlockingIO();
+    }
+
+    @Override
+    public Options setPersistStatsToDisk(final boolean persistStatsToDisk) {
+        dbOptions.setPersistStatsToDisk(persistStatsToDisk);
+        return this;
+    }
+
+    @Override
+    public boolean persistStatsToDisk() {
+        return dbOptions.persistStatsToDisk();
+    }
+
+    @Override
+    public Options setWriteDbidToManifest(final boolean writeDbidToManifest) {
+        dbOptions.setWriteDbidToManifest(writeDbidToManifest);
+        return this;
+    }
+
+    @Override
+    public boolean writeDbidToManifest() {
+        return dbOptions.writeDbidToManifest();
+    }
+
+    @Override
+    public Options setLogReadaheadSize(final long logReadaheadSize) {
+        dbOptions.setLogReadaheadSize(logReadaheadSize);
+        return this;
+    }
+
+    @Override
+    public long logReadaheadSize() {
+        return dbOptions.logReadaheadSize();
+    }
+
+    @Override
+    public Options setBestEffortsRecovery(final boolean bestEffortsRecovery) {
+        dbOptions.setBestEffortsRecovery(bestEffortsRecovery);
+        return this;
+    }
+
+    @Override
+    public boolean bestEffortsRecovery() {
+        return dbOptions.bestEffortsRecovery();
+    }
+
+    @Override
+    public Options setMaxBgErrorResumeCount(final int maxBgerrorResumeCount) {
+        dbOptions.setMaxBgErrorResumeCount(maxBgerrorResumeCount);
+        return this;
+    }
+
+    @Override
+    public int maxBgerrorResumeCount() {
+        return dbOptions.maxBgerrorResumeCount();
+    }
+
+    @Override
+    public Options setBgerrorResumeRetryInterval(final long bgerrorResumeRetryInterval) {
+        dbOptions.setBgerrorResumeRetryInterval(bgerrorResumeRetryInterval);
+        return this;
+    }
+
+    @Override
+    public long bgerrorResumeRetryInterval() {
+        return dbOptions.bgerrorResumeRetryInterval();
+    }
+
+    @Override
+    public Options setSstPartitionerFactory(final SstPartitionerFactory sstPartitionerFactory) {
+        columnFamilyOptions.setSstPartitionerFactory(sstPartitionerFactory);
+        return this;
+    }
+
+    @Override
+    public SstPartitionerFactory sstPartitionerFactory() {
+        return columnFamilyOptions.sstPartitionerFactory();
+    }
+
+    @Override
+    public Options setCompactionThreadLimiter(final ConcurrentTaskLimiter compactionThreadLimiter) {
+        columnFamilyOptions.setCompactionThreadLimiter(compactionThreadLimiter);
+        return this;
+    }
+
+    @Override
+    public ConcurrentTaskLimiter compactionThreadLimiter() {
+        return columnFamilyOptions.compactionThreadLimiter();
     }
 
     public Options setCompactionFilter(final AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter) {

@@ -354,6 +354,7 @@ public class GlobalStreamThread extends Thread {
     }
 
     private StateConsumer initialize() {
+        StateConsumer stateConsumer = null;
         try {
             final GlobalStateManager stateMgr = new GlobalStateManagerImpl(
                 logContext,
@@ -374,7 +375,7 @@ public class GlobalStreamThread extends Thread {
             );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
-            final StateConsumer stateConsumer = new StateConsumer(
+            stateConsumer = new StateConsumer(
                 logContext,
                 globalConsumer,
                 new GlobalStateUpdateTask(
@@ -397,11 +398,7 @@ public class GlobalStreamThread extends Thread {
                     recoverableException
                 );
 
-                try {
-                    stateConsumer.close(true);
-                } catch (final IOException e) {
-                    log.error("Failed to close state consumer due to the following error:", e);
-                }
+                closeStateConsumer(stateConsumer, true);
 
                 throw new StreamsException(
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
@@ -411,11 +408,23 @@ public class GlobalStreamThread extends Thread {
 
             return stateConsumer;
         } catch (final StreamsException fatalException) {
+            closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
         } catch (final Exception fatalException) {
+            closeStateConsumer(stateConsumer, false);
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         }
         return null;
+    }
+
+    private void closeStateConsumer(final StateConsumer stateConsumer, final boolean wipeStateStore) {
+        if (stateConsumer != null) {
+            try {
+                stateConsumer.close(wipeStateStore);
+            } catch (final IOException e) {
+                log.error("Failed to close state consumer due to the following error:", e);
+            }
+        }
     }
 
     @Override
