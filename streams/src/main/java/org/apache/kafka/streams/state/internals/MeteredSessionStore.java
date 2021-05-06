@@ -205,8 +205,11 @@ public class MeteredSessionStore<K, V>
         return maybeMeasureLatency(
             () -> {
                 final Bytes bytesKey = keyBytes(key);
-                final byte[] result = wrapped().fetchSession(bytesKey, earliestSessionEndTime,
-                    latestSessionStartTime);
+                final byte[] result = wrapped().fetchSession(
+                    bytesKey,
+                    earliestSessionEndTime,
+                    latestSessionStartTime
+                );
                 if (result == null) {
                     return null;
                 }
