@@ -23,6 +23,9 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
+
 public interface AdminApiLookupStrategy<T> {
 
     /**
@@ -83,6 +86,19 @@ public interface AdminApiLookupStrategy<T> {
             this.failedKeys = Collections.unmodifiableMap(failedKeys);
             this.mappedKeys = Collections.unmodifiableMap(mappedKeys);
         }
+
+        static <K> LookupResult<K> empty() {
+            return new LookupResult<>(emptyMap(), emptyMap());
+        }
+
+        static <K> LookupResult<K> failed(K key, Throwable exception) {
+            return new LookupResult<>(singletonMap(key, exception), emptyMap());
+        }
+
+        static <K> LookupResult<K> mapped(K key, Integer brokerId) {
+            return new LookupResult<>(emptyMap(), singletonMap(key, brokerId));
+        }
+
     }
 
 }

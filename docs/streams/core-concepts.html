@@ -291,16 +291,18 @@
         commits on the input topic offsets, updates on the state stores, and writes to the output topics will be completed atomically instead of treating Kafka as an external system that may have side-effects.
         For more information on how this is done inside Kafka Streams, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.<br />
 
-        As of the 2.6.0 release, Kafka Streams supports an improved implementation of exactly-once processing, named "exactly-once beta", 
+        As of the 2.6.0 release, Kafka Streams supports an improved implementation of exactly-once processing, named "exactly-once v2",
         which requires broker version 2.5.0 or newer.
         This implementation is more efficient, because it reduces client and broker resource utilization, like client threads and used network connections, 
         and it enables higher throughput and improved scalability.
+        As of the 3.0.0 release, the first version of exactly-once has been deprecated. Users are encouraged to use exactly-once v2 for
+        exactly-once processing from now on, and prepare by upgrading their brokers if necessary.
         For more information on how this is done inside the brokers and Kafka Streams, see 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>.<br />
 
         To enable exactly-once semantics when running Kafka Streams applications,
         set the <code>processing.guarantee</code> config value (default value is <b>at_least_once</b>)
-        to <b>exactly_once</b> for EOS version 1 (requires brokers version 0.11.0 or newer) or <b>exactly_once_beta</b> for EOS version 2 (requires brokers version 2.5 or newer).
+        to <b>StreamsConfig.EXACTLY_ONCE_V2</b> (requires brokers version 2.5 or newer).
         For more information, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html">Kafka Streams Configs</a> section.
     </p>
 

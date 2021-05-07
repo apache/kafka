@@ -368,7 +368,7 @@ class LogValidatorTest {
       assertEquals(isTransactional, batch.isTransactional)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
-        assertTrue(record.isValid)
+        record.ensureValid()
         assertEquals(timestampSeq(i), record.timestamp)
         i += 1
       }
@@ -439,7 +439,7 @@ class LogValidatorTest {
       assertEquals(baseSequence, batch.baseSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
-        assertTrue(record.isValid)
+        record.ensureValid()
         assertEquals(timestampSeq(i), record.timestamp)
         i += 1
       }
@@ -597,7 +597,7 @@ class LogValidatorTest {
       assertEquals(baseSequence, batch.baseSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
-        assertTrue(record.isValid)
+        record.ensureValid()
         assertEquals(timestampSeq(i), record.timestamp)
         i += 1
       }
@@ -1497,7 +1497,7 @@ class LogValidatorTest {
     assertEquals(expectedLogAppendTime, batch.maxTimestamp, s"Unexpected max timestamp of batch $batch")
     maybeCheckBaseTimestamp(expectedBaseTimestamp, batch)
     for (record <- batch.asScala) {
-      assertTrue(record.isValid)
+      record.ensureValid()
       assertEquals(expectedLogAppendTime, record.timestamp, s"Unexpected timestamp of record $record")
     }
   }

@@ -94,9 +94,7 @@ public class DefaultRecordBatchTest {
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) record.ensureValid();
         }
     }
 
@@ -124,9 +122,7 @@ public class DefaultRecordBatchTest {
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(baseSequence + 1, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) record.ensureValid();
         }
     }
 
@@ -199,7 +195,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -208,7 +204,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -217,7 +213,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -226,7 +222,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test

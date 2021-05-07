@@ -183,6 +183,9 @@
         <li>TimestampRouter - Modify the topic of a record based on original topic and timestamp. Useful when using a sink that needs to write to different tables or indexes based on timestamps</li>
         <li>RegexRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
         <li>Filter - Removes messages from all further processing. This is used with a <a href="#connect_predicates">predicate</a> to selectively filter certain messages.</li>
+        <li>InsertHeader - Add a header using static data</li>
+        <li>HeadersFrom - Copy or move fields in the key or value to the record headers</li>
+        <li>DropHeaders - Remove headers by name</li>
     </ul>
 
     <p>Details on how to configure each transformation are listed below:</p>

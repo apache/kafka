@@ -518,7 +518,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // push two items to the primary stream; the other window is empty; this should produce two items
+            // push two items to the primary stream; the other window is empty; this should not produce items yet
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0, 1:A1 }
@@ -526,8 +526,7 @@ public class KStreamKStreamJoinTest {
             for (int i = 0; i < 2; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
-                new KeyValueTimestamp<>(1, "A1+null", 0));
+            processor.checkAndClearProcessResult();
 
             // push two items to the other stream; this should produce two items
             // w1 = { 0:A0, 1:A1 }
@@ -540,7 +539,7 @@ public class KStreamKStreamJoinTest {
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+a0", 0),
                 new KeyValueTimestamp<>(1, "A1+a1", 0));
 
-            // push all four items to the primary stream; this should produce four items
+            // push all four items to the primary stream; this should produce two items
             // w1 = { 0:A0, 1:A1 }
             // w2 = { 0:a0, 1:a1 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 3:B3 }
@@ -549,9 +548,7 @@ public class KStreamKStreamJoinTest {
                 inputTopic1.pipeInput(expectedKey, "B" + expectedKey);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "B0+a0", 0),
-                new KeyValueTimestamp<>(1, "B1+a1", 0),
-                new KeyValueTimestamp<>(2, "B2+null", 0),
-                new KeyValueTimestamp<>(3, "B3+null", 0));
+                new KeyValueTimestamp<>(1, "B1+a1", 0));
 
             // push all items to the other stream; this should produce six items
             // w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 3:B3 }
@@ -1144,7 +1141,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(0)).after(ofMillis(100)),
+            JoinWindows.of(ofMillis(0)).after(ofMillis(100)).grace(ofMillis(0)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String()));

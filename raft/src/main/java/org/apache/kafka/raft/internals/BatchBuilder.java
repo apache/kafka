@@ -96,7 +96,7 @@ public class BatchBuilder<T> {
     }
 
     /**
-     * Append a record to this patch. The caller must first verify there is room for the batch
+     * Append a record to this batch. The caller must first verify there is room for the batch
      * using {@link #bytesNeeded(Collection, ObjectSerializationCache)}.
      *
      * @param record the record to append
