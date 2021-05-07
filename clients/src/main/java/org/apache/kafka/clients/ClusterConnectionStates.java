@@ -97,8 +97,8 @@ final class ClusterConnectionStates {
 
     /**
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
-     * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
-     * connections.
+     * disconnected, this respects the reconnect backoff time. When connecting, return a delay based on the connection timeout.
+     * When connected, this handles slow/stalled connections.
      * @param id the connection to check
      * @param now the current time in ms
      */
