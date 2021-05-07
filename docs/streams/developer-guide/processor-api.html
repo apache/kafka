@@ -119,47 +119,46 @@
                 <li>In the <code class="docutils literal"><span class="pre">process()</span></code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this later in this section).</li>
                 <li>In the <code class="docutils literal"><span class="pre">punctuate()</span></code> method, iterate the local state store and send the aggregated counts to the downstream processor (we will talk about downstream processors later in this section), and commit the current stream state.</li>
             </ul>
-            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">WordCountProcessor</span> <span class="kd">implements</span> <span class="n">Processor</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="o">{</span>
+            <pre class="line-numbers"><code class="language-java">public class WordCountProcessor implements Processor&lt;String, String&gt; {
 
-  <span class="kd">private</span> <span class="n">ProcessorContext</span> <span class="n">context</span><span class="o">;</span>
-  <span class="kd">private</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">kvStore</span><span class="o">;</span>
+  private ProcessorContext context;
+  private KeyValueStore&lt;String, Long&gt; kvStore;
 
-  <span class="nd">@Override</span>
-  <span class="nd">@SuppressWarnings</span><span class="o">(</span><span class="s">&quot;unchecked&quot;</span><span class="o">)</span>
-  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">init</span><span class="o">(</span><span class="n">ProcessorContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>
-      <span class="c1">// keep the processor context locally because we need it in punctuate() and commit()</span>
-      <span class="k">this</span><span class="o">.</span><span class="na">context</span> <span class="o">=</span> <span class="n">context</span><span class="o">;</span>
+  @Override
+  @SuppressWarnings(&quot;unchecked&quot;)
+  public void init(ProcessorContext context) {
+      // keep the processor context locally because we need it in punctuate() and commit()
+      this.context = context;
 
-      <span class="c1">// retrieve the key-value store named &quot;Counts&quot;</span>
-      <span class="n">kvStore</span> <span class="o">=</span> <span class="o">(</span><span class="n">KeyValueStore</span><span class="o">)</span> <span class="n">context</span><span class="o">.</span><span class="na">getStateStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">);</span>
+      // retrieve the key-value store named &quot;Counts&quot;
+      kvStore = (KeyValueStore) context.getStateStore(&quot;Counts&quot;);
 
-      <span class="c1">// schedule a punctuate() method every second based on stream-time</span>
-      <span class="k">this</span><span class="o">.</span><span class="na">context</span><span class="o">.</span><span class="na">schedule</span><span class="o">(</span><span class="na">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">1000</span><span class="o">),</span> <span class="n">PunctuationType</span><span class="o">.</span><span class="na">STREAM_TIME</span><span class="o">,</span> <span class="o">(</span><span class="n">timestamp</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
-          <span class="n">KeyValueIterator</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">iter</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="na">kvStore</span><span class="o">.</span><span class="na">all</span><span class="o">();</span>
-          <span class="k">while</span> <span class="o">(</span><span class="n">iter</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
-              <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">entry</span> <span class="o">=</span> <span class="n">iter</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
-              <span class="n">context</span><span class="o">.</span><span class="na">forward</span><span class="o">(</span><span class="n">entry</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="n">entry</span><span class="o">.</span><span class="na">value</span><span class="o">.</span><span class="na">toString</span><span class="o">());</span>
-          <span class="o">}</span>
-          <span class="n">iter</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+      // schedule a punctuate() method every second based on stream-time
+      this.context.schedule(Duration.ofSeconds(1000), PunctuationType.STREAM_TIME, (timestamp) -&gt; {
+          KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
+          while (iter.hasNext()) {
+              KeyValue&lt;String, Long&gt; entry = iter.next();
+              context.forward(entry.key, entry.value.toString());
+          }
+          iter.close();
 
-          <span class="c1">// commit the current processing progress</span>
-          <span class="n">context</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span>
-      <span class="o">});</span>
-  <span class="o">}</span>
+          // commit the current processing progress
+          context.commit();
+      });
+  }
 
-  <span class="nd">@Override</span>
-  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">punctuate</span><span class="o">(</span><span class="kt">long</span> <span class="n">timestamp</span><span class="o">)</span> <span class="o">{</span>
-      <span class="c1">// this method is deprecated and should not be used anymore</span>
-  <span class="o">}</span>
+  @Override
+  public void punctuate(long timestamp) {
+      // this method is deprecated and should not be used anymore
+  }
 
-  <span class="nd">@Override</span>
-  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">close</span><span class="o">()</span> <span class="o">{</span>
-      <span class="c1">// close any resources managed by this processor</span>
-      <span class="c1">// Note: Do not close any StateStores as these are managed by the library</span>
-  <span class="o">}</span>
+  @Override
+  public void close() {
+      // close any resources managed by this processor
+      // Note: Do not close any StateStores as these are managed by the library
+  }
 
-<span class="o">}</span></code></pre></div>
-            </div>
+}</code></pre>
             <div class="admonition note">
                 <p><b>Note</b></p>
                 <p class="last"><strong>Stateful processing with state stores:</strong>
@@ -234,19 +233,18 @@
                             <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore-java.lang.String-java.time.Duration-java.time.Duration-boolean-">persistentTimestampedWindowStore</a>
                                 when you need a persistent windowedKey-(value/timestamp) store.</li>
                         </ul>
-                            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating a persistent key-value store:</span>
-<span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;persistent-counts&quot;.</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
+                            <pre class="line-numbers"><code class="language-java">// Creating a persistent key-value store:
+// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;persistent-counts&quot;.
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
-<span class="c1">// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.</span>
-<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
-    <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;persistent-counts&quot;</span><span class="o">),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">());</span>
-<span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">countStore</span> <span class="o">=</span> <span class="n">countStoreSupplier</span><span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre></div>
-                            </div>
+// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
+StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier =
+  Stores.keyValueStoreBuilder(
+    Stores.persistentKeyValueStore(&quot;persistent-counts&quot;),
+    Serdes.String(),
+    Serdes.Long());
+KeyValueStore&lt;String, Long&gt; countStore = countStoreSupplier.build();</code></pre>
                         </td>
                     </tr>
                     <tr class="row-odd"><td>In-memory
@@ -268,19 +266,18 @@
                             <li>Use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html">TimestampedWindowStore</a>
                                 when you need to store windowedKey-(value/timestamp) pairs.</li>
                         </ul>
-                            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating an in-memory key-value store:</span>
-<span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
+                            <pre class="line-numbers"><code class="language-java">// Creating an in-memory key-value store:
+// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
-<span class="c1">// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.</span>
-<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
-    <span class="n">Stores</span><span class="o">.</span><span class="na">inMemoryKeyValueStore</span><span class="o">(</span><span class="s">&quot;inmemory-counts&quot;</span><span class="o">),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">());</span>
-<span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">countStore</span> <span class="o">=</span> <span class="n">countStoreSupplier</span><span class="o">.</span><span class="na">build</span><span class="o">();</span></code></pre></div>
-                            </div>
+// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.
+StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier =
+  Stores.keyValueStoreBuilder(
+    Stores.inMemoryKeyValueStore(&quot;inmemory-counts&quot;),
+    Serdes.String(),
+    Serdes.Long());
+KeyValueStore&lt;String, Long&gt; countStore = countStoreSupplier.build();</code></pre>
                         </td>
                     </tr>
                     </tbody>
@@ -317,15 +314,14 @@
                     of the store through <code class="docutils literal"><span class="pre">enableLogging()</span></code> and <code class="docutils literal"><span class="pre">disableLogging()</span></code>.
                     You can also fine-tune the associated topic&#8217;s configuration if needed.</p>
                 <p>Example for disabling fault-tolerance:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
+                <pre class="line-numbers"><code class="language-java">import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
-<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span> <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">())</span>
-  <span class="o">.</span><span class="na">withLoggingDisabled</span><span class="o">();</span> <span class="c1">// disable backing up the store to a changelog topic</span></code></pre></div>
-                </div>
+StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Stores.keyValueStoreBuilder(
+  Stores.persistentKeyValueStore(&quot;Counts&quot;),
+    Serdes.String(),
+    Serdes.Long())
+  .withLoggingDisabled(); // disable backing up the store to a changelog topic</code></pre>
                 <div class="admonition attention">
                     <p class="first admonition-title">Attention</p>
                     <p class="last">If the changelog is disabled then the attached state store is no longer fault tolerant and it can&#8217;t have any <a class="reference internal" href="config-streams.html#streams-developer-guide-standby-replicas"><span class="std std-ref">standby replicas</span></a>.</p>
@@ -333,19 +329,18 @@
                 <p>Here is an example for enabling fault tolerance, with additional changelog-topic configuration:
                     You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala">kafka.log.LogConfig</a>.
                     Unrecognized configs will be ignored.</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
+                <pre class="line-numbers"><code class="language-java">import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
-<span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">changelogConfig</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">();</span>
-<span class="c1">// override min.insync.replicas</span>
-<span class="n">changelogConfig</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">TopicConfig</span><span class="o">.</span><span class="na">MIN_IN_SYNC_REPLICAS_CONFIG</span><span class="o">,</span> <span class="s">&quot;1&quot;</span><span class="o">)</span>
+Map&lt;String, String&gt; changelogConfig = new HashMap();
+// override min.insync.replicas
+changelogConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, &quot;1&quot;)
 
-<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span> <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
-    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">())</span>
-  <span class="o">.</span><span class="na">withLoggingEnabled</span><span class="o">(</span><span class="n">changlogConfig</span><span class="o">);</span> <span class="c1">// enable changelogging, with custom changelog settings</span></code></pre></div>
-                </div>
+StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countStoreSupplier = Stores.keyValueStoreBuilder(
+  Stores.persistentKeyValueStore(&quot;Counts&quot;),
+    Serdes.String(),
+    Serdes.Long())
+  .withLoggingEnabled(changlogConfig); // enable changelogging, with custom changelog settings</code></pre>
             </div>
             <div class="section" id="timestamped-state-stores">
                 <span id="streams-developer-guide-state-store-timestamps"></span><h3><a class="toc-backref" href="#id11">Timestamped State Stores</a><a class="headerlink" href="#timestamped-state-stores" title="Permalink to this headline"></a></h3>
@@ -389,12 +384,11 @@
                 <code class="docutils literal"><span class="pre">partition</span></code>, <code class="docutils literal"><span class="pre">offset</span></code>, <code class="docutils literal"><span class="pre">timestamp</span></code> and
                 <code class="docutils literal"><span class="pre">headers</span></code>.</p>
             <p>Here is an example implementation of how to add a new header to the record:</p>
-            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">public void process(String key, String value) {</span>
+            <pre class="line-numbers"><code class="language-java">public void process(String key, String value) {
 
-    <span class="c1">// add a header to the elements</span>
-    <span class="n">context()</span><span class="o">.</span><span class="na">headers</span><span class="o">()</span><span class="o">.</span><span class="na">add</span><span class="o">.</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">,</span> <span class="s">&quot;key&quot;</span>
-<span class="o">}</span></code></pre></div>
-        </div>
+    // add a header to the elements
+    context().headers().add.(&quot;key&quot;, &quot;value&quot;);
+}</code></pre>
         <div class="section" id="connecting-processors-and-state-stores">
             <h2><a class="toc-backref" href="#id8">Connecting Processors and State Stores</a><a class="headerlink" href="#connecting-processors-and-state-stores" title="Permalink to this headline"></a></h2>
             <p>Now that a <a class="reference internal" href="#streams-developer-guide-stream-processor"><span class="std std-ref">processor</span></a> (WordCountProcessor) and the
@@ -403,16 +397,16 @@
                 to generate input data streams into the topology, and sink processors with the specified Kafka topics to generate
                 output data streams out of the topology.</p>
             <p>Here is an example implementation:</p>
-            <pre class="line-numbers"><code class="language-java">                Topology builder = new Topology();
-                // add the source processor node that takes Kafka topic "source-topic" as input
-                builder.addSource("Source", "source-topic")
-                    // add the WordCountProcessor node which takes the source processor as its upstream processor
-                    .addProcessor("Process", () -> new WordCountProcessor(), "Source")
-                    // add the count store associated with the WordCountProcessor processor
-                    .addStateStore(countStoreBuilder, "Process")
-                    // add the sink processor node that takes Kafka topic "sink-topic" as output
-                    // and the WordCountProcessor node as its upstream processor
-                    .addSink("Sink", "sink-topic", "Process");</code></pre>
+            <pre class="line-numbers"><code class="language-java">Topology builder = new Topology();
+// add the source processor node that takes Kafka topic "source-topic" as input
+builder.addSource("Source", "source-topic")
+    // add the WordCountProcessor node which takes the source processor as its upstream processor
+    .addProcessor("Process", () -> new WordCountProcessor(), "Source")
+    // add the count store associated with the WordCountProcessor processor
+    .addStateStore(countStoreBuilder, "Process")
+    // add the sink processor node that takes Kafka topic "sink-topic" as output
+    // and the WordCountProcessor node as its upstream processor
+    .addSink("Sink", "sink-topic", "Process");</code></pre>
             <p>Here is a quick explanation of this example:</p>
             <ul class="simple">
                 <li>A source processor node named <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> is added to the topology using the <code class="docutils literal"><span class="pre">addSource</span></code> method, with one Kafka topic
@@ -429,22 +423,22 @@
                 This can be done by implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
                 instead of calling <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code>, like this:
             </p>
-            <pre class="line-numbers"><code class="language-java">                Topology builder = new Topology();
-                // add the source processor node that takes Kafka "source-topic" as input
-                builder.addSource("Source", "source-topic")
-                    // add the WordCountProcessor node which takes the source processor as its upstream processor.
-                    // the ProcessorSupplier provides the count store associated with the WordCountProcessor
-                    .addProcessor("Process", new ProcessorSupplier&ltString, String&gt() {
-                        public Processor&ltString, String&gt get() {
-                            return new WordCountProcessor();
-                        }
-                        public Set&ltStoreBuilder&lt?&gt&gt stores() {
-                            return countStoreBuilder;
-                        }
-                    }, "Source")
-                    // add the sink processor node that takes Kafka topic "sink-topic" as output
-                    // and the WordCountProcessor node as its upstream processor
-                    .addSink("Sink", "sink-topic", "Process");</code></pre>
+            <pre class="line-numbers"><code class="language-java">Topology builder = new Topology();
+// add the source processor node that takes Kafka "source-topic" as input
+builder.addSource("Source", "source-topic")
+    // add the WordCountProcessor node which takes the source processor as its upstream processor.
+    // the ProcessorSupplier provides the count store associated with the WordCountProcessor
+    .addProcessor("Process", new ProcessorSupplier&ltString, String&gt() {
+        public Processor&ltString, String&gt get() {
+            return new WordCountProcessor();
+        }
+        public Set&ltStoreBuilder&lt?&gt&gt stores() {
+            return countStoreBuilder;
+        }
+    }, "Source")
+    // add the sink processor node that takes Kafka topic "sink-topic" as output
+    // and the WordCountProcessor node as its upstream processor
+    .addSink("Sink", "sink-topic", "Process");</code></pre>
             <p>This allows for a processor to "own" state stores, effectively encapsulating their usage from the user wiring the topology.
                 Multiple processors that share a state store may provide the same store with this technique, as long as the <code class="docutils literal"><span class="pre">StoreBuilder</span></code> is the same <code class="docutils literal"><span class="pre">instance</span></code>.</p>
             <p>In these topologies, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an

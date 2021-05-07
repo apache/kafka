@@ -129,95 +129,87 @@
                 <span id="streams-developer-guide-interactive-queries-local-key-value-stores"></span><h3><a class="toc-backref" href="#id4">Querying local key-value stores</a><a class="headerlink" href="#querying-local-key-value-stores" title="Permalink to this headline"></a></h3>
                 <p>To query a local key-value store, you must first create a topology with a key-value store. This example creates a key-value
                     store named &#8220;CountsKeyValueStore&#8221;. This store will hold the latest count for any word that is found on the topic &#8220;word-count-input&#8221;.</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Properties </span> <span class="n">props</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">textLines</span> <span class="o">=</span> <span class="o">...;</span>
+                <pre class="line-numbers"><code class="language-java">Properties  props = ...;
+StreamsBuilder builder = ...;
+KStream&lt;String, String&gt; textLines = ...;
 
-<span class="c1">// Define the processing topology (here: WordCount)</span>
-<span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedByWord</span> <span class="o">=</span> <span class="n">textLines</span>
-  <span class="o">.</span><span class="na">flatMapValues</span><span class="o">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="n">value</span><span class="o">.</span><span class="na">toLowerCase</span><span class="o">().</span><span class="na">split</span><span class="o">(</span><span class="s">&quot;\\W+&quot;</span><span class="o">)))</span>
-  <span class="o">.</span><span class="na">groupBy</span><span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">word</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">word</span><span class="o">,</span> <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">stringSerde</span><span class="o">,</span> <span class="n">stringSerde</span><span class="o">));</span>
+// Define the processing topology (here: WordCount)
+KGroupedStream&lt;String, String&gt; groupedByWord = textLines
+  .flatMapValues(value -&gt; Arrays.asList(value.toLowerCase().split(&quot;\\W+&quot;)))
+  .groupBy((key, word) -&gt; word, Grouped.with(stringSerde, stringSerde));
 
-<span class="c1">// Create a key-value store named &quot;CountsKeyValueStore&quot; for the all-time word counts</span>
-<span class="n">groupedByWord</span><span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;CountsKeyValueStore&quot;</span><span class="o">));</span>
+// Create a key-value store named &quot;CountsKeyValueStore&quot; for the all-time word counts
+groupedByWord.count(Materialized.&lt;String, String, KeyValueStore&lt;Bytes, byte[]&gt;as(&quot;CountsKeyValueStore&quot;));
 
-<span class="c1">// Start an instance of the topology</span>
-<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">builder</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span></code></pre></div>
-                </div>
+// Start an instance of the topology
+KafkaStreams streams = new KafkaStreams(builder, props);
+streams.start();</code></pre>
                 <p>After the application has started, you can get access to &#8220;CountsKeyValueStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java">ReadOnlyKeyValueStore</a> API:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the key-value store CountsKeyValueStore</span>
-<span class="n">ReadOnlyKeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">keyValueStore</span> <span class="o">=</span>
-    <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;CountsKeyValueStore&quot;</span><span class="o">,</span> <span class="n">QueryableStoreTypes</span><span class="o">.</span><span class="na">keyValueStore</span><span class="o">());</span>
+                <pre class="line-numbers"><code class="language-java">// Get the key-value store CountsKeyValueStore
+ReadOnlyKeyValueStore&lt;String, Long&gt; keyValueStore =
+    streams.store(&quot;CountsKeyValueStore&quot;, QueryableStoreTypes.keyValueStore());
 
-<span class="c1">// Get value by key</span>
-<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;count for hello:&quot;</span> <span class="o">+</span> <span class="n">keyValueStore</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="s">&quot;hello&quot;</span><span class="o">));</span>
+// Get value by key
+System.out.println(&quot;count for hello:&quot; + keyValueStore.get(&quot;hello&quot;));
 
-<span class="c1">// Get the values for a range of keys available in this application instance</span>
-<span class="n">KeyValueIterator</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">range</span> <span class="o">=</span> <span class="n">keyValueStore</span><span class="o">.</span><span class="na">range</span><span class="o">(</span><span class="s">&quot;all&quot;</span><span class="o">,</span> <span class="s">&quot;streams&quot;</span><span class="o">);</span>
-<span class="k">while</span> <span class="o">(</span><span class="n">range</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
-  <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">next</span> <span class="o">=</span> <span class="n">range</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
-  <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;count for &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">key</span> <span class="o">+</span> <span class="s">&quot;: &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">value</span><span class="o">);</span>
-<span class="o">}</span>
+// Get the values for a range of keys available in this application instance
+KeyValueIterator&lt;String, Long&gt; range = keyValueStore.range(&quot;all&quot;, &quot;streams&quot;);
+while (range.hasNext()) {
+  KeyValue&lt;String, Long&gt; next = range.next();
+  System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+}
 
-<span class="c1">// Get the values for all of the keys available in this application instance</span>
-<span class="n">KeyValueIterator</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">range</span> <span class="o">=</span> <span class="n">keyValueStore</span><span class="o">.</span><span class="na">all</span><span class="o">();</span>
-<span class="k">while</span> <span class="o">(</span><span class="n">range</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
-  <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">next</span> <span class="o">=</span> <span class="n">range</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
-  <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;count for &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">key</span> <span class="o">+</span> <span class="s">&quot;: &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">value</span><span class="o">);</span>
-<span class="o">}</span></code></pre></div>
-                </div>
+// Get the values for all of the keys available in this application instance
+KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all();
+while (range.hasNext()) {
+  KeyValue&lt;String, Long&gt; next = range.next();
+  System.out.println(&quot;count for &quot; + next.key + &quot;: &quot; + next.value);
+}</code></pre>
                 <p>You can also materialize the results of stateless operators by using the overloaded methods that take a <code class="docutils literal"><span class="pre">queryableStoreName</span></code>
                     as shown in the example below:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span>
-<span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">regionCounts</span> <span class="o">=</span> <span class="o">...;</span>
+                <pre class="line-numbers"><code class="language-java">StreamsBuilder builder = ...;
+KTable&lt;String, Integer&gt; regionCounts = ...;
 
-<span class="c1">// materialize the result of filtering corresponding to odd numbers</span>
-<span class="c1">// the &quot;queryableStoreName&quot; can be subsequently queried.</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">oddCounts</span> <span class="o">=</span> <span class="n">numberLines</span><span class="o">.</span><span class="na">filter</span><span class="o">((</span><span class="n">region</span><span class="o">,</span> <span class="n">count</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">count</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">),</span>
-  <span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;queryableStoreName&quot;</span><span class="o">));</span>
+// materialize the result of filtering corresponding to odd numbers
+// the &quot;queryableStoreName&quot; can be subsequently queried.
+KTable&lt;String, Integer&gt; oddCounts = numberLines.filter((region, count) -&gt; (count % 2 != 0),
+  Materialized.&lt;String, Integer, KeyValueStore&lt;Bytes, byte[]&gt;as(&quot;queryableStoreName&quot;));
 
-<span class="c1">// do not materialize the result of filtering corresponding to even numbers</span>
-<span class="c1">// this means that these results will not be materialized and cannot be queried.</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">oddCounts</span> <span class="o">=</span> <span class="n">numberLines</span><span class="o">.</span><span class="na">filter</span><span class="o">((</span><span class="n">region</span><span class="o">,</span> <span class="n">count</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">count</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="o">));</span></code></pre></div>
-                </div>
-            </div>
+// do not materialize the result of filtering corresponding to even numbers
+// this means that these results will not be materialized and cannot be queried.
+KTable&lt;String, Integer&gt; oddCounts = numberLines.filter((region, count) -&gt; (count % 2 == 0));</code></pre>
             <div class="section" id="querying-local-window-stores">
                 <span id="streams-developer-guide-interactive-queries-local-window-stores"></span><h3><a class="toc-backref" href="#id5">Querying local window stores</a><a class="headerlink" href="#querying-local-window-stores" title="Permalink to this headline"></a></h3>
                 <p>A window store will potentially have many results for any given key because the key can be present in multiple windows.
                     However, there is only one result per window for a given key.</p>
                 <p>To query a local window store, you must first create a topology with a window store. This example creates a window store
                     named &#8220;CountsWindowStore&#8221; that contains the counts for words in 1-minute windows.</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span>
-<span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">textLines</span> <span class="o">=</span> <span class="o">...;</span>
+                <pre class="line-numbers"><code class="language-java">StreamsBuilder builder = ...;
+KStream&lt;String, String&gt; textLines = ...;
 
-<span class="c1">// Define the processing topology (here: WordCount)</span>
-<span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedByWord</span> <span class="o">=</span> <span class="n">textLines</span>
-  <span class="o">.</span><span class="na">flatMapValues</span><span class="o">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="n">value</span><span class="o">.</span><span class="na">toLowerCase</span><span class="o">().</span><span class="na">split</span><span class="o">(</span><span class="s">&quot;\\W+&quot;</span><span class="o">)))</span>
-  <span class="o">.</span><span class="na">groupBy</span><span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">word</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">word</span><span class="o">,</span> <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">stringSerde</span><span class="o">,</span> <span class="n">stringSerde</span><span class="o">));</span>
+// Define the processing topology (here: WordCount)
+KGroupedStream&lt;String, String&gt; groupedByWord = textLines
+  .flatMapValues(value -&gt; Arrays.asList(value.toLowerCase().split(&quot;\\W+&quot;)))
+  .groupBy((key, word) -&gt; word, Grouped.with(stringSerde, stringSerde));
 
-<span class="c1">// Create a window state store named &quot;CountsWindowStore&quot; that contains the word counts for every minute</span>
-<span class="n">groupedByWord</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(<span class="n">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">60</span><span class="o">)))</span>
-  <span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">,</span> <span class="n">WindowStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">));</span></code></pre></div>
-                </div>
+// Create a window state store named &quot;CountsWindowStore&quot; that contains the word counts for every minute
+groupedByWord.windowedBy(TimeWindows.of(Duration.ofSeconds(60)))
+  .count(Materialized.&lt;String, Long, WindowStore&lt;Bytes, byte[]&gt;as(&quot;CountsWindowStore&quot;));</code></pre>
                 <p>After the application has started, you can get access to &#8220;CountsWindowStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java">ReadOnlyWindowStore</a> API:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the window store named &quot;CountsWindowStore&quot;</span>
-<span class="n">ReadOnlyWindowStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">windowStore</span> <span class="o">=</span>
-    <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">,</span> <span class="n">QueryableStoreTypes</span><span class="o">.</span><span class="na">windowStore</span><span class="o">());</span>
+                <pre class="line-numbers"><code class="language-java">// Get the window store named &quot;CountsWindowStore&quot;
+ReadOnlyWindowStore&lt;String, Long&gt; windowStore =
+    streams.store(&quot;CountsWindowStore&quot;, QueryableStoreTypes.windowStore());
 
-<span class="c1">// Fetch values for the key &quot;world&quot; for all of the windows available in this application instance.</span>
-<span class="c1">// To get *all* available windows we fetch windows from the beginning of time until now.</span>
-<span class="kt">Instant</span> <span class="n">timeFrom</span> <span class="o">=</span> <span class="na">Instant</span><span class="o">.</span><span class="na">ofEpochMilli<span class="o">(</span><span class="mi">0</span><span class="o">);</span> <span class="c1">// beginning of time = oldest available</span>
-<span class="kt">Instant</span> <span class="n">timeTo</span> <span class="o">=</span> <span class="n">Instant</span><span class="o">.</span><span class="na">now</span><span class="o">();</span> <span class="c1">// now (in processing-time)</span>
-<span class="n">WindowStoreIterator</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;</span> <span class="n">iterator</span> <span class="o">=</span> <span class="n">windowStore</span><span class="o">.</span><span class="na">fetch</span><span class="o">(</span><span class="s">&quot;world&quot;</span><span class="o">,</span> <span class="n">timeFrom</span><span class="o">,</span> <span class="n">timeTo</span><span class="o">);</span>
-<span class="k">while</span> <span class="o">(</span><span class="n">iterator</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
-  <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">next</span> <span class="o">=</span> <span class="n">iterator</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
-  <span class="kt">long</span> <span class="n">windowTimestamp</span> <span class="o">=</span> <span class="n">next</span><span class="o">.</span><span class="na">key</span><span class="o">;</span>
-  <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;Count of &#39;world&#39; @ time &quot;</span> <span class="o">+</span> <span class="n">windowTimestamp</span> <span class="o">+</span> <span class="s">&quot; is &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">value</span><span class="o">);</span>
-<span class="o">}</span></code></pre></div>
-                </div>
+// Fetch values for the key &quot;world&quot; for all of the windows available in this application instance.
+// To get *all* available windows we fetch windows from the beginning of time until now.
+Instant timeFrom = Instant.ofEpochMilli(0); // beginning of time = oldest available
+Instant timeTo = Instant.now(); // now (in processing-time)
+WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetch(&quot;world&quot;, timeFrom, timeTo);
+while (iterator.hasNext()) {
+  KeyValue&lt;Long, Long&gt; next = iterator.next();
+  long windowTimestamp = next.key;
+  System.out.println(&quot;Count of &#39;world&#39; @ time &quot; + windowTimestamp + &quot; is &quot; + next.value);
+}</code></pre>
             </div>
             <div class="section" id="querying-local-custom-state-stores">
                 <span id="streams-developer-guide-interactive-queries-custom-stores"></span><h3><a class="toc-backref" href="#id6">Querying local custom state stores</a><a class="headerlink" href="#querying-local-custom-state-stores" title="Permalink to this headline"></a></h3>
@@ -233,43 +225,41 @@
                     <li>It is recommended that you provide an interface that restricts access to read-only operations. This prevents users of this API from mutating the state of your running Kafka Streams application out-of-band.</li>
                 </ul>
                 <p>The class/interface hierarchy for your custom store might look something like:</p>
-                <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">StateStore</span><span class="o">,</span> <span class="n">MyWriteableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
-  <span class="c1">// implementation of the actual store</span>
-<span class="o">}</span>
+                <pre class="line-numbers"><code class="language-java">public class MyCustomStore&lt;K,V&gt; implements StateStore, MyWriteableCustomStore&lt;K,V&gt; {
+  // implementation of the actual store
+}
 
-<span class="c1">// Read-write interface for MyCustomStore</span>
-<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MyWriteableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">extends</span> <span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
-  <span class="kt">void</span> <span class="nf">write</span><span class="o">(</span><span class="n">K</span> <span class="n">Key</span><span class="o">,</span> <span class="n">V</span> <span class="n">value</span><span class="o">);</span>
-<span class="o">}</span>
+// Read-write interface for MyCustomStore
+public interface MyWriteableCustomStore&lt;K,V&gt; extends MyReadableCustomStore&lt;K,V&gt; {
+  void write(K Key, V value);
+}
 
-<span class="c1">// Read-only interface for MyCustomStore</span>
-<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
-  <span class="n">V</span> <span class="nf">read</span><span class="o">(</span><span class="n">K</span> <span class="n">key</span><span class="o">);</span>
-<span class="o">}</span>
+// Read-only interface for MyCustomStore
+public interface MyReadableCustomStore&lt;K,V&gt; {
+  V read(K key);
+}
 
-<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStoreBuilder</span> <span class="kd">implements</span> <span class="n">StoreBuilder</span> <span class="o">{</span>
-  <span class="c1">// implementation of the supplier for MyCustomStore</span>
-<span class="o">}</span></code></pre></div>
-                </div>
+public class MyCustomStoreBuilder implements StoreBuilder {
+  // implementation of the supplier for MyCustomStore
+}</code></pre>
                 <p>To make this store queryable you must:</p>
                 <ul class="simple">
                     <li>Provide an implementation of <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java">QueryableStoreType</a>.</li>
                     <li>Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.</li>
                 </ul>
                 <p>Here is how to implement <code class="docutils literal"><span class="pre">QueryableStoreType</span></code>:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStoreType</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">QueryableStoreType</span><span class="o">&lt;</span><span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;&gt;</span> <span class="o">{</span>
+                <pre class="line-numbers"><code class="language-java">public class MyCustomStoreType&lt;K,V&gt; implements QueryableStoreType&lt;MyReadableCustomStore&lt;K,V&gt;&gt; {
 
-  <span class="c1">// Only accept StateStores that are of type MyCustomStore</span>
-  <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">accepts</span><span class="o">(</span><span class="kd">final</span> <span class="n">StateStore</span> <span class="n">stateStore</span><span class="o">)</span> <span class="o">{</span>
-    <span class="k">return</span> <span class="n">stateStore</span> <span class="n">instanceOf</span> <span class="n">MyCustomStore</span><span class="o">;</span>
-  <span class="o">}</span>
+  // Only accept StateStores that are of type MyCustomStore
+  public boolean accepts(final StateStore stateStore) {
+    return stateStore instanceOf MyCustomStore;
+  }
 
-  <span class="kd">public</span> <span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="nf">create</span><span class="o">(</span><span class="kd">final</span> <span class="n">StateStoreProvider</span> <span class="n">storeProvider</span><span class="o">,</span> <span class="kd">final</span> <span class="n">String</span> <span class="n">storeName</span><span class="o">)</span> <span class="o">{</span>
-      <span class="k">return</span> <span class="k">new</span> <span class="n">MyCustomStoreTypeWrapper</span><span class="o">(</span><span class="n">storeProvider</span><span class="o">,</span> <span class="n">storeName</span><span class="o">,</span> <span class="k">this</span><span class="o">);</span>
-  <span class="o">}</span>
+  public MyReadableCustomStore&lt;K,V&gt; create(final StateStoreProvider storeProvider, final String storeName) {
+      return new MyCustomStoreTypeWrapper(storeProvider, storeName, this);
+  }
 
-<span class="o">}</span></code></pre></div>
-                </div>
+}</code></pre>
                 <p>A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage
                     multiple local instances of a particular state store.  The wrapper class hides this complexity and lets you query a &#8220;logical&#8221;
                     state store by name without having to know about all of the underlying local instances of that state store.</p>
@@ -279,56 +269,53 @@
                     <code class="docutils literal"><span class="pre">StateStoreProvider#stores(String</span> <span class="pre">storeName,</span> <span class="pre">QueryableStoreType&lt;T&gt;</span> <span class="pre">queryableStoreType)</span></code> returns a <code class="docutils literal"><span class="pre">List</span></code> of state
                     stores with the given storeName and of the type as defined by <code class="docutils literal"><span class="pre">queryableStoreType</span></code>.</p>
                 <p>Here is an example implementation of the wrapper follows (Java 8+):</p>
-                <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="c1">// We strongly recommended implementing a read-only interface</span>
-<span class="c1">// to restrict usage of the store to safe read operations!</span>
-<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStoreTypeWrapper</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
+                <pre class="line-numbers"><code class="language-java">// We strongly recommended implementing a read-only interface
+// to restrict usage of the store to safe read operations!
+public class MyCustomStoreTypeWrapper&lt;K,V&gt; implements MyReadableCustomStore&lt;K,V&gt; {
 
-  <span class="kd">private</span> <span class="kd">final</span> <span class="n">QueryableStoreType</span><span class="o">&lt;</span><span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span> <span class="n">V</span><span class="o">&gt;&gt;</span> <span class="n">customStoreType</span><span class="o">;</span>
-  <span class="kd">private</span> <span class="kd">final</span> <span class="n">String</span> <span class="n">storeName</span><span class="o">;</span>
-  <span class="kd">private</span> <span class="kd">final</span> <span class="n">StateStoreProvider</span> <span class="n">provider</span><span class="o">;</span>
+  private final QueryableStoreType&lt;MyReadableCustomStore&lt;K, V&gt;&gt; customStoreType;
+  private final String storeName;
+  private final StateStoreProvider provider;
 
-  <span class="kd">public</span> <span class="nf">CustomStoreTypeWrapper</span><span class="o">(</span><span class="kd">final</span> <span class="n">StateStoreProvider</span> <span class="n">provider</span><span class="o">,</span>
-                              <span class="kd">final</span> <span class="n">String</span> <span class="n">storeName</span><span class="o">,</span>
-                              <span class="kd">final</span> <span class="n">QueryableStoreType</span><span class="o">&lt;</span><span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span> <span class="n">V</span><span class="o">&gt;&gt;</span> <span class="n">customStoreType</span><span class="o">)</span> <span class="o">{</span>
+  public CustomStoreTypeWrapper(final StateStoreProvider provider,
+                              final String storeName,
+                              final QueryableStoreType&lt;MyReadableCustomStore&lt;K, V&gt;&gt; customStoreType) {
 
-    <span class="c1">// ... assign fields ...</span>
-  <span class="o">}</span>
+    // ... assign fields ...
+  }
 
-  <span class="c1">// Implement a safe read method</span>
-  <span class="nd">@Override</span>
-  <span class="kd">public</span> <span class="n">V</span> <span class="nf">read</span><span class="o">(</span><span class="kd">final</span> <span class="n">K</span> <span class="n">key</span><span class="o">)</span> <span class="o">{</span>
-    <span class="c1">// Get all the stores with storeName and of customStoreType</span>
-    <span class="kd">final</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span> <span class="n">V</span><span class="o">&gt;&gt;</span> <span class="n">stores</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="na">getStores</span><span class="o">(</span><span class="n">storeName</span><span class="o">,</span> <span class="n">customStoreType</span><span class="o">);</span>
-    <span class="c1">// Try and find the value for the given key</span>
-    <span class="kd">final</span> <span class="n">Optional</span><span class="o">&lt;</span><span class="n">V</span><span class="o">&gt;</span> <span class="n">value</span> <span class="o">=</span> <span class="n">stores</span><span class="o">.</span><span class="na">stream</span><span class="o">().</span><span class="na">filter</span><span class="o">(</span><span class="n">store</span> <span class="o">-&gt;</span> <span class="n">store</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="n">key</span><span class="o">)</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">).</span><span class="na">findFirst</span><span class="o">();</span>
-    <span class="c1">// Return the value if it exists</span>
-    <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="na">orElse</span><span class="o">(</span><span class="kc">null</span><span class="o">);</span>
-  <span class="o">}</span>
+  // Implement a safe read method
+  @Override
+  public V read(final K key) {
+    // Get all the stores with storeName and of customStoreType
+    final List&lt;MyReadableCustomStore&lt;K, V&gt;&gt; stores = provider.getStores(storeName, customStoreType);
+    // Try and find the value for the given key
+    final Optional&lt;V&gt; value = stores.stream().filter(store -&gt; store.read(key) != null).findFirst();
+    // Return the value if it exists
+    return value.orElse(null);
+  }
 
-<span class="o">}</span></code></pre></div>
-                </div>
+}</code></pre>
                 <p>You can now find and query your custom store:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span>
-<span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">ProcessorSupplier</span> <span class="n">processorSuppler</span> <span class="o">=</span> <span class="o">...;</span>
+                <pre class="line-numbers"><code class="language-java">Topology topology = ...;
+ProcessorSupplier processorSuppler = ...;
 
-<span class="c1">// Create CustomStoreSupplier for store name the-custom-store</span>
-<span class="n">MyCustomStoreBuilder</span> <span class="n">customStoreBuilder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">MyCustomStoreBuilder</span><span class="o">(</span><span class="s">&quot;the-custom-store&quot;</span><span class="o">)</span> <span class="c1">//...;</span>
-<span class="c1">// Add the source topic</span>
-<span class="n">topology</span><span class="o">.</span><span class="na">addSource</span><span class="o">(</span><span class="s">&quot;input&quot;</span><span class="o">,</span> <span class="s">&quot;inputTopic&quot;</span><span class="o">);</span>
-<span class="c1">// Add a custom processor that reads from the source topic</span>
-<span class="n">topology</span><span class="o">.</span><span class="na">addProcessor</span><span class="o">(</span><span class="s">&quot;the-processor&quot;</span><span class="o">,</span> <span class="n">processorSupplier</span><span class="o">,</span> <span class="s">&quot;input&quot;</span><span class="o">);</span>
-<span class="c1">// Connect your custom state store to the custom processor above</span>
-<span class="n">topology</span><span class="o">.</span><span class="na">addStateStore</span><span class="o">(</span><span class="n">customStoreBuilder</span><span class="o">,</span> <span class="s">&quot;the-processor&quot;</span><span class="o">);</span>
+// Create CustomStoreSupplier for store name the-custom-store
+MyCustomStoreBuilder customStoreBuilder = new MyCustomStoreBuilder(&quot;the-custom-store&quot;) //...;
+// Add the source topic
+topology.addSource(&quot;input&quot;, &quot;inputTopic&quot;);
+// Add a custom processor that reads from the source topic
+topology.addProcessor(&quot;the-processor&quot;, processorSupplier, &quot;input&quot;);
+// Connect your custom state store to the custom processor above
+topology.addStateStore(customStoreBuilder, &quot;the-processor&quot;);
 
-<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">topology</span><span class="o">,</span> <span class="n">config</span><span class="o">);</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
+KafkaStreams streams = new KafkaStreams(topology, config);
+streams.start();
 
-<span class="c1">// Get access to the custom store</span>
-<span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">store</span> <span class="o">=</span> <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;the-custom-store&quot;</span><span class="o">,</span> <span class="k">new</span> <span class="n">MyCustomStoreType</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span><span class="n">String</span><span class="o">&gt;());</span>
-<span class="c1">// Query the store</span>
-<span class="n">String</span> <span class="n">value</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">);</span></code></pre></div>
-                </div>
+// Get access to the custom store
+MyReadableCustomStore&lt;String,String&gt; store = streams.store(&quot;the-custom-store&quot;, new MyCustomStoreType&lt;String,String&gt;());
+// Query the store
+String value = store.read(&quot;key&quot;);</code></pre>
             </div>
         </div>
         <div class="section" id="querying-remote-state-stores-for-the-entire-app">
@@ -369,41 +356,39 @@ interactive queries</span></p>
                         piggybacking additional inter-application communication that goes beyond interactive queries.</p>
                 </div>
                 <p>This example shows how to configure and run a Kafka Streams application that supports the discovery of its state stores.</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="c1">// Set the unique RPC endpoint of this application instance through which it</span>
-<span class="c1">// can be interactively queried.  In a real application, the value would most</span>
-<span class="c1">// probably not be hardcoded but derived dynamically.</span>
-<span class="n">String</span> <span class="n">rpcEndpoint</span> <span class="o">=</span> <span class="s">&quot;host1:4460&quot;</span><span class="o">;</span>
-<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">APPLICATION_SERVER_CONFIG</span><span class="o">,</span> <span class="n">rpcEndpoint</span><span class="o">);</span>
-<span class="c1">// ... further settings may follow here ...</span>
+                <pre class="line-numbers"><code class="language-java">Properties props = new Properties();
+// Set the unique RPC endpoint of this application instance through which it
+// can be interactively queried.  In a real application, the value would most
+// probably not be hardcoded but derived dynamically.
+String rpcEndpoint = &quot;host1:4460&quot;;
+props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, rpcEndpoint);
+// ... further settings may follow here ...
 
-<span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">StreamsBuilder</span><span class="o">();</span>
+StreamsBuilder builder = new StreamsBuilder();
 
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">textLines</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="na">stream</span><span class="o">(</span><span class="n">stringSerde</span><span class="o">,</span> <span class="n">stringSerde</span><span class="o">,</span> <span class="s">&quot;word-count-input&quot;</span><span class="o">);</span>
+KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, &quot;word-count-input&quot;);
 
-<span class="kd">final</span> <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedByWord</span> <span class="o">=</span> <span class="n">textLines</span>
-    <span class="o">.</span><span class="na">flatMapValues</span><span class="o">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="na">asList</span><span class="o">(</span><span class="n">value</span><span class="o">.</span><span class="na">toLowerCase</span><span class="o">().</span><span class="na">split</span><span class="o">(</span><span class="s">&quot;\\W+&quot;</span><span class="o">)))</span>
-    <span class="o">.</span><span class="na">groupBy</span><span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">word</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">word</span><span class="o">,</span> <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">stringSerde</span><span class="o">,</span> <span class="n">stringSerde</span><span class="o">));</span>
+final KGroupedStream&lt;String, String&gt; groupedByWord = textLines
+    .flatMapValues(value -&gt; Arrays.asList(value.toLowerCase().split(&quot;\\W+&quot;)))
+    .groupBy((key, word) -&gt; word, Grouped.with(stringSerde, stringSerde));
 
-<span class="c1">// This call to `count()` creates a state store named &quot;word-count&quot;.</span>
-<span class="c1">// The state store is discoverable and can be queried interactively.</span>
-<span class="n">groupedByWord</span><span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;word-count&quot;</span><span class="o">));</span>
+// This call to `count()` creates a state store named &quot;word-count&quot;.
+// The state store is discoverable and can be queried interactively.
+groupedByWord.count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;as(&quot;word-count&quot;));
 
-<span class="c1">// Start an instance of the topology</span>
-<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">builder</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
+// Start an instance of the topology
+KafkaStreams streams = new KafkaStreams(builder, props);
+streams.start();
 
-<span class="c1">// Then, create and start the actual RPC service for remote access to this</span>
-<span class="c1">// application instance&#39;s local state stores.</span>
-<span class="c1">//</span>
-<span class="c1">// This service should be started on the same host and port as defined above by</span>
-<span class="c1">// the property `StreamsConfig.APPLICATION_SERVER_CONFIG`.  The example below is</span>
-<span class="c1">// fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)</span>
-<span class="c1">// that showcase how to implement such a service to get you started.</span>
-<span class="n">MyRPCService</span> <span class="n">rpcService</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">rpcService</span><span class="o">.</span><span class="na">listenAt</span><span class="o">(</span><span class="n">rpcEndpoint</span><span class="o">);</span></code></pre></div>
-                </div>
-            </div>
+// Then, create and start the actual RPC service for remote access to this
+// application instance&#39;s local state stores.
+//
+// This service should be started on the same host and port as defined above by
+// the property `StreamsConfig.APPLICATION_SERVER_CONFIG`.  The example below is
+// fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)
+// that showcase how to implement such a service to get you started.
+MyRPCService rpcService = ...;
+rpcService.listenAt(rpcEndpoint);</code></pre>
             <div class="section" id="discovering-and-accessing-application-instances-and-their-local-state-stores">
                 <span id="streams-developer-guide-interactive-queries-discover-app-instances-and-stores"></span><h3><a class="toc-backref" href="#id10">Discovering and accessing application instances and their local state stores</a><a class="headerlink" href="#discovering-and-accessing-application-instances-and-their-local-state-stores" title="Permalink to this headline"></a></h3>
                 <p>The following methods return <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a> objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.</p>
@@ -419,39 +404,38 @@ interactive queries</span></p>
                 </div>
                 <p>For example, we can now find the <code class="docutils literal"><span class="pre">StreamsMetadata</span></code> for the state store named &#8220;word-count&#8221; that we defined in the
                     code example shown in the previous section:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="c1">// Find all the locations of local instances of the state store named &quot;word-count&quot;</span>
-<span class="n">Collection</span><span class="o">&lt;</span><span class="n">StreamsMetadata</span><span class="o">&gt;</span> <span class="n">wordCountHosts</span> <span class="o">=</span> <span class="n">streams</span><span class="o">.</span><span class="na">allMetadataForStore</span><span class="o">(</span><span class="s">&quot;word-count&quot;</span><span class="o">);</span>
+                <pre class="line-numbers"><code class="language-java">KafkaStreams streams = ...;
+// Find all the locations of local instances of the state store named &quot;word-count&quot;
+Collection&lt;StreamsMetadata&gt; wordCountHosts = streams.allMetadataForStore(&quot;word-count&quot;);
 
-<span class="c1">// For illustrative purposes, we assume using an HTTP client to talk to remote app instances.</span>
-<span class="n">HttpClient</span> <span class="n">http</span> <span class="o">=</span> <span class="o">...;</span>
+// For illustrative purposes, we assume using an HTTP client to talk to remote app instances.
+HttpClient http = ...;
 
-<span class="c1">// Get the word count for word (aka key) &#39;alice&#39;: Approach 1</span>
-<span class="c1">//</span>
-<span class="c1">// We first find the one app instance that manages the count for &#39;alice&#39; in its local state stores.</span>
-<span class="n">StreamsMetadata</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">streams</span><span class="o">.</span><span class="na">metadataForKey</span><span class="o">(</span><span class="s">&quot;word-count&quot;</span><span class="o">,</span> <span class="s">&quot;alice&quot;</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">().</span><span class="na">serializer</span><span class="o">());</span>
-<span class="c1">// Then, we query only that single app instance for the latest count of &#39;alice&#39;.</span>
-<span class="c1">// Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,</span>
-<span class="c1">// the URL (or, in general, the method of communication) will depend on the RPC layer you opted to</span>
-<span class="c1">// implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase</span>
-<span class="c1">// how to implement such an RPC layer.</span>
-<span class="n">Long</span> <span class="n">result</span> <span class="o">=</span> <span class="n">http</span><span class="o">.</span><span class="na">getLong</span><span class="o">(</span><span class="s">&quot;http://&quot;</span> <span class="o">+</span> <span class="n">metadata</span><span class="o">.</span><span class="na">host</span><span class="o">()</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">metadata</span><span class="o">.</span><span class="na">port</span><span class="o">()</span> <span class="o">+</span> <span class="s">&quot;/word-count/alice&quot;</span><span class="o">);</span>
+// Get the word count for word (aka key) &#39;alice&#39;: Approach 1
+//
+// We first find the one app instance that manages the count for &#39;alice&#39; in its local state stores.
+StreamsMetadata metadata = streams.metadataForKey(&quot;word-count&quot;, &quot;alice&quot;, Serdes.String().serializer());
+// Then, we query only that single app instance for the latest count of &#39;alice&#39;.
+// Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,
+// the URL (or, in general, the method of communication) will depend on the RPC layer you opted to
+// implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase
+// how to implement such an RPC layer.
+Long result = http.getLong(&quot;http://&quot; + metadata.host() + &quot;:&quot; + metadata.port() + &quot;/word-count/alice&quot;);
 
-<span class="c1">// Get the word count for word (aka key) &#39;alice&#39;: Approach 2</span>
-<span class="c1">//</span>
-<span class="c1">// Alternatively, we could also choose (say) a brute-force approach where we query every app instance</span>
-<span class="c1">// until we find the one that happens to know about &#39;alice&#39;.</span>
-<span class="n">Optional</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">streams</span><span class="o">.</span><span class="na">allMetadataForStore</span><span class="o">(</span><span class="s">&quot;word-count&quot;</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">stream</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="n">streamsMetadata</span> <span class="o">-&gt;</span> <span class="o">{</span>
-        <span class="c1">// Construct the (fictituous) full endpoint URL to query the current remote application instance</span>
-        <span class="n">String</span> <span class="n">url</span> <span class="o">=</span> <span class="s">&quot;http://&quot;</span> <span class="o">+</span> <span class="n">streamsMetadata</span><span class="o">.</span><span class="na">host</span><span class="o">()</span> <span class="o">+</span> <span class="s">&quot;:&quot;</span> <span class="o">+</span> <span class="n">streamsMetadata</span><span class="o">.</span><span class="na">port</span><span class="o">()</span> <span class="o">+</span> <span class="s">&quot;/word-count/alice&quot;</span><span class="o">;</span>
-        <span class="c1">// Read and return the count for &#39;alice&#39;, if any.</span>
-        <span class="k">return</span> <span class="n">http</span><span class="o">.</span><span class="na">getLong</span><span class="o">(</span><span class="n">url</span><span class="o">);</span>
-    <span class="o">})</span>
-    <span class="o">.</span><span class="na">filter</span><span class="o">(</span><span class="n">s</span> <span class="o">-&gt;</span> <span class="n">s</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">findFirst</span><span class="o">();</span></code></pre></div>
-                </div>
+// Get the word count for word (aka key) &#39;alice&#39;: Approach 2
+//
+// Alternatively, we could also choose (say) a brute-force approach where we query every app instance
+// until we find the one that happens to know about &#39;alice&#39;.
+Optional&lt;Long&gt; result = streams.allMetadataForStore(&quot;word-count&quot;)
+    .stream()
+    .map(streamsMetadata -&gt; {
+        // Construct the (fictituous) full endpoint URL to query the current remote application instance
+        String url = &quot;http://&quot; + streamsMetadata.host() + &quot;:&quot; + streamsMetadata.port() + &quot;/word-count/alice&quot;;
+        // Read and return the count for &#39;alice&#39;, if any.
+        return http.getLong(url);
+    })
+    .filter(s -&gt; s != null)
+    .findFirst();</code></pre>
                 <p>At this point the full state of the application is interactively queryable:</p>
                 <ul class="simple">
                     <li>You can discover the running instances of the application and the state stores they manage locally.</li>
