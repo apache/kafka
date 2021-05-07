@@ -163,8 +163,10 @@ final class KafkaMetadataLog private (
   override def truncateToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
     val (truncated, forgottenSnapshots) = latestSnapshotId().asScala match {
-      case Some(snapshotId) if (snapshotId.epoch > latestEpoch ||
-        (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)) =>
+      case Some(snapshotId) if (
+          snapshotId.epoch > latestEpoch ||
+          (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)
+        ) =>
         // Truncate the log fully if the latest snapshot is greater than the log end offset
         log.truncateFullyAndStartAt(snapshotId.offset)
 

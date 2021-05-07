@@ -17,13 +17,13 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.text.NumberFormat;
 import java.util.Optional;
 
@@ -125,7 +125,7 @@ public final class Snapshots {
         Path immutablePath = snapshotPath(logDir, snapshotId);
         Path deletedPath = deleteRename(immutablePath, snapshotId);
         try {
-            Files.move(immutablePath, deletedPath, StandardCopyOption.ATOMIC_MOVE);
+            Utils.atomicMoveWithFallback(immutablePath, deletedPath, false);
         } catch (IOException e) {
             log.error("Error renaming snapshot file from {} to {}", immutablePath, deletedPath, e);
         }
