@@ -45,7 +45,7 @@ public interface ReplicationPolicy {
      */
     default String originalTopic(String topic) {
         String upstream = upstreamTopic(topic);
-        if (upstream == null) {
+        if (upstream == null || upstream.equals(topic)) {
             return topic;
         } else {
             return originalTopic(upstream);

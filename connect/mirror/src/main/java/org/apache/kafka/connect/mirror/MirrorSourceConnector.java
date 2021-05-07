@@ -494,7 +494,12 @@ public class MirrorSourceConnector extends SourceConnector {
         } else if (source.equals(sourceAndTarget.target())) {
             return true;
         } else {
-            return isCycle(replicationPolicy.upstreamTopic(topic));
+            String upstreamTopic = replicationPolicy.upstreamTopic(topic);
+            if (upstreamTopic.equals(topic)) {
+                // Extra check for LegacyReplicationPolicy
+                return false;
+            }
+            return isCycle(upstreamTopic);
         }
     }
 

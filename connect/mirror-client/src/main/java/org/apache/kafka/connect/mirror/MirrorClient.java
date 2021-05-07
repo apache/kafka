@@ -192,6 +192,7 @@ public class MirrorClient implements AutoCloseable {
 
     int countHopsForTopic(String topic, String sourceClusterAlias) {
         int hops = 0;
+        Set<String> visited = new HashSet<>();
         while (true) {
             hops++;
             String source = replicationPolicy.topicSource(topic);
@@ -201,6 +202,12 @@ public class MirrorClient implements AutoCloseable {
             if (source.equals(sourceClusterAlias)) {
                 return hops;
             }
+            if (visited.contains(source)) {
+                // Extra check for LegacyReplicationPolicy (and any other dumb impls) that cannot prevent cycles.
+                // We assume we're stuck in a cycle and will never find sourceClusterAlias.
+                return -1;
+            }
+            visited.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
         } 
     }
@@ -223,7 +230,9 @@ public class MirrorClient implements AutoCloseable {
     Set<String> allSources(String topic) {
         Set<String> sources = new HashSet<>();
         String source = replicationPolicy.topicSource(topic);
-        while (source != null) {
+        while (source != null && !sources.contains(source)) {
+            // The extra Set.contains above is for LegacyReplicationPolicy (and any other dumb impls) which
+            // cannot prevent cycles. In impls that do prevent cycles, we shouldn't see the same source twice.
             sources.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
             source = replicationPolicy.topicSource(topic);
