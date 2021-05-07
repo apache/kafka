@@ -26,7 +26,7 @@ import java.nio.ByteOrder;
 import java.util.Random;
 
 /**
- * This class behaves identically to TimestampRandomPayloadGenerator, except the message size follows a gaussian
+ * This class behaves identically to TimestampConstantPayloadGenerator, except the message size follows a gaussian
  * distribution.
  *
  * This should be used in conjunction with TimestampRecordProcessor in the Consumer to measure true end-to-end latency
@@ -35,12 +35,11 @@ import java.util.Random;
  * `messageSizeAverage` - The average size in bytes of each message.
  * `messageSizeDeviation` - The standard deviation to use when calculating message size.
  * `messagesUntilSizeChange` - The number of messages to keep at the same size.
- * `seed` - Used to initialize Random() to remove some non-determinism.
  *
  * Here is an example spec:
  *
  * {
- *    "type": "gaussianTimestampRandom",
+ *    "type": "gaussianTimestampConstant",
  *    "messageSizeAverage": 512,
  *    "messageSizeDeviation": 100,
  *    "messagesUntilSizeChange": 100
@@ -56,7 +55,7 @@ import java.util.Random;
  *    ~99% of the messages are between 212 and 812 bytes
  */
 
-public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator {
+public class GaussianTimestampConstantPayloadGenerator implements PayloadGenerator {
     private final int messageSizeAverage;
     private final double messageSizeDeviation;
     private final int messagesUntilSizeChange;
@@ -69,10 +68,10 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
     private int messageSize = 0;
 
     @JsonCreator
-    public GaussianTimestampRandomPayloadGenerator(@JsonProperty("messageSizeAverage") int messageSizeAverage,
-                                                   @JsonProperty("messageSizeDeviation") double messageSizeDeviation,
-                                                   @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
-                                                   @JsonProperty("seed") long seed) {
+    public GaussianTimestampConstantPayloadGenerator(@JsonProperty("messageSizeAverage") int messageSizeAverage,
+                                                     @JsonProperty("messageSizeDeviation") double messageSizeDeviation,
+                                                     @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
+                                                     @JsonProperty("seed") long seed) {
         this.messageSizeAverage = messageSizeAverage;
         this.messageSizeDeviation = messageSizeDeviation;
         this.seed = seed;
@@ -113,9 +112,8 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
         }
         messageTracker += 1;
 
-        // Generate out of order to prevent inclusion of random number generation in latency numbers.
+        // Generate the byte array before the timestamp generation.
         byte[] result = new byte[messageSize];
-        random.nextBytes(result);
 
         // Do the timestamp generation as the very last task.
         buffer.clear();
