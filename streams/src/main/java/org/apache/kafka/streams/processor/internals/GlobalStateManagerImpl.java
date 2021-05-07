@@ -62,21 +62,22 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
 public class GlobalStateManagerImpl implements GlobalStateManager {
     private final static long NO_DEADLINE = -1L;
 
-    private final Logger log;
     private final Time time;
-    private final Consumer<byte[], byte[]> globalConsumer;
+    private final Logger log;
     private final File baseDir;
-    private final Set<String> globalStoreNames = new HashSet<>();
-    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-    private final StateRestoreListener stateRestoreListener;
-    private InternalProcessorContext globalProcessorContext;
-    private final Duration requestTimeoutPlusTaskTimeout;
     private final long taskTimeoutMs;
-    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final ProcessorTopology topology;
     private final OffsetCheckpoint checkpointFile;
+    private final Duration requestTimeoutPlusTaskTimeout;
+    private final Consumer<byte[], byte[]> globalConsumer;
+    private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> checkpointFileCache;
     private final Map<String, String> storeToChangelogTopic;
-    private final List<StateStore> globalStateStores;
+    private final Set<String> globalStoreNames = new HashSet<>();
+    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
+
+    private InternalProcessorContext globalProcessorContext;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -86,14 +87,15 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
         this.time = time;
-        storeToChangelogTopic = topology.storeToChangelogTopic();
-        globalStateStores = topology.globalStateStores();
+        this.topology = topology;
         baseDir = stateDirectory.globalStateDir();
+        storeToChangelogTopic = topology.storeToChangelogTopic();
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
-        for (final StateStore store : globalStateStores) {
+        for (final StateStore store : topology.globalStateStores()) {
+            globalStoreNames.add(store.name());
             if (!store.persistent()) {
                 globalNonPersistentStoresTopics.add(changelogFor(store.name()));
             }
@@ -110,8 +112,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         final int requestTimeoutMs = new ClientUtils.QuietConsumerConfig(consumerProps)
             .getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
-        requestTimeoutPlusTaskTimeout =
-            Duration.ofMillis(requestTimeoutMs + taskTimeoutMs);
+        requestTimeoutPlusTaskTimeout = Duration.ofMillis(requestTimeoutMs + taskTimeoutMs);
     }
 
     @Override
@@ -128,8 +129,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         final Set<String> changelogTopics = new HashSet<>();
-        for (final StateStore stateStore : globalStateStores) {
-            globalStoreNames.add(stateStore.name());
+        for (final StateStore stateStore : topology.globalStateStores()) {
             final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
             stateStore.init((StateStoreContext) globalProcessorContext, stateStore);
@@ -179,8 +179,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         log.info("Restoring state for global store {}", store.name());
-        final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
+        globalStores.put(store.name(), Optional.of(store));
 
+        final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
         final Map<TopicPartition, Long> highWatermarks = retryUntilSuccessOrThrowOnTaskTimeout(
             () -> globalConsumer.endOffsets(topicPartitions),
             String.format(
@@ -197,7 +198,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 store.name(),
                 converterForStore(store)
             );
-            globalStores.put(store.name(), Optional.of(store));
         } finally {
             globalConsumer.unsubscribe();
         }
@@ -374,7 +374,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void close() {
-        if (globalStateStores.isEmpty() && globalStores.isEmpty()) {
+        if (globalStores.isEmpty()) {
             return;
         }
         final StringBuilder closeFailed = new StringBuilder();
@@ -394,20 +394,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 globalStores.put(entry.getKey(), Optional.empty());
             } else {
                 log.info("Skipping to close non-initialized store {}", entry.getKey());
-            }
-        }
-        for (final StateStore store : globalStateStores) {
-            if (store.isOpen()) {
-                try {
-                    store.close();
-                } catch (final RuntimeException e) {
-                    log.error("Failed to close global state store {}", store.name(), e);
-                    closeFailed.append("Failed to close global state store:")
-                            .append(store.name())
-                            .append(". Reason: ")
-                            .append(e)
-                            .append("\n");
-                }
             }
         }
 
