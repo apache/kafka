@@ -223,8 +223,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
         Objects.requireNonNull(keyFrom, "keyFrom can't be null");
         Objects.requireNonNull(keyTo, "keyTo can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(
-            keyFrom, keyTo);
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
+            store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                                                        new CompositeKeyValueIterator<>(
                                                                storeProvider.stores(storeName, queryableStoreType).iterator(),
@@ -235,8 +235,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo) {
         Objects.requireNonNull(keyFrom, "keyFrom can't be null");
         Objects.requireNonNull(keyTo, "keyTo can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.backwardFetch(
-            keyFrom, keyTo);
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
