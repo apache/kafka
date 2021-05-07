@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Arrays;
-import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +56,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void testIsHeartbeatTopic() throws InterruptedException, TimeoutException {
+    public void testIsHeartbeatTopic() {
         MirrorClient client = new FakeMirrorClient();
         assertTrue(client.isHeartbeatTopic("heartbeats"));
         assertTrue(client.isHeartbeatTopic("source1.heartbeats"));
@@ -69,7 +68,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void testIsCheckpointTopic() throws InterruptedException, TimeoutException {
+    public void testIsCheckpointTopic() {
         MirrorClient client = new FakeMirrorClient();
         assertTrue(client.isCheckpointTopic("source1.checkpoints.internal"));
         assertFalse(client.isCheckpointTopic("checkpoints.internal"));
@@ -80,7 +79,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void countHopsForTopicTest() throws InterruptedException, TimeoutException {
+    public void countHopsForTopicTest() {
         MirrorClient client = new FakeMirrorClient();
         assertEquals(-1, client.countHopsForTopic("topic", "source"));
         assertEquals(-1, client.countHopsForTopic("source", "source"));
@@ -94,7 +93,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void heartbeatTopicsTest() throws InterruptedException, TimeoutException {
+    public void heartbeatTopicsTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source2.source1.heartbeats", "source3.heartbeats"));
         Set<String> heartbeatTopics = client.heartbeatTopics();
@@ -103,7 +102,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void checkpointsTopicsTest() throws InterruptedException, TimeoutException {
+    public void checkpointsTopicsTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "checkpoints.internal",
             "source1.checkpoints.internal", "source2.source1.checkpoints.internal", "source3.checkpoints.internal"));
         Set<String> checkpointTopics = client.checkpointTopics();
@@ -112,7 +111,7 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void replicationHopsTest() throws InterruptedException, TimeoutException {
+    public void replicationHopsTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source1.source2.heartbeats", "source3.heartbeats"));
         assertEquals(1, client.replicationHops("source1"));
