@@ -108,8 +108,9 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
         InetAddress[] addresses = hostResolver.resolve(host);
-        List<InetAddress> result= filterPreferredAddresses(addresses);
-        log.debug("Resolved host {} as {}", host, result.stream().map(i -> i.getHostAddress()).collect(Collectors.toList()));
+        List<InetAddress> result = filterPreferredAddresses(addresses);
+        if (log.isDebugEnabled())
+            log.debug("Resolved host {} as {}", host, result.stream().map(i -> i.getHostAddress()).collect(Collectors.toList()));
         return result;
     }
 
