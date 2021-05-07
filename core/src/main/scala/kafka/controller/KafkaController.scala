@@ -1319,6 +1319,13 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def safeToShutdown(id: Int, brokerEpoch: Long): Boolean = {
+    // First, check whether or not the broker requesting shutdown has already been told that it is OK to shut down
+    // at this epoch.
+    if (controllerContext.shuttingDownBrokerIds.contains(id)
+      && controllerContext.shuttingDownBrokerIds(id) >= brokerEpoch) {
+      return true
+    }
+
     // If a topic doesn't have min.insync.replicas configured, default to 1
     val defaultMinISRPropertyValue = 1
 
@@ -1328,13 +1335,14 @@ class KafkaController(val config: KafkaConfig,
 
       // See which replicas are known alive and not pending shutdown for this partition
       val liveBrokerIds = controllerContext.liveBrokerIds
-      val liveReplicasInIsr = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.isr.count({ replicaBrokerId =>
+      val isr = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.isr
+      val remainingLiveReplicasInIsr = isr.filter(replicaId => replicaId != id).count({ replicaBrokerId =>
         liveBrokerIds.contains(replicaBrokerId)
       })
 
       // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
-      debug(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Broker $id is a replica and the ISR contains $liveReplicasInIsr live replicas.")
-      liveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
+      debug(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
+      remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
     }
 
     atRiskPartitions.isEmpty
