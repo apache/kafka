@@ -350,6 +350,8 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     public void close() {
         this.sslContext = null;
         this.securityStoreRefreshThread.interrupt();
+        securityFileChangeListener.watchKeyPathMap.keySet().forEach(WatchKey::cancel);
+
         try {
             this.securityStoreRefreshThread.join(TimeUnit.SECONDS.toMillis(30));
         } catch (InterruptedException e) {
