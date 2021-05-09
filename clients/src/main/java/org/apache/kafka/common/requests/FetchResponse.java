@@ -57,7 +57,8 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     not supported by the fetch request version
  * - {@link Errors#CORRUPT_MESSAGE} If corrupt message encountered, e.g. when the broker scans the log to find
  *     the fetch offset after the index lookup
- * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker
+ * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker or a partition in the session has
+ *     an ID that differs from the broker
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse extends AbstractResponse {
@@ -79,6 +80,7 @@ public class FetchResponse extends AbstractResponse {
      * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
      * Version 13 introduces topic IDs which mean there may be unresolved partitions. If there is any unknown topic ID in the request, the
      * response will contain a top-level UNKNOWN_TOPIC_ID error and UNKNOWN_TOPIC_ID errors on all the partitions.
+     * We may also return UNKNOWN_TOPIC_ID for a given partition when that partition in the session has a topic ID inconsistent with the broker.
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
@@ -92,28 +94,6 @@ public class FetchResponse extends AbstractResponse {
     public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
         return toResponseDataMap(topicNames, version);
 
-    }
-
-    // TODO: Should be replaced or cleaned up. The idea is that in KafkaApis we need to reconstruct responseData even though we could have just passed in and out a map.
-    //  With topic IDs, recreating the map takes a little more time since we have to get the topic name from the topic ID to name map.
-    //  The refactor somewhat helps in KafkaApis where we already have the topic names, but we have to recompute the map using topic IDs instead of just returning what we have.
-    //  Can be replaced when we remove toMessage and change sizeOf as a part of KAFKA-12410.
-    // Used when we can guarantee responseData is populated with all possible partitions
-    // This occurs when we have a response version < 13 or we built the FetchResponse with
-    // responseDataMap as a parameter and we have the same topic IDs available.
-    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> resolvedResponseData() {
-        if (responseData == null) {
-            synchronized (this) {
-                if (responseData == null) {
-                    responseData = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse ->
-                        topicResponse.partitions().forEach(partition ->
-                                responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition))
-                    );
-                }
-            }
-        }
-        return responseData;
     }
 
     @Override
@@ -174,6 +154,7 @@ public class FetchResponse extends AbstractResponse {
      *
      * @param version       The version of the response to use.
      * @param partIterator  The partition iterator.
+     * @param topicIds      The mapping from topic name to topic ID.
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,

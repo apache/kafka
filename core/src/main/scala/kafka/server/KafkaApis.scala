@@ -74,13 +74,13 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
-
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
+
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -669,7 +669,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // If fetchData or forgottenTopics contain an unknown topic ID, return a top level error.
     var fetchData: util.Map[TopicPartition, FetchRequest.PartitionData] = null
-    var forgottenTopics: util.List[FetchRequestData.ForgottenTopic] = null
+    var forgottenTopics: util.List[TopicPartition] = null
     try {
       fetchData = fetchRequest.fetchData(topicNames)
       forgottenTopics = fetchRequest.forgottenTopics(topicNames)
@@ -3429,7 +3429,11 @@ object KafkaApis {
                                                 unconvertedResponse: FetchResponse,
                                                 quota: ReplicationQuotaManager,
                                                 topicIds: util.Map[String, Uuid]): Int = {
-    FetchResponse.sizeOf(versionId, unconvertedResponse.resolvedResponseData.entrySet
+    val responseData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    unconvertedResponse.data.responses().forEach(topicResponse =>
+      topicResponse.partitions().forEach(partition =>
+        responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition)))
+    FetchResponse.sizeOf(versionId, responseData.entrySet
       .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, topicIds)
   }
 

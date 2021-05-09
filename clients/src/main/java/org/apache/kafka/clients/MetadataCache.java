@@ -139,6 +139,7 @@ public class MetadataCache {
      * @param addUnauthorizedTopics unauthorized topics to add
      * @param addInternalTopics internal topics to add
      * @param newController the new controller node
+     * @param topicIds the mapping from topic name to topic ID from the MetadataResponse
      * @param retainTopic returns whether a topic's metadata should be retained
      * @return the merged metadata cache
      */
@@ -157,8 +158,8 @@ public class MetadataCache {
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
         Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
 
-        // We want the most recent topic ID. We add the old one here and replace if a new topic ID is added
-        // or remove if the request did not support topic IDs for this topic.
+        // We want the most recent topic ID. We add the old one here for retained topics and then update with newest information in the MetadataResponse
+        // we add if a new topic ID is added or remove if the request did not support topic IDs for this topic.
         for (Map.Entry<String, Uuid> entry : this.topicIds.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey())) {
                 newTopicIds.put(entry.getKey(), entry.getValue());

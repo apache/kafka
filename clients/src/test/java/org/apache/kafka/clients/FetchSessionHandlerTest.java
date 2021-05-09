@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -127,7 +128,7 @@ public class FetchSessionHandlerTest {
                 " had different PartitionData than expected.");
             i++;
         }
-        if (expectedIter.hasNext()) {
+        if (actualIter.hasNext()) {
             fail("Unexpected element " + i + " found.");
         }
     }
@@ -222,7 +223,7 @@ public class FetchSessionHandlerTest {
             assertEquals(INVALID_SESSION_ID, data2.metadata().sessionId());
             assertEquals(INITIAL_EPOCH, data2.metadata().epoch());
             assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
-                    data.toSend(), data.sessionPartitions());
+                    data2.toSend(), data2.sessionPartitions());
         });
     }
 
@@ -385,6 +386,137 @@ public class FetchSessionHandlerTest {
     }
 
     @Test
+    public void testSessionIsClosedOnIdUpgrade() {
+        // We want to test adding a topic ID to an existing partition and a new partition in the incremental request.
+        // 0 is the existing partition and 1 is the new one.
+        List<Integer> partitions = Arrays.asList(0, 1);
+        partitions.forEach(partition -> {
+            String testType = partition == 0 ? "updating a partition" : "adding a new partition";
+            FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+            FetchSessionHandler.Builder builder = handler.newBuilder();
+            builder.add(new TopicPartition("foo", 0),  Uuid.ZERO_UUID,
+                    new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data = builder.build();
+            assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
+                    data.toSend(), data.sessionPartitions());
+            assertTrue(data.metadata().isFull());
+
+            FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
+                    respMap(new RespEntry("foo", 0, 10, 20)), Collections.emptyMap());
+            handler.handleResponse(resp, (short) 12);
+
+            // Try to add a topic ID to an already existing topic partition (0) or a new partition (1) in the session.
+            FetchSessionHandler.Builder builder2 = handler.newBuilder();
+            builder2.add(new TopicPartition("foo", partition), Uuid.randomUuid(),
+                    new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data2 = builder2.build();
+            // Should have the same session ID but the initial epoch so the request will close the session.
+            assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
+            assertEquals(INITIAL_EPOCH, data2.metadata().epoch(), "Did not close session when " + testType);
+        });
+    }
+
+    @Test
+    public void testSessionIsClosedOnIdDowngrade() {
+        // We want to test removing topic ID to an existing partition and adding a new partition without an ID in the incremental request.
+        // 0 is the existing partition and 1 is the new one.
+        List<Integer> partitions = Arrays.asList(0, 1);
+        partitions.forEach(partition -> {
+            String testType = partition == 0 ? "updating a partition" : "adding a new partition";
+            Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());
+            FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+            FetchSessionHandler.Builder builder = handler.newBuilder();
+            builder.add(new TopicPartition("foo", 0),  topicIds.get("foo"),
+                    new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data = builder.build();
+            assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
+                    data.toSend(), data.sessionPartitions());
+            assertTrue(data.metadata().isFull());
+
+            FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
+                    respMap(new RespEntry("foo", 0, 10, 20)), topicIds);
+            handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
+
+            // Try to remove a topic ID from an existing topic partition (0) or add a new topic partition (1) without an ID.
+            FetchSessionHandler.Builder builder2 = handler.newBuilder();
+            builder2.add(new TopicPartition("foo", 0), Uuid.ZERO_UUID,
+                    new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data2 = builder2.build();
+            // Should have the same session ID but the initial epoch so the request will close the session.
+            assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
+            assertEquals(INITIAL_EPOCH, data2.metadata().epoch(), "Did not close session when " + testType);
+        });
+    }
+
+    @Test
+    public void testSessionIsClosedOnChangedID() {
+        // We want to test removing topic ID to an existing partition and adding a new partition without an ID in the incremental request.
+        // 0 is the existing partition and 1 is the new one.
+        List<Integer> partitions = Arrays.asList(0, 1);
+        partitions.forEach(partition -> {
+            String testType = partition == 0 ? "updating a partition" : "adding a new partition";
+            Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());
+            FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+            FetchSessionHandler.Builder builder = handler.newBuilder();
+            builder.add(new TopicPartition("foo", 0), topicIds.get("foo"),
+                    new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data = builder.build();
+            assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
+                    data.toSend(), data.sessionPartitions());
+            assertTrue(data.metadata().isFull());
+
+            FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
+                    respMap(new RespEntry("foo", 0, 10, 20)), topicIds);
+            handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
+
+            // Try to change a topic ID from an existing topic partition (0) or add a different ID new topic partition (1).
+            FetchSessionHandler.Builder builder2 = handler.newBuilder();
+            builder2.add(new TopicPartition("foo", partition), Uuid.randomUuid(),
+                    new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
+            FetchSessionHandler.FetchRequestData data2 = builder2.build();
+            // Should have the same session ID but the initial epoch so the request will close the session.
+            assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
+            assertEquals(INITIAL_EPOCH, data2.metadata().epoch(), "Did not close session when " + testType);
+        });
+    }
+
+    // We do not guarantee all partitions have been removed from the session, so even when they are, we do not allow new topic IDs.
+    @Test
+    public void testNotOkToAddNewIdAfterTopicRemovedFromSession() {
+        Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());
+        FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+        FetchSessionHandler.Builder builder = handler.newBuilder();
+        builder.add(new TopicPartition("foo", 0),  topicIds.get("foo"),
+                new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+        FetchSessionHandler.FetchRequestData data = builder.build();
+        assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
+                data.toSend(), data.sessionPartitions());
+        assertTrue(data.metadata().isFull());
+
+        FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
+                respMap(new RespEntry("foo", 0, 10, 20)), topicIds);
+        handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
+
+        // Remove the partition from the session. Return a session ID as though the session is still open.
+        FetchSessionHandler.Builder builder2 = handler.newBuilder();
+        FetchSessionHandler.FetchRequestData data2 = builder2.build();
+        assertMapsEqual(new LinkedHashMap<>(),
+                data2.toSend(), data2.sessionPartitions());
+        FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123,
+                new LinkedHashMap<>(), topicIds);
+        handler.handleResponse(resp2, ApiKeys.FETCH.latestVersion());
+
+        // After the topic is removed, add a recreated topic with a new ID.
+        FetchSessionHandler.Builder builder3 = handler.newBuilder();
+        builder3.add(new TopicPartition("foo", 0),  Uuid.randomUuid(),
+                new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+        FetchSessionHandler.FetchRequestData data3 = builder3.build();
+        // Should have the same session ID but the initial epoch so the request will close the session.
+        assertEquals(123, data3.metadata().sessionId(), "Did not use same session");
+        assertEquals(INITIAL_EPOCH, data3.metadata().epoch(), "Did not close session");
+    }
+
+    @Test
     public void testVerifyFullFetchResponsePartitions() {
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
@@ -400,8 +532,8 @@ public class FetchSessionHandlerTest {
                         new RespEntry("bar", 0, 10, 20)), topicIds);
             String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, version).keySet(),
                     resp1.topicIds(), version);
-            assertTrue(issue.contains("extra"));
-            assertFalse(issue.contains("omitted"));
+            assertTrue(issue.contains("extraPartitions="));
+            assertFalse(issue.contains("omittedPartitions="));
             FetchSessionHandler.Builder builder = handler.newBuilder();
             builder.add(new TopicPartition("foo", 0), topicIds.getOrDefault("foo", Uuid.ZERO_UUID),
                     new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
@@ -422,8 +554,8 @@ public class FetchSessionHandlerTest {
                         new RespEntry("foo", 1, 10, 20)), topicIds);
             String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, version).keySet(),
                     resp3.topicIds(), version);
-            assertFalse(issue3.contains("extra"));
-            assertTrue(issue3.contains("omitted"));
+            assertFalse(issue3.contains("extraPartitions="));
+            assertTrue(issue3.contains("omittedPartitions="));
         });
     }
 
@@ -442,9 +574,9 @@ public class FetchSessionHandlerTest {
                     new RespEntry("bar", 0, 10, 20)), topicIds);
         String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp1.topicIds(), ApiKeys.FETCH.latestVersion());
-        assertTrue(issue.contains("extra="));
+        assertTrue(issue.contains("extraPartitions="));
         assertTrue(issue.contains("extraIds="));
-        assertFalse(issue.contains("omitted"));
+        assertFalse(issue.contains("omittedPartitions="));
         FetchSessionHandler.Builder builder = handler.newBuilder();
         builder.add(new TopicPartition("foo", 0), topicIds.get("foo"),
                 new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
@@ -457,9 +589,9 @@ public class FetchSessionHandlerTest {
                     new RespEntry("bar", 0, 10, 20)), topicIds);
         String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp2.topicIds(), ApiKeys.FETCH.latestVersion());
-        assertFalse(issue2.contains("extra="));
+        assertFalse(issue2.contains("extraPartitions="));
         assertTrue(issue2.contains("extraIds="));
-        assertFalse(issue2.contains("omitted"));
+        assertFalse(issue2.contains("omittedPartitions="));
         topicNames.put(extraId, "extra2");
         FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
             respMap(new RespEntry("foo", 0, 10, 20),

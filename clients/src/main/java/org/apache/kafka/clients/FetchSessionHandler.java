@@ -91,7 +91,7 @@ public class FetchSessionHandler {
         return sessionTopicNames;
     }
 
-    public boolean requestUsedTopicIds = false;
+    private boolean canUseTopicIds = false;
 
     public static class FetchRequestData {
         /**
@@ -186,12 +186,26 @@ public class FetchSessionHandler {
         @Override
         public String toString() {
             if (metadata.isFull()) {
-                StringBuilder bld = new StringBuilder("FullFetchRequest(");
+                StringBuilder bld = new StringBuilder("FullFetchRequest(toSend=(");
                 String prefix = "";
                 for (TopicPartition partition : toSend.keySet()) {
                     bld.append(prefix);
                     bld.append(partition);
                     prefix = ", ";
+                }
+                bld.append("), topicIds=(");
+                prefix = "";
+                for (Map.Entry<String, Uuid> entry : topicIds.entrySet()) {
+                    bld.append(prefix);
+                    bld.append(entry.getKey());
+                    bld.append(": ");
+                    bld.append(entry.getValue());
+                    prefix = ", ";
+                }
+                if (canUseTopicIds) {
+                    bld.append("), canUseTopicIds=True");
+                } else {
+                    bld.append("), canUseTopicIds=False");
                 }
                 bld.append(")");
                 return bld.toString();
@@ -219,7 +233,21 @@ public class FetchSessionHandler {
                         prefix = ", ";
                     }
                 }
-                bld.append("))");
+                bld.append("), topicIds=(");
+                prefix = "";
+                for (Map.Entry<String, Uuid> entry : topicIds.entrySet()) {
+                    bld.append(prefix);
+                    bld.append(entry.getKey());
+                    bld.append(": ");
+                    bld.append(entry.getValue());
+                    prefix = ", ";
+                }
+                if (canUseTopicIds) {
+                    bld.append("), canUseTopicIds=True");
+                } else {
+                    bld.append("), canUseTopicIds=False");
+                }
+                bld.append(")");
                 return bld.toString();
             }
         }
@@ -242,6 +270,7 @@ public class FetchSessionHandler {
         private LinkedHashMap<TopicPartition, PartitionData> next;
         private Map<String, Uuid> topicIds;
         private final boolean copySessionPartitions;
+        private boolean missingTopicIds;
 
         Builder() {
             this.next = new LinkedHashMap<>();
@@ -259,11 +288,43 @@ public class FetchSessionHandler {
          * Mark that we want data from this partition in the upcoming fetch.
          */
         public void add(TopicPartition topicPartition, Uuid topicId, PartitionData data) {
-            if (next.put(topicPartition, data) == null) {
-                if (!topicId.equals(Uuid.ZERO_UUID)) {
-                    topicIds.put(topicPartition.topic(), topicId);
+            next.put(topicPartition, data);
+            // topicIds do not change between adding partitions and building, so we can use putIfAbsent
+            if (!topicId.equals(Uuid.ZERO_UUID)) {
+                topicIds.putIfAbsent(topicPartition.topic(), topicId);
+            } else if (canUseTopicIds) {
+                // If we established that this session uses topic IDs and we were not provided an ID, mark the session as
+                // missingTopicIds
+                missingTopicIds = true;
+            }
+        }
+
+        /**
+         * Check topic IDs. If we are not using topic IDs in the session and a topic ID is provided, close the session.
+         * If we are using topic IDs, we must make sure all topic IDs are consistent with those in the session.
+         * If we are using topic IDs, but they are not yet in the session, add them to the session.
+         *
+         * @return true if we should close the session due to inconsistent topic ID usage
+         */
+        public boolean processTopicIds() {
+            if (!canUseTopicIds) {
+                return !topicIds.isEmpty();
+            } else {
+                for (Map.Entry<String, Uuid> topic : topicIds.entrySet()) {
+                    String topicName = topic.getKey();
+                    Uuid addedId = topic.getValue();
+                    Uuid existingId = sessionTopicIds.getOrDefault(topicName, Uuid.ZERO_UUID);
+                    if (existingId.equals(Uuid.ZERO_UUID)) {
+                        sessionTopicIds.put(topicName, addedId);
+                        sessionTopicNames.put(addedId, topicName);
+                    } else {
+                        if (!existingId.equals(addedId)) {
+                            return true;
+                        }
+                    }
                 }
             }
+            return false;
         }
 
         public FetchRequestData build() {
@@ -273,19 +334,23 @@ public class FetchSessionHandler {
                               nextMetadata, node, partitionsToLogString(next.keySet()));
                 }
                 sessionPartitions = next;
-                sessionTopicIds = topicIds;
-                topicIds.forEach((name, id) -> sessionTopicNames.put(id, name));
                 next = null;
-                topicIds = null;
-                requestUsedTopicIds = sessionTopicIds.keySet().containsAll(sessionPartitions.keySet().stream().map(
+                canUseTopicIds = topicIds.keySet().containsAll(sessionPartitions.keySet().stream().map(
                     tp -> tp.topic()).collect(Collectors.toSet()));
+                // Only add topic IDs to the session if we are using topic IDs.
+                if (canUseTopicIds) {
+                    sessionTopicIds = topicIds;
+                    sessionTopicNames = new HashMap<>(topicIds.size());
+                    topicIds.forEach((name, id) -> sessionTopicNames.put(id, name));
+                }
+                topicIds = null;
                 Map<TopicPartition, PartitionData> toSend =
                         Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 Map<String, Uuid> toSendTopicIds =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
                 Map<Uuid, String> toSendTopicNames =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
+                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, canUseTopicIds);
             }
 
             List<TopicPartition> added = new ArrayList<>();
@@ -324,16 +389,29 @@ public class FetchSessionHandler {
                 }
                 sessionPartitions.put(topicPartition, nextData);
                 added.add(topicPartition);
-                Uuid topicId = topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
-                if (!topicId.equals(Uuid.ZERO_UUID)) {
-                    sessionTopicIds.put(topicPartition.topic(), topicId);
-                }
             }
+
+            // Check session topic IDs are consistent and add new IDs to the session.
+            boolean inconsistentTopicIds = processTopicIds();
+
+            // Close the session if we were missing topic IDs or had inconsistent topic IDs.
+            boolean closeSession = missingTopicIds || inconsistentTopicIds;
+
+            if (closeSession) {
+                nextMetadata = nextMetadata.nextCloseExisting();
+            }
+
             if (log.isDebugEnabled()) {
-                log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
-                          "out of {}", nextMetadata, node, partitionsToLogString(added),
-                          partitionsToLogString(altered), partitionsToLogString(removed),
-                          partitionsToLogString(sessionPartitions.keySet()));
+                if (closeSession) {
+                    log.debug("Built incremental fetch {} for node {}. Found inconsistent topic ID usage, so sending a " +
+                            "request to close the session", nextMetadata, node);
+
+                } else {
+                    log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
+                                    "out of {}", nextMetadata, node, partitionsToLogString(added),
+                            partitionsToLogString(altered), partitionsToLogString(removed),
+                            partitionsToLogString(sessionPartitions.keySet()));
+                }
             }
             Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
@@ -341,16 +419,12 @@ public class FetchSessionHandler {
                     : Collections.unmodifiableMap(sessionPartitions);
             Map<String, Uuid> toSendTopicIds =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
-            toSendTopicIds.forEach((name, id) -> sessionTopicNames.put(id, name));
             Map<Uuid, String> toSendTopicNames =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-
-            requestUsedTopicIds = requestUsedTopicIds && toSendTopicIds.keySet().containsAll(toSend.keySet().stream().map(
-                tp -> tp.topic()).collect(Collectors.toSet()));
             next = null;
             topicIds = null;
             return new FetchRequestData(toSend, Collections.unmodifiableList(removed), curSessionPartitions,
-                                        toSendTopicIds, toSendTopicNames, nextMetadata, requestUsedTopicIds);
+                                        toSendTopicIds, toSendTopicNames, nextMetadata, canUseTopicIds);
         }
     }
 
@@ -378,11 +452,11 @@ public class FetchSessionHandler {
     }
 
     /**
-     * Return some partitions which are expected to be in a particular set, but which are not.
+     * Return missing items which are expected to be in a particular set, but which are not.
      *
      * @param toFind    The items to look for.
      * @param toSearch  The set of items to search.
-     * @return          null if all items were found; some of the missing ones in a set, if not
+     * @return          null if all items were found; some of the missing ones in a set, if not.
      */
     static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
         Set<T> ret = new LinkedHashSet<>();
@@ -413,10 +487,10 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
+            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append(", ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extra=(").append(Utils.join(extra, ", ")).append(", ");
+            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append(", ");
         }
         if (!extraIds.isEmpty()) {
             bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append(", ");
@@ -445,7 +519,7 @@ public class FetchSessionHandler {
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
         if (extra.isEmpty())
-            bld.append("extra=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
         if (extraIds.isEmpty())
             bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {

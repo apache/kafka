@@ -416,12 +416,13 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
           error(s"Listeners are not identical across brokers: $aliveNodes")
       }
 
-      val newTopicIds = updateMetadataRequest.topicStates().asScala
-        .map(topicState => (topicState.topicName(), topicState.topicId()))
-        .filter(_._2 != Uuid.ZERO_UUID).toMap
       val topicIds = mutable.Map.empty[String, Uuid]
       topicIds ++= metadataSnapshot.topicIds
-      topicIds ++= newTopicIds
+      val (newTopicIds, newZeroIds) = updateMetadataRequest.topicStates().asScala
+        .map(topicState => (topicState.topicName(), topicState.topicId()))
+        .partition(_._2 != Uuid.ZERO_UUID)
+      newZeroIds.foreach(zeroId => topicIds.remove(zeroId._1))
+      topicIds ++= newTopicIds.toMap
 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       if (!updateMetadataRequest.partitionStates.iterator.hasNext) {
@@ -488,7 +489,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
                               controllerId: Option[Int],
                               aliveBrokers: mutable.LongMap[Broker],
                               aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
-    val topicNames = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
+    val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
   }
 
 }

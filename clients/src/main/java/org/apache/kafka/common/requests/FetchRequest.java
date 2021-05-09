@@ -48,8 +48,7 @@ public class FetchRequest extends AbstractRequest {
 
     private final FetchRequestData data;
 
-    // These are immutable read-only structures derived from FetchRequestData
-    private final Map<TopicPartition, PartitionData> fetchData;
+    // This is an immutable read-only structures derived from FetchRequestData
     private final FetchMetadata metadata;
 
     public static final class PartitionData {
@@ -296,16 +295,8 @@ public class FetchRequest extends AbstractRequest {
 
     public FetchRequest(FetchRequestData fetchRequestData, short version) {
         super(ApiKeys.FETCH, version);
-        if (version < 13) {
-            this.data = fetchRequestData;
-            this.fetchData = toPartitionDataMap(fetchRequestData.topics(), Collections.emptyMap());
-            this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
-        } else {
-            this.data = fetchRequestData;
-            // We need topic name map to fill this data structures, so we will build the map on fetchData()
-            this.fetchData = Collections.emptyMap();
-            this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
-        }
+        this.data = fetchRequestData;
+        this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
     }
 
     @Override
@@ -317,18 +308,12 @@ public class FetchRequest extends AbstractRequest {
         // may not be any partitions at all in the response.  For this reason, the top-level error code
         // is essential for them.
         Errors error = Errors.forException(e);
-        if (version() < 13) {
-            LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-            for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-                responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
-            }
-            return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData, Collections.emptyMap());
-        }
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         data.topics().forEach(topic -> {
             List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
                     FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
+                    .setTopic(topic.topic())
                     .setTopicId(topic.topicId())
                     .setPartitions(partitionResponses));
         });
@@ -357,23 +342,25 @@ public class FetchRequest extends AbstractRequest {
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
     public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
-        if (version() >= 13)
-            return toPartitionDataMap(data.topics(), topicNames);
-        return fetchData;
+        return toPartitionDataMap(data.topics(), topicNames);
     }
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
-    public List<FetchRequestData.ForgottenTopic> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
-        if (version() >= 13) {
-            data.forgottenTopicsData().forEach(forgottenTopic -> {
-                String name = topicNames.get(forgottenTopic.topicId());
-                if (name == null) {
-                    throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", forgottenTopic.topicId()));
-                }
-                forgottenTopic.setTopic(topicNames.getOrDefault(forgottenTopic.topicId(), ""));
-            });
-        }
-        return data.forgottenTopicsData();
+    public List<TopicPartition> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+        List<TopicPartition> result = new ArrayList<>();
+        data.forgottenTopicsData().forEach(forgottenTopic -> {
+            String name;
+            if (version() < 13) {
+                name = forgottenTopic.topic(); // can't be null
+            } else {
+                name = topicNames.get(forgottenTopic.topicId());
+            }
+            if (name == null) {
+                throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", forgottenTopic.topicId()));
+            }
+            forgottenTopic.partitions().forEach(partitionId -> result.add(new TopicPartition(name, partitionId)));
+        });
+        return result;
     }
 
     public boolean isFromFollower() {

@@ -2121,13 +2121,13 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData,  metadataCache.topicNamesToIds(), false)
+      fetchMetadata, 9, fetchData,  metadataCache.topicNamesToIds(),  false)
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[FetchRequestData.ForgottenTopic]],
+      anyObject[util.List[TopicPartition]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -2664,9 +2664,6 @@ class KafkaApisTest {
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchData,
         metadataCache.topicNamesToIds()).build())
 
-    // TODO: change?
-    addTopicToMetadataCache(tp0.topic, numPartitions = 1)
-
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
@@ -2683,13 +2680,13 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData,  metadataCache.topicNamesToIds(), true)
+      fetchMetadata, ApiKeys.FETCH.latestVersion(), fetchData,  metadataCache.topicNamesToIds(), true)
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[FetchRequestData.ForgottenTopic]],
+      anyObject[util.List[TopicPartition]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
     expect(replicaQuotaManager.record(anyLong()))
@@ -3208,7 +3205,7 @@ class KafkaApisTest {
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
 
-  private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1): Unit = {
+  private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers)
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
