@@ -22,7 +22,6 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-
 import com.yammer.metrics.core.Gauge
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
@@ -101,7 +100,7 @@ object KafkaServer {
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None,
-                  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
+                  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List(), actions: KafkaActions = NoOpKafkaActions) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -157,6 +156,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _brokerTopicStats: BrokerTopicStats = null
 
   private var healthCheckScheduler: KafkaScheduler = null
+
+  private val kafkaActions: KafkaActions = actions
 
   private def haltIfNotHealthy() {
     // This relies on io-thread to receive request from RequestChannel with 300 ms timeout, so that lastDequeueTimeMs
@@ -513,13 +514,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       var shutdownSucceeded: Boolean = false
 
       try {
-
         var remainingRetries = retries
         var prevController: Broker = null
         var ioException = false
+        var shutdownResponse: ControlledShutdownResponse = null
 
         while (!shutdownSucceeded && remainingRetries > 0) {
           remainingRetries = remainingRetries - 1
+          shutdownResponse = null
 
           // 1. Find the controller and establish a connection to it.
 
@@ -552,7 +554,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // 2. issue a controlled shutdown to the controller
           if (prevController != null) {
             try {
-
               if (!NetworkClientUtils.awaitReady(networkClient, node(prevController), time, socketTimeoutMs))
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
@@ -576,7 +577,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
               if (brokerEpochAtRequestTime == kafkaController.brokerEpoch) {
-                val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
+                shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
                 if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
                   shutdownSucceeded = true
                   info("Controlled shutdown succeeded")
@@ -601,6 +602,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             Thread.sleep(config.controlledShutdownRetryBackoffMs)
             warn("Retrying controlled shutdown after the previous attempt failed...")
           }
+          /** In case {@link KafkaController.safeToShutdown} reported that it's not safe to shutdown,
+           * the delegate KafkaAction will invoke Cruise-Control to demote this broker in Azure environment only. */
+          kafkaActions.notifyControlledShutdownStatus(shutdownSucceeded, shutdownResponse, remainingRetries)
         }
       }
       finally
