@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.junit.Test;
 
+import java.util.Collections;
+
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
@@ -46,13 +48,13 @@ public class SuppressedTest {
         assertThat(
             "keys alone should be set",
             maxRecords(2L),
-            is(new EagerBufferConfigImpl(2L, MAX_VALUE))
+            is(new EagerBufferConfigImpl(2L, MAX_VALUE, Collections.emptyMap()))
         );
 
         assertThat(
             "size alone should be set",
             maxBytes(2L),
-            is(new EagerBufferConfigImpl(MAX_VALUE, 2L))
+            is(new EagerBufferConfigImpl(MAX_VALUE, 2L, Collections.emptyMap()))
         );
     }
 
@@ -91,7 +93,7 @@ public class SuppressedTest {
         assertThat(
             "all constraints should be set",
             untilTimeLimit(ofMillis(2L), maxRecords(3L).withMaxBytes(2L)),
-            is(new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(3L, 2L), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(3L, 2L, Collections.emptyMap()), null, false))
         );
     }
 
@@ -105,13 +107,13 @@ public class SuppressedTest {
 
         assertThat(
             untilWindowCloses(maxRecords(2L).shutDownWhenFull()),
-            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Collections.emptyMap()))
             )
         );
 
         assertThat(
             untilWindowCloses(maxBytes(2L).shutDownWhenFull()),
-            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Collections.emptyMap()))
             )
         );
 
@@ -122,13 +124,13 @@ public class SuppressedTest {
 
         assertThat(
             untilWindowCloses(maxRecords(2L).shutDownWhenFull()).withName("name"),
-            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN, Collections.emptyMap()))
             )
         );
 
         assertThat(
             untilWindowCloses(maxBytes(2L).shutDownWhenFull()).withName("name"),
-            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN, Collections.emptyMap()))
             )
         );
     }

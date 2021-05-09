@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 import java.time.Duration
+import java.util.Collections
 
 @deprecated(message = "org.apache.kafka.streams.scala.kstream.Suppressed has been deprecated", since = "2.5")
 class SuppressedTest {
@@ -44,20 +45,34 @@ class SuppressedTest {
 
   @Test
   def testProduceCorrectBufferConfigWithMaxRecords(): Unit = {
-    assertEquals(BufferConfig.maxRecords(4), new EagerBufferConfigImpl(4, Long.MaxValue))
-    assertEquals(BufferConfig.maxRecords(4).withMaxBytes(5), new EagerBufferConfigImpl(4, 5))
+    assertEquals(
+      BufferConfig.maxRecords(4),
+      new EagerBufferConfigImpl(4, Long.MaxValue, Collections.emptyMap())
+    )
+    assertEquals(
+      BufferConfig.maxRecords(4).withMaxBytes(5),
+      new EagerBufferConfigImpl(4, 5, Collections.emptyMap())
+    )
   }
 
   @Test
   def testProduceCorrectBufferConfigWithMaxBytes(): Unit = {
-    assertEquals(BufferConfig.maxBytes(4), new EagerBufferConfigImpl(Long.MaxValue, 4))
-    assertEquals(BufferConfig.maxBytes(4).withMaxRecords(5), new EagerBufferConfigImpl(5, 4))
+    assertEquals(
+      BufferConfig.maxBytes(4),
+      new EagerBufferConfigImpl(Long.MaxValue, 4, Collections.emptyMap())
+    )
+    assertEquals(
+      BufferConfig.maxBytes(4).withMaxRecords(5),
+      new EagerBufferConfigImpl(5, 4, Collections.emptyMap())
+    )
   }
 
   @Test
   def testProduceCorrectBufferConfigWithUnbounded(): Unit =
-    assertEquals(BufferConfig.unbounded(),
-                 new StrictBufferConfigImpl(Long.MaxValue, Long.MaxValue, BufferFullStrategy.SHUT_DOWN))
+    assertEquals(
+      BufferConfig.unbounded(),
+      new StrictBufferConfigImpl(Long.MaxValue, Long.MaxValue, BufferFullStrategy.SHUT_DOWN, Collections.emptyMap())
+    )
 
   @Test
   def testSupportLongChainsOfFactoryMethods(): Unit = {
@@ -68,8 +83,9 @@ class SuppressedTest {
       .withMaxBytes(4L)
       .withMaxRecords(5L)
       .withMaxBytes(6L)
-    assertEquals(new EagerBufferConfigImpl(5L, 6L), bc1)
-    assertEquals(new StrictBufferConfigImpl(5L, 6L, BufferFullStrategy.SHUT_DOWN), bc1.shutDownWhenFull())
+    assertEquals(new EagerBufferConfigImpl(5L, 6L, Collections.emptyMap()), bc1)
+    assertEquals(new StrictBufferConfigImpl(5L, 6L, BufferFullStrategy.SHUT_DOWN, Collections.emptyMap()),
+                 bc1.shutDownWhenFull())
 
     val bc2 = BufferConfig
       .maxBytes(4)
@@ -79,7 +95,7 @@ class SuppressedTest {
       .withMaxBytes(7)
       .withMaxRecords(8)
 
-    assertEquals(new StrictBufferConfigImpl(8L, 7L, BufferFullStrategy.SHUT_DOWN), bc2)
+    assertEquals(new StrictBufferConfigImpl(8L, 7L, BufferFullStrategy.SHUT_DOWN, Collections.emptyMap()), bc2)
     assertEquals(BufferConfig.unbounded(), bc2.withNoBound())
 
     val bc3 = BufferConfig
@@ -88,6 +104,6 @@ class SuppressedTest {
       .emitEarlyWhenFull()
       .withMaxRecords(11L)
 
-    assertEquals(new EagerBufferConfigImpl(11L, 10L), bc3)
+    assertEquals(new EagerBufferConfigImpl(11L, 10L, Collections.emptyMap()), bc3)
   }
 }

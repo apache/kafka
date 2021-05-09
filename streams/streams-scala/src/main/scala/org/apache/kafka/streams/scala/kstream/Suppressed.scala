@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration
-
 import org.apache.kafka.streams.kstream.{Windowed, Suppressed => SupressedJ}
 import org.apache.kafka.streams.kstream.Suppressed.{
   EagerBufferConfig,
@@ -30,6 +29,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.{
   StrictBufferConfigImpl,
   SuppressedInternal
 }
+import java.util.Collections
 
 /**
  * Duplicates the static factory methods inside the Java interface [[org.apache.kafka.streams.kstream.Suppressed]].
@@ -93,7 +93,7 @@ object Suppressed {
      * @see [[org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords]]
      */
     def maxRecords(recordLimit: Long): EagerBufferConfig =
-      new EagerBufferConfigImpl(recordLimit, Long.MaxValue)
+      new EagerBufferConfigImpl(recordLimit, Long.MaxValue, Collections.emptyMap())
 
     /**
      * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
@@ -103,7 +103,7 @@ object Suppressed {
      * @see [[org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes]]
      */
     def maxBytes(byteLimit: Long): EagerBufferConfig =
-      new EagerBufferConfigImpl(Long.MaxValue, byteLimit)
+      new EagerBufferConfigImpl(Long.MaxValue, byteLimit, Collections.emptyMap())
 
     /**
      * Create a buffer unconstrained by size (either keys or bytes).
