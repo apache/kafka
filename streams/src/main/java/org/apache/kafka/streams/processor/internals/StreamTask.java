@@ -196,13 +196,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         );
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        this.committedOffsets = new HashMap<>();
-        this.highWatermark = new HashMap<>();
+        committedOffsets = new HashMap<>();
+        highWatermark = new HashMap<>();
         for (final TopicPartition topicPartition: inputPartitions) {
-            this.committedOffsets.put(topicPartition, -1L);
-            this.highWatermark.put(topicPartition, -1L);
+            committedOffsets.put(topicPartition, -1L);
+            highWatermark.put(topicPartition, -1L);
         }
-        this.timeCurrentIdlingStarted = Optional.empty();
+        timeCurrentIdlingStarted = Optional.empty();
     }
 
     // create queues for each assigned partition and associate them
@@ -1191,12 +1191,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return timeCurrentIdlingStarted;
     }
 
-    @Override
     public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
         committedOffsets.put(topicPartition, offset);
     }
 
-    @Override
     public void updateEndOffsets(final TopicPartition topicPartition, final Long offset) {
         highWatermark.put(topicPartition, offset);
     }

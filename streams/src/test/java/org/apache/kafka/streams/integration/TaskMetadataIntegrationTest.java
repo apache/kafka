@@ -78,14 +78,14 @@ public class TaskMetadataIntegrationTest {
     private String inputTopic;
     private static StreamsBuilder builder;
     private static Properties properties;
-    private static String appId = "";
+    private static String appId = "TaskMetadataTest_";
     private AtomicBoolean process;
     private AtomicBoolean commit;
 
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
-        appId = "appId_" + testId;
+        appId = appId + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
