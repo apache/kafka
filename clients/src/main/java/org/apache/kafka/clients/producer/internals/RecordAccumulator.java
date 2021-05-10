@@ -710,9 +710,9 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            // Make a copy of of the request results at the time the flush is called.
-            // We avoid making a copy of the full incomplete batch collections to allow
-            // garbage collection.
+            // Obtain a copy of all of the incomplete ProduceRequestResult(s) the time of the flush.
+            // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
+            // collection can occur on the contents.
             for (ProduceRequestResult result : this.incomplete.requestResults())
                 result.await();
         } finally {
