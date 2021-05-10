@@ -374,7 +374,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void close() {
-        if (globalStores.isEmpty()) {
+        if (globalStateStores.isEmpty() && globalStores.isEmpty()) {
             return;
         }
         final StringBuilder closeFailed = new StringBuilder();
@@ -396,6 +396,21 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
         }
+        for (final StateStore store : globalStateStores) {
+            if (store.isOpen()) {
+                try {
+                    store.close();
+                } catch (final RuntimeException e) {
+                    log.error("Failed to close global state store {}", store.name(), e);
+                    closeFailed.append("Failed to close global state store:")
+                            .append(store.name())
+                            .append(". Reason: ")
+                            .append(e)
+                            .append("\n");
+                }
+            }
+        }
+
         if (closeFailed.length() > 0) {
             throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
         }

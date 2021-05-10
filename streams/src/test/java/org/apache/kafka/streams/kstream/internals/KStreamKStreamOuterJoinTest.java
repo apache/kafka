@@ -112,6 +112,9 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
+            // Only 2 window stores should be available
+            assertEquals(2, driver.getAllStateStores().size());
+
             inputTopic1.pipeInput(0, "A0", 0);
             inputTopic1.pipeInput(0, "A0-0", 0);
             inputTopic2.pipeInput(0, "a0", 0);
@@ -556,6 +559,9 @@ public class KStreamKStreamOuterJoinTest {
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // 2 window stores + 1 shared window store should be available
+            assertEquals(3, driver.getAllStateStores().size());
 
             // push two items to the primary stream; the other window is empty; this should not
             // produce any items because window has not expired
