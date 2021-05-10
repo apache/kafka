@@ -1072,6 +1072,7 @@ project(':metadata') {
 
   dependencies {
     implementation project(':server-common')
+    implementation project(':clients')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
@@ -1269,11 +1270,13 @@ project(':raft') {
 
   dependencies {
     implementation project(':server-common')
+    implementation project(':clients')
     implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
     testImplementation project(':server-common')
+    testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -1642,6 +1645,7 @@ project(':shell') {
     implementation libs.jline
     implementation libs.slf4jApi
     implementation project(':server-common')
+    implementation project(':clients')
     implementation project(':core')
     implementation project(':log4j-appender')
     implementation project(':metadata')
