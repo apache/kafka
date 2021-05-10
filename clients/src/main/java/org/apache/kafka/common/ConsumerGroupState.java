@@ -17,7 +17,10 @@
 
 package org.apache.kafka.common;
 
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * The consumer group state.
@@ -30,14 +33,8 @@ public enum ConsumerGroupState {
     DEAD("Dead"),
     EMPTY("Empty");
 
-    private final static HashMap<String, ConsumerGroupState> NAME_TO_ENUM;
-
-    static {
-        NAME_TO_ENUM = new HashMap<>();
-        for (ConsumerGroupState state : ConsumerGroupState.values()) {
-            NAME_TO_ENUM.put(state.name, state);
-        }
-    }
+    private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
+        .collect(Collectors.toMap(state -> state.name, Function.identity()));;
 
     private final String name;
 

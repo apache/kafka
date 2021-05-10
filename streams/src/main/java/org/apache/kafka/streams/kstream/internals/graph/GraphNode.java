@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Properties;
 
 public abstract class GraphNode {
 
@@ -117,7 +118,7 @@ public abstract class GraphNode {
         return this.buildPriority;
     }
 
-    public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
+    public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props);
 
     public boolean hasWrittenToTopology() {
         return hasWrittenToTopology;

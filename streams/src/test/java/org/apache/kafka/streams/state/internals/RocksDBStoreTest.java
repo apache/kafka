@@ -855,7 +855,7 @@ public class RocksDBStoreTest {
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
                 filter = new BloomFilter();
-                tableConfig.setFilter(filter);
+                tableConfig.setFilterPolicy(filter);
                 options.optimizeFiltersForHits();
                 bloomFiltersSet = true;
             } else {

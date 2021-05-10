@@ -196,7 +196,6 @@ public class CachingPersistentWindowStoreTest {
                 }
             }, "store-name");
 
-        final String bootstrapServers = "localhost:9092";
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -231,6 +230,8 @@ public class CachingPersistentWindowStoreTest {
         for (int i = 0; i < 5; i++) {
             inputTopic.pipeInput(UUID.randomUUID().toString(), UUID.randomUUID().toString());
         }
+
+        driver.close();
     }
 
     @Test

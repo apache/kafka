@@ -35,7 +35,6 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
@@ -102,7 +101,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 1. Send with null key/value/partition-id should be accepted; send with null topic should be rejected.
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
-  @nowarn("cat=deprecation")
   @Test
   def testSendOffset(): Unit = {
     val producer = createProducer(brokerList)
@@ -123,7 +121,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             case 2 => assertEquals(metadata.serializedValueSize, "value".getBytes(StandardCharsets.UTF_8).length)
             case _ => assertTrue(metadata.serializedValueSize > 0)
           }
-          assertNotEquals(metadata.checksum(), 0)
           offset += 1
         } else {
           fail(s"Send callback returns the following exception: $exception")

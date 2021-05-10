@@ -525,6 +525,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             final boolean autoDowngradeTxnCommit = config.getBoolean(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
+            // Only log a warning if being used outside of Streams, which we know includes "StreamThread-" in the client id
+            if (autoDowngradeTxnCommit && !clientId.contains("StreamThread-")) {
+                log.warn("The configuration parameter `{}` is internal and not intended for public use, it will be " +
+                    "removed in 4.0", ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
+            }
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
@@ -642,7 +647,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         to the partition leader. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
+     *
+     * @deprecated Since 3.0.0, please use {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} instead.
      */
+    @Deprecated
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
@@ -657,8 +665,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern. Thus, the specified
      * {@code groupMetadata} should be extracted from the used {@link KafkaConsumer consumer} via
-     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata for stronger fencing than
-     * {@link #sendOffsetsToTransaction(Map, String)} which only sends with consumer group id.
+     * {@link KafkaConsumer#groupMetadata()} to leverage consumer group metadata. This will provide
+     * stronger fencing than just supplying the {@code consumerGroupId} and passing in {@code new ConsumerGroupMetadata(consumerGroupId)},
+     * however note that the full set of consumer group metadata returned by {@link KafkaConsumer#groupMetadata()}
+     * requires the brokers to be on version 2.5 or newer to understand.
      *
      * <p>
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
@@ -671,8 +681,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
-     *         the broker doesn't support latest version of transactional API with consumer group metadata (i.e. if its version is
-     *         lower than 2.5.0).
+     *         the broker doesn't support latest version of transactional API with all consumer group metadata
+     *         (i.e. if its version is lower than 2.5.0).
      * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException fatal error indicating the message
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
@@ -1359,7 +1369,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1L, -1, -1);
+            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);

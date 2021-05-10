@@ -19,7 +19,8 @@ package kafka.server
 
 import java.util
 import java.util.Collections
-import java.util.concurrent.ExecutionException
+import java.util.Map.Entry
+import java.util.concurrent.{CompletableFuture, ExecutionException}
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
@@ -27,22 +28,27 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
-import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
+import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsRequestData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED}
+import org.apache.kafka.common.message._
+import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.Controller
 import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -76,6 +82,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopics(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKeys.ALTER_CONFIGS => handleLegacyAlterConfigs(request)
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
@@ -86,9 +93,12 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
+        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -108,18 +118,18 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request): Unit = {
-    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+    val responseData = new SaslHandshakeResponseData().setErrorCode(ILLEGAL_SASL_STATE.code)
     requestHelper.sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request): Unit = {
     val responseData = new SaslAuthenticateResponseData()
-      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+      .setErrorCode(ILLEGAL_SASL_STATE.code)
       .setErrorMessage("SaslAuthenticate request received after successful authentication")
     requestHelper.sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(responseData))
   }
 
-  private def handleFetch(request: RequestChannel.Request): Unit = {
+  def handleFetch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
   }
@@ -136,7 +146,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           .setPort(node.port)
           .setRack(node.rack))
       }
-      metadataResponseData.setClusterId(metaProperties.clusterId.toString)
+      metadataResponseData.setClusterId(metaProperties.clusterId)
       if (controller.isActive) {
         metadataResponseData.setControllerId(config.nodeId)
       } else {
@@ -160,24 +170,32 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteTopics(request: RequestChannel.Request): Unit = {
-    val responses = deleteTopics(request.body[DeleteTopicsRequest].data,
+    val deleteTopicsRequest = request.body[DeleteTopicsRequest]
+    val future = deleteTopics(deleteTopicsRequest.data,
       request.context.apiVersion,
       authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
-    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
-      val responseData = new DeleteTopicsResponseData().
-        setResponses(new DeletableTopicResultCollection(responses.iterator)).
-        setThrottleTimeMs(throttleTimeMs)
-      new DeleteTopicsResponse(responseData)
-    })
+    future.whenComplete { (results, exception) =>
+      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+        if (exception != null) {
+          deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
+        } else {
+          val responseData = new DeleteTopicsResponseData().
+            setResponses(new DeletableTopicResultCollection(results.iterator)).
+            setThrottleTimeMs(throttleTimeMs)
+          new DeleteTopicsResponse(responseData)
+        }
+      })
+    }
   }
 
   def deleteTopics(request: DeleteTopicsRequestData,
                    apiVersion: Int,
                    hasClusterAuth: Boolean,
                    getDescribableTopics: Iterable[String] => Set[String],
-                   getDeletableTopics: Iterable[String] => Set[String]): util.List[DeletableTopicResult] = {
+                   getDeletableTopics: Iterable[String] => Set[String])
+                   : CompletableFuture[util.List[DeletableTopicResult]] = {
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
       if (apiVersion < 3) {
@@ -238,87 +256,99 @@ class ControllerApis(val requestChannel: RequestChannel,
     val toAuthenticate = new util.HashSet[String]
     toAuthenticate.addAll(providedNames)
     val idToName = new util.HashMap[Uuid, String]
-    controller.findTopicNames(providedIds).get().forEach { (id, nameOrError) =>
-      if (nameOrError.isError) {
-        appendResponse(null, id, nameOrError.error())
-      } else {
-        toAuthenticate.add(nameOrError.result())
-        idToName.put(id, nameOrError.result())
-      }
-    }
-    // Get the list of deletable topics (those we can delete) and the list of describeable
-    // topics.  If a topic can't be deleted or described, we have to act like it doesn't
-    // exist, even when it does.
-    val topicsToAuthenticate = toAuthenticate.asScala
-    val (describeable, deletable) = if (hasClusterAuth) {
-      (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
-    } else {
-      (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
-    }
-    // For each topic that was provided by ID, check if authentication failed.
-    // If so, remove it from the idToName map and create an error response for it.
-    val iterator = idToName.entrySet().iterator()
-    while (iterator.hasNext) {
-      val entry = iterator.next()
-      val id = entry.getKey
-      val name = entry.getValue
-      if (!deletable.contains(name)) {
-        if (describeable.contains(name)) {
-          appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+    controller.findTopicNames(providedIds).thenCompose { topicNames =>
+      topicNames.forEach { (id, nameOrError) =>
+        if (nameOrError.isError) {
+          appendResponse(null, id, nameOrError.error())
         } else {
-          appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+          toAuthenticate.add(nameOrError.result())
+          idToName.put(id, nameOrError.result())
         }
-        iterator.remove()
       }
-    }
-    // For each topic that was provided by name, check if authentication failed.
-    // If so, create an error response for it.  Otherwise, add it to the idToName map.
-    controller.findTopicIds(providedNames).get().forEach { (name, idOrError) =>
-      if (!describeable.contains(name)) {
-        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
-      } else if (idOrError.isError) {
-        appendResponse(name, ZERO_UUID, idOrError.error)
-      } else if (deletable.contains(name)) {
-        val id = idOrError.result()
-        if (duplicateProvidedIds.contains(id) || idToName.put(id, name) != null) {
-          // This is kind of a weird case: what if we supply topic ID X and also a name
-          // that maps to ID X?  In that case, _if authorization succeeds_, we end up
-          // here.  If authorization doesn't succeed, we refrain from commenting on the
-          // situation since it would reveal topic ID mappings.
-          duplicateProvidedIds.add(id)
-          idToName.remove(id)
-          appendResponse(name, id, new ApiError(INVALID_REQUEST,
-            "The provided topic name maps to an ID that was already supplied."))
-        }
+      // Get the list of deletable topics (those we can delete) and the list of describeable
+      // topics.
+      val topicsToAuthenticate = toAuthenticate.asScala
+      val (describeable, deletable) = if (hasClusterAuth) {
+        (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
       } else {
-        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+        (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
+      }
+      // For each topic that was provided by ID, check if authentication failed.
+      // If so, remove it from the idToName map and create an error response for it.
+      val iterator = idToName.entrySet().iterator()
+      while (iterator.hasNext) {
+        val entry = iterator.next()
+        val id = entry.getKey
+        val name = entry.getValue
+        if (!deletable.contains(name)) {
+          if (describeable.contains(name)) {
+            appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+          } else {
+            appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+          }
+          iterator.remove()
+        }
+      }
+      // For each topic that was provided by name, check if authentication failed.
+      // If so, create an error response for it. Otherwise, add it to the idToName map.
+      controller.findTopicIds(providedNames).thenCompose { topicIds =>
+        topicIds.forEach { (name, idOrError) =>
+          if (!describeable.contains(name)) {
+            appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+          } else if (idOrError.isError) {
+            appendResponse(name, ZERO_UUID, idOrError.error)
+          } else if (deletable.contains(name)) {
+            val id = idOrError.result()
+            if (duplicateProvidedIds.contains(id) || idToName.put(id, name) != null) {
+              // This is kind of a weird case: what if we supply topic ID X and also a name
+              // that maps to ID X?  In that case, _if authorization succeeds_, we end up
+              // here.  If authorization doesn't succeed, we refrain from commenting on the
+              // situation since it would reveal topic ID mappings.
+              duplicateProvidedIds.add(id)
+              idToName.remove(id)
+              appendResponse(name, id, new ApiError(INVALID_REQUEST,
+                "The provided topic name maps to an ID that was already supplied."))
+            }
+          } else {
+            appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+          }
+        }
+        // Finally, the idToName map contains all the topics that we are authorized to delete.
+        // Perform the deletion and create responses for each one.
+        controller.deleteTopics(idToName.keySet).thenApply { idToError =>
+          idToError.forEach { (id, error) =>
+            appendResponse(idToName.get(id), id, error)
+          }
+          // Shuffle the responses so that users can not use patterns in their positions to
+          // distinguish between absent topics and topics we are not permitted to see.
+          Collections.shuffle(responses)
+          responses
+        }
       }
     }
-    // Finally, the idToName map contains all the topics that we are authorized to delete.
-    // Perform the deletion and create responses for each one.
-    val idToError = controller.deleteTopics(idToName.keySet).get()
-    idToError.forEach { (id, error) =>
-        appendResponse(idToName.get(id), id, error)
-    }
-    // Shuffle the responses so that users can not use patterns in their positions to
-    // distinguish between absent topics and topics we are not permitted to see.
-    Collections.shuffle(responses)
-    responses
   }
 
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
-    val responseData = createTopics(request.body[CreateTopicsRequest].data(),
+    val createTopicsRequest = request.body[CreateTopicsRequest]
+    val future = createTopics(createTopicsRequest.data(),
         authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
         names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
-    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
-      responseData.setThrottleTimeMs(throttleTimeMs)
-      new CreateTopicsResponse(responseData)
-    })
+    future.whenComplete { (result, exception) =>
+      requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+        if (exception != null) {
+          createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
+        } else {
+          result.setThrottleTimeMs(throttleTimeMs)
+          new CreateTopicsResponse(result)
+        }
+      })
+    }
   }
 
   def createTopics(request: CreateTopicsRequestData,
                    hasClusterAuth: Boolean,
-                   getCreatableTopics: Iterable[String] => Set[String]): CreateTopicsResponseData = {
+                   getCreatableTopics: Iterable[String] => Set[String])
+                   : CompletableFuture[CreateTopicsResponseData] = {
     val topicNames = new util.HashSet[String]()
     val duplicateTopicNames = new util.HashSet[String]()
     request.topics().forEach { topicData =>
@@ -343,21 +373,22 @@ class ControllerApis(val requestChannel: RequestChannel,
         iterator.remove()
       }
     }
-    val response = controller.createTopics(effectiveRequest).get()
-    duplicateTopicNames.forEach { name =>
-      response.topics().add(new CreatableTopicResult().
-        setName(name).
-        setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage("Found multiple entries for this topic."))
-    }
-    topicNames.forEach { name =>
-      if (!authorizedTopicNames.contains(name)) {
+    controller.createTopics(effectiveRequest).thenApply { response =>
+      duplicateTopicNames.forEach { name =>
         response.topics().add(new CreatableTopicResult().
           setName(name).
-          setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()))
+          setErrorCode(INVALID_REQUEST.code).
+          setErrorMessage("Duplicate topic name."))
       }
+      topicNames.forEach { name =>
+        if (!authorizedTopicNames.contains(name)) {
+          response.topics().add(new CreatableTopicResult().
+            setName(name).
+            setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
+        }
+      }
+      response
     }
-    response
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): Unit = {
@@ -370,7 +401,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
       val apiVersionRequest = request.body[ApiVersionsRequest]
       if (apiVersionRequest.hasUnsupportedRequestVersion) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
+        apiVersionRequest.getErrorResponse(requestThrottleMs, UNSUPPORTED_VERSION.exception)
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception)
       } else {
@@ -380,45 +411,122 @@ class ControllerApis(val requestChannel: RequestChannel,
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
   }
 
-  private def handleVote(request: RequestChannel.Request): Unit = {
+  def authorizeAlterResource(requestContext: RequestContext,
+                             resource: ConfigResource): ApiError = {
+    resource.`type` match {
+      case ConfigResource.Type.BROKER =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(CLUSTER_AUTHORIZATION_FAILED)
+        }
+      case ConfigResource.Type.TOPIC =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, TOPIC, resource.name)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(TOPIC_AUTHORIZATION_FAILED)
+        }
+      case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
+    }
+  }
+
+  def handleLegacyAlterConfigs(request: RequestChannel.Request): Unit = {
+    val response = new AlterConfigsResponseData()
+    val alterConfigsRequest = request.body[AlterConfigsRequest]
+    val duplicateResources = new util.HashSet[ConfigResource]
+    val configChanges = new util.HashMap[ConfigResource, util.Map[String, String]]()
+    alterConfigsRequest.data.resources.forEach { resource =>
+      val configResource = new ConfigResource(
+        ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
+      if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
+        response.responses().add(new OldAlterConfigsResourceResponse().
+          setErrorCode(UNSUPPORTED_VERSION.code()).
+          setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
+          setResourceName(resource.resourceName()).
+          setResourceType(resource.resourceType()))
+      } else if (!duplicateResources.contains(configResource)) {
+        val configs = new util.HashMap[String, String]()
+        resource.configs().forEach(config => configs.put(config.name(), config.value()))
+        if (configChanges.put(configResource, configs) != null) {
+          duplicateResources.add(configResource)
+          configChanges.remove(configResource)
+          response.responses().add(new OldAlterConfigsResourceResponse().
+            setErrorCode(INVALID_REQUEST.code()).
+            setErrorMessage("Duplicate resource.").
+            setResourceName(resource.resourceName()).
+            setResourceType(resource.resourceType()))
+        }
+      }
+    }
+    val iterator = configChanges.keySet().iterator()
+    while (iterator.hasNext) {
+      val resource = iterator.next()
+      val apiError = authorizeAlterResource(request.context, resource)
+      if (apiError.isFailure) {
+        response.responses().add(new OldAlterConfigsResourceResponse().
+          setErrorCode(apiError.error().code()).
+          setErrorMessage(apiError.message()).
+          setResourceName(resource.name()).
+          setResourceType(resource.`type`().id()))
+        iterator.remove()
+      }
+    }
+    controller.legacyAlterConfigs(configChanges, alterConfigsRequest.data.validateOnly)
+      .whenComplete { (controllerResults, exception) =>
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          controllerResults.entrySet().forEach(entry => response.responses().add(
+            new OldAlterConfigsResourceResponse().
+              setErrorCode(entry.getValue.error().code()).
+              setErrorMessage(entry.getValue.message()).
+              setResourceName(entry.getKey.name()).
+              setResourceType(entry.getKey.`type`().id())))
+          requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
+            new AlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
+        }
+      }
+  }
+
+  def handleVote(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
   }
 
-  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
+  def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
   }
 
-  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
+  def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
   }
 
-  private def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
+  def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val alterIsrRequest = request.body[AlterIsrRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val future = controller.alterIsr(alterIsrRequest.data)
-    future.whenComplete((result, exception) => {
+    future.whenComplete { (result, exception) =>
       val response = if (exception != null) {
         alterIsrRequest.getErrorResponse(exception)
       } else {
         new AlterIsrResponse(result)
       }
       requestHelper.sendResponseExemptThrottle(request, response)
-    })
+    }
   }
 
   def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
     val heartbeatRequest = request.body[BrokerHeartbeatRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, e) => {
+    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit] { (reply, e) =>
       def createResponseCallback(requestThrottleMs: Int,
                                  reply: BrokerHeartbeatReply,
                                  e: Throwable): BrokerHeartbeatResponse = {
@@ -429,7 +537,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         } else {
           new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.NONE.code).
+            setErrorCode(NONE.code).
             setIsCaughtUp(reply.isCaughtUp).
             setIsFenced(reply.isFenced).
             setShouldShutDown(reply.shouldShutDown))
@@ -437,14 +545,14 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
-    })
+    }
   }
 
   def handleUnregisterBroker(request: RequestChannel.Request): Unit = {
     val decommissionRequest = request.body[UnregisterBrokerRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
 
-    controller.unregisterBroker(decommissionRequest.data().brokerId()).handle[Unit]((_, e) => {
+    controller.unregisterBroker(decommissionRequest.data().brokerId()).handle[Unit] { (_, e) =>
       def createResponseCallback(requestThrottleMs: Int,
                                  e: Throwable): UnregisterBrokerResponse = {
         if (e != null) {
@@ -458,31 +566,31 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => createResponseCallback(requestThrottleMs, e))
-    })
+    }
   }
 
   def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
     val registrationRequest = request.body[BrokerRegistrationRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    controller.registerBroker(registrationRequest.data).handle[Unit]((reply, e) => {
+    controller.registerBroker(registrationRequest.data).handle[Unit] { (reply, e) =>
       def createResponseCallback(requestThrottleMs: Int,
                                  reply: BrokerRegistrationReply,
                                  e: Throwable): BrokerRegistrationResponse = {
         if (e != null) {
           new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code()))
+            setErrorCode(Errors.forException(e).code))
         } else {
           new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.NONE.code).
+            setErrorCode(NONE.code).
             setBrokerEpoch(reply.epoch))
         }
       }
       requestHelper.sendResponseMaybeThrottle(request,
         requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
-    })
+    }
   }
 
   private def handleRaftRequest(request: RequestChannel.Request,
@@ -490,52 +598,166 @@ class ControllerApis(val requestChannel: RequestChannel,
     val requestBody = request.body[AbstractRequest]
     val future = raftManager.handleRequest(request.header, requestBody.data, time.milliseconds())
 
-    future.whenComplete((responseData, exception) => {
+    future.whenComplete { (responseData, exception) =>
       val response = if (exception != null) {
         requestBody.getErrorResponse(exception)
       } else {
         buildResponse(responseData)
       }
       requestHelper.sendResponseExemptThrottle(request, response)
-    })
+    }
   }
 
   def handleAlterClientQuotas(request: RequestChannel.Request): Unit = {
     val quotaRequest = request.body[AlterClientQuotasRequest]
-    authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-
+    authHelper.authorizeClusterOperation(request, ALTER_CONFIGS)
     controller.alterClientQuotas(quotaRequest.entries, quotaRequest.validateOnly)
-      .whenComplete((results, exception) => {
+      .whenComplete { (results, exception) =>
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             AlterClientQuotasResponse.fromQuotaEntities(results, requestThrottleMs))
         }
-      })
+      }
   }
 
   def handleIncrementalAlterConfigs(request: RequestChannel.Request): Unit = {
+    val response = new IncrementalAlterConfigsResponseData()
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
-    authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-    val configChanges = new util.HashMap[ConfigResource, util.Map[String, util.Map.Entry[AlterConfigOp.OpType, String]]]()
+    val duplicateResources = new util.HashSet[ConfigResource]
+    val configChanges = new util.HashMap[ConfigResource,
+      util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     alterConfigsRequest.data.resources.forEach { resource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
-      val altersByName = new util.HashMap[String, util.Map.Entry[AlterConfigOp.OpType, String]]()
-      resource.configs.forEach { config =>
-        altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-          AlterConfigOp.OpType.forId(config.configOperation), config.value))
+      val configResource = new ConfigResource(
+        ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
+      if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
+        response.responses().add(new AlterConfigsResourceResponse().
+          setErrorCode(UNSUPPORTED_VERSION.code()).
+          setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
+          setResourceName(resource.resourceName()).
+          setResourceType(resource.resourceType()))
+      } else if (!duplicateResources.contains(configResource)) {
+        val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+        resource.configs.forEach { config =>
+          altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+            AlterConfigOp.OpType.forId(config.configOperation), config.value))
+        }
+        if (configChanges.put(configResource, altersByName) != null) {
+          duplicateResources.add(configResource)
+          configChanges.remove(configResource)
+          response.responses().add(new AlterConfigsResourceResponse().
+            setErrorCode(INVALID_REQUEST.code()).
+            setErrorMessage("Duplicate resource.").
+            setResourceName(resource.resourceName()).
+            setResourceType(resource.resourceType()))
+        }
       }
-      configChanges.put(configResource, altersByName)
+    }
+    val iterator = configChanges.keySet().iterator()
+    while (iterator.hasNext) {
+      val resource = iterator.next()
+      val apiError = authorizeAlterResource(request.context, resource)
+      if (apiError.isFailure) {
+        response.responses().add(new AlterConfigsResourceResponse().
+          setErrorCode(apiError.error().code()).
+          setErrorMessage(apiError.message()).
+          setResourceName(resource.name()).
+          setResourceType(resource.`type`().id()))
+        iterator.remove()
+      }
     }
     controller.incrementalAlterConfigs(configChanges, alterConfigsRequest.data.validateOnly)
-      .whenComplete((results, exception) => {
+      .whenComplete { (controllerResults, exception) =>
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new IncrementalAlterConfigsResponse(requestThrottleMs, results))
+          controllerResults.entrySet().forEach(entry => response.responses().add(
+            new AlterConfigsResourceResponse().
+              setErrorCode(entry.getValue.error().code()).
+              setErrorMessage(entry.getValue.message()).
+              setResourceName(entry.getKey.name()).
+              setResourceType(entry.getKey.`type`().id())))
+          requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
+            new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
-      })
+      }
+  }
+
+  def handleCreatePartitions(request: RequestChannel.Request): Unit = {
+    val future = createPartitions(request.body[CreatePartitionsRequest].data,
+      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+    future.whenComplete { (responses, exception) =>
+      if (exception != null) {
+        requestHelper.handleError(request, exception)
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+          val responseData = new CreatePartitionsResponseData().
+            setResults(responses).
+            setThrottleTimeMs(requestThrottleMs)
+          new CreatePartitionsResponse(responseData)
+        })
+      }
+    }
+  }
+
+  def createPartitions(request: CreatePartitionsRequestData,
+                       hasClusterAuth: Boolean,
+                       getCreatableTopics: Iterable[String] => Set[String])
+                       : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+    val responses = new util.ArrayList[CreatePartitionsTopicResult]()
+    val duplicateTopicNames = new util.HashSet[String]()
+    val topicNames = new util.HashSet[String]()
+    request.topics().forEach {
+      topic =>
+        if (!topicNames.add(topic.name())) {
+          duplicateTopicNames.add(topic.name())
+        }
+    }
+    duplicateTopicNames.forEach { topicName =>
+      responses.add(new CreatePartitionsTopicResult().
+        setName(topicName).
+        setErrorCode(INVALID_REQUEST.code).
+        setErrorMessage("Duplicate topic name."))
+        topicNames.remove(topicName)
+    }
+    val authorizedTopicNames = {
+      if (hasClusterAuth) {
+        topicNames.asScala
+      } else {
+        getCreatableTopics(topicNames.asScala)
+      }
+    }
+    val topics = new util.ArrayList[CreatePartitionsTopic]
+    topicNames.forEach { topicName =>
+      if (authorizedTopicNames.contains(topicName)) {
+        topics.add(request.topics().find(topicName))
+      } else {
+        responses.add(new CreatePartitionsTopicResult().
+          setName(topicName).
+          setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
+      }
+    }
+    controller.createPartitions(topics).thenApply { results =>
+      results.forEach(response => responses.add(response))
+      responses
+    }
+  }
+
+  def handleAlterPartitionReassignments(request: RequestChannel.Request): Unit = {
+    val alterRequest = request.body[AlterPartitionReassignmentsRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val response = controller.alterPartitionReassignments(alterRequest.data()).get()
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new AlterPartitionReassignmentsResponse(response))
+  }
+
+  def handleListPartitionReassignments(request: RequestChannel.Request): Unit = {
+    val listRequest = request.body[ListPartitionReassignmentsRequest]
+    authHelper.authorizeClusterOperation(request, DESCRIBE)
+    val response = controller.listPartitionReassignments(listRequest.data()).get()
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new ListPartitionReassignmentsResponse(response))
   }
 }

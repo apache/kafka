@@ -711,7 +711,9 @@ public class StreamsBuilderTest {
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
-                                 STREAM_OPERATION_NAME + "-this-join-store", STREAM_OPERATION_NAME + "-outer-other-join-store"
+            STREAM_OPERATION_NAME + "-this-join-store",
+            STREAM_OPERATION_NAME + "-outer-other-join-store",
+            STREAM_OPERATION_NAME + "-left-shared-join-store"
         );
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
@@ -734,7 +736,8 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
                                  "KSTREAM-JOINTHIS-0000000004-store",
-                                 "KSTREAM-OUTEROTHER-0000000005-store"
+                                 "KSTREAM-OUTEROTHER-0000000005-store",
+                                 "KSTREAM-OUTERSHARED-0000000004-store"
         );
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
@@ -802,7 +805,8 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
                                  STREAM_OPERATION_NAME + "-outer-this-join-store",
-                                 STREAM_OPERATION_NAME + "-outer-other-join-store");
+                                 STREAM_OPERATION_NAME + "-outer-other-join-store",
+                                 STREAM_OPERATION_NAME + "-outer-shared-join-store");
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
                                 "KSTREAM-SOURCE-0000000001",
@@ -825,7 +829,8 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
                                  "KSTREAM-OUTERTHIS-0000000004-store",
-                                 "KSTREAM-OUTEROTHER-0000000005-store"
+                                 "KSTREAM-OUTEROTHER-0000000005-store",
+                                 "KSTREAM-OUTERSHARED-0000000004-store"
         );
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
