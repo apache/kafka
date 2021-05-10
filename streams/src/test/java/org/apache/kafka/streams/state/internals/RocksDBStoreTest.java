@@ -74,6 +74,7 @@ import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
+import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -453,14 +454,21 @@ public class RocksDBStoreTest {
         rocksDBStore.flush();
 
         final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer);
+        final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
         while (keysWithPrefix.hasNext()) {
-            keysWithPrefix.next();
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            valuesWithPrefix.add(new String(next.value));
             numberOfKeysReturned++;
         }
 
         assertThat(numberOfKeysReturned, is(numMatches));
+        if (numMatches == 2) {
+            assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+        } else {
+            assertThat(valuesWithPrefix.get(0), is("a"));
+        }
     }
 
     @Test
