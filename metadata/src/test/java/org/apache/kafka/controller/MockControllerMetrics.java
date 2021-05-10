@@ -19,13 +19,17 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
-    private volatile int topicCount;
-    private volatile int partitionCount;
+    private volatile int topics;
+    private volatile int partitions;
+    private volatile int offlinePartitions;
+    private volatile int preferredReplicaImbalances;
 
     public MockControllerMetrics() {
         this.active = false;
-        this.topicCount = 0;
-        this.partitionCount = 0;
+        this.topics = 0;
+        this.partitions = 0;
+        this.offlinePartitions = 0;
+        this.preferredReplicaImbalances = 0;
     }
 
     @Override
@@ -50,21 +54,41 @@ public final class MockControllerMetrics implements ControllerMetrics {
 
     @Override
     public void setGlobalTopicsCount(int topicCount) {
-        this.topicCount = topicCount;
+        this.topics = topicCount;
     }
 
     @Override
     public int globalTopicsCount() {
-        return this.topicCount;
+        return this.topics;
     }
 
     @Override
     public void setGlobalPartitionCount(int partitionCount) {
-        this.partitionCount = partitionCount;
+        this.partitions = partitionCount;
     }
 
     @Override
     public int globalPartitionCount() {
-        return this.partitionCount;
+        return this.partitions;
+    }
+
+    @Override
+    public void setOfflinePartitionCount(int offlinePartitions) {
+        this.offlinePartitions = offlinePartitions;
+    }
+
+    @Override
+    public int offlinePartitionCount() {
+        return this.offlinePartitions;
+    }
+
+    @Override
+    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
+        this.preferredReplicaImbalances = replicaImbalances;
+    }
+
+    @Override
+    public int preferredReplicaImbalanceCount() {
+        return this.preferredReplicaImbalances;
     }
 }

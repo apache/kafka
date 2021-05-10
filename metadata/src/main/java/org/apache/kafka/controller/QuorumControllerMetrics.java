@@ -34,19 +34,31 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ReplicationControlManager", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
         "kafka.controller", "ReplicationControlManager", "GlobalPartitionCount", null);
+    private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
+        "kafka.controller", "ReplicationControlManager", "OfflinePartitionCount", null);
+    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
+        "kafka.controller", "ReplicationControlManager", "PreferredReplicaImbalanceCount", null);
     
 
     private volatile boolean active;
-    private volatile int topicCount;
-    private volatile int partitionCount;
+    private volatile int topics;
+    private volatile int partitions;
+    private volatile int offlinePartitions;
+    private volatile int preferredReplicaImbalances;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> globalPartitionCount;
     private final Gauge<Integer> globalTopicCount;
+    private final Gauge<Integer> offlinePartitionCount;
+    private final Gauge<Integer> preferredReplicaImbalanceCount;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
+        this.topics = 0;
+        this.partitions = 0;
+        this.offlinePartitions = 0;
+        this.preferredReplicaImbalances = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -55,17 +67,28 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.topicCount = 0;
         this.globalTopicCount = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return topicCount;
+                return topics;
             }
         });
         this.globalPartitionCount = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return partitionCount;
+                return partitions;
+            }
+        });
+        this.offlinePartitionCount = registry.newGauge(OFFLINE_PARTITION_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return offlinePartitions;
+            }
+        });
+        this.preferredReplicaImbalanceCount = registry.newGauge(PREFERRED_REPLICA_IMBALANCE_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return preferredReplicaImbalances;
             }
         });
     }
@@ -92,21 +115,41 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     @Override
     public void setGlobalTopicsCount(int topicCount) {
-        this.topicCount = topicCount;
+        this.topics = topicCount;
     }
 
     @Override
     public int globalTopicsCount() {
-        return this.topicCount;
+        return this.topics;
     }
 
     @Override
     public void setGlobalPartitionCount(int partitionCount) {
-        this.partitionCount = partitionCount;
+        this.partitions = partitionCount;
     }
 
     @Override
     public int globalPartitionCount() {
-        return this.partitionCount;
+        return this.partitions;
+    }
+
+    @Override
+    public void setOfflinePartitionCount(int offlinePartitions) {
+        this.offlinePartitions = offlinePartitions;
+    }
+
+    @Override
+    public int offlinePartitionCount() {
+        return this.offlinePartitions;
+    }
+
+    @Override
+    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
+        this.preferredReplicaImbalances = replicaImbalances;
+    }
+
+    @Override
+    public int preferredReplicaImbalanceCount() {
+        return this.preferredReplicaImbalances;
     }
 }

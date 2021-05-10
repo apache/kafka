@@ -326,4 +326,14 @@ public class BrokersToIsrs {
     boolean hasLeaderships(int brokerId) {
         return iterator(brokerId, true).hasNext();
     }
+
+    int offlinePartitionCount() {
+        PartitionsOnReplicaIterator noLeaderIterator = partitionsWithNoLeader();
+        int offlinePartitionCount = 0;
+        while (noLeaderIterator.hasNext()) {
+            noLeaderIterator.next();
+            offlinePartitionCount++;
+        }
+        return offlinePartitionCount;
+    }
 }
