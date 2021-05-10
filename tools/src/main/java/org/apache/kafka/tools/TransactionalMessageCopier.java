@@ -22,6 +22,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -353,11 +354,8 @@ public class TransactionalMessageCopier {
 
                         long messagesSentWithinCurrentTxn = records.count();
 
-                        if (useGroupMetadata) {
-                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumer.groupMetadata());
-                        } else {
-                            producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
-                        }
+                        ConsumerGroupMetadata groupMetadata = useGroupMetadata ? consumer.groupMetadata() : new ConsumerGroupMetadata(consumerGroup);
+                        producer.sendOffsetsToTransaction(consumerPositions(consumer), groupMetadata);
 
                         if (enableRandomAborts && random.nextInt() % 3 == 0) {
                             throw new KafkaException("Aborting transaction");

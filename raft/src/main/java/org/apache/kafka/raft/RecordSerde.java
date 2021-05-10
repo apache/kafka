@@ -21,7 +21,7 @@ import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 
 /**
- * Serde interface for records written to the Raft log. This class assumes
+ * Serde interface for records written to a metadata log. This class assumes
  * a two-pass serialization, with the first pass used to compute the size of the
  * serialized record, and the second pass to write the object.
  */

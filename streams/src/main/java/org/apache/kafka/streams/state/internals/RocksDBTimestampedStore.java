@@ -75,7 +75,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
             setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
         } catch (final RocksDBException e) {
-            if ("Column family not found: : keyValueWithTimestamp".equals(e.getMessage())) {
+            if ("Column family not found: keyValueWithTimestamp".equals(e.getMessage())) {
                 try {
                     db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors.subList(0, 1), columnFamilies);
                     columnFamilies.add(db.createColumnFamily(columnFamilyDescriptors.get(1)));
@@ -203,6 +203,22 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 to,
                 forward,
                 true);
+        }
+
+        @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(oldColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
+            try {
+                db.deleteRange(newColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
         }
 
         @Override

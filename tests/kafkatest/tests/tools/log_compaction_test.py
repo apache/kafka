@@ -49,7 +49,7 @@ class LogCompactionTest(Test):
             zk = self.zk,
             security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol,
-            server_prop_overides=[
+            server_prop_overrides=[
                 [config_property.LOG_SEGMENT_BYTES, LogCompactionTest.LOG_SEGMENT_BYTES],
             ],
             controller_num_nodes_override=self.num_zk)

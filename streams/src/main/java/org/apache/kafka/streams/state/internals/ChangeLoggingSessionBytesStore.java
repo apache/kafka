@@ -44,14 +44,14 @@ class ChangeLoggingSessionBytesStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override
@@ -91,8 +91,8 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
-        return wrapped().fetchSession(key, startTime, endTime);
+    public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
     }
 
     @Override
@@ -106,12 +106,12 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from, final Bytes to) {
-        return wrapped().backwardFetch(from, to);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+        return wrapped().backwardFetch(keyFrom, keyTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
-        return wrapped().fetch(from, to);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+        return wrapped().fetch(keyFrom, keyTo);
     }
 }

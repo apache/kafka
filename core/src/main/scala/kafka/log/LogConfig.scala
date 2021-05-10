@@ -103,6 +103,13 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     if (compact && maxCompactionLagMs > 0) math.min(maxCompactionLagMs, segmentMs)
     else segmentMs
   }
+
+  def initFileSize: Int = {
+    if (preallocate)
+      segmentSize
+    else
+      0
+  }
 }
 
 object LogConfig {
