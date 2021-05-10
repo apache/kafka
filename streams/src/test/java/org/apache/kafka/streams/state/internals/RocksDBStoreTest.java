@@ -74,6 +74,7 @@ import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
+import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -438,7 +439,7 @@ public class RocksDBStoreTest {
         final Serializer<UUID> uuidSerializer = Serdes.UUID().serializer();
         final UUID uuid1 = UUID.randomUUID();
         final UUID uuid2 = UUID.randomUUID();
-        final String prefix = uuid1.toString().substring(0, 4);
+        final String prefix1 = uuid1.toString().substring(0, 4);
         entries.add(new KeyValue<>(
             new Bytes(uuidSerializer.serialize(null, uuid1)),
             stringSerializer.serialize(null, "a")));
@@ -450,18 +451,24 @@ public class RocksDBStoreTest {
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer);
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix1, stringSerializer);
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
-
         while (keysWithPrefix.hasNext()) {
             final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
             valuesWithPrefix.add(new String(next.value));
             numberOfKeysReturned++;
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(valuesWithPrefix.get(0), is("a"));
+        final boolean clashOnPrefix = prefix1.equals(uuid2.toString().substring(0, 4));
+        final int expectedNumberOfKeysReturned = clashOnPrefix ? 2 : 1;
+        assertThat(numberOfKeysReturned, is(expectedNumberOfKeysReturned));
+
+        if (clashOnPrefix) {
+            assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+        } else {
+            assertThat(valuesWithPrefix.get(0), is("a"));
+        }
     }
 
     @Test
