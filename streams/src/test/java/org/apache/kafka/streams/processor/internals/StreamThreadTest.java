@@ -1535,6 +1535,7 @@ public class StreamThreadTest {
         assertThat(processed.get(), is(false));
         thread.runOnce();
         assertThat(processed.get(), is(true));
+        thread.taskManager().shutdown(true);
     }
 
     @Test
@@ -1736,6 +1737,8 @@ public class StreamThreadTest {
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
         assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(threadMetadata.activeTasks().isEmpty());
+
+        thread.taskManager().shutdown(true);
     }
 
     @SuppressWarnings("unchecked")
@@ -1816,6 +1819,8 @@ public class StreamThreadTest {
 
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
+
+        thread.taskManager().shutdown(true);
     }
 
     @Test

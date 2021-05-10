@@ -200,12 +200,16 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public V fetchSession(final K key, final long startTime, final long endTime) {
+    public V fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
         return maybeMeasureLatency(
             () -> {
                 final Bytes bytesKey = keyBytes(key);
-                final byte[] result = wrapped().fetchSession(bytesKey, startTime, endTime);
+                final byte[] result = wrapped().fetchSession(
+                    bytesKey,
+                    earliestSessionEndTime,
+                    latestSessionStartTime
+                );
                 if (result == null) {
                     return null;
                 }
@@ -240,12 +244,12 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(from), keyBytes(to)),
+            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             streamsMetrics,
             serdes,
@@ -253,12 +257,12 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
-                                                          final K to) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(keyBytes(from), keyBytes(to)),
+            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             streamsMetrics,
             serdes,

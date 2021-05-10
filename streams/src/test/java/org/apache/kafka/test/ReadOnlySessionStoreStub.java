@@ -63,7 +63,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public V fetchSession(K key, long startTime, long endTime) {
+    public V fetchSession(K key, long earliestSessionEndTime, long latestSessionStartTime) {
         throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
@@ -90,14 +90,15 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
         }
-        if (sessions.subMap(from, true, to, true).isEmpty()) {
+        if (sessions.subMap(keyFrom, true, keyTo, true).isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
-        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true,  to, true).values().iterator();
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(keyFrom, true,
+            keyTo, true).values().iterator();
         return new KeyValueIteratorStub<>(
             new Iterator<KeyValue<Windowed<K>, V>>() {
 
@@ -124,15 +125,15 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to) {
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
         }
-        if (sessions.subMap(from, true, to, true).isEmpty()) {
+        if (sessions.subMap(keyFrom, true, keyTo, true).isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.emptyIterator());
         }
         final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator =
-            sessions.subMap(from, true, to, true).descendingMap().values().iterator();
+            sessions.subMap(keyFrom, true, keyTo, true).descendingMap().values().iterator();
         return new KeyValueIteratorStub<>(
             new Iterator<KeyValue<Windowed<K>, V>>() {
 

@@ -75,7 +75,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
             setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
         } catch (final RocksDBException e) {
-            if ("Column family not found: : keyValueWithTimestamp".equals(e.getMessage())) {
+            if ("Column family not found: keyValueWithTimestamp".equals(e.getMessage())) {
                 try {
                     db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors.subList(0, 1), columnFamilies);
                     columnFamilies.add(db.createColumnFamily(columnFamilyDescriptors.get(1)));

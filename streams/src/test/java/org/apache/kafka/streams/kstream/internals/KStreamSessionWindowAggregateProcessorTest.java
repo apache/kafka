@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.ToInternal;
@@ -52,7 +51,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -91,22 +89,23 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
-    private Metrics metrics;
+    private final Metrics metrics = new Metrics();
 
     @Before
-    public void initializeStore() {
-        final File stateDir = TestUtils.tempDirectory();
-        metrics = new Metrics();
-        final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
+    public void setup() {
+        setup(StreamsConfig.METRICS_LATEST, true);
+    }
 
+    private void setup(final String builtInMetricsVersion, final boolean enableCache) {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
         context = new InternalMockProcessorContext(
-            stateDir,
+            TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
-            metrics,
+            streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics),
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
             Time.SYSTEM
         ) {
             @SuppressWarnings("unchecked")
@@ -116,8 +115,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
             }
         };
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
 
-        initStore(true);
+        initStore(enableCache);
         processor.init(context);
     }
 
@@ -133,6 +133,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
             storeBuilder.withCachingEnabled();
         }
 
+        if (sessionStore != null) {
+            sessionStore.close();
+        }
         sessionStore = storeBuilder.build();
         sessionStore.init((StateStoreContext) context, sessionStore);
     }
@@ -383,8 +386,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
-        processor.init(context);
+        setup(builtInMetricsVersion, false);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
         );
@@ -424,7 +426,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        setup(builtInMetricsVersion, false);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
@@ -432,7 +434,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger
         ).get();
-        initStore(false);
         processor.init(context);
 
         // dummy record to establish stream time = 0
@@ -522,7 +523,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(builtInMetricsVersion);
+        setup(builtInMetricsVersion, false);
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
@@ -530,7 +531,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger
         ).get();
-        initStore(false);
         processor.init(context);
 
         try (final LogCaptureAppender appender =
@@ -615,36 +615,5 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertThat(
             (Double) metrics.metrics().get(dropRate).metricValue(),
             greaterThan(0.0));
-    }
-
-    private InternalMockProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.String(),
-            streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics),
-            Time.SYSTEM
-        ) {
-            @SuppressWarnings("unchecked")
-            @Override
-            public void forward(final Object key, final Object value, final To to) {
-                toInternal.update(to);
-                results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
-            }
-        };
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
-        final StoreBuilder<SessionStore<String, Long>> storeBuilder =
-            Stores.sessionStoreBuilder(
-                Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
-                Serdes.String(),
-                Serdes.Long())
-                .withLoggingDisabled();
-        final SessionStore<String, Long> sessionStore = storeBuilder.build();
-        sessionStore.init((StateStoreContext) context, sessionStore);
-        return context;
     }
 }

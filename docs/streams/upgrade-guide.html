@@ -144,7 +144,12 @@
         <li>Connect-json: As of Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
             Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
     </ul>
-    
+    <p>
+      The default value for configuration parameter <code>replication.factor</code> was changed to <code>-1</code>
+      (meaning: use broker default replication factor).
+      The <code>replication.factor</code> value of <code>-1</code> requires broker version 2.4 or newer.
+    </p>
+
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>
         We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in
