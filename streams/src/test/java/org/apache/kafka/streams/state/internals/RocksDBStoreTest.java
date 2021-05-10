@@ -74,6 +74,7 @@ import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
+import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -439,6 +440,8 @@ public class RocksDBStoreTest {
         final UUID uuid1 = UUID.randomUUID();
         final UUID uuid2 = UUID.randomUUID();
         final String prefix = uuid1.toString().substring(0, 4);
+        final int numMatches = uuid2.toString().substring(0, 4).equals(prefix) ? 2 : 1;
+
         entries.add(new KeyValue<>(
             new Bytes(uuidSerializer.serialize(null, uuid1)),
             stringSerializer.serialize(null, "a")));
@@ -460,8 +463,12 @@ public class RocksDBStoreTest {
             numberOfKeysReturned++;
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(valuesWithPrefix.get(0), is("a"));
+        assertThat(numberOfKeysReturned, is(numMatches));
+        if (numMatches == 2) {
+            assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+        } else {
+            assertThat(valuesWithPrefix.get(0), is("a"));
+        }
     }
 
     @Test
