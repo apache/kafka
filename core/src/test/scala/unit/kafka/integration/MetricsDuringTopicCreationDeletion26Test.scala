@@ -19,15 +19,15 @@ package kafka.integration
 
 import java.util.Properties
 
-import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestUtils}
-
-import scala.jdk.CollectionConverters._
-import org.junit.jupiter.api.{BeforeEach, Test}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
+import kafka.server.KafkaConfig
+import kafka.utils.{Logging, TestUtils}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
-class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
+import scala.jdk.CollectionConverters._
+
+class MetricsDuringTopicCreationDeletion26Test extends KafkaServerTestHarness with Logging {
 
   private val nodesNum = 3
   private val topicName = "topic"

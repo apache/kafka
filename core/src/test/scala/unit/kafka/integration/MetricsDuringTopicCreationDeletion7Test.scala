@@ -41,7 +41,7 @@ class MetricsDuringTopicCreationDeletion7Test extends KafkaServerTestHarness wit
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   // speed up the test for UnderReplicatedPartitions
   // which relies on the ISR expiry thread to execute concurrently with topic creation
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "2000")
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "4000")
 
   private val testedMetrics = List("OfflinePartitionsCount","PreferredReplicaImbalanceCount","UnderReplicatedPartitions")
   private val topics = List.tabulate(topicNum) (n => topicName + n)
