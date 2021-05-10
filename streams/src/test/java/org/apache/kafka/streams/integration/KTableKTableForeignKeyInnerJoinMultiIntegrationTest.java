@@ -195,7 +195,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        System.err.println("starting");
         startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
+        System.err.println("all running");
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -258,8 +260,12 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        final Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final Function<Float, String> tableOneKeyExtractor = value -> {
+            System.err.println("tableOneKeyExtractor:" + value);
+            return Integer.toString((int) value.floatValue());
+        };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
+            System.err.println("joinedTableKeyExtractor:" + value);
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;

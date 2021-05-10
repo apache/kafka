@@ -57,7 +57,9 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -154,8 +156,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration6Test {
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
         streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
         streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
-
-        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
     @After
@@ -173,33 +173,31 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration6Test {
             streamsThree.close();
             streamsThree = null;
         }
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+        IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));
     }
 
-    private enum JoinType {
-        INNER
-    }
+    private String innerJoinType = "INNER";
 
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
         final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
-        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+        verifyKTableKTableJoin(expectedOne);
     }
 
-    private void verifyKTableKTableJoin(final JoinType joinType,
-                                        final Set<KeyValue<Integer, String>> expectedResult,
-                                        final boolean verifyQueryableState) throws Exception {
-        final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
-        final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
+    private void verifyKTableKTableJoin(final Set<KeyValue<Integer, String>> expectedResult) throws Exception {
+        final String queryableName = innerJoinType + "-store1";
+        final String queryableNameTwo = innerJoinType + "-store2";
 
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
-        streams.start();
-        streamsTwo.start();
-        streamsThree.start();
+
+        final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        System.err.println("starting");
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
+        System.err.println("all running");
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             CONSUMER_CONFIG,
@@ -262,8 +260,12 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration6Test {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        final Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final Function<Float, String> tableOneKeyExtractor = value -> {
+            System.err.println("tableOneKeyExtractor:" + value);
+            return Integer.toString((int) value.floatValue());
+        };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
+            System.err.println("joinedTableKeyExtractor:" + value);
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
