@@ -598,7 +598,7 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assign(partitionsPerTopic, subscriptions);
     }
 
-    @Timeout(30)
+    @Timeout(40)
     @Test
     public void testLargeAssignmentAndGroupWithNonEqualSubscription() {
         // 1 million partitions!
