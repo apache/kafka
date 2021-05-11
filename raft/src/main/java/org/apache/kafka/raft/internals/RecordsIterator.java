@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
     private final Records records;

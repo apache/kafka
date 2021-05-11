@@ -48,7 +48,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;

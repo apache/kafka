@@ -779,6 +779,7 @@ project(':core') {
     api project(':clients')
     api libs.scalaLibrary
 
+    implementation project(':server-common')
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
@@ -1066,6 +1067,7 @@ project(':metadata') {
   archivesBaseName = "kafka-metadata"
 
   dependencies {
+    implementation project(':server-common')
     implementation project(':clients')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -1263,11 +1265,13 @@ project(':raft') {
   archivesBaseName = "kafka-raft"
 
   dependencies {
+    implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
+    testImplementation project(':server-common')
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -1341,6 +1345,62 @@ project(':raft') {
   }
 }
 
+project(':server-common') {
+  archivesBaseName = "kafka-server-common"
+
+  dependencies {
+    api project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+}
+
 project(':storage:api') {
   archivesBaseName = "kafka-storage-api"
 
@@ -1406,9 +1466,8 @@ project(':storage') {
 
   dependencies {
     implementation project(':storage:api')
+    implementation project(':server-common')
     implementation project(':clients')
-    implementation project(':metadata')
-    implementation project(':raft')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
@@ -1581,6 +1640,7 @@ project(':shell') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jline
     implementation libs.slf4jApi
+    implementation project(':server-common')
     implementation project(':clients')
     implementation project(':core')
     implementation project(':log4j-appender')
