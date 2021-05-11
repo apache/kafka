@@ -320,7 +320,7 @@ final class KafkaMetadataLog private (
    * Forget the snapshots earlier than a given snapshot id and return the associated
    * snapshot readers.
    *
-   * This method assumes that the lock for `snapshots` is ready held.
+   * This method assumes that the lock for `snapshots` is already held.
    */
   @nowarn("cat=deprecation") // Needed for TreeMap.until
   private def forgetSnapshotsBefore(
@@ -333,8 +333,8 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * Rename the given snapshots on the log directory. Asynchronously, close and delete the given
-   * snapshots.
+   * Rename the given snapshots on the log directory. Asynchronously, close and delete the
+   * given snapshots after some delay.
    */
   private def removeSnapshots(
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
@@ -444,7 +444,7 @@ object KafkaMetadataLog {
   private def deleteSnapshotFiles(
     logDir: Path,
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
-  )(): Unit = {
+  ): () => Unit = () => {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach(_.close())
       Snapshots.deleteIfExists(logDir, snapshotId)
