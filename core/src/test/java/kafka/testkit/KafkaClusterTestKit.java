@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metalog.MetaLogManager;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.raft.metadata.MetaLogRaftShim;

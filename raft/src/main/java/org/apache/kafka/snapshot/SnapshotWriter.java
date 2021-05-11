@@ -21,7 +21,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 

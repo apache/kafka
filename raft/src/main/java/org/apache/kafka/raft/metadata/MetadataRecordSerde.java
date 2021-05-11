@@ -18,6 +18,7 @@ package org.apache.kafka.raft.metadata;
 
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
 
 public class MetadataRecordSerde extends AbstractApiMessageSerde {
 

@@ -20,7 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
