@@ -466,6 +466,15 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 processingMode)
 
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      # the old broker (< 2.4) does not support configuration replication.factor=-1
+                      "replication.factor": 1}
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, configs):
