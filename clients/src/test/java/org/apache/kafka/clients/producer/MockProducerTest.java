@@ -417,6 +417,7 @@ public class MockProducerTest {
         assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
         buildMockProducer(true);
@@ -433,6 +434,7 @@ public class MockProducerTest {
         assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(null)));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransactionByGroupId() {
         buildMockProducer(true);
@@ -451,6 +453,7 @@ public class MockProducerTest {
         assertFalse(producer.sentOffsets());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupId() {
         buildMockProducer(true);

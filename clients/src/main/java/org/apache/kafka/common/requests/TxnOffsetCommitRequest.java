@@ -50,14 +50,12 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         public final TxnOffsetCommitRequestData data;
 
-        private final boolean autoDowngrade;
 
         public Builder(final String transactionalId,
                        final String consumerGroupId,
                        final long producerId,
                        final short producerEpoch,
-                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
-                       final boolean autoDowngrade) {
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
             this(transactionalId,
                 consumerGroupId,
                 producerId,
@@ -65,8 +63,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 pendingTxnOffsetCommits,
                 JoinGroupRequest.UNKNOWN_MEMBER_ID,
                 JoinGroupRequest.UNKNOWN_GENERATION_ID,
-                Optional.empty(),
-                autoDowngrade);
+                Optional.empty());
         }
 
         public Builder(final String transactionalId,
@@ -76,8 +73,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                        final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
                        final String memberId,
                        final int generationId,
-                       final Optional<String> groupInstanceId,
-                       final boolean autoDowngrade) {
+                       final Optional<String> groupInstanceId) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.data = new TxnOffsetCommitRequestData()
                             .setTransactionalId(transactionalId)
@@ -88,26 +84,13 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                             .setMemberId(memberId)
                             .setGenerationId(generationId)
                             .setGroupInstanceId(groupInstanceId.orElse(null));
-            this.autoDowngrade = autoDowngrade;
         }
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
             if (version < 3 && groupMetadataSet()) {
-                if (autoDowngrade) {
-                    log.trace("Downgrade the request by resetting group metadata fields: " +
-                                  "[member.id:{}, generation.id:{}, group.instance.id:{}], because broker " +
-                                  "only supports TxnOffsetCommit version {}. Need " +
-                                  "v3 or newer to enable this feature",
-                        data.memberId(), data.generationId(), data.groupInstanceId(), version);
-
-                    data.setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
-                        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-                        .setGroupInstanceId(null);
-                } else {
-                    throw new UnsupportedVersionException("Broker unexpectedly " +
+                throw new UnsupportedVersionException("Broker unexpectedly " +
                         "doesn't support group metadata commit API on version " + version);
-                }
             }
             return new TxnOffsetCommitRequest(data, version);
         }

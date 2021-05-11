@@ -907,20 +907,11 @@ public class KafkaProducerTest {
 
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
-        sendOffsetsWithGroupMetadata((short) 3);
-    }
-
-    @Test
-    public void testSendTxnOffsetsWithGroupMetadataDowngrade() {
-        sendOffsetsWithGroupMetadata((short) 2);
-    }
-
-    private void sendOffsetsWithGroupMetadata(final short maxVersion) {
+        final short maxVersion = (short) 3;
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        configs.put(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT, true);
 
         Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
@@ -943,23 +934,16 @@ public class KafkaProducerTest {
         String groupInstanceId = "instance";
         client.prepareResponse(request -> {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
-            if (maxVersion < 3) {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) &&
-                           data.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
-                           data.groupInstanceId() == null;
-            } else {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(memberId) &&
-                           data.generationId() == generationId &&
-                           data.groupInstanceId().equals(groupInstanceId);
-            }
+            return data.groupId().equals(groupId) &&
+                data.memberId().equals(memberId) &&
+                data.generationId() == generationId &&
+                data.groupInstanceId().equals(groupInstanceId);
         }, txnOffsetsCommitResponse(Collections.singletonMap(
             new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-            new StringSerializer(), metadata, client, null, time)) {
+                                                               new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
             ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
