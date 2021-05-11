@@ -151,7 +151,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
-    System.err.println("zkcreateTopics:" + toCreate.keySet + "," + timeout)
+//    System.err.println("zkcreateTopics:" + toCreate.keySet + "," + timeout)
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
     val metadata = toCreate.values.map(topic =>
@@ -211,23 +211,23 @@ class ZkAdminManager(val config: KafkaConfig,
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
           debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
-          System.err.println(s"Topic creation failed since topic '${topic.name}' already exists." + e)
+//          System.err.println(s"Topic creation failed since topic '${topic.name}' already exists." + e)
           CreatePartitionsMetadata(topic.name, e)
         case e: ThrottlingQuotaExceededException =>
           debug(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
-          System.err.println(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+//          System.err.println(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
           CreatePartitionsMetadata(topic.name, e)
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
-          System.err.println(s"Error processing create topic request $topic" + e)
+//          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, e)
         case e: ConfigException =>
           info(s"Error processing create topic request $topic", e)
-          System.err.println(s"Error processing create topic request $topic" + e)
+//          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, new InvalidConfigurationException(e.getMessage, e.getCause))
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
-          System.err.println(s"Error processing create topic request $topic" + e)
+//          System.err.println(s"Error processing create topic request $topic" + e)
           CreatePartitionsMetadata(topic.name, e)
       }).toBuffer
 
