@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.Collections
 import java.util.concurrent.ExecutionException
-
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -46,8 +45,9 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
+import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._

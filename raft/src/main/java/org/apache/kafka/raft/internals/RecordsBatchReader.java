@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.raft.BatchReader;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

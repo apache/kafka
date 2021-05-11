@@ -753,10 +753,12 @@ project(':core') {
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
+    compile project(':server-common')
     compile project(':clients')
     compile project(':metadata')
     compile project(':raft')
-    implementation project(':storage')
+    compile project(':storage:api')
+    compile project(':storage')
     compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
@@ -1035,6 +1037,7 @@ project(':metadata') {
   archivesBaseName = "kafka-metadata"
 
   dependencies {
+    compile project(':server-common')
     compile project(':clients')
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
@@ -1241,11 +1244,13 @@ project(':raft') {
   archivesBaseName = "kafka-raft"
 
   dependencies {
+    compile project(':server-common')
     compile project(':clients')
     compile project(':metadata')
     compile libs.slf4jApi
     compile libs.jacksonDatabind
 
+    testCompile project(':server-common')
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junitJupiter
@@ -1316,13 +1321,13 @@ project(':storage:api') {
   archivesBaseName = "kafka-storage-api"
 
   dependencies {
-    implementation project(':clients')
-    implementation libs.slf4jApi
+    compile project(':clients')
+    compile libs.slf4jApi
 
-    testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junitJupiter
+    testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
   }
@@ -1372,21 +1377,76 @@ project(':storage:api') {
   }
 }
 
+project(':server-common') {
+  archivesBaseName = "kafka-server-common"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.slf4jApi
+
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junitJupiter
+    testCompile libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+}
+
 project(':storage') {
   archivesBaseName = "kafka-storage"
 
   dependencies {
-    implementation project(':storage:api')
-    implementation project(':clients')
-    implementation project(':metadata')
-    implementation project(':raft')
-    implementation libs.slf4jApi
-    implementation libs.jacksonDatabind
+    compile project(':storage:api')
+    compile project(':server-common')
+    compile project(':clients')
+    compile libs.slf4jApi
+    compile libs.jacksonDatabind
 
-    testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junitJupiter
+    testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
   }

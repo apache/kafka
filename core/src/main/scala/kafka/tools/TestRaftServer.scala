@@ -19,7 +19,6 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
-
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -37,7 +36,8 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, RaftClient, RecordSerde}
+import org.apache.kafka.raft.{BatchReader, RaftClient}
+import org.apache.kafka.server.common.serialization.RecordSerde
 
 import scala.jdk.CollectionConverters._
 
