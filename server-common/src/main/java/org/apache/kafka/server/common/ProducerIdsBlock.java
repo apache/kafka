@@ -21,6 +21,8 @@ import java.util.Objects;
 
 /**
  * Holds a range of Producer IDs used for Transactional and EOS producers.
+ *
+ * The start and end of the ID block are inclusive.
  */
 public class ProducerIdsBlock {
     public static final int PRODUCER_ID_BLOCK_SIZE = 1000;

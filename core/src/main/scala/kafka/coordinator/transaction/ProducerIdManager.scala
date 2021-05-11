@@ -34,7 +34,7 @@ import scala.util.{Failure, Success, Try}
  * such that the same producerId will not be assigned twice across multiple transaction coordinators.
  *
  * ProducerIds are managed by the controller. When requesting a new range of IDs, we are guaranteed to receive
- * a unique block. The block start and block end are inclusive.
+ * a unique block.
  */
 object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
