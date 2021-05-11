@@ -25,6 +25,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.AbstractFetcherThread.ResultWithWaitTime
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
@@ -59,6 +60,7 @@ class ReplicaFetcherThread(name: String,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
+                                time = Time.SYSTEM,
                                 replicaMgr.brokerTopicStats) {
 
   private val replicaId = brokerConfig.brokerId
@@ -72,7 +74,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV0) 13
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
@@ -212,14 +215,14 @@ class ReplicaFetcherThread(name: String,
   }
 
 
-  override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+  override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): ResultWithWaitTime = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
-        Map.empty
+        ResultWithWaitTime(Map.empty, fetchResponse.waitTimeMs())
       } else {
-        fetchResponse.responseData.asScala
+        ResultWithWaitTime(fetchResponse.responseData.asScala, fetchResponse.waitTimeMs())
       }
     } catch {
       case t: Throwable =>

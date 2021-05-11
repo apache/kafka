@@ -47,7 +47,7 @@
   // Version 12 adds flexible versions support as well as epoch validation through
   // the `LastFetchedEpoch` field
   //
-  "validVersions": "0-12",
+  "validVersions": "0-13",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",

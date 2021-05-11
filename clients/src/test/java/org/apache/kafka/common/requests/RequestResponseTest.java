@@ -818,8 +818,8 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setRecords(records));
 
-        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData);
-        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
+        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, 0, INVALID_SESSION_ID, responseData);
+        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, 0, INVALID_SESSION_ID, responseData);
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
         assertEquals(responseData, v0Response.responseData(), "Response data does not match");
@@ -854,7 +854,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(6)
                         .setRecords(records));
 
-        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
+        FetchResponse response = FetchResponse.of(Errors.NONE, 10, 0, INVALID_SESSION_ID, responseData);
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
@@ -1225,7 +1225,7 @@ public class RequestResponseTest {
     }
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
-        return FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>());
+        return FetchResponse.of(error, 25, 0, sessionId, new LinkedHashMap<>());
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
@@ -1243,7 +1243,7 @@ public class RequestResponseTest {
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
-        return FetchResponse.of(Errors.NONE, 25, sessionId, responseData);
+        return FetchResponse.of(Errors.NONE, 25, 0, sessionId, responseData);
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
@@ -1266,7 +1266,7 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
 
-        return FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID, responseData);
+        return FetchResponse.of(Errors.NONE, 25, 0, INVALID_SESSION_ID, responseData);
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

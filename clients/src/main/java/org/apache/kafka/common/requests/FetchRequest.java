@@ -300,7 +300,7 @@ public class FetchRequest extends AbstractRequest {
         for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
             responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
         }
-        return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData);
+        return FetchResponse.of(error, throttleTimeMs, 0, data.sessionId(), responseData);
     }
 
     public int replicaId() {

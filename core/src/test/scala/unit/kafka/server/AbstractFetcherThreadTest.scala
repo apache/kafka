@@ -26,6 +26,7 @@ import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.AbstractFetcherThread.ResultWithWaitTime
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
@@ -592,8 +593,8 @@ class AbstractFetcherThreadTest {
 
     val fetcher = new MockFetcherThread {
       var fetchedOnce = false
-      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-        val fetchedData = super.fetchFromLeader(fetchRequest)
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): ResultWithWaitTime = {
+        val fetchedData = super.fetchFromLeader(fetchRequest).result
         if (!fetchedOnce) {
           val records = fetchedData.head._2.records.asInstanceOf[MemoryRecords]
           val buffer = records.buffer()
@@ -601,7 +602,7 @@ class AbstractFetcherThreadTest {
           buffer.putInt(30, buffer.getInt(30) ^ 93242)
           fetchedOnce = true
         }
-        fetchedData
+        ResultWithWaitTime(fetchedData, 0)
       }
     }
 
@@ -1115,8 +1116,8 @@ class AbstractFetcherThreadTest {
 
     override protected val isTruncationOnFetchSupported: Boolean = truncateOnFetch
 
-    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-      fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
+    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): ResultWithWaitTime = {
+      ResultWithWaitTime(fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
         val leaderState = leaderPartitionState(partition)
         val epochCheckError = checkExpectedLeaderEpoch(fetchData.currentLeaderEpoch, leaderState)
         val divergingEpoch = divergingEpochAndOffset(partition, fetchData.lastFetchedEpoch, fetchData.fetchOffset, leaderState)
@@ -1152,7 +1153,7 @@ class AbstractFetcherThreadTest {
         divergingEpoch.foreach(partitionData.setDivergingEpoch)
 
         (partition, partitionData)
-      }.toMap
+      }.toMap, 0)
     }
 
     private def checkLeaderEpochAndThrow(expectedEpoch: Int, partitionState: PartitionState): Unit = {

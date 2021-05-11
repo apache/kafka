@@ -40,11 +40,13 @@
   // Version 12 adds support for flexible versions, epoch detection through the `TruncationOffset` field,
   // and leader discovery through the `CurrentLeader` field
   //
-  "validVersions": "0-12",
+  "validVersions": "0-13",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "WaitTimeMs", "type": "int32", "versions": "13+", "ignorable": true,
+      "about": "Duration in milliseconds for which the request was waiting in purgatory." },
     { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": true,
       "about": "The top level response error code." },
     { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
