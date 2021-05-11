@@ -310,10 +310,10 @@ class WorkerSourceTask extends WorkerTask {
 
         RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.convertKey(record, headers),
+        byte[] key = retryWithToleranceOperator.execute(() -> convertKey(record, headers),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.convertValue(record, headers),
+        byte[] value = retryWithToleranceOperator.execute(() -> convertValue(record, headers),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         if (retryWithToleranceOperator.failed()) {
