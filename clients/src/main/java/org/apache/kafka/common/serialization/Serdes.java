@@ -291,9 +291,7 @@ public class Serdes {
     /*
      * A serde for {@code List} type
      */
-    static public <L extends List<Inner>, Inner> Serde<List<Inner>>
-        ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
-
+    static public <L extends List<Inner>, Inner> Serde<List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
         return new ListSerde<>(listClass, innerSerde);
     }
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.serialization;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
@@ -27,8 +29,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
@@ -44,7 +44,6 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
     private Serializer<Inner> inner;
     private SerializationStrategy serStrategy;
-    private boolean isFixedLength;
 
     public ListSerializer() {}
 
@@ -53,8 +52,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
             throw new IllegalArgumentException("ListSerializer requires \"serializer\" parameter to be provided during initialization");
         }
         this.inner = inner;
-        this.isFixedLength = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass());
-        this.serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
+        this.serStrategy = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass()) ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
     }
 
     public Serializer<Inner> getInnerSerializer() {
@@ -81,19 +79,24 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
                 throw new KafkaException("Could not create a serializer class instance using \"" + innerSerdePropertyName + "\" property.");
             }
             inner.configure(configs, isKey);
-            isFixedLength = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass());
-            serStrategy = this.isFixedLength ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
+            serStrategy = FIXED_LENGTH_SERIALIZERS.contains(inner.getClass()) ? SerializationStrategy.CONSTANT_SIZE : SerializationStrategy.VARIABLE_SIZE;
         } catch (final ClassNotFoundException e) {
             throw new ConfigException(innerSerdePropertyName, innerSerdeClassOrName, "Serializer class " + innerSerdeClassOrName + " could not be found.");
         }
     }
 
     private void serializeNullIndexList(final DataOutputStream out, List<Inner> data) throws IOException {
-        List<Integer> nullIndexList = IntStream.range(0, data.size())
-                .filter(i -> data.get(i) == null)
-                .boxed().collect(Collectors.toList());
+        int i = 0;
+        List<Integer> nullIndexList = new ArrayList<>();
+        for (Iterator<Inner> it = data.listIterator(); it.hasNext(); i++) {
+            if (it.next() == null) {
+                nullIndexList.add(i);
+            }
+        }
         out.writeInt(nullIndexList.size());
-        for (int i : nullIndexList) out.writeInt(i);
+        for (int nullIndex : nullIndexList) {
+            out.writeInt(nullIndex);
+        }
     }
 
     @Override
@@ -105,6 +108,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
              final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeByte(serStrategy.ordinal()); // write serialization strategy flag
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
+                // In CONSTANT_SIZE strategy, indexes of null entries are encoded in a null index list
                 serializeNullIndexList(out, data);
             }
             final int size = data.size();
@@ -116,7 +120,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
                     }
                 } else {
                     final byte[] bytes = inner.serialize(topic, entry);
-                    if (!isFixedLength || serStrategy == SerializationStrategy.VARIABLE_SIZE) {
+                    if (serStrategy == SerializationStrategy.VARIABLE_SIZE) {
                         out.writeInt(bytes.length);
                     }
                     out.write(bytes);

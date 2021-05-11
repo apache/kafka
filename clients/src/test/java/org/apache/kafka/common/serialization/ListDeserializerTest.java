@@ -43,7 +43,7 @@ public class ListDeserializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class.getName());
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         listDeserializer.configure(props, true);
-        final Deserializer<?> inner = listDeserializer.getInnerDeserializer();
+        final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
         assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
     }
@@ -53,7 +53,7 @@ public class ListDeserializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, ArrayList.class.getName());
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.IntegerSerde.class.getName());
         listDeserializer.configure(props, false);
-        final Deserializer<?> inner = listDeserializer.getInnerDeserializer();
+        final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
         assertTrue(inner instanceof IntegerDeserializer, "Inner deserializer type should be IntegerDeserializer");
     }
@@ -63,7 +63,7 @@ public class ListDeserializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS, ArrayList.class);
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listDeserializer.configure(props, true);
-        final Deserializer<?> inner = listDeserializer.getInnerDeserializer();
+        final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
         assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
     }
@@ -73,7 +73,7 @@ public class ListDeserializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS, ArrayList.class);
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listDeserializer.configure(props, false);
-        final Deserializer<?> inner = listDeserializer.getInnerDeserializer();
+        final Deserializer<?> inner = listDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
         assertTrue(inner instanceof StringDeserializer, "Inner deserializer type should be StringDeserializer");
     }

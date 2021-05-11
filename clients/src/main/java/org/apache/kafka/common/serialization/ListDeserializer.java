@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.utils.Utils;
+import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -30,10 +28,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Serdes.ListSerde;
+import org.apache.kafka.common.utils.Utils;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
@@ -61,7 +61,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         this.primitiveSize = FIXED_LENGTH_DESERIALIZERS.get(inner.getClass());
     }
 
-    public Deserializer<Inner> getInnerDeserializer() {
+    public Deserializer<Inner> innerDeserializer() {
         return inner;
     }
 
@@ -117,7 +117,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
 
     @SuppressWarnings("unchecked")
-    private List<Inner> getListInstance(int listSize) {
+    private List<Inner> createListInstance(int listSize) {
         try {
             Constructor<List<Inner>> listConstructor;
             try {
@@ -159,27 +159,29 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
             List<Integer> nullIndexList = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
+                // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
                 nullIndexList = deserializeNullIndexList(dis);
             }
             final int size = dis.readInt();
-            List<Inner> deserializedList = getListInstance(size);
+            List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
-                if (serStrategy == SerializationStrategy.CONSTANT_SIZE
-                        && nullIndexList.contains(i)) {
-                    deserializedList.add(null);
-                    continue;
-                }
-                int entrySize = (primitiveSize == null || serStrategy == SerializationStrategy.VARIABLE_SIZE) ? dis.readInt() : primitiveSize;
-                if (serStrategy == SerializationStrategy.VARIABLE_SIZE &&
-                        entrySize == Serdes.ListSerde.NULL_ENTRY_VALUE) {
-                    deserializedList.add(null);
-                } else {
-                    byte[] payload = new byte[entrySize];
-                    if (dis.read(payload) == -1) {
-                        throw new SerializationException("End of the stream was reached prematurely");
+                int entrySize = -1;
+                if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
+                    if (nullIndexList.contains(i)) {
+                        deserializedList.add(null);
                     }
-                    deserializedList.add(inner.deserialize(topic, payload));
+                    entrySize = primitiveSize;
+                } else if (serStrategy == SerializationStrategy.VARIABLE_SIZE) {
+                    entrySize = dis.readInt();
+                    if (entrySize == ListSerde.NULL_ENTRY_VALUE) {
+                        deserializedList.add(null);
+                    }
                 }
+                byte[] payload = new byte[entrySize];
+                if (dis.read(payload) == -1) {
+                    throw new SerializationException("End of the stream was reached prematurely");
+                }
+                deserializedList.add(inner.deserialize(topic, payload));
             }
             return deserializedList;
         } catch (IOException e) {
