@@ -101,6 +101,11 @@ object KafkaServer {
  */
 class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None,
                   kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List(), actions: KafkaActions = NoOpKafkaActions) extends Logging with KafkaMetricsGroup {
+  /** Constructor signature that is backwards compatible */
+  def this(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], kafkaMetricsReporters: Seq[KafkaMetricsReporter]) {
+    this(config, time, threadNamePrefix, kafkaMetricsReporters, NoOpKafkaActions)
+  }
+
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
