@@ -170,8 +170,8 @@ public class StandbyTaskEOSIntegrationTest {
         // Wait for the record to be processed
         assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-        streamInstanceOne.close(Duration.ZERO);
-        streamInstanceTwo.close(Duration.ZERO);
+        streamInstanceOne.close();
+        streamInstanceTwo.close();
 
         streamInstanceOne.cleanUp();
         streamInstanceTwo.cleanUp();
