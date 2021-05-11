@@ -24,7 +24,6 @@ import kafka.common._
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
-import kafka.coordinator.transaction.{ProducerIdBlock, ProducerIdManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -43,6 +42,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -2424,17 +2424,17 @@ class KafkaController(val config: KafkaConfig,
           val currProducerIdBlock = ProducerIdBlockZNode.parseProducerIdBlockData(data)
           debug(s"Read current producerId block $currProducerIdBlock, Zk path version $zkVersion")
 
-          if (currProducerIdBlock.blockEndId > Long.MaxValue - ProducerIdManager.PidBlockSize) {
+          if (currProducerIdBlock.producerIdEnd > Long.MaxValue - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             // we have exhausted all producerIds (wow!), treat it as a fatal error
-            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.blockEndId})")
+            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.producerIdEnd})")
             callback.apply(Left(Errors.UNKNOWN_SERVER_ERROR))
             return
           }
 
-          ProducerIdBlock(brokerId, currProducerIdBlock.blockEndId + 1L, currProducerIdBlock.blockEndId + ProducerIdManager.PidBlockSize)
+          new ProducerIdsBlock(brokerId, currProducerIdBlock.producerIdEnd + 1L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
         case None =>
           debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
-          ProducerIdBlock(brokerId, 0L, ProducerIdManager.PidBlockSize - 1)
+          new ProducerIdsBlock(brokerId, 0L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
       }
 
       val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(newProducerIdBlock)
@@ -2445,7 +2445,7 @@ class KafkaController(val config: KafkaConfig,
 
       if (zkWriteComplete) {
         info(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
-        callback.apply(Right((newProducerIdBlock.blockStartId, newProducerIdBlock.blockEndId)))
+        callback.apply(Right((newProducerIdBlock.producerIdStart, newProducerIdBlock.producerIdEnd)))
         return
       }
     }

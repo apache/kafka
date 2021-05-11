@@ -25,7 +25,6 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.coordinator.transaction.ProducerIdBlock
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
@@ -40,6 +39,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
@@ -770,22 +770,22 @@ object ProducerIdBlockZNode {
 
   def path = "/latest_producer_id_block"
 
-  def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): Array[Byte] = {
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdsBlock): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> CurrentVersion,
       "broker" -> producerIdBlock.brokerId,
-      "block_start" -> producerIdBlock.blockStartId.toString,
-      "block_end" -> producerIdBlock.blockEndId.toString).asJava
+      "block_start" -> producerIdBlock.producerIdStart.toString,
+      "block_end" -> producerIdBlock.producerIdEnd.toString).asJava
     )
   }
 
-  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdBlock = {
+  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdsBlock = {
     val jsonDataAsString = jsonData.map(_.toChar).mkString
     try {
       Json.parseBytes(jsonData).map(_.asJsonObject).flatMap { js =>
         val brokerId = js("broker").to[Int]
         val blockStart = js("block_start").to[String].toLong
         val blockEnd = js("block_end").to[String].toLong
-        Some(ProducerIdBlock(brokerId, blockStart, blockEnd))
+        Some(new ProducerIdsBlock(brokerId, blockStart, Math.toIntExact(blockEnd - blockStart + 1)))
       }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonDataAsString"))
     } catch {
       case e: java.lang.NumberFormatException =>

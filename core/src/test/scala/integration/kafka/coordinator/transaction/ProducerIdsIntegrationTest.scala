@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package integration.kafka.coordinator.transaction
+package kafka.coordinator.transaction
 
-import integration.kafka.server.IntegrationTestUtils
+import kafka.server.IntegrationTestUtils
 import kafka.network.SocketServer
 import kafka.server.KafkaConfig
 import kafka.test.annotation.{ClusterTest, Type}

@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
+import org.apache.kafka.server.common.ProducerIdsBlock
 
 import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
@@ -36,22 +37,8 @@ import scala.util.{Failure, Success, Try}
  * a unique block. The block start and block end are inclusive.
  */
 object ProducerIdManager {
-  val PidBlockSize = 1000L
-
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
-}
-
-case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) {
-  override def toString: String = {
-    val producerIdBlockInfo = new StringBuilder
-    producerIdBlockInfo.append("(brokerId:" + brokerId)
-    producerIdBlockInfo.append(",blockStartProducerId:" + blockStartId)
-    producerIdBlockInfo.append(",blockEndProducerId:" + blockEndId + ")")
-    producerIdBlockInfo.toString()
-  }
-
-  val blockSize: Long = blockEndId - blockStartId + 1 // inclusive
 }
 
 trait ProducerIdGenerator {
@@ -66,9 +53,9 @@ class ProducerIdManager(brokerId: Int,
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
-  private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdBlock]](1)
+  private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdsBlock]](1)
   private val requestInFlight = new AtomicBoolean(false)
-  private var currentProducerIdBlock: ProducerIdBlock = ProducerIdBlock(brokerId, 0L, 0L)
+  private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
   private var nextProducerId: Long = 0L
 
   // Send an initial request to get the first block
@@ -79,12 +66,12 @@ class ProducerIdManager(brokerId: Int,
       nextProducerId += 1
 
       // Check if we need to fetch the next block
-      if (nextProducerId >= (currentProducerIdBlock.blockStartId + currentProducerIdBlock.blockSize * ProducerIdManager.PidPrefetchThreshold)) {
+      if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdManager.PidPrefetchThreshold)) {
         maybeRequestNextBlock()
       }
 
       // If we've exhausted the current block, grab the next block (waiting if necessary)
-      if (nextProducerId > currentProducerIdBlock.blockEndId) {
+      if (nextProducerId > currentProducerIdBlock.producerIdEnd) {
         val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
         if (block == null) {
           throw Errors.REQUEST_TIMED_OUT.exception("Timed out waiting for next producer ID block")
@@ -92,7 +79,7 @@ class ProducerIdManager(brokerId: Int,
           block match {
             case Success(nextBlock) =>
               currentProducerIdBlock = nextBlock
-              nextProducerId = currentProducerIdBlock.blockStartId
+              nextProducerId = currentProducerIdBlock.producerIdStart
             case Failure(t) => throw t
           }
         }
@@ -132,14 +119,14 @@ class ProducerIdManager(brokerId: Int,
       case Errors.NONE =>
         debug(s"Got next producer ID block from controller $data")
         // Do some sanity checks on the response
-        if (data.producerIdStart() < currentProducerIdBlock.blockEndId) {
+        if (data.producerIdStart() < currentProducerIdBlock.producerIdEnd) {
           nextProducerIdBlock.put(Failure(new KafkaException(
             s"Producer ID block is not monotonic with current block: current=$currentProducerIdBlock response=$data")))
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MaxValue - data.producerIdLen()) {
           nextProducerIdBlock.put(Failure(new KafkaException(s"Producer ID block includes invalid ID range: $data")))
         } else {
           nextProducerIdBlock.put(
-            Success(ProducerIdBlock(brokerId, data.producerIdStart(), data.producerIdStart() + data.producerIdLen() - 1)))
+            Success(new ProducerIdsBlock(brokerId, data.producerIdStart(), data.producerIdLen())))
         }
       case Errors.STALE_BROKER_EPOCH =>
         warn("Our broker epoch was stale, trying again.")

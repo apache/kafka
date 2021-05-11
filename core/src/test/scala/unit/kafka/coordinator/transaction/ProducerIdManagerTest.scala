@@ -50,11 +50,11 @@ class ProducerIdManagerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = Array(1, 2, 1000))
-  def testDifferentBlockLengths(idBlockLen: Int): Unit = {
+  @ValueSource(ints = Array(1, 2, 10))
+  def testContiguousIds(idBlockLen: Int): Unit = {
     val manager = new MockProducerIdManager(0, 0, idBlockLen)
 
-    IntStream.range(0, idBlockLen * 2).forEach { i =>
+    IntStream.range(0, idBlockLen * 3).forEach { i =>
       assertEquals(i, manager.generateProducerId())
     }
   }
