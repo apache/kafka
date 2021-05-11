@@ -2378,20 +2378,20 @@ class KafkaController(val config: KafkaConfig,
   def allocateProducerIds(allocateProducerIdsRequest: AllocateProducerIdsRequestData,
                           callback: AllocateProducerIdsResponseData => Unit): Unit = {
 
-    def eventManagerCallback(results: Either[Errors, (Long, Long)]): Unit = {
+    def eventManagerCallback(results: Either[Errors, ProducerIdsBlock]): Unit = {
       results match {
         case Left(error) => callback.apply(new AllocateProducerIdsResponseData().setErrorCode(error.code))
-        case Right((start, end)) => callback.apply(
+        case Right(pidBlock) => callback.apply(
           new AllocateProducerIdsResponseData()
-            .setProducerIdStart(start)
-            .setProducerIdLen(Math.toIntExact(end - start + 1))) // ends are inclusive
+            .setProducerIdStart(pidBlock.producerIdStart())
+            .setProducerIdLen(pidBlock.producerIdLen()))
       }
     }
     eventManager.put(AllocateProducerIds(allocateProducerIdsRequest.brokerId,
       allocateProducerIdsRequest.brokerEpoch, eventManagerCallback))
   }
 
-  def processAllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, (Long, Long)] => Unit): Unit = {
+  def processAllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, ProducerIdsBlock] => Unit): Unit = {
     // Handle a few short-circuits
     if (!isActive) {
       callback.apply(Left(Errors.NOT_CONTROLLER))
@@ -2445,7 +2445,7 @@ class KafkaController(val config: KafkaConfig,
 
       if (zkWriteComplete) {
         info(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
-        callback.apply(Right((newProducerIdBlock.producerIdStart, newProducerIdBlock.producerIdEnd)))
+        callback.apply(Right(newProducerIdBlock))
         return
       }
     }
@@ -2824,7 +2824,8 @@ case class UpdateFeatures(request: UpdateFeaturesRequest,
   override def preempt(): Unit = {}
 }
 
-case class AllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, (Long, Long)] => Unit) extends ControllerEvent {
+case class AllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, ProducerIdsBlock] => Unit)
+    extends ControllerEvent {
   override def state: ControllerState = ControllerState.Idle
   override def preempt(): Unit = {}
 }
