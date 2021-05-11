@@ -74,28 +74,28 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public List<Extension> getAdditionalExtensions() {
         return Arrays.asList(
-                (BeforeTestExecutionCallback) context -> {
-                    KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
-                            new TestKitNodes.Builder().
-                                    setNumBrokerNodes(clusterConfig.numBrokers()).
-                                    setNumControllerNodes(clusterConfig.numControllers()).build());
+            (BeforeTestExecutionCallback) context -> {
+                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
+                    new TestKitNodes.Builder().
+                        setNumBrokerNodes(clusterConfig.numBrokers()).
+                        setNumControllerNodes(clusterConfig.numControllers()).build());
 
-                    // Copy properties into the TestKit builder
-                    clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
-                    // KAFKA-12512 need to pass security protocol and listener name here
-                    KafkaClusterTestKit cluster = builder.build();
-                    clusterReference.set(cluster);
-                    cluster.format();
-                    cluster.startup();
-                    kafka.utils.TestUtils.waitUntilTrue(
-                            () -> cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
-                            () -> "Broker never made it to RUNNING state.",
-                            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-                            100L);
-                },
-                (AfterTestExecutionCallback) context -> clusterReference.get().close(),
-                new ClusterInstanceParameterResolver(new RaftClusterInstance(clusterReference, clusterConfig)),
-                new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
+                // Copy properties into the TestKit builder
+                clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
+                // KAFKA-12512 need to pass security protocol and listener name here
+                KafkaClusterTestKit cluster = builder.build();
+                clusterReference.set(cluster);
+                cluster.format();
+                cluster.startup();
+                kafka.utils.TestUtils.waitUntilTrue(
+                    () -> cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+                    () -> "Broker never made it to RUNNING state.",
+                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                    100L);
+            },
+            (AfterTestExecutionCallback) context -> clusterReference.get().close(),
+            new ClusterInstanceParameterResolver(new RaftClusterInstance(clusterReference, clusterConfig)),
+            new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
         );
     }
 
@@ -119,8 +119,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Collection<SocketServer> brokerSocketServers() {
             return clusterReference.get().brokers().values().stream()
-                    .map(BrokerServer::socketServer)
-                    .collect(Collectors.toList());
+                .map(BrokerServer::socketServer)
+                .collect(Collectors.toList());
         }
 
         @Override
@@ -131,24 +131,24 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Collection<SocketServer> controllerSocketServers() {
             return clusterReference.get().controllers().values().stream()
-                    .map(ControllerServer::socketServer)
-                    .collect(Collectors.toList());
+                .map(ControllerServer::socketServer)
+                .collect(Collectors.toList());
         }
 
         @Override
         public SocketServer anyBrokerSocketServer() {
             return clusterReference.get().brokers().values().stream()
-                    .map(BrokerServer::socketServer)
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
+                .map(BrokerServer::socketServer)
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
         }
 
         @Override
         public SocketServer anyControllerSocketServer() {
             return clusterReference.get().controllers().values().stream()
-                    .map(ControllerServer::socketServer)
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+                .map(ControllerServer::socketServer)
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
         }
 
         @Override
