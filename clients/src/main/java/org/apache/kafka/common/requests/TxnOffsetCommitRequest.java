@@ -89,8 +89,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         @Override
         public TxnOffsetCommitRequest build(short version) {
             if (version < 3 && groupMetadataSet()) {
-                throw new UnsupportedVersionException("Broker unexpectedly " +
-                        "doesn't support group metadata commit API on version " + version);
+                throw new UnsupportedVersionException("Broker doesn't support group metadata commit API on version " + version
+                + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
             }
             return new TxnOffsetCommitRequest(data, version);
         }
