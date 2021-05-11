@@ -1444,7 +1444,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
-        if (isRunningOrRebalancing()) {
+        if (!(state == State.CREATED || state == State.NOT_RUNNING || state == State.ERROR)) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
