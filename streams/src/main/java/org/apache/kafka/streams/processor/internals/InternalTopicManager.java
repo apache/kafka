@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -439,13 +440,34 @@ public class InternalTopicManager {
                         final Throwable cause = executionException.getCause();
                         if (cause instanceof TopicExistsException) {
                             // This topic didn't exist earlier or its leader not known before; just retain it for next round of validation.
-                            log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
-                                "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
-                                "Error message was: {}", topicName, retryBackOffMs, cause.toString());
+                            log.info(
+                                "Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n"
+                                    +
+                                    "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n"
+                                    +
+                                    "Error message was: {}", topicName, retryBackOffMs,
+                                cause.toString());
                         } else {
                             log.error("Unexpected error during topic creation for {}.\n" +
                                 "Error message was: {}", topicName, cause.toString());
-                            throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
+
+                            if (cause instanceof UnsupportedVersionException) {
+                                final String errorMessage = cause.getMessage();
+                                if (errorMessage != null &&
+                                    errorMessage.startsWith("Creating topics with default partitions/replication factor are only supported in CreateTopicRequest version 4+")) {
+
+                                    throw new StreamsException(String.format(
+                                        "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
+                                            + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
+                                        topicName)
+                                    );
+                                }
+                            } else {
+                                throw new StreamsException(
+                                    String.format("Could not create topic %s.", topicName),
+                                    cause
+                                );
+                            }
                         }
                     } catch (final TimeoutException retriableException) {
                         log.error("Creating topic {} timed out.\n" +

@@ -81,8 +81,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if the given key is {@code null}
      */
-    // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
@@ -124,8 +124,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if one of the given keys is {@code null}
      */
-    // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom, long timeTo);
 
     @Override
@@ -167,8 +167,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    // note, this method must be kept if super#fetchAll(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override

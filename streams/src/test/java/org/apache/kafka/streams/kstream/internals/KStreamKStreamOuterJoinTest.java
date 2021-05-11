@@ -30,6 +30,8 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -109,6 +111,9 @@ public class KStreamKStreamOuterJoinTest {
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // Only 2 window stores should be available
+            assertEquals(2, driver.getAllStateStores().size());
 
             inputTopic1.pipeInput(0, "A0", 0);
             inputTopic1.pipeInput(0, "A0-0", 0);
@@ -498,7 +503,32 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     @Test
-    public void testOuterJoin() {
+    public void testOuterJoinWithInMemoryCustomSuppliers() {
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store-other",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), true);
+
+        final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
+
+        runOuterJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+    }
+
+    @Test
+    public void testOuterJoinWithDefaultSuppliers() {
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+        final StreamJoined<Integer, String, String> streamJoined = StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String());
+
+        runOuterJoin(streamJoined, joinWindows);
+    }
+
+    public void runOuterJoin(final StreamJoined<Integer, String, String> streamJoined,
+                             final JoinWindows joinWindows) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -513,8 +543,8 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(100)).grace(ofMillis(0)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            joinWindows,
+            streamJoined);
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
@@ -529,6 +559,9 @@ public class KStreamKStreamOuterJoinTest {
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+            // 2 window stores + 1 shared window store should be available
+            assertEquals(3, driver.getAllStateStores().size());
 
             // push two items to the primary stream; the other window is empty; this should not
             // produce any items because window has not expired

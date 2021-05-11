@@ -35,7 +35,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
-import org.apache.kafka.raft.{Batch, BatchReader, RaftClient, RaftConfig, RecordSerde}
+import org.apache.kafka.raft.{Batch, BatchReader, RaftClient, RaftConfig}
+import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._

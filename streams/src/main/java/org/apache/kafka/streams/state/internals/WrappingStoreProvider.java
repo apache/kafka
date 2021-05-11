@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
@@ -57,7 +58,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
         }
         if (allStores.isEmpty()) {
             if (storeQueryParameters.partition() != null) {
-                throw new InvalidStateStoreException(
+                throw new InvalidStateStorePartitionException(
                         String.format("The specified partition %d for store %s does not exist.",
                                 storeQueryParameters.partition(),
                                 storeName));
