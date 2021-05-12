@@ -1104,6 +1104,12 @@
         <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
     </ul>
 
+    <p> New serde type <code>ListSerde</code>: </p>
+    <ul>
+        <li> added class <code>ListSerde</code> to (de)serialize <code>List</code>-based objects </li>
+        <li> introduced <code>ListSerializer</code> and <code>ListDeserializer</code> to power the new functionality </li>
+    </ul>
+
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="#" class="pagination__btn pagination__btn__next pagination__btn--disabled">Next</a>
