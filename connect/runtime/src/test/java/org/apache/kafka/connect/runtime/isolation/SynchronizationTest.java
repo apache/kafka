@@ -45,6 +45,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.junit.After;
 import org.junit.Before;
@@ -167,6 +168,7 @@ public class SynchronizationTest {
     }
 
     private class SynchronizedDelegatingClassLoader extends DelegatingClassLoader {
+        // NOTE: the DelegatingClassLoader is not parallel capable, and neither is this subclass.
 
         public SynchronizedDelegatingClassLoader(List<String> pluginPaths) {
             super(pluginPaths);
@@ -209,100 +211,110 @@ public class SynchronizationTest {
         }
     }
 
-    @Test(timeout = 15000L)
     // If the test times out, then there's a deadlock in the test but not necessarily the code
-    public void workerContextClassLoaderMismatch() throws Exception {
+    @Test(timeout = 15000L)
+    public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
+        String t1Class = TestPlugins.SAMPLING_CONVERTER;
         // Grab a reference to the target PluginClassLoader before activating breakpoints
-        ClassLoader connectorLoader = plugins.delegatingLoader()
-            .connectorLoader(TestPlugins.SAMPLING_CONVERTER);
+        ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(t1Class);
 
-        // Simulate Worker::startConnector that creates configs with the delegating classloader
-        Runnable delegatingToPlugin = () -> {
+        // THREAD 1: loads a class by delegating downward starting from the DelegatingClassLoader
+        // DelegatingClassLoader breakpoint will only trigger on this thread
+        dclBreakpoint.set(t1Class::equals);
+        Runnable thread1 = () -> {
             // Use the DelegatingClassLoader as the current context loader
             ClassLoader savedLoader = Plugins.compareAndSwapLoaders(plugins.delegatingLoader());
 
             // Load an isolated plugin from the delegating classloader, which will
-            // 1. Lock the DelegatingClassLoader (via Class.forName)
-            // 2. Wait for test to continue
-            // 3. Attempt to lock the PluginClassLoader (via PluginClassLoader::loadClass)
-            // 4. Deadlock
+            // 1. Enter the DelegatingClassLoader
+            // 2. Wait on dclBreakpoint for test to continue
+            // 3. Enter the PluginClassLoader
+            // 4. Load the isolated plugin class and return
             new AbstractConfig(
                 new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                Collections.singletonMap("a.class", TestPlugins.SAMPLING_CONVERTER));
+                Collections.singletonMap("a.class", t1Class));
             Plugins.compareAndSwapLoaders(savedLoader);
         };
-        // DelegatingClassLoader breakpoint will only trigger on this thread
-        dclBreakpoint.set(TestPlugins.SAMPLING_CONVERTER::equals);
 
-        // Simulate Worker::startTask that creates configs with the plugin classloader
-        Runnable pluginToDelegating = () -> {
+        // THREAD 2: loads a class by delegating upward starting from the PluginClassLoader
+        String t2Class = JsonConverter.class.getName();
+        // PluginClassLoader breakpoint will only trigger on this thread
+        pclBreakpoint.set(t2Class::equals);
+        Runnable thread2 = () -> {
             // Use the PluginClassLoader as the current context loader
             ClassLoader savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
             // Load a non-isolated class from the plugin classloader, which will
-            // 1. Lock the PluginClassLoader (via PluginClassLoader::loadClass)
+            // 1. Enter the PluginClassLoader
             // 2. Wait for the test to continue
-            // 3. Attempt to lock the DelegatingClassLoader (via ClassLoader::loadClass)
-            // 4. Deadlock
+            // 3. Enter the DelegatingClassLoader
+            // 4. Load the non-isolated class and return
             new AbstractConfig(new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                Collections.singletonMap("a.class", "org.apache.kafka.connect.storage.JsonConverter"));
+                Collections.singletonMap("a.class", t2Class));
             Plugins.compareAndSwapLoaders(savedLoader);
         };
-        // PluginClassLoader breakpoint will only trigger on this thread
-        pclBreakpoint.set("org.apache.kafka.connect.storage.JsonConverter"::equals);
 
-        // Step 1: Lock the delegating classloader and pause
-        exec.submit(delegatingToPlugin);
-        // d2p enters ConfigDef::parseType
-        // d2p enters DelegatingClassLoader::loadClass
+        // STEP 1: Have T1 enter the DelegatingClassLoader and pause
+        exec.submit(thread1);
+        // T1 enters ConfigDef::parseType
+        // T1 enters DelegatingClassLoader::loadClass
         dclBreakpoint.testAwait();
         dclBreakpoint.testAwait();
-        // d2p exits DelegatingClassLoader::loadClass
-        // d2p enters Class::forName
-        // d2p LOCKS DelegatingClassLoader
-        // d2p enters DelegatingClassLoader::loadClass
+        // T1 exits DelegatingClassLoader::loadClass
+        // T1 enters Class::forName
+        // T1 enters DelegatingClassLoader::loadClass
         dclBreakpoint.testAwait();
-        // d2p waits in the delegating classloader while we set up the other thread
-        dumpThreads("d2p waiting with DelegatingClassLoader locked");
+        // T1 waits in the delegating classloader while we set up the other thread
+        dumpThreads("step 1, T1 waiting in DelegatingClassLoader");
 
-        // Step 2: Lock the plugin classloader and then the delegating classloader
-        exec.submit(pluginToDelegating);
-        // p2d enters PluginClassLoader::loadClass
-        // p2d LOCKS PluginClassLoader
+        // STEP 2: Have T2 enter PluginClassLoader, delegate upward to the Delegating classloader
+        exec.submit(thread2);
+        // T2 enters PluginClassLoader::loadClass
         pclBreakpoint.testAwait();
-        // p2d locks the class-specific classLoadingLock
-        // p2d falls through to ClassLoader::loadClass
+        // T2 falls through to ClassLoader::loadClass
         pclBreakpoint.testAwait();
-        // p2d locks the class-specific classLoadingLock
-        // p2d delegates upwards to DelegatingClassLoader::loadClass
-        // p2d enters ClassLoader::loadClass
-        // p2d LOCKS DelegatingClassLoader (starting the deadlock)
-        dumpThreads("p2d blocked trying to acquire the DelegatingClassLoader lock");
+        // T2 delegates upwards to DelegatingClassLoader::loadClass
+        // T2 enters ClassLoader::loadClass and loads the class from the parent (CLASSPATH)
+        dumpThreads("step 2, T2 entered DelegatingClassLoader and is loading class from parent");
 
-        // Step 3: Resume the first thread and try to lock the plugin classloader
+        // STEP 3: Resume T1 and have it enter the PluginClassLoader
         dclBreakpoint.testAwait();
-        // d2p enters PluginClassLoader::loadClass
-        // d2p LOCKS PluginClassLoader (completing the deadlock)
-        dumpThreads("d2p blocked trying to acquire the PluginClassLoader lock");
+        // T1 enters PluginClassLoader::loadClass
+        dumpThreads("step 3, T1 entered PluginClassLoader and is/was loading class from isolated jar");
+
+        // If the DelegatingClassLoader and PluginClassLoader are both not parallel capable, then this test will deadlock
+        // Otherwise, T1 should be able to complete it's load from the PluginClassLoader concurrently with T2,
+        // before releasing the DelegatingClassLoader and allowing T2 to complete.
+        // As the DelegatingClassLoader is not parallel capable, it must be the case that PluginClassLoader is.
         assertNoDeadlocks();
     }
 
-    // This is an informative test that is supposed to fail, demonstrating that forName is
-    // locking the connectorLoader in this JVM implementation, when initialize is true.
-    @Test
-    public void forNameLocksClassloader()
+    // If the test times out, then there's a deadlock in the test but not necessarily the code
+    @Test(timeout = 15000L)
+    // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
+    public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
-        // It is not important here that we're using the PluginClassLoader.
-        // This behavior is specific to the JVM, not the classloader implementation
-        // It is just a convenient classloader instance that we can throw away after the test
-        ClassLoader connectorLoader = plugins.delegatingLoader()
-            .connectorLoader(TestPlugins.SAMPLING_CONVERTER);
+        String t1Class = TestPlugins.SAMPLING_CONVERTER;
+        ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(t1Class);
 
-        Object monitor = new Object();
-        Breakpoint<Object> monitorBreakpoint = new Breakpoint<>();
+        Object externalTestLock = new Object();
+        Breakpoint<Object> testBreakpoint = new Breakpoint<>();
         Breakpoint<Object> progress = new Breakpoint<>();
 
-        Runnable executeForName = () -> {
-            synchronized (monitor) {
+        // THREAD 1: hold the PluginClassLoader's monitor lock, and attempt to grab the external lock
+        testBreakpoint.set(null);
+        Runnable thread1 = () -> {
+            synchronized (connectorLoader) {
+                testBreakpoint.await(null);
+                testBreakpoint.await(null);
+                synchronized (externalTestLock) {
+                }
+            }
+        };
+
+        // THREAD 2: load a class via forName while holding some external lock
+        progress.set(null);
+        Runnable thread2 = () -> {
+            synchronized (externalTestLock) {
                 try {
                     progress.await(null);
                     Class.forName(TestPlugins.SAMPLING_CONVERTER, true, connectorLoader);
@@ -311,32 +323,27 @@ public class SynchronizationTest {
                 }
             }
         };
-        progress.set(null);
 
-        Runnable holdsMonitorLock = () -> {
-            synchronized (connectorLoader) {
-                monitorBreakpoint.await(null);
-                monitorBreakpoint.await(null);
-                synchronized (monitor) {
-                }
-            }
-        };
-        monitorBreakpoint.set(null);
+        // STEP 1: Have T1 hold the PluginClassLoader's monitor lock
+        exec.submit(thread1);
+        // LOCK the classloader monitor lock
+        testBreakpoint.testAwait();
+        dumpThreads("step 1, T1 holding classloader monitor lock");
 
-        exec.submit(holdsMonitorLock);
-        // LOCK the classloader
-        // wait for test to progress
-        dumpThreads("locked the classloader");
-        monitorBreakpoint.testAwait();
-
-        exec.submit(executeForName);
+        // STEP 2: Have T2 hold the external lock, and proceed to perform classloading
+        exec.submit(thread2);
+        // LOCK the external lock
         progress.testAwait();
-        // LOCK the monitor
-        // LOCK the classloader (starting the deadlock)
-        dumpThreads("half-deadlocked");
-        monitorBreakpoint.testAwait();
-        // LOCK the monitor (completing the deadlock)
+        // perform class loading
+        dumpThreads("step 2, T2 holding external lock");
 
+        // STEP 3: Have T1 grab the external lock, and then release both locks
+        testBreakpoint.testAwait();
+        // LOCK the external lock
+        dumpThreads("step 3, T1 grabbed external lock");
+
+        // If the PluginClassLoader was not parallel capable, then these threads should deadlock
+        // Otherwise, classloading should proceed without grabbing the monitor lock, and complete before T1 grabs the external lock from T2.
         assertNoDeadlocks();
     }
 
@@ -407,7 +414,6 @@ public class SynchronizationTest {
         StackTraceElement[] stackTrace = info.getStackTrace();
         int i = 0;
         // This is a copy of ThreadInfo::toString but with an unlimited number of frames shown.
-        //for (; i < stackTrace.length && i < MAX_FRAMES; i++) {
         for (; i < stackTrace.length; i++) {
             StackTraceElement ste = stackTrace[i];
             sb.append("\tat " + ste.toString());
@@ -438,11 +444,6 @@ public class SynchronizationTest {
                 }
             }
         }
-        // This also becomes non-functional
-        //if (i < stackTrace.length) {
-        //sb.append("\t...");
-        //sb.append('\n');
-        //}
     }
 
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
