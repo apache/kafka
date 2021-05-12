@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.net.SocketException
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.stream.{Collectors, IntStream}
@@ -63,17 +63,8 @@ class ProducerIdsIntegrationTest {
     }
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 1)
-  def testNewBlockOnRestart(clusterInstance: ClusterInstance): Unit = {
-    val id0 = nextProducerId(clusterInstance.anyBrokerSocketServer(), clusterInstance.clientListener())
-    clusterInstance.rollingBrokerRestart()
-    val id1 = nextProducerId(clusterInstance.anyBrokerSocketServer(), clusterInstance.clientListener())
-    assertEquals(0, id0)
-    assertEquals(1000, id1)
-  }
-
   @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
-  def testRollingUpgrade(clusterInstance: ClusterInstance): Unit = {
+  def testBumpIBP(clusterInstance: ClusterInstance): Unit = {
     clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
     clusterInstance.start()
 
@@ -88,8 +79,8 @@ class ProducerIdsIntegrationTest {
             try {
               collectedIds += nextProducerId(broker, clusterInstance.clientListener())
             } catch {
-              case _: SocketException => // Expected during rolling restart
-              case t: Throwable => // Not expected
+              case _: IOException => // Expected during rolling restart
+              case t: Throwable =>
                 doneLatch.completeExceptionally(t)
                 return
             }
@@ -99,15 +90,12 @@ class ProducerIdsIntegrationTest {
       }
     })
 
-
-    Thread.sleep(100)
-
     clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "3.0")
     clusterInstance.rollingBrokerRestart()
 
     running.set(false)
     val ids = doneLatch.get()
-    assertEquals(ids.size, ids.distinct.size) // ensure no duplicates
+    assertEquals(ids.size, ids.distinct.size, "Found duplicate producer IDs")
     clusterInstance.stop()
   }
 
