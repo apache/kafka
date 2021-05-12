@@ -641,7 +641,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.LIST_TRANSACTIONS =>
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
-
+        case ApiKeys.ALLOCATE_PRODUCER_IDS =>
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
