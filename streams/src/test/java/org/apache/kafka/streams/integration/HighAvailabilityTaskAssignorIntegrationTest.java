@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -51,6 +52,7 @@ import org.junit.rules.TestName;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -119,7 +121,16 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             new TopicPartition(storeChangelog, 1)
         );
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 2, inputTopic, storeChangelog);
+        IntegrationTestUtils.cleanStateBeforeTest(
+            CLUSTER,
+            2,
+            mkMap(
+                mkEntry(inputTopic, Collections.emptyMap()),
+                mkEntry(storeChangelog, mkMap(
+                    mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))
+                )
+            )
+        );
 
         final ReentrantLock assignmentLock = new ReentrantLock();
         final AtomicInteger assignmentsCompleted = new AtomicInteger(0);

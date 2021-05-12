@@ -24,11 +24,9 @@ import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class MockInternalTopicManager extends InternalTopicManager {
 
@@ -47,8 +45,19 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
-        for (final InternalTopicConfig topic : topics.values()) {
+    public ValidationResult validate(final Map<String, InternalTopicConfig> topicConfigs) {
+        final ValidationResult validationResult = new ValidationResult();
+        if (mockCreateInternalTopics) {
+            topicConfigs.keySet().forEach(validationResult::addMissingTopic);
+        } else {
+            setup(topicConfigs);
+        }
+        return validationResult;
+    }
+
+    @Override
+    public void setup(final Map<String, InternalTopicConfig> topicConfigs) {
+        for (final InternalTopicConfig topic : topicConfigs.values()) {
             final String topicName = topic.name();
             final int numberOfPartitions = topic.numberOfPartitions().get();
             readyTopics.put(topicName, numberOfPartitions);
@@ -60,17 +69,5 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
             restoreConsumer.updatePartitions(topicName, partitions);
         }
-        return mockCreateInternalTopics ? topics.keySet() : Collections.emptySet();
-    }
-
-    @Override
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                    final Set<String> tempUnknownTopics) {
-        final Map<String, Integer> partitions = new HashMap<>();
-        for (final String topic : topics) {
-            partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
-        }
-
-        return partitions;
     }
 }
