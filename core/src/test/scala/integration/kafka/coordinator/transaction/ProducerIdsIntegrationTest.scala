@@ -17,10 +17,9 @@
 
 package kafka.coordinator.transaction
 
-import kafka.server.IntegrationTestUtils
 import kafka.network.SocketServer
-import kafka.server.KafkaConfig
-import kafka.test.annotation.{ClusterTest, Type}
+import kafka.server.{IntegrationTestUtils, KafkaConfig}
+import kafka.test.annotation.{AutoStart, ClusterTest, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.InitProducerIdRequestData
@@ -31,7 +30,11 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
 
+import java.net.SocketException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.stream.{Collectors, IntStream}
+import scala.collection.mutable.ArrayBuffer
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ProducerIdsIntegrationTest {
@@ -42,7 +45,10 @@ class ProducerIdsIntegrationTest {
     clusterConfig.serverProperties().put(KafkaConfig.TransactionsTopicReplicationFactorProp, "3")
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 3)
+  @ClusterTests(Array(
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "2.8"),
+    new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0")
+  ))
   def testNonOverlapping(clusterInstance: ClusterInstance): Unit = {
     val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
       IntStream.range(0, 1001).parallel().mapToObj( _ => nextProducerId(broker, clusterInstance.clientListener()))
@@ -64,6 +70,45 @@ class ProducerIdsIntegrationTest {
     val id1 = nextProducerId(clusterInstance.anyBrokerSocketServer(), clusterInstance.clientListener())
     assertEquals(0, id0)
     assertEquals(1000, id1)
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
+  def testRollingUpgrade(clusterInstance: ClusterInstance): Unit = {
+    clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    clusterInstance.start()
+
+    // Create a thread that continuously tries to get next producer ID
+    val running = new AtomicBoolean(true)
+    val doneLatch = new CompletableFuture[ArrayBuffer[Long]]()
+    Executors.newSingleThreadExecutor().submit(new Runnable() {
+      override def run(): Unit = {
+        val collectedIds = ArrayBuffer[Long]()
+        while (running.get) {
+          clusterInstance.brokerSocketServers().stream().forEach( broker => {
+            try {
+              collectedIds += nextProducerId(broker, clusterInstance.clientListener())
+            } catch {
+              case _: SocketException => // Expected during rolling restart
+              case t: Throwable => // Not expected
+                doneLatch.completeExceptionally(t)
+                return
+            }
+          })
+        }
+        doneLatch.complete(collectedIds)
+      }
+    })
+
+
+    Thread.sleep(100)
+
+    clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "3.0")
+    clusterInstance.rollingBrokerRestart()
+
+    running.set(false)
+    val ids = doneLatch.get()
+    assertEquals(ids.size, ids.distinct.size) // ensure no duplicates
+    clusterInstance.stop()
   }
 
   private def nextProducerId(broker: SocketServer, listener: ListenerName): Long = {

@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
+import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -91,7 +92,9 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 IntegrationTestHarness cluster = new IntegrationTestHarness() {
                     @Override
                     public Properties serverConfig() {
-                        return clusterConfig.serverProperties();
+                        Properties props = clusterConfig.serverProperties();
+                        clusterConfig.ibp().ifPresent(ibp -> props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp));
+                        return props;
                     }
 
                     @Override
@@ -255,7 +258,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 for (int i = 0; i < clusterReference.get().brokerCount(); i++) {
                     clusterReference.get().killBroker(i);
                 }
-                clusterReference.get().restartDeadBrokers();
+                clusterReference.get().restartDeadBrokers(true);
             } else {
                 throw new IllegalStateException("Tried to restart brokers but the cluster has not been started!");
             }

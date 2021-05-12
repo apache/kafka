@@ -24,6 +24,7 @@ import kafka.common._
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
+import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -49,7 +50,7 @@ import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 sealed trait ElectionTrigger
 final case object AutoTriggered extends ElectionTrigger
@@ -2411,43 +2412,15 @@ class KafkaController(val config: KafkaConfig,
       return
     }
 
-    // Get or create the existing PID block from ZK and attempt to update it. We retry in a loop here since other
-    // brokers may be generating PID blocks during a rolling upgrade
-    var zkWriteComplete = false
-    while (!zkWriteComplete) {
-      // refresh current producerId block from zookeeper again
-      val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+    val maybeNewProducerIdsBlock = try {
+      Try(ZkProducerIdManager.getNewProducerIdBlock(brokerId, zkClient, this))
+    } catch {
+      case ke: KafkaException => Failure(ke)
+    }
 
-      // generate the new producerId block
-      val newProducerIdBlock = dataOpt match {
-        case Some(data) =>
-          val currProducerIdBlock = ProducerIdBlockZNode.parseProducerIdBlockData(data)
-          debug(s"Read current producerId block $currProducerIdBlock, Zk path version $zkVersion")
-
-          if (currProducerIdBlock.producerIdEnd > Long.MaxValue - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
-            // we have exhausted all producerIds (wow!), treat it as a fatal error
-            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.producerIdEnd})")
-            callback.apply(Left(Errors.UNKNOWN_SERVER_ERROR))
-            return
-          }
-
-          new ProducerIdsBlock(brokerId, currProducerIdBlock.producerIdEnd + 1L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
-        case None =>
-          debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
-          new ProducerIdsBlock(brokerId, 0L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
-      }
-
-      val newProducerIdBlockData = ProducerIdBlockZNode.generateProducerIdBlockJson(newProducerIdBlock)
-
-      // try to write the new producerId block into zookeeper
-      val (succeeded, version) = zkClient.conditionalUpdatePath(ProducerIdBlockZNode.path, newProducerIdBlockData, zkVersion, None)
-      zkWriteComplete = succeeded
-
-      if (zkWriteComplete) {
-        info(s"Acquired new producerId block $newProducerIdBlock by writing to Zk with path version $version")
-        callback.apply(Right(newProducerIdBlock))
-        return
-      }
+    maybeNewProducerIdsBlock match {
+      case Failure(exception) => callback.apply(Left(Errors.forException(exception)))
+      case Success(newProducerIdBlock) => callback.apply(Right(newProducerIdBlock))
     }
   }
 
