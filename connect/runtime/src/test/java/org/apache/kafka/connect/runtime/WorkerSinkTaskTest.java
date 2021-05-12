@@ -639,7 +639,7 @@ public class WorkerSinkTaskTest {
                 rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
                 return ConsumerRecords.empty();
             });
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(3);
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(4);
         sinkTask.close(Collections.singleton(TOPIC_PARTITION3));
         EasyMock.expectLastCall();
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
