@@ -21,6 +21,7 @@ import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +49,7 @@ public class ClusterConfig {
     private final Properties adminClientProperties = new Properties();
     private final Properties saslServerProperties = new Properties();
     private final Properties saslClientProperties = new Properties();
+    private final Map<Integer, Properties> perBrokerOverrideProperties = new HashMap<>();
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
@@ -121,6 +123,10 @@ public class ClusterConfig {
 
     public Optional<String> ibp() {
         return Optional.ofNullable(ibp);
+    }
+
+    public Properties brokerServerProperties(int brokerId) {
+        return perBrokerOverrideProperties.computeIfAbsent(brokerId, __ -> new Properties());
     }
 
     public Map<String, String> nameTags() {

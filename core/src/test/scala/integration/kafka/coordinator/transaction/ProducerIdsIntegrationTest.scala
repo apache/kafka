@@ -30,11 +30,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.io.IOException
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.stream.{Collectors, IntStream}
-import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ProducerIdsIntegrationTest {
@@ -49,10 +46,24 @@ class ProducerIdsIntegrationTest {
     new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "2.8"),
     new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0")
   ))
-  def testNonOverlapping(clusterInstance: ClusterInstance): Unit = {
+  def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
+    verifyNonOverlappingAndUniqueIds(clusterInstance)
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
+  def testUniqueProducerIdsBumpIBP(clusterInstance: ClusterInstance): Unit = {
+    clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    clusterInstance.config().brokerServerProperties(0).put(KafkaConfig.InterBrokerProtocolVersionProp, "3.0-IV0")
+    clusterInstance.start()
+    verifyNonOverlappingAndUniqueIds(clusterInstance)
+    clusterInstance.stop()
+  }
+
+  private def verifyNonOverlappingAndUniqueIds(clusterInstance: ClusterInstance): Unit = {
+    // Request enough PIDs from each broker to ensure each broker generates two PID blocks
     val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
       IntStream.range(0, 1001).parallel().mapToObj( _ => nextProducerId(broker, clusterInstance.clientListener()))
-    }).collect(Collectors.toSet[Long])
+    }).collect(Collectors.toSet[Long]).asScala.toSeq
 
     assertEquals(3003, ids.size)
 
@@ -61,42 +72,7 @@ class ProducerIdsIntegrationTest {
     expectedIds.foreach { id =>
       assertTrue(ids.contains(id), s"Expected to see $id in $idsAsString")
     }
-  }
-
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
-  def testBumpIBP(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
-    clusterInstance.start()
-
-    // Create a thread that continuously tries to get next producer ID
-    val running = new AtomicBoolean(true)
-    val doneLatch = new CompletableFuture[ArrayBuffer[Long]]()
-    Executors.newSingleThreadExecutor().submit(new Runnable() {
-      override def run(): Unit = {
-        val collectedIds = ArrayBuffer[Long]()
-        while (running.get) {
-          clusterInstance.brokerSocketServers().stream().forEach( broker => {
-            try {
-              collectedIds += nextProducerId(broker, clusterInstance.clientListener())
-            } catch {
-              case _: IOException => // Expected during rolling restart
-              case t: Throwable =>
-                doneLatch.completeExceptionally(t)
-                return
-            }
-          })
-        }
-        doneLatch.complete(collectedIds)
-      }
-    })
-
-    clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "3.0")
-    clusterInstance.rollingBrokerRestart()
-
-    running.set(false)
-    val ids = doneLatch.get()
     assertEquals(ids.size, ids.distinct.size, "Found duplicate producer IDs")
-    clusterInstance.stop()
   }
 
   private def nextProducerId(broker: SocketServer, listener: ListenerName): Long = {

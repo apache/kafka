@@ -33,6 +33,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import scala.Option;
 import scala.collection.JavaConverters;
+import scala.collection.Seq;
 import scala.compat.java8.OptionConverters;
 
 import java.io.File;
@@ -90,6 +91,15 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 // This is what tests normally extend from to start a cluster, here we create it anonymously and
                 // configure the cluster using values from ClusterConfig
                 IntegrationTestHarness cluster = new IntegrationTestHarness() {
+
+                    @Override
+                    public void modifyConfigs(Seq<Properties> props) {
+                        super.modifyConfigs(props);
+                        for (int i = 0; i < props.length(); i++) {
+                            props.apply(i).putAll(clusterConfig.brokerServerProperties(i));
+                        }
+                    }
+
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
