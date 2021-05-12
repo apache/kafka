@@ -150,7 +150,7 @@ class LogManager(logDirs: Seq[File],
           val created = dir.mkdirs()
           if (!created)
             throw new IOException(s"Failed to create data directory ${dir.getAbsolutePath}")
-          Utils.flushParentDir(dir.toPath)
+          Utils.flushDir(dir.toPath.toAbsolutePath.normalize.getParent)
         }
         if (!dir.isDirectory || !dir.canRead)
           throw new IOException(s"${dir.getAbsolutePath} is not a readable log directory.")
@@ -640,6 +640,8 @@ class LogManager(logDirs: Seq[File],
     try {
       recoveryPointCheckpoints.get(logDir).foreach { checkpoint =>
         val recoveryOffsets = logsToCheckpoint.map { case (tp, log) => tp -> log.recoveryPoint }
+        // checkpoint.write calls Utils.atomicMoveWithFallback, which flushes the parent
+        // directory and guarantees crash consistency.
         checkpoint.write(recoveryOffsets)
       }
     } catch {
@@ -867,7 +869,6 @@ class LogManager(logDirs: Seq[File],
       val dir = new File(logDirPath, logDirName)
       try {
         Files.createDirectories(dir.toPath)
-        Utils.flushParentDir(dir.toPath)
         Success(dir)
       } catch {
         case e: IOException =>

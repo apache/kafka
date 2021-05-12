@@ -1676,7 +1676,10 @@ class Log(@volatile private var _dir: File,
       if (offset > this.recoveryPoint) {
         debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: $unflushedMessages")
-        logSegments(this.recoveryPoint, offset).foreach(_.flush())
+        val segments = logSegments(this.recoveryPoint, offset)
+        segments.foreach(_.flush())
+        // if there are any new segments, we need to flush the parent directory for crash consistency
+        segments.lastOption.filter(_.baseOffset >= this.recoveryPoint).foreach(_ => Utils.flushDir(dir.toPath))
 
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
@@ -2312,7 +2315,7 @@ object Log extends Logging {
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix, false))
+        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
       sortedNewSegments.reverse.foreach(existingSegments.add(_))
       val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
@@ -2335,6 +2338,7 @@ object Log extends Logging {
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+      Utils.flushDir(dir.toPath)
   }
 
   /**
@@ -2369,7 +2373,7 @@ object Log extends Logging {
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
                                       producerStateManager: ProducerStateManager): Unit = {
-    segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix, false))
+    segmentsToDelete.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segment files ${segmentsToDelete.mkString(",")}")
