@@ -454,8 +454,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
-            false)
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)

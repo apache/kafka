@@ -28,8 +28,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -41,8 +39,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
-
-    private static final Logger log = LoggerFactory.getLogger(TxnOffsetCommitRequest.class);
 
     private final TxnOffsetCommitRequestData data;
 
