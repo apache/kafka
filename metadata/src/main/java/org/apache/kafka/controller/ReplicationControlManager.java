@@ -362,8 +362,6 @@ public class ReplicationControlManager {
                 newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
         }
         controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount());
     }
 
     public void replay(PartitionChangeRecord record) {
@@ -385,8 +383,6 @@ public class ReplicationControlManager {
         String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
             record.topicId();
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount());
     }
 
     public void replay(RemoveTopicRecord record) {
@@ -411,8 +407,6 @@ public class ReplicationControlManager {
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
         controllerMetrics.setGlobalTopicsCount(topics.size());
         controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount());
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
@@ -475,18 +469,6 @@ public class ReplicationControlManager {
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
         return ControllerResult.atomicOf(records, data);
-    }
-
-    private int preferredReplicaImbalanceCount() {
-        int count = 0;
-        for (TopicControlInfo topic : topics.values()) {
-            for (PartitionControlInfo part : topic.parts.values()) {
-                if (part.leader != part.preferredReplica()) {
-                    count++;
-                }
-            }
-        }
-        return count;
     }
 
     private ApiError createTopic(CreatableTopic topic,

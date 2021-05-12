@@ -34,22 +34,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ReplicationControlManager", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
         "kafka.controller", "ReplicationControlManager", "GlobalPartitionCount", null);
-    private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "OfflinePartitionCount", null);
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "PreferredReplicaImbalanceCount", null);
-    
 
     private volatile boolean active;
     private volatile int topics;
     private volatile int partitions;
-    private volatile int offlinePartitions;
-    private volatile int preferredReplicaImbalances;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> globalPartitionCount;
     private final Gauge<Integer> globalTopicCount;
-    private final Gauge<Integer> offlinePartitionCount;
-    private final Gauge<Integer> preferredReplicaImbalanceCount;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
@@ -57,8 +48,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.active = false;
         this.topics = 0;
         this.partitions = 0;
-        this.offlinePartitions = 0;
-        this.preferredReplicaImbalances = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -77,18 +66,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return partitions;
-            }
-        });
-        this.offlinePartitionCount = registry.newGauge(OFFLINE_PARTITION_COUNT, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return offlinePartitions;
-            }
-        });
-        this.preferredReplicaImbalanceCount = registry.newGauge(PREFERRED_REPLICA_IMBALANCE_COUNT, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return preferredReplicaImbalances;
             }
         });
     }
@@ -131,25 +108,5 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public int globalPartitionCount() {
         return this.partitions;
-    }
-
-    @Override
-    public void setOfflinePartitionCount(int offlinePartitions) {
-        this.offlinePartitions = offlinePartitions;
-    }
-
-    @Override
-    public int offlinePartitionCount() {
-        return this.offlinePartitions;
-    }
-
-    @Override
-    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
-        this.preferredReplicaImbalances = replicaImbalances;
-    }
-
-    @Override
-    public int preferredReplicaImbalanceCount() {
-        return this.preferredReplicaImbalances;
     }
 }

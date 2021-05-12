@@ -34,12 +34,4 @@ public interface ControllerMetrics {
     void setGlobalPartitionCount(int partitionCount);
 
     int globalPartitionCount();
-
-    void setOfflinePartitionCount(int offlinePartitions);
-
-    int offlinePartitionCount();
-
-    void setPreferredReplicaImbalanceCount(int replicaImbalances);
-
-    int preferredReplicaImbalanceCount();
 }
