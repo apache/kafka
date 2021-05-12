@@ -115,7 +115,6 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
     }
 
-
     @SuppressWarnings("unchecked")
     private List<Inner> createListInstance(int listSize) {
         try {
@@ -165,17 +164,10 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             final int size = dis.readInt();
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
-                int entrySize = -1;
-                if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
-                    if (nullIndexList.contains(i)) {
-                        deserializedList.add(null);
-                    }
-                    entrySize = primitiveSize;
-                } else if (serStrategy == SerializationStrategy.VARIABLE_SIZE) {
-                    entrySize = dis.readInt();
-                    if (entrySize == ListSerde.NULL_ENTRY_VALUE) {
-                        deserializedList.add(null);
-                    }
+                int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
+                if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
+                    deserializedList.add(null);
+                    continue;
                 }
                 byte[] payload = new byte[entrySize];
                 if (dis.read(payload) == -1) {
