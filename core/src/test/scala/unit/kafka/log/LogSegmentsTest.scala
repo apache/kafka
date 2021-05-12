@@ -46,7 +46,7 @@ class LogSegmentsTest {
     Utils.delete(logDir)
   }
 
-  private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[java.lang.Long, LogSegment]): Unit = {
+  private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[Long, LogSegment]): Unit = {
     assertEquals(segment.baseOffset, tested.getKey())
     assertEquals(segment, tested.getValue())
   }
