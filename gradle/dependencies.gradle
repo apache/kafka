@@ -67,7 +67,7 @@ versions += [
   easymock: "4.3",
   jackson: "2.10.5",
   jacksonDatabind: "2.10.5.1",
-  jacoco: "0.8.5",
+  jacoco: "0.8.7",
   javassist: "3.27.0-GA",
   jetty: "9.4.39.v20210325",
   jersey: "2.34",
