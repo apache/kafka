@@ -60,11 +60,11 @@ See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugi
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
-    ./gradlew reportCoverage -PenableTestCoverage=true
+    ./gradlew reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
 
 Generate coverage for a single module, i.e.: 
 
-    ./gradlew clients:reportCoverage -PenableTestCoverage=true
+    ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
