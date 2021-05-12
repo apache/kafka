@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 /**
  * A meta representation of a {@link Topology topology}.
  * <p>
- * The nodes of a topology are grouped into {@link Subtopology sub-topologies} if they are connected.
+ * The nodes of a topology are grouped into {@link SubtopologyDescription sub-topologies} if they are connected.
  * In contrast, two sub-topologies are not connected but can be linked to each other via topics, i.e., if one
  * sub-topology {@link Topology#addSink(String, String, String...) writes} into a topic and another sub-topology
  * {@link Topology#addSource(String, String...) reads} from the same topic.
@@ -43,7 +43,7 @@ public interface TopologyDescription {
      * {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
      * (i.e., if multiple processors share the same state).
      */
-    interface Subtopology {
+    interface SubtopologyDescription {
         /**
          * Internally assigned unique ID.
          * @return the ID of the sub-topology
@@ -62,10 +62,10 @@ public interface TopologyDescription {
      * org.apache.kafka.common.serialization.Deserializer, org.apache.kafka.common.serialization.Deserializer, String,
      * String, org.apache.kafka.streams.processor.api.ProcessorSupplier) global store}.
      * Adding a global store results in adding a source node and one stateful processor node.
-     * Note, that all added global stores form a single unit (similar to a {@link Subtopology}) even if different
+     * Note, that all added global stores form a single unit (similar to a {@link SubtopologyDescription}) even if different
      * global stores are not connected to each other.
      * Furthermore, global stores are available to all processors without connecting them explicitly, and thus global
-     * stores will never be part of any {@link Subtopology}.
+     * stores will never be part of any {@link SubtopologyDescription}.
      */
     interface GlobalStore {
         /**
@@ -168,7 +168,7 @@ public interface TopologyDescription {
      * All sub-topologies of the represented topology.
      * @return set of all sub-topologies
      */
-    Set<Subtopology> subtopologies();
+    Set<SubtopologyDescription> subtopologies();
 
     /**
      * All global stores of the represented topology.
