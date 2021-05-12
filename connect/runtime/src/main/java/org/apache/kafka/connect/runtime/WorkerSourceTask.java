@@ -92,6 +92,7 @@ class WorkerSourceTask extends WorkerTask {
     private final AtomicReference<Exception> producerSendException;
     private final boolean isTopicTrackingEnabled;
     private final TopicCreation topicCreation;
+    private final RateLimiter<SourceRecord> rateLimiter;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -126,7 +127,8 @@ class WorkerSourceTask extends WorkerTask {
                             Time time,
                             RetryWithToleranceOperator retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
-                            Executor closeExecutor) {
+                            Executor closeExecutor,
+                            RateLimiter<SourceRecord> rateLimiter) {
 
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -154,6 +156,8 @@ class WorkerSourceTask extends WorkerTask {
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
+        this.rateLimiter = rateLimiter;
+        rateLimiter.start(time);
     }
 
     @Override
@@ -187,6 +191,7 @@ class WorkerSourceTask extends WorkerTask {
         }
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
+        Utils.closeQuietly(rateLimiter, "rate limiter");
     }
 
     @Override
@@ -332,6 +337,7 @@ class WorkerSourceTask extends WorkerTask {
     private boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
+        rateLimiter.accumulate(toSend);
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
@@ -386,6 +392,7 @@ class WorkerSourceTask extends WorkerTask {
                         }
                     });
                 lastSendFailed = false;
+                rateLimiter.throttle();
             } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
@@ -400,6 +407,8 @@ class WorkerSourceTask extends WorkerTask {
                 throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
+            } catch (InterruptedException e) {
+                // rate limiter interrupted. Just swallow.
             }
             processed++;
         }

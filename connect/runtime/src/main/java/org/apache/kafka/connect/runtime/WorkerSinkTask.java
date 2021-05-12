@@ -96,6 +96,7 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final RateLimiter<SinkRecord> rateLimiter;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -113,7 +114,8 @@ class WorkerSinkTask extends WorkerTask {
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
-                          StatusBackingStore statusBackingStore) {
+                          StatusBackingStore statusBackingStore,
+                          RateLimiter<SinkRecord> rateLimiter) {
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
 
@@ -141,6 +143,8 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.rateLimiter = rateLimiter;
+        rateLimiter.start(time);
     }
 
     @Override
@@ -174,6 +178,7 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
+        Utils.closeQuietly(rateLimiter, "rate limiter");
     }
 
     @Override
@@ -578,6 +583,7 @@ class WorkerSinkTask extends WorkerTask {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
+            rateLimiter.accumulate(messageBatch);
             task.put(new ArrayList<>(messageBatch));
             // if errors raised from the operator were swallowed by the task implementation, an
             // exception needs to be thrown to kill the task indicating the tolerance was exceeded
@@ -596,6 +602,7 @@ class WorkerSinkTask extends WorkerTask {
                     resumeAll();
                 pausedForRedelivery = false;
             }
+            rateLimiter.throttle();
         } catch (RetriableException e) {
             log.error("{} RetriableException from SinkTask:", this, e);
             // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,

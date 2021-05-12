@@ -160,6 +160,11 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.override.";
     public static final String PREDICATES_PREFIX = "predicates.";
 
+    public static final String TASK_RECORD_RATE_MAX_CONFIG = "task.record.rate.max";
+    public static final String TASK_RECORD_RATE_MAX_DISPLAY = "Per-task Max Record Throughput";
+    public static final Double TASK_RECORD_RATE_MAX_DEFAULT = Double.MAX_VALUE;
+    public static final String TASK_RECORD_RATE_MAX_DOC = "Maximum throughput in records-per-second allowed through each Task.";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -197,7 +202,9 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(ERRORS_LOG_ENABLE_CONFIG, Type.BOOLEAN, ERRORS_LOG_ENABLE_DEFAULT, Importance.MEDIUM,
                         ERRORS_LOG_ENABLE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_ENABLE_DISPLAY)
                 .define(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, Type.BOOLEAN, ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT, Importance.MEDIUM,
-                        ERRORS_LOG_INCLUDE_MESSAGES_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY);
+                        ERRORS_LOG_INCLUDE_MESSAGES_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY)
+
+                .define(TASK_RECORD_RATE_MAX_CONFIG, Type.DOUBLE, TASK_RECORD_RATE_MAX_DEFAULT, Importance.LOW, TASK_RECORD_RATE_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_RECORD_RATE_MAX_DISPLAY);
     }
 
     private static ConfigDef.CompositeValidator aliasValidator(String kind) {
@@ -255,6 +262,10 @@ public class ConnectorConfig extends AbstractConfig {
             }
         }
         return ERRORS_TOLERANCE_DEFAULT;
+    }
+
+    public double recordRateMax() {
+        return getDouble(TASK_RECORD_RATE_MAX_CONFIG);
     }
 
     public boolean enableErrorLog() {

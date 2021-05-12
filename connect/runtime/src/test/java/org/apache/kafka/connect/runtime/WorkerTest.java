@@ -1500,7 +1500,8 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(Time.class),
                 anyObject(RetryWithToleranceOperator.class),
                 anyObject(StatusBackingStore.class),
-                anyObject(Executor.class))
+                anyObject(Executor.class),
+                anyObject(RateLimiter.class))
                 .andReturn(workerTask);
     }
     /* Name here needs to be unique as we are testing the aliasing mechanism */
