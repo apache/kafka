@@ -331,6 +331,7 @@ public final class QuorumController implements Controller {
     private void appendControlEvent(String name, Runnable handler) {
         ControlEvent event = new ControlEvent(name, handler);
         queue.append(event);
+        controllerMetrics.setEventQueueSize(queue.size());
     }
 
     private static final String GENERATE_SNAPSHOT = "generateSnapshot";
@@ -374,12 +375,14 @@ public final class QuorumController implements Controller {
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
+            controllerMetrics.setEventQueueSize(queue.size());
         }
 
         void reschedule(long delayNs) {
             ControlEvent event = new ControlEvent(GENERATE_SNAPSHOT, this);
             queue.scheduleDeferred(event.name,
                 new EarliestDeadlineFunction(time.nanoseconds() + delayNs), event);
+            controllerMetrics.setEventQueueSize(queue.size());
         }
 
         @Override
@@ -472,6 +475,7 @@ public final class QuorumController implements Controller {
     <T> CompletableFuture<T> appendReadEvent(String name, Supplier<T> handler) {
         ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
         queue.append(event);
+        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -607,6 +611,7 @@ public final class QuorumController implements Controller {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.appendWithDeadline(time.nanoseconds() +
             NANOSECONDS.convert(timeoutMs, TimeUnit.MILLISECONDS), event);
+        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -614,6 +619,7 @@ public final class QuorumController implements Controller {
                                                       ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.append(event);
+        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -708,6 +714,7 @@ public final class QuorumController implements Controller {
                                                 ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
+        controllerMetrics.setEventQueueSize(queue.size());
         event.future.exceptionally(e -> {
             if (e instanceof UnknownServerException && e.getCause() != null &&
                     e.getCause() instanceof RejectedExecutionException) {
@@ -744,6 +751,7 @@ public final class QuorumController implements Controller {
 
     private void cancelMaybeFenceReplicas() {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
+        controllerMetrics.setEventQueueSize(queue.size());
     }
 
     @SuppressWarnings("unchecked")
@@ -821,7 +829,7 @@ public final class QuorumController implements Controller {
     /**
      * The controller metrics.
      */
-    private final ControllerMetrics controllerMetrics;
+    final ControllerMetrics controllerMetrics;
 
     /**
      * A registry for snapshot data.  This must be accessed only by the event queue thread.

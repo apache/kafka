@@ -19,17 +19,15 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
-    private volatile int topics;
-    private volatile int partitions;
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
+    private volatile int queueSize;
 
     public MockControllerMetrics() {
         this.active = false;
-        this.topics = 0;
-        this.partitions = 0;
         this.offlinePartitions = 0;
         this.preferredReplicaImbalances = 0;
+        this.queueSize = 0;
     }
 
     @Override
@@ -53,23 +51,13 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setGlobalTopicsCount(int topicCount) {
-        this.topics = topicCount;
+    public void setEventQueueSize(int queueSize) {
+        this.queueSize = queueSize;
     }
 
     @Override
-    public int globalTopicsCount() {
-        return this.topics;
-    }
-
-    @Override
-    public void setGlobalPartitionCount(int partitionCount) {
-        this.partitions = partitionCount;
-    }
-
-    @Override
-    public int globalPartitionCount() {
-        return this.partitions;
+    public int eventQueueSize() {
+        return this.queueSize;
     }
 
     @Override
