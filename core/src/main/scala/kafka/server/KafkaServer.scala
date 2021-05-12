@@ -266,11 +266,11 @@ class KafkaServer(
           threadNamePrefix = threadNamePrefix,
           retryTimeoutMs = config.requestTimeoutMs.longValue)
         brokerToControllerManager.start()
+        clientToControllerChannelManager = Some(brokerToControllerManager)
 
         /* start forwarding manager */
         if (enableForwarding) {
           this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
-          clientToControllerChannelManager = Some(brokerToControllerManager)
         }
 
         val apiVersionManager = ApiVersionManager(
