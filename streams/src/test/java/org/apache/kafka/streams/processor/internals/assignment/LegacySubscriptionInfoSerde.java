@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

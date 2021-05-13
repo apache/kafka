@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Map;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TaskId;
+
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

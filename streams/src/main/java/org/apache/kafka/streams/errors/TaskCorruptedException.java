@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskId;
 
 import java.util.Set;
 

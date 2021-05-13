@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskId;
 
 public class NamedTaskId extends TaskId {
     public NamedTaskId(final int topicGroupId, final int partition, final String namedTopology) {

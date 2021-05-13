@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskId;
 import org.junit.Before;
 import org.junit.Test;
 
