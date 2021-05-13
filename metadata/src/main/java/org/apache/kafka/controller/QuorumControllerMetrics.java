@@ -32,27 +32,26 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
     private final static MetricName EVENT_QUEUE_SIZE = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueSize", null);
-    private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "OfflinePartitionCount", null);
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "PreferredReplicaImbalanceCount", null);
-    
+    private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "GlobalTopicCount", null);
+    private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "GlobalPartitionCount", null);
 
     private volatile boolean active;
-    private volatile int offlinePartitions;
-    private volatile int preferredReplicaImbalances;
+    private volatile int globalTopicCount;
+    private volatile int globalPartitionCount;
     private volatile int queueSize;
     private final Gauge<Integer> activeControllerCount;
-    private final Gauge<Integer> offlinePartitionCount;
-    private final Gauge<Integer> preferredReplicaImbalanceCount;
+    private final Gauge<Integer> globalPartitionCountGauge;
+    private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> eventQueueSize;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
-        this.offlinePartitions = 0;
-        this.preferredReplicaImbalances = 0;
+        this.globalTopicCount = 0;
+        this.globalPartitionCount = 0;
         this.queueSize = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
@@ -68,16 +67,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
                 return queueSize;
             }
         });
-        this.offlinePartitionCount = registry.newGauge(OFFLINE_PARTITION_COUNT, new Gauge<Integer>() {
+        this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return offlinePartitions;
+                return globalTopicCount;
             }
         });
-        this.preferredReplicaImbalanceCount = registry.newGauge(PREFERRED_REPLICA_IMBALANCE_COUNT, new Gauge<Integer>() {
+        this.globalPartitionCountGauge = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return preferredReplicaImbalances;
+                return globalPartitionCount;
             }
         });
     }
@@ -113,22 +112,22 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setOfflinePartitionCount(int offlinePartitions) {
-        this.offlinePartitions = offlinePartitions;
+    public void setGlobalTopicsCount(int topicCount) {
+        this.globalTopicCount = topicCount;
     }
 
     @Override
-    public int offlinePartitionCount() {
-        return this.offlinePartitions;
+    public int globalTopicsCount() {
+        return this.globalTopicCount;
     }
 
     @Override
-    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
-        this.preferredReplicaImbalances = replicaImbalances;
+    public void setGlobalPartitionCount(int partitionCount) {
+        this.globalPartitionCount = partitionCount;
     }
 
     @Override
-    public int preferredReplicaImbalanceCount() {
-        return this.preferredReplicaImbalances;
+    public int globalPartitionCount() {
+        return this.globalPartitionCount;
     }
 }

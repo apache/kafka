@@ -31,11 +31,11 @@ public interface ControllerMetrics {
 
     int eventQueueSize();
 
-    void setOfflinePartitionCount(int offlinePartitions);
+    void setGlobalTopicsCount(int topicCount);
 
-    int offlinePartitionCount();
+    int globalTopicsCount();
 
-    void setPreferredReplicaImbalanceCount(int replicaImbalances);
+    void setGlobalPartitionCount(int partitionCount);
 
-    int preferredReplicaImbalanceCount();
+    int globalPartitionCount();
 }

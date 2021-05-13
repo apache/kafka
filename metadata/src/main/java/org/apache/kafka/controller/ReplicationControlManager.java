@@ -60,7 +60,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -279,7 +279,10 @@ public class ReplicationControlManager {
      */
     private final int defaultNumPartitions;
 
-    private int preferredReplicaImbalanceCount;
+    /**
+     * A count of the total number of partitions in the cluster.
+     */
+    private int globalPartitionCount;
 
     /**
      * A reference to the controller's configuration control manager.
@@ -325,7 +328,7 @@ public class ReplicationControlManager {
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
-        this.preferredReplicaImbalanceCount = 0;
+        this.globalPartitionCount = 0;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
@@ -335,6 +338,7 @@ public class ReplicationControlManager {
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
+        controllerMetrics.setGlobalTopicsCount(topics.size());
         log.info("Created topic {} with topic ID {}.", record.name(), record.topicId());
     }
 
@@ -353,17 +357,14 @@ public class ReplicationControlManager {
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
+            globalPartitionCount++;
+            controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         } else if (!newPartInfo.equals(prevPartInfo)) {
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), prevPartInfo.isr,
                 newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
         }
-        if (newPartInfo.leader != newPartInfo.preferredReplica()) {
-            preferredReplicaImbalanceCount++;
-        }
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
     }
 
     public void replay(PartitionChangeRecord record) {
@@ -385,12 +386,6 @@ public class ReplicationControlManager {
         String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
             record.topicId();
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
-        if ((newPartitionInfo.leader != newPartitionInfo.preferredReplica()) && 
-                (prevPartitionInfo.leader == prevPartitionInfo.preferredReplica())) {
-            preferredReplicaImbalanceCount++;
-        }
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
     }
 
     public void replay(RemoveTopicRecord record) {
@@ -410,14 +405,11 @@ public class ReplicationControlManager {
             for (int i = 0; i < partition.isr.length; i++) {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
-            if (partition.leader != partition.preferredReplica()) {
-                preferredReplicaImbalanceCount--;
-            }
+            globalPartitionCount--;
         }
-        brokersToIsrs.updateMetricsForTopicRemoval(topic.id);
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
-        controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
+        controllerMetrics.setGlobalTopicsCount(topics.size());
+        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 

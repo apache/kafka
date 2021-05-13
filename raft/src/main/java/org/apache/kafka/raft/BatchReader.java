@@ -28,7 +28,7 @@ import java.util.OptionalLong;
  * of the Raft IO thread. This helps to ensure that a slow state machine will not
  * affect replication.
  *
- * @param <T> record type (see {@link org.apache.kafka.raft.RecordSerde})
+ * @param <T> record type (see {@link org.apache.kafka.server.common.serialization.RecordSerde})
  */
 public interface BatchReader<T> extends Iterator<Batch<T>>, AutoCloseable {
 
