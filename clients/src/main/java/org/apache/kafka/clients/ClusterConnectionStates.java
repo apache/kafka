@@ -105,6 +105,7 @@ final class ClusterConnectionStates {
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
+
         if (state.state == ConnectionState.CONNECTING) {
             return connectionSetupTimeoutMs(id);
         } else if (state.state.isDisconnected()) {
