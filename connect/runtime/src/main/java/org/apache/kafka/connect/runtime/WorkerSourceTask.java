@@ -475,7 +475,7 @@ class WorkerSourceTask extends WorkerTask {
             removed = outstandingMessagesBacklog.remove(record);
         // But if neither one had it, something is very wrong
         if (removed == null) {
-            log.error("{} CRITICAL Saw callback for record from topic {} partition {} that was not present in the outstanding message set: {}", this, record.topic(), record.partition());
+            log.error("{} CRITICAL Saw callback for record from topic {} partition {} that was not present in the outstanding message set", this, record.topic(), record.partition());
         } else if (flushing && outstandingMessages.isEmpty()) {
             // flush thread may be waiting on the outstanding messages to clear
             this.notifyAll();

@@ -46,6 +46,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -1526,6 +1527,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsNotStartedException If Streams state is {@link KafkaStreams.State#CREATED CREATED}. Just
      *         retry and wait until to {@link KafkaStreams.State#RUNNING RUNNING}.
      * @throws UnknownStateStoreException If the specified store name does not exist in the topology.
+     * @throws InvalidStateStorePartitionException If the specified partition does not exist.
      * @throws InvalidStateStoreException If the Streams instance isn't in a queryable state.
      *                                    If the store's type does not match the QueryableStoreType,
      *                                    the Streams instance is not in a queryable state with respect

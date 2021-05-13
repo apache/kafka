@@ -22,7 +22,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

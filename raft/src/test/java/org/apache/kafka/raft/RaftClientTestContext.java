@@ -55,6 +55,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
