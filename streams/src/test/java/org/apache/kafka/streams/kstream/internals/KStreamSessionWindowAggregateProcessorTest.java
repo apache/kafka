@@ -87,7 +87,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Processor<String, String, Windowed<String>, Change<Long>> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
-    private Metrics metrics;
+    private final Metrics metrics = new Metrics();
 
     @Before
     public void setup() {
