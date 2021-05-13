@@ -1442,11 +1442,11 @@ class Log(@volatile private var _dir: File,
       while (segmentOpt.isDefined) {
         val segment = segmentOpt.get
         val nextSegmentOpt = segmentsIterator.nextOption()
-        val (nextSegment, upperBoundOffset, isLastSegmentAndEmpty) =
+        val (upperBoundOffset, isLastSegmentAndEmpty) =
           nextSegmentOpt.map {
-            entry => (entry, entry.baseOffset, false)
+            nextSegment => (nextSegment.baseOffset, false)
           }.getOrElse {
-            (null, logEndOffset, segment.size == 0)
+            (logEndOffset, segment.size == 0)
           }
 
         if (highWatermark >= upperBoundOffset && predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
