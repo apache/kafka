@@ -800,16 +800,40 @@ public class ReplicationControlManager {
         boolean uncleanOk = electionTypeIsUnclean(request.electionType());
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ElectLeadersResponseData response = new ElectLeadersResponseData();
-        for (TopicPartitions topic : request.topicPartitions()) {
-            ReplicaElectionResult topicResults =
-                new ReplicaElectionResult().setTopic(topic.topic());
-            response.replicaElectionResults().add(topicResults);
-            for (int partitionId : topic.partitions()) {
-                ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
-                topicResults.partitionResult().add(new PartitionResult().
-                    setPartitionId(partitionId).
-                    setErrorCode(error.error().code()).
-                    setErrorMessage(error.message()));
+        if (request.topicPartitions() == null) {
+            // If topicPartitions is null, we try to elect a new leader for every partition.  There
+            // are some obvious issues with this wire protocol.  For example, what if we have too
+            // many partitions to fit the results in a single RPC?  This behavior should probably be
+            // removed from the protocol.  For now, however, we have to implement this for
+            // compatibility with the old controller.
+            for (Entry<String, Uuid> topicEntry : topicsByName.entrySet()) {
+                String topicName = topicEntry.getKey();
+                ReplicaElectionResult topicResults =
+                    new ReplicaElectionResult().setTopic(topicName);
+                response.replicaElectionResults().add(topicResults);
+                TopicControlInfo topic = topics.get(topicEntry.getValue());
+                if (topic != null) {
+                    for (int partitionId : topic.parts.keySet()) {
+                        ApiError error = electLeader(topicName, partitionId, uncleanOk, records);
+                        topicResults.partitionResult().add(new PartitionResult().
+                            setPartitionId(partitionId).
+                            setErrorCode(error.error().code()).
+                            setErrorMessage(error.message()));
+                    }
+                }
+            }
+        } else {
+            for (TopicPartitions topic : request.topicPartitions()) {
+                ReplicaElectionResult topicResults =
+                    new ReplicaElectionResult().setTopic(topic.topic());
+                response.replicaElectionResults().add(topicResults);
+                for (int partitionId : topic.partitions()) {
+                    ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
+                    topicResults.partitionResult().add(new PartitionResult().
+                        setPartitionId(partitionId).
+                        setErrorCode(error.error().code()).
+                        setErrorMessage(error.message()));
+                }
             }
         }
         return ControllerResult.of(records, response);
