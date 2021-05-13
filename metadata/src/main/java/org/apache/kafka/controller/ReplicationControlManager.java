@@ -280,6 +280,11 @@ public class ReplicationControlManager {
     private final int defaultNumPartitions;
 
     /**
+     * A count of the total number of partitions in the cluster.
+     */
+    private int globalPartitionCount;
+
+    /**
      * A reference to the controller's configuration control manager.
      */
     private final ConfigurationControlManager configurationControl;
@@ -288,6 +293,11 @@ public class ReplicationControlManager {
      * A reference to the controller's cluster control manager.
      */
     private final ClusterControlManager clusterControl;
+
+    /**
+     * A reference to the controller's metrics registry.
+     */
+    private final ControllerMetrics controllerMetrics;
 
     /**
      * Maps topic names to topic UUIDs.
@@ -309,13 +319,16 @@ public class ReplicationControlManager {
                               short defaultReplicationFactor,
                               int defaultNumPartitions,
                               ConfigurationControlManager configurationControl,
-                              ClusterControlManager clusterControl) {
+                              ClusterControlManager clusterControl,
+                              ControllerMetrics controllerMetrics) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.configurationControl = configurationControl;
+        this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
+        this.globalPartitionCount = 0;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
@@ -325,6 +338,7 @@ public class ReplicationControlManager {
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(),
             new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
+        controllerMetrics.setGlobalTopicsCount(topics.size());
         log.info("Created topic {} with topic ID {}.", record.name(), record.topicId());
     }
 
@@ -343,6 +357,8 @@ public class ReplicationControlManager {
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
+            globalPartitionCount++;
+            controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         } else if (!newPartInfo.equals(prevPartInfo)) {
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
@@ -389,9 +405,11 @@ public class ReplicationControlManager {
             for (int i = 0; i < partition.isr.length; i++) {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
+            globalPartitionCount--;
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
-
+        controllerMetrics.setGlobalTopicsCount(topics.size());
+        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 

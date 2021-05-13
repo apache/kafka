@@ -88,6 +88,7 @@ public class ReplicationControlManagerTest {
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
             new SimpleReplicaPlacementPolicy(random));
+        final ControllerMetrics metrics = new MockControllerMetrics();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap());
         final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
@@ -95,7 +96,8 @@ public class ReplicationControlManagerTest {
             (short) 3,
             1,
             configurationControl,
-            clusterControl);
+            clusterControl,
+            metrics);
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
             ControllerTestUtils.replayAll(clusterControl, records);
@@ -201,6 +203,53 @@ public class ReplicationControlManagerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testGlobalTopicAndPartitionMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+
+        registerBroker(0, ctx);
+        unfenceBroker(0, ctx);
+        registerBroker(1, ctx);
+        unfenceBroker(1, ctx);
+        registerBroker(2, ctx);
+        unfenceBroker(2, ctx);
+
+        List<Uuid> topicsToDelete = new ArrayList<>();
+
+        ControllerResult<CreateTopicsResponseData> result =
+            replicationControl.createTopics(request);
+        topicsToDelete.add(result.response().topics().find("foo").topicId());
+
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+
+        request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("bar").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+        request.topics().add(new CreatableTopic().setName("baz").
+            setNumPartitions(2).setReplicationFactor((short) -1));
+        result = replicationControl.createTopics(request);
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(3, ctx.metrics.globalTopicsCount());
+        assertEquals(4, ctx.metrics.globalPartitionCount());
+
+        topicsToDelete.add(result.response().topics().find("baz").topicId());
+        ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+        assertEquals(1, ctx.metrics.globalPartitionCount());
+
+        Uuid topicToDelete = result.response().topics().find("bar").topicId();
+        deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(0, ctx.metrics.globalTopicsCount());
+        assertEquals(0, ctx.metrics.globalPartitionCount());
     }
 
     @Test
