@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -206,6 +206,53 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testGlobalTopicAndPartitionMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+
+        registerBroker(0, ctx);
+        unfenceBroker(0, ctx);
+        registerBroker(1, ctx);
+        unfenceBroker(1, ctx);
+        registerBroker(2, ctx);
+        unfenceBroker(2, ctx);
+
+        List<Uuid> topicsToDelete = new ArrayList<>();
+
+        ControllerResult<CreateTopicsResponseData> result =
+            replicationControl.createTopics(request);
+        topicsToDelete.add(result.response().topics().find("foo").topicId());
+
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+
+        request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("bar").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+        request.topics().add(new CreatableTopic().setName("baz").
+            setNumPartitions(2).setReplicationFactor((short) -1));
+        result = replicationControl.createTopics(request);
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(3, ctx.metrics.globalTopicsCount());
+        assertEquals(4, ctx.metrics.globalPartitionCount());
+
+        topicsToDelete.add(result.response().topics().find("baz").topicId());
+        ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+        assertEquals(1, ctx.metrics.globalPartitionCount());
+
+        Uuid topicToDelete = result.response().topics().find("bar").topicId();
+        deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(0, ctx.metrics.globalTopicsCount());
+        assertEquals(0, ctx.metrics.globalPartitionCount());
+    }
+
+    @Test
     public void testOfflinePartitionAndReplicaImbalanceMetrics() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
@@ -271,7 +318,6 @@ public class ReplicationControlManagerTest {
 
         assertEquals(0, ctx.metrics.offlinePartitionCount());
     }
-
 
     @Test
     public void testValidateNewTopicNames() {

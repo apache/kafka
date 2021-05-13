@@ -17,7 +17,7 @@
 
 package org.apache.kafka.metalog;
 
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 

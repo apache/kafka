@@ -18,7 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemotePartitionDeleteMetadataRecord;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
