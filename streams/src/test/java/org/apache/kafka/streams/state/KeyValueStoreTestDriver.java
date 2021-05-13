@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -141,7 +141,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Create a driver object that will have a {@link #context()} that records messages
-     * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides default serializers and
+     * {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) forwarded} by the store and that provides default serializers and
      * deserializers for the given built-in key and value types (e.g., {@code String.class}, {@code Integer.class},
      * {@code Long.class}, and {@code byte[].class}). This can be used when store is created to rely upon the
      * ProcessorContext's default key and value serializers and deserializers.
@@ -159,7 +159,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Create a driver object that will have a {@link #context()} that records messages
-     * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides the specified serializers and
+     * {@link ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record) forwarded} by the store and that provides the specified serializers and
      * deserializers. This can be used when store is created to rely upon the ProcessorContext's default key and value serializers
      * and deserializers.
      *
@@ -184,9 +184,10 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
-    private final InternalMockProcessorContext context;
+    private final InternalMockProcessorContext<?, ?> context;
     private final StateSerdes<K, V> stateSerdes;
 
+    @SuppressWarnings("unchecked")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");

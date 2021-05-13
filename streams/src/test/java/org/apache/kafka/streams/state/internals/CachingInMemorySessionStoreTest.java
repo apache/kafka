@@ -78,7 +78,7 @@ public class CachingInMemorySessionStoreTest {
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
     private SessionStore<Bytes, byte[]> underlyingStore;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
 
@@ -87,7 +87,7 @@ public class CachingInMemorySessionStoreTest {
         underlyingStore = new InMemorySessionStore("store-name", Long.MAX_VALUE, "metric-scope");
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
         cachingStore.init((StateStoreContext) context, cachingStore);
     }
@@ -223,7 +223,7 @@ public class CachingInMemorySessionStoreTest {
         EasyMock.replay(underlyingStore);
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = EasyMock.niceMock(ThreadCache.class);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         cachingStore.init((StateStoreContext) context, cachingStore);
     }
@@ -674,7 +674,8 @@ public class CachingInMemorySessionStoreTest {
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class)) {
-            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();

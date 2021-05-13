@@ -23,21 +23,21 @@ import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
  * Utility base class containing the common fields between
  * a Stream-Stream join and a Table-Table join
  */
-abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
+abstract class BaseJoinProcessorNode<K, V, V1, VOut> extends GraphNode {
 
-    private final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters;
-    private final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters;
-    private final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters;
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner;
+    private final ProcessorParameters<K, V, ?, ?> joinThisProcessorParameters;
+    private final ProcessorParameters<K, V1, ?, ?> joinOtherProcessorParameters;
+    private final ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParameters;
+    private final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner;
     private final String thisJoinSideNodeName;
     private final String otherJoinSideNodeName;
 
 
     BaseJoinProcessorNode(final String nodeName,
-                          final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
-                          final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
-                          final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters,
-                          final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
+                          final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner,
+                          final ProcessorParameters<K, V, ?, ?> joinThisProcessorParameters,
+                          final ProcessorParameters<K, V1, ?, ?> joinOtherProcessorParameters,
+                          final ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParameters,
                           final String thisJoinSideNodeName,
                           final String otherJoinSideNodeName) {
 
@@ -51,19 +51,19 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
         this.otherJoinSideNodeName = otherJoinSideNodeName;
     }
 
-    ProcessorParameters<K, V1, ?, ?> thisProcessorParameters() {
+    ProcessorParameters<K, V, ?, ?> thisProcessorParameters() {
         return joinThisProcessorParameters;
     }
 
-    ProcessorParameters<K, V2, ?, ?> otherProcessorParameters() {
+    ProcessorParameters<K, V1, ?, ?> otherProcessorParameters() {
         return joinOtherProcessorParameters;
     }
 
-    ProcessorParameters<K, VR, ?, ?> mergeProcessorParameters() {
+    ProcessorParameters<K, VOut, ?, ?> mergeProcessorParameters() {
         return joinMergeProcessorParameters;
     }
 
-    ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner() {
+    ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner() {
         return valueJoiner;
     }
 

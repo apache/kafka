@@ -59,7 +59,7 @@ public class RocksDBTimeOrderedWindowStoreTest {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
             Serdes.Integer(),

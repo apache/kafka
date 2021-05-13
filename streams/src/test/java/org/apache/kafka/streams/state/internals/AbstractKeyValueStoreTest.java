@@ -53,14 +53,14 @@ public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
 
-    protected InternalMockProcessorContext context;
+    protected InternalMockProcessorContext<?, ?> context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        context = (InternalMockProcessorContext) driver.context();
+        context = (InternalMockProcessorContext<?, ?>) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context);
     }

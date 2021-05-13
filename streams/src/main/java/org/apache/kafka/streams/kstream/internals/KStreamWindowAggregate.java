@@ -23,9 +23,11 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -39,7 +41,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggregateProcessorSupplier<K, V, Windowed<K>, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
@@ -60,7 +62,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, V, Windowed<K>, Change<Agg>> get() {
         return new KStreamWindowAggregateProcessor();
     }
 
@@ -74,20 +76,20 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
 
-    private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamWindowAggregateProcessor extends
+        ContextualProcessor<K, V, Windowed<K>, Change<Agg>> {
         private TimestampedWindowStore<K, Agg> windowStore;
-        private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
+        private TupleChangeForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
+            final InternalProcessorContext<Windowed<K>, Change<Agg>> internalProcessorContext =
+                (InternalProcessorContext<Windowed<K>, Change<Agg>>) context;
             metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
@@ -97,27 +99,30 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 metrics
             );
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
-            tupleForwarder = new TimestampedTupleForwarder<>(
+            windowStore = context.getStateStore(storeName);
+            tupleForwarder = new TupleChangeForwarder<>(
                 windowStore,
                 context,
-                new TimestampedCacheFlushListener<>(context),
+                new TupleChangeCacheFlushListener<>(context),
                 sendOldValues);
         }
 
         @Override
-        public void process(final K key, final V value) {
-            if (key == null) {
+        public void process(final Record<K, V> record) {
+            if (record.key() == null) {
                 log.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
+                    record.value(),
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;
             }
 
             // first get the matching windows
-            final long timestamp = context().timestamp();
+            final long timestamp = record.timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
@@ -128,7 +133,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 final Long windowStart = entry.getKey();
                 final long windowEnd = entry.getValue().end();
                 if (windowEnd > closeTime) {
-                    final ValueAndTimestamp<Agg> oldAggAndTimestamp = windowStore.fetch(key, windowStart);
+                    final ValueAndTimestamp<Agg> oldAggAndTimestamp = windowStore.fetch(record.key(), windowStart);
                     Agg oldAgg = getValueOrNull(oldAggAndTimestamp);
 
                     final Agg newAgg;
@@ -136,17 +141,17 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
                     if (oldAgg == null) {
                         oldAgg = initializer.apply();
-                        newTimestamp = context().timestamp();
+                        newTimestamp = record.timestamp();
                     } else {
-                        newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                        newTimestamp = Math.max(record.timestamp(), oldAggAndTimestamp.timestamp());
                     }
 
-                    newAgg = aggregator.apply(key, value, oldAgg);
+                    newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(key, ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
+                    windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
                     tupleForwarder.maybeForward(
-                        new Windowed<>(key, entry.getValue()),
+                        record.withKey(new Windowed<>(record.key(), entry.getValue())),
                         newAgg,
                         sendOldValues ? oldAgg : null,
                         newTimestamp);
@@ -161,11 +166,11 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                             "window=[{},{}) " +
                             "expiration=[{}] " +
                             "streamTime=[{}]",
-                        key,
-                        context().topic(),
-                        context().partition(),
-                        context().offset(),
-                        context().timestamp(),
+                        record.key(),
+                        context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                        context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                        context().recordMetadata().map(RecordMetadata::offset).orElse(-1L),
+                        record.timestamp(),
                         windowStart, windowEnd,
                         closeTime,
                         observedStreamTime
@@ -195,10 +200,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
         private TimestampedWindowStore<K, Agg> windowStore;
 
-        @SuppressWarnings("unchecked")
+
         @Override
-        public void init(final ProcessorContext context) {
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
+            windowStore = context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")

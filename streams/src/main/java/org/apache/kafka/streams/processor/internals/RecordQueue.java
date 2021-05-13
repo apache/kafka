@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 
@@ -39,9 +39,9 @@ public class RecordQueue {
     public static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
 
     private final Logger log;
-    private final SourceNode<?, ?, ?, ?> source;
+    private final SourceNode<?, ?> source;
     private final TopicPartition partition;
-    private final ProcessorContext processorContext;
+    private final ProcessorContext<?, ?> processorContext;
     private final TimestampExtractor timestampExtractor;
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
@@ -52,10 +52,10 @@ public class RecordQueue {
     private final Sensor droppedRecordsSensor;
 
     RecordQueue(final TopicPartition partition,
-                final SourceNode<?, ?, ?, ?> source,
+                final SourceNode<?, ?> source,
                 final TimestampExtractor timestampExtractor,
                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                final InternalProcessorContext processorContext,
+                final InternalProcessorContext<?, ?> processorContext,
                 final LogContext logContext) {
         this.source = source;
         this.partition = partition;
@@ -85,7 +85,7 @@ public class RecordQueue {
      *
      * @return SourceNode
      */
-    public SourceNode<?, ?, ?, ?> source() {
+    public SourceNode<?, ?> source() {
         return source;
     }
 

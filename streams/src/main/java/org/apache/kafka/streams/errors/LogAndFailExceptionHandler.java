@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +32,7 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
     private static final Logger log = LoggerFactory.getLogger(LogAndFailExceptionHandler.class);
 
     @Override
-    public DeserializationHandlerResponse handle(final ProcessorContext context,
+    public DeserializationHandlerResponse handle(final ProcessorContext<?, ?> context,
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
 

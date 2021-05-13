@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -68,7 +68,7 @@ public class KTableSourceTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<String, Integer> supplier = new MockOldProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -208,12 +208,12 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
 
@@ -265,12 +265,12 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
@@ -318,12 +318,12 @@ public class KTableSourceTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
         table1.enableSendingOldValues(true);

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -30,11 +34,6 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
 
 /*
  * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
@@ -144,7 +143,7 @@ public abstract class AbstractStream<K, V> {
         };
     }
 
-    static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> toValueJoinerWithKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
+    static <K, V, V1, VOut> ValueJoinerWithKey<K, V, V1, VOut> toValueJoinerWithKey(final ValueJoiner<V, V1, VOut> valueJoiner) {
         Objects.requireNonNull(valueJoiner, "joiner can't be null");
         return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
     }

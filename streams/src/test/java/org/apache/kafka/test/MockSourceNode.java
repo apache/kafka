@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.internals.SourceNode;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, KOut, VOut> {
+public class MockSourceNode<KIn, VIn> extends SourceNode<KIn, VIn> {
 
     private static final String NAME = "MOCK-SOURCE-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
@@ -47,7 +47,7 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     }
 
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KIn, VIn> context) {
         super.init(context);
         initialized = true;
     }

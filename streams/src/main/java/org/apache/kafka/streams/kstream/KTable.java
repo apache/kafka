@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import java.util.function.Function;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -29,8 +30,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-
-import java.util.function.Function;
 
 /**
  * {@code KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
@@ -341,10 +340,10 @@ public interface KTable<K, V> {
      * delete the corresponding record in the result {@code KTable}.
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
+    <VOut> KTable<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -372,11 +371,11 @@ public interface KTable<K, V> {
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                 final Named named);
+    <VOut> KTable<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper,
+                                     final Named named);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -405,10 +404,11 @@ public interface KTable<K, V> {
      * delete the corresponding record in the result {@code KTable}.
      *
      * @param mapper a {@link ValueMapperWithKey} that computes a new output value
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper);
+    <VOut> KTable<K, VOut> mapValues(
+        final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -438,11 +438,12 @@ public interface KTable<K, V> {
      *
      * @param mapper a {@link ValueMapperWithKey} that computes a new output value
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                 final Named named);
+    <VOut> KTable<K, VOut> mapValues(
+        final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper,
+        final Named named);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -483,12 +484,12 @@ public interface KTable<K, V> {
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper,
+                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -530,13 +531,13 @@ public interface KTable<K, V> {
      * @param named  a {@link Named} config used to name the processor in the topology
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                 final Named named,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper,
+                                     final Named named,
+                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -578,12 +579,13 @@ public interface KTable<K, V> {
      * @param mapper a {@link ValueMapperWithKey} that computes a new output value
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> mapValues(
+        final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -626,13 +628,14 @@ public interface KTable<K, V> {
      * @param named  a {@link Named} config used to name the processor in the topology
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                 final Named named,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> mapValues(
+        final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper,
+        final Named named,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Convert this changelog stream to a {@link KStream}.
@@ -678,10 +681,11 @@ public interface KTable<K, V> {
      * each record of this changelog stream is no longer treated as an updated record (cf. {@link KStream} vs {@code KTable}).
      *
      * @param mapper a {@link KeyValueMapper} that computes a new key for each record
-     * @param <KR> the new key type of the result stream
+     * @param <KOut> the new key type of the result stream
      * @return a {@link KStream} that contains the same records as this {@code KTable}
      */
-    <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
+    <KOut> KStream<KOut, V> toStream(
+        final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper);
 
     /**
      * Convert this changelog stream to a {@link KStream} using the given {@link KeyValueMapper} to select the new key.
@@ -706,11 +710,12 @@ public interface KTable<K, V> {
      *
      * @param mapper a {@link KeyValueMapper} that computes a new key for each record
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <KR> the new key type of the result stream
+     * @param <KOut> the new key type of the result stream
      * @return a {@link KStream} that contains the same records as this {@code KTable}
      */
-    <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
-                                 final Named named);
+    <KOut> KStream<KOut, V> toStream(
+        final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper,
+        final Named named);
 
     /**
      * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
@@ -787,13 +792,14 @@ public interface KTable<K, V> {
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
      * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <VR>                the value type of the result table
+     * @param <VOut>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                       final String... stateStoreNames);
+    <VOut> KTable<K, VOut> transformValues(
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+        final String... stateStoreNames);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -861,14 +867,15 @@ public interface KTable<K, V> {
      *                            Transformers do not need to be thread-safe.
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <VR>                the value type of the result table
+     * @param <VOut>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                       final Named named,
-                                       final String... stateStoreNames);
+    <VOut> KTable<K, VOut> transformValues(
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+        final Named named,
+        final String... stateStoreNames);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -940,14 +947,15 @@ public interface KTable<K, V> {
      *                            resulting table should be materialized.
      *                            Cannot be {@code null}
      * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <VR>                the value type of the result table
+     * @param <VOut>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                       final String... stateStoreNames);
+    <VOut> KTable<K, VOut> transformValues(
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized,
+        final String... stateStoreNames);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -1020,15 +1028,16 @@ public interface KTable<K, V> {
      *                            Cannot be {@code null}
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <VR>                the value type of the result table
+     * @param <VOut>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                       final Named named,
-                                       final String... stateStoreNames);
+    <VOut> KTable<K, VOut> transformValues(
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized,
+        final Named named,
+        final String... stateStoreNames);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper} and default serializers
@@ -1056,11 +1065,12 @@ public interface KTable<K, V> {
      * instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
-     * @param <KR>     the key type of the result {@link KGroupedTable}
-     * @param <VR>     the value type of the result {@link KGroupedTable}
+     * @param <KOut>     the key type of the result {@link KGroupedTable}
+     * @param <VOut>     the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
      */
-    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector);
+    <KOut, VOut> KGroupedTable<KOut, VOut> groupBy(
+        final KeyValueMapper<? super K, ? super V, KeyValue<KOut, VOut>> selector);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
@@ -1088,12 +1098,13 @@ public interface KTable<K, V> {
      * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
      * @param grouped       the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
      *                      and the name for a repartition topic if repartitioning is required.
-     * @param <KR>          the key type of the result {@link KGroupedTable}
-     * @param <VR>          the value type of the result {@link KGroupedTable}
+     * @param <KOut>          the key type of the result {@link KGroupedTable}
+     * @param <VOut>          the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
      */
-    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
-                                           final Grouped<KR, VR> grouped);
+    <KOut, VOut> KGroupedTable<KOut, VOut> groupBy(
+        final KeyValueMapper<? super K, ? super V, KeyValue<KOut, VOut>> selector,
+        final Grouped<KOut, VOut> grouped);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
@@ -1160,15 +1171,15 @@ public interface KTable<K, V> {
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner)
      * @see #outerJoin(KTable, ValueJoiner)
      */
-    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
+    <V1, VOut> KTable<K, VOut> join(final KTable<K, V1> other,
+                                    final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
@@ -1236,16 +1247,16 @@ public interface KTable<K, V> {
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner)
      * @see #outerJoin(KTable, ValueJoiner)
      */
-    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Named named);
+    <V1, VOut> KTable<K, VOut> join(final KTable<K, V1> other,
+                                    final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                    final Named named);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
@@ -1315,16 +1326,16 @@ public interface KTable<K, V> {
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner, Materialized)
      * @see #outerJoin(KTable, ValueJoiner, Materialized)
      */
-    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <V1, VOut> KTable<K, VOut> join(final KTable<K, V1> other,
+                                    final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                    final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
@@ -1395,17 +1406,17 @@ public interface KTable<K, V> {
      * @param named         a {@link Named} config used to name the processor in the topology
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner, Materialized)
      * @see #outerJoin(KTable, ValueJoiner, Materialized)
      */
-    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Named named,
-                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <V1, VOut> KTable<K, VOut> join(final KTable<K, V1> other,
+                                    final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                    final Named named,
+                                    final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1478,16 +1489,16 @@ public interface KTable<K, V> {
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
      * @see #join(KTable, ValueJoiner)
      * @see #outerJoin(KTable, ValueJoiner)
      */
-    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                    final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
+    <V1, VOut> KTable<K, VOut> leftJoin(final KTable<K, V1> other,
+                                        final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1561,651 +1572,673 @@ public interface KTable<K, V> {
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
      * @see #join(KTable, ValueJoiner)
      * @see #outerJoin(KTable, ValueJoiner)
      */
-    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                    final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Named named);
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
-     * an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
-     * right {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code rightValue =
-     * null} to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
-     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
-     * deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other         the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
-     *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * left {@code KTable}
-     * @see #join(KTable, ValueJoiner, Materialized)
-     * @see #outerJoin(KTable, ValueJoiner, Materialized)
-     */
-    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                    final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
-     * an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
-     * right {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code rightValue =
-     * null} to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
-     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
-     * deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other         the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named         a {@link Named} config used to name the processor in the topology
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
-     *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * left {@code KTable}
-     * @see #join(KTable, ValueJoiner, Materialized)
-     * @see #outerJoin(KTable, ValueJoiner, Materialized)
-     */
-    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                    final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Named named,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join, with default serializers, deserializers, and state store.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
-     * all records from both input {@code KTable}s will produce an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record that does not find a corresponding record in the corresponding other
-     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
-     * corresponding other value to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other  the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KTable}s
-     * @see #join(KTable, ValueJoiner)
-     * @see #leftJoin(KTable, ValueJoiner)
-     */
-    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
-
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join, with default serializers, deserializers, and state store.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
-     * all records from both input {@code KTable}s will produce an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record that does not find a corresponding record in the corresponding other
-     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
-     * corresponding other value to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other  the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VO>   the value type of the other {@code KTable}
-     * @param <VR>   the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KTable}s
-     * @see #join(KTable, ValueJoiner)
-     * @see #leftJoin(KTable, ValueJoiner)
-     */
-    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Named named);
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
-     * all records from both input {@code KTable}s will produce an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record that does not find a corresponding record in the corresponding other
-     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
-     * corresponding other value to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other         the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
-     *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KTable}s
-     * @see #join(KTable, ValueJoiner)
-     * @see #leftJoin(KTable, ValueJoiner)
-     */
-    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-
-    /**
-     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
-     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
-     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
-     * all records from both input {@code KTable}s will produce an output record (cf. below).
-     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
-     * of the join.
-     * <p>
-     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
-     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
-     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
-     * {@code KTable} the result gets updated.
-     * <p>
-     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * Additionally, for each record that does not find a corresponding record in the corresponding other
-     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
-     * corresponding other value to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * <p>
-     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
-     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
-     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
-     * <p>
-     * Input records with {@code null} key will be dropped and no join computation is performed.
-     * <p>
-     * Example:
-     * <table border='1'>
-     * <tr>
-     * <th>thisKTable</th>
-     * <th>thisState</th>
-     * <th>otherKTable</th>
-     * <th>otherState</th>
-     * <th>result updated record</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K1:A&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:b&gt;</td>
-     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:null&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     *
-     * @param other         the other {@code KTable} to be joined with this {@code KTable}
-     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named         a {@link Named} config used to name the processor in the topology
-     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
-     *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
-     * @return a {@code KTable} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KTable}s
-     * @see #join(KTable, ValueJoiner)
-     * @see #leftJoin(KTable, ValueJoiner)
-     */
-    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Named named,
-                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains the result of joining this table with {@code other}
-     */
-    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final Function<V, KO> foreignKeyExtractor,
-                                    final ValueJoiner<V, VO, VR> joiner);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains the result of joining this table with {@code other}
-     */
-    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final Function<V, KO> foreignKeyExtractor,
-                                    final ValueJoiner<V, VO, VR> joiner,
-                                    final Named named);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                            should be materialized. Cannot be {@code null}
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains the result of joining this table with {@code other}
-     */
-    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final Function<V, KO> foreignKeyExtractor,
-                                    final ValueJoiner<V, VO, VR> joiner,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                            should be materialized. Cannot be {@code null}
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains the result of joining this table with {@code other}
-     */
-    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final Function<V, KO> foreignKeyExtractor,
-                                    final ValueJoiner<V, VO, VR> joiner,
-                                    final Named named,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains only those records that satisfy the given predicate
-     */
-    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final Function<V, KO> foreignKeyExtractor,
-                                        final ValueJoiner<V, VO, VR> joiner);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains the result of joining this table with {@code other}
-     */
-    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final Function<V, KO> foreignKeyExtractor,
-                                        final ValueJoiner<V, VO, VR> joiner,
+    <V1, VOut> KTable<K, VOut> leftJoin(final KTable<K, V1> other,
+                                        final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
                                         final Named named);
 
     /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
+     * an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
+     * right {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code rightValue =
+     * null} to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
+     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
+     * deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * left {@code KTable}
+     * @see #join(KTable, ValueJoiner, Materialized)
+     * @see #outerJoin(KTable, ValueJoiner, Materialized)
+     */
+    <V1, VOut> KTable<K, VOut> leftJoin(final KTable<K, V1> other,
+                                        final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
+     * an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
+     * right {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code rightValue =
+     * null} to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
+     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
+     * deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named         a {@link Named} config used to name the processor in the topology
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * left {@code KTable}
+     * @see #join(KTable, ValueJoiner, Materialized)
+     * @see #outerJoin(KTable, ValueJoiner, Materialized)
+     */
+    <V1, VOut> KTable<K, VOut> leftJoin(final KTable<K, V1> other,
+                                        final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                        final Named named,
+                                        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join, with default serializers, deserializers, and state store.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
+     * all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other  the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <V1, VOut> KTable<K, VOut> outerJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner);
+
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join, with default serializers, deserializers, and state store.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
+     * all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other  the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named  a {@link Named} config used to name the processor in the topology
+     * @param <V1>   the value type of the other {@code KTable}
+     * @param <VOut>   the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <V1, VOut> KTable<K, VOut> outerJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                         final Named named);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
+     * all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <V1, VOut> KTable<K, VOut> outerJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                         final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
+     * all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoiner} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result updated record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named         a {@link Named} config used to name the processor in the topology
+     * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
+     *                      Cannot be {@code null}
+     * @param <V1>          the value type of the other {@code KTable}
+     * @param <VOut>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <V1, VOut> KTable<K, VOut> outerJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends VOut> joiner,
+                                         final Named named,
+                                         final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner
+     * join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code
+     * foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}.
+     *                            Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's
+     *                            value (V). If the result is null, the update is ignored as
+     *                            invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of
+     *                            matching records
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>              the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <K1, V1, VOut> KTable<K, VOut> join(final KTable<K1, V1> other,
+                                        final Function<V, K1> foreignKeyExtractor,
+                                        final ValueJoiner<V, V1, VOut> joiner);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner
+     * join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code
+     * foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}.
+     *                            Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's
+     *                            value (V). If the result is null, the update is ignored as
+     *                            invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of
+     *                            matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>              the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <K1, V1, VOut> KTable<K, VOut> join(final KTable<K1, V1> other,
+                                        final Function<V, K1> foreignKeyExtractor,
+                                        final ValueJoiner<V, V1, VOut> joiner,
+                                        final Named named);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner
+     * join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code
+     * foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}.
+     *                            Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's
+     *                            value (V). If the result is null, the update is ignored as
+     *                            invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of
+     *                            matching records
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore}
+     *                            for the resulting {@code KTable} should be materialized. Cannot be
+     *                            {@code null}
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>              the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <K1, V1, VOut> KTable<K, VOut> join(final KTable<K1, V1> other,
+                                        final Function<V, K1> foreignKeyExtractor,
+                                        final ValueJoiner<V, V1, VOut> joiner,
+                                        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner
+     * join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code
+     * foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}.
+     *                            Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's
+     *                            value (V). If the result is null, the update is ignored as
+     *                            invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of
+     *                            matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore}
+     *                            for the resulting {@code KTable} should be materialized. Cannot be
+     *                            {@code null}
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>              the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <K1, V1, VOut> KTable<K, VOut> join(final KTable<K1, V1> other,
+                                        final Function<V, K1> foreignKeyExtractor,
+                                        final ValueJoiner<V, V1, VOut> joiner,
+                                        final Named named,
+                                        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>                the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains only those records that satisfy the given predicate
+     */
+    <K1, V1, VOut> KTable<K, VOut> leftJoin(final KTable<K1, V1> other,
+                                            final Function<V, K1> foreignKeyExtractor,
+                                            final ValueJoiner<V, V1, VOut> joiner);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @param <VOut>                the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <KO, VO, VOut> KTable<K, VOut> leftJoin(final KTable<KO, VO> other,
+                                            final Function<V, KO> foreignKeyExtractor,
+                                            final ValueJoiner<V, VO, VOut> joiner,
+                                            final Named named);
+
+    /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
@@ -2216,15 +2249,15 @@ public interface KTable<K, V> {
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>                the value type of the result {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      */
-    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final Function<V, KO> foreignKeyExtractor,
-                                        final ValueJoiner<V, VO, VR> joiner,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <K1, V1, VOut> KTable<K, VOut> leftJoin(final KTable<K1, V1> other,
+                                            final Function<V, K1> foreignKeyExtractor,
+                                            final ValueJoiner<V, V1, VOut> joiner,
+                                            final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
@@ -2238,16 +2271,16 @@ public interface KTable<K, V> {
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
+     * @param <K1>                the key type of the other {@code KTable}
+     * @param <V1>                the value type of the other {@code KTable}
+     * @param <VOut>                the value type of the result {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      */
-    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final Function<V, KO> foreignKeyExtractor,
-                                        final ValueJoiner<V, VO, VR> joiner,
-                                        final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <K1, V1, VOut> KTable<K, VOut> leftJoin(final KTable<K1, V1> other,
+                                            final Function<V, K1> foreignKeyExtractor,
+                                            final ValueJoiner<V, V1, VOut> joiner,
+                                            final Named named,
+                                            final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Get the name of the local state store used that can be used to query this {@code KTable}.

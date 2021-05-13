@@ -69,7 +69,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
-            final SourceNode<?, ?, ?, ?> source = topology.source(sourceTopic);
+            final SourceNode<?, ?> source = topology.source(sourceTopic);
             deserializers.put(
                 sourceTopic,
                 new RecordDeserializer(
@@ -111,7 +111,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 processorContext.timestamp(),
                 processorContext.headers()
             );
-            ((SourceNode<Object, Object, Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(toProcess);
+            ((SourceNode<Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(toProcess);
         }
 
         offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
@@ -138,6 +138,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void initTopology() {
         for (final ProcessorNode<?, ?, ?, ?> node : this.topology.processors()) {
             processorContext.setCurrentNode(node);

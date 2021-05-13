@@ -22,7 +22,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;
 
 import java.util.Optional;
@@ -31,11 +31,11 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXC
 
 class RecordDeserializer {
     private final Logger log;
-    private final SourceNode<?, ?, ?, ?> sourceNode;
+    private final SourceNode<?, ?> sourceNode;
     private final Sensor droppedRecordsSensor;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    RecordDeserializer(final SourceNode<?, ?, ?, ?> sourceNode,
+    RecordDeserializer(final SourceNode<?, ?> sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
                        final Sensor droppedRecordsSensor) {
@@ -100,7 +100,7 @@ class RecordDeserializer {
         }
     }
 
-    SourceNode<?, ?, ?, ?> sourceNode() {
+    SourceNode<?, ?> sourceNode() {
         return sourceNode;
     }
 }

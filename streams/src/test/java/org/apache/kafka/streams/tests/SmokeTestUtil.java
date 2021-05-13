@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
@@ -24,11 +25,8 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-
-import java.time.Instant;
 
 public class SmokeTestUtil {
 
@@ -39,54 +37,50 @@ public class SmokeTestUtil {
     }
 
     static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
-        return new ProcessorSupplier<Object, Object>() {
+        return () -> new AbstractProcessor<Object, Object>() {
+            private int numRecordsProcessed = 0;
+            private long smallestOffset = Long.MAX_VALUE;
+            private long largestOffset = Long.MIN_VALUE;
+
             @Override
-            public Processor<Object, Object> get() {
-                return new AbstractProcessor<Object, Object>() {
-                    private int numRecordsProcessed = 0;
-                    private long smallestOffset = Long.MAX_VALUE;
-                    private long largestOffset = Long.MIN_VALUE;
+            public void init(final ProcessorContext context) {
+                super.init(context);
+                System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
+                System.out.flush();
+                numRecordsProcessed = 0;
+                smallestOffset = Long.MAX_VALUE;
+                largestOffset = Long.MIN_VALUE;
+            }
 
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        super.init(context);
-                        System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
-                        System.out.flush();
-                        numRecordsProcessed = 0;
-                        smallestOffset = Long.MAX_VALUE;
-                        largestOffset = Long.MIN_VALUE;
-                    }
+            @Override
+            public void process(final Object key, final Object value) {
+                numRecordsProcessed++;
+                if (numRecordsProcessed % 100 == 0) {
+                    System.out.printf("%s: %s%n", name, Instant.now());
+                    System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
+                }
 
-                    @Override
-                    public void process(final Object key, final Object value) {
-                        numRecordsProcessed++;
-                        if (numRecordsProcessed % 100 == 0) {
-                            System.out.printf("%s: %s%n", name, Instant.now());
-                            System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
-                        }
+                final long offset = context().offset();
+                if (smallestOffset > offset) {
+                    smallestOffset = offset;
+                }
+                if (largestOffset < offset) {
+                    largestOffset = offset;
+                }
+            }
 
-                        if (smallestOffset > context().offset()) {
-                            smallestOffset = context().offset();
-                        }
-                        if (largestOffset < context().offset()) {
-                            largestOffset = context().offset();
-                        }
-                    }
-
-                    @Override
-                    public void close() {
-                        System.out.printf("Close processor for task %s%n", context().taskId());
-                        System.out.println("processed " + numRecordsProcessed + " records");
-                        final long processed;
-                        if (largestOffset >= smallestOffset) {
-                            processed = 1L + largestOffset - smallestOffset;
-                        } else {
-                            processed = 0L;
-                        }
-                        System.out.println("offset " + smallestOffset + " to " + largestOffset + " -> processed " + processed);
-                        System.out.flush();
-                    }
-                };
+            @Override
+            public void close() {
+                System.out.printf("Close processor for task %s%n", context().taskId());
+                System.out.println("processed " + numRecordsProcessed + " records");
+                final long processed;
+                if (largestOffset >= smallestOffset) {
+                    processed = 1L + largestOffset - smallestOffset;
+                } else {
+                    processed = 0L;
+                }
+                System.out.println("offset " + smallestOffset + " to " + largestOffset + " -> processed " + processed);
+                System.out.flush();
             }
         };
     }

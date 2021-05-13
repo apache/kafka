@@ -16,17 +16,27 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -49,16 +59,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
-
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 @Category({IntegrationTest.class})
 public class StoreUpgradeIntegrationTest {
@@ -956,10 +956,9 @@ public class StoreUpgradeIntegrationTest {
     private static class KeyValueProcessor implements Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
@@ -980,15 +979,13 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedKeyValueProcessor extends AbstractProcessor<Integer, Integer> {
         private TimestampedKeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedKeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+            super.init(context);
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
@@ -1016,10 +1013,9 @@ public class StoreUpgradeIntegrationTest {
     private static class WindowedProcessor implements Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (WindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
@@ -1040,15 +1036,13 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedWindowedProcessor extends AbstractProcessor<Integer, Integer> {
         private TimestampedWindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedWindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+            super.init(context);
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
@@ -1060,10 +1054,10 @@ public class StoreUpgradeIntegrationTest {
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = context.timestamp();
+                newTimestamp = context().timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context().timestamp());
             }
 
             store.put(key, ValueAndTimestamp.make(newCount, newTimestamp), key < 10 ? 0L : 100000L);

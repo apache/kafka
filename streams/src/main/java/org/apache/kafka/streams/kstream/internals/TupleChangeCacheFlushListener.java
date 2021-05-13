@@ -16,36 +16,38 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.To;
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+class TupleChangeCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
 
-class TimestampedCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
-    private final InternalProcessorContext context;
+    private final InternalProcessorContext<K, Change<V>> context;
     private final ProcessorNode myNode;
 
-    TimestampedCacheFlushListener(final ProcessorContext context) {
-        this.context = (InternalProcessorContext) context;
+    TupleChangeCacheFlushListener(final ProcessorContext<K, Change<V>> context) {
+        this.context = (InternalProcessorContext<K, Change<V>>) context;
         myNode = this.context.currentNode();
     }
 
     @Override
     public void apply(final K key,
-                      final ValueAndTimestamp<V> newValue,
-                      final ValueAndTimestamp<V> oldValue,
-                      final long timestamp) {
+        final ValueAndTimestamp<V> newValue,
+        final ValueAndTimestamp<V> oldValue,
+        final long timestamp) {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(
+            final Record<K, Change<V>> record = new Record<>(
                 key,
                 new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
-                To.all().withTimestamp(newValue != null ? newValue.timestamp() : timestamp));
+                newValue != null ? newValue.timestamp() : timestamp);
+            context.forward(record);
         } finally {
             context.setCurrentNode(prev);
         }

@@ -35,28 +35,27 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTRE
 /**
  * Too much information to generalize, so Stream-Stream joins are represented by a specific node.
  */
-public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V2, VR> {
-    private static final Properties EMPTY_PROPERTIES = new Properties();
+public class StreamStreamJoinNode<K, V, V1, VOut> extends BaseJoinProcessorNode<K, V, V1, VOut> {
 
-    private final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
-    private final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
-    private final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-    private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
-    private final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
-    private final Joined<K, V1, V2> joined;
+    private final ProcessorParameters<K, V, ?, ?> thisWindowedStreamProcessorParameters;
+    private final ProcessorParameters<K, V1, ?, ?> otherWindowedStreamProcessorParameters;
+    private final StoreBuilder<WindowStore<K, V>> thisWindowStoreBuilder;
+    private final StoreBuilder<WindowStore<K, V1>> otherWindowStoreBuilder;
+    private final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V, V1>>>> outerJoinWindowStoreBuilder;
+    private final Joined<K, V, V1> joined;
 
 
     private StreamStreamJoinNode(final String nodeName,
-                                 final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
-                                 final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
-                                 final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters,
-                                 final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
-                                 final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters,
-                                 final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters,
-                                 final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
-                                 final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
-                                 final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder,
-                                 final Joined<K, V1, V2> joined) {
+                                 final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner,
+                                 final ProcessorParameters<K, V, ?, ?> joinThisProcessorParameters,
+                                 final ProcessorParameters<K, V1, ?, ?> joinOtherProcessParameters,
+                                 final ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParameters,
+                                 final ProcessorParameters<K, V, ?, ?> thisWindowedStreamProcessorParameters,
+                                 final ProcessorParameters<K, V1, ?, ?> otherWindowedStreamProcessorParameters,
+                                 final StoreBuilder<WindowStore<K, V>> thisWindowStoreBuilder,
+                                 final StoreBuilder<WindowStore<K, V1>> otherWindowStoreBuilder,
+                                 final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V, V1>>>> outerJoinWindowStoreBuilder,
+                                 final Joined<K, V, V1> joined) {
 
         super(nodeName,
               valueJoiner,
@@ -70,7 +69,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.otherWindowStoreBuilder = otherWindowStoreBuilder;
         this.joined = joined;
         this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
-        this.otherWindowedStreamProcessorParameters =  otherWindowedStreamProcessorParameters;
+        this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
         this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
     }
 
@@ -78,127 +77,144 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     @Override
     public String toString() {
         return "StreamStreamJoinNode{" +
-               "thisWindowedStreamProcessorParameters=" + thisWindowedStreamProcessorParameters +
-               ", otherWindowedStreamProcessorParameters=" + otherWindowedStreamProcessorParameters +
-               ", thisWindowStoreBuilder=" + thisWindowStoreBuilder +
-               ", otherWindowStoreBuilder=" + otherWindowStoreBuilder +
-               ", outerJoinWindowStoreBuilder=" + outerJoinWindowStoreBuilder +
-               ", joined=" + joined +
-               "} " + super.toString();
+            "thisWindowedStreamProcessorParameters=" + thisWindowedStreamProcessorParameters +
+            ", otherWindowedStreamProcessorParameters=" + otherWindowedStreamProcessorParameters +
+            ", thisWindowStoreBuilder=" + thisWindowStoreBuilder +
+            ", otherWindowStoreBuilder=" + otherWindowStoreBuilder +
+            ", outerJoinWindowStoreBuilder=" + outerJoinWindowStoreBuilder +
+            ", joined=" + joined +
+            "} " + super.toString();
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder,
+                                final Properties props) {
 
         final String thisProcessorName = thisProcessorParameters().processorName();
         final String otherProcessorName = otherProcessorParameters().processorName();
-        final String thisWindowedStreamProcessorName = thisWindowedStreamProcessorParameters.processorName();
-        final String otherWindowedStreamProcessorName = otherWindowedStreamProcessorParameters.processorName();
+        final String thisWindowedStreamProcessorName = thisWindowedStreamProcessorParameters
+            .processorName();
+        final String otherWindowedStreamProcessorName = otherWindowedStreamProcessorParameters
+            .processorName();
 
-        topologyBuilder.addProcessor(thisProcessorName, thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorName);
-        topologyBuilder.addProcessor(otherProcessorName, otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorName);
-        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorName, otherProcessorName);
-        topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
-        topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
+        topologyBuilder
+            .addProcessor(thisProcessorName, thisProcessorParameters().processorSupplier(),
+                thisWindowedStreamProcessorName);
+        topologyBuilder
+            .addProcessor(otherProcessorName, otherProcessorParameters().processorSupplier(),
+                otherWindowedStreamProcessorName);
+        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(),
+            mergeProcessorParameters().processorSupplier(), thisProcessorName, otherProcessorName);
+        topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName,
+            otherProcessorName);
+        topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName,
+            thisProcessorName);
 
-        if (props == null || StreamsConfig.InternalConfig.getBoolean(new HashMap(props), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
-            outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder.addStateStore(builder, thisProcessorName, otherProcessorName));
+        if (props == null || StreamsConfig.InternalConfig
+            .getBoolean(new HashMap(props), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                true)) {
+            outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder
+                .addStateStore(builder, thisProcessorName, otherProcessorName));
         }
     }
 
-    public static <K, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {
+    public static <K, V, V1, VOut> StreamStreamJoinNodeBuilder<K, V, V1, VOut> streamStreamJoinNodeBuilder() {
         return new StreamStreamJoinNodeBuilder<>();
     }
 
-    public static final class StreamStreamJoinNodeBuilder<K, V1, V2, VR> {
+    public static final class StreamStreamJoinNodeBuilder<K, V, V1, VOut> {
 
         private String nodeName;
-        private ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner;
-        private ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters;
-        private ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters;
-        private ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters;
-        private ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
-        private ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
-        private StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-        private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
-        private Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
-        private Joined<K, V1, V2> joined;
+        private ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner;
+        private ProcessorParameters<K, V, ?, ?> joinThisProcessorParameters;
+        private ProcessorParameters<K, V1, ?, ?> joinOtherProcessorParameters;
+        private ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParameters;
+        private ProcessorParameters<K, V, ?, ?> thisWindowedStreamProcessorParameters;
+        private ProcessorParameters<K, V1, ?, ?> otherWindowedStreamProcessorParameters;
+        private StoreBuilder<WindowStore<K, V>> thisWindowStoreBuilder;
+        private StoreBuilder<WindowStore<K, V1>> otherWindowStoreBuilder;
+        private Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V, V1>>>> outerJoinWindowStoreBuilder;
+        private Joined<K, V, V1> joined;
 
 
         private StreamStreamJoinNodeBuilder() {
         }
 
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withValueJoiner(final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withJoinThisProcessorParameters(final ProcessorParameters<K, V, ?, ?> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withNodeName(final String nodeName) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withJoinOtherProcessorParameters(final ProcessorParameters<K, V1, ?, ?> joinOtherProcessParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withJoinMergeProcessorParameters(final ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V, ?, ?> thisWindowedStreamProcessorParameters) {
             this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowedStreamProcessorParameters(
-            final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withOtherWindowedStreamProcessorParameters(
+            final ProcessorParameters<K, V1, ?, ?> otherWindowedStreamProcessorParameters) {
             this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowStoreBuilder(final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withThisWindowStoreBuilder(
+            final StoreBuilder<WindowStore<K, V>> thisWindowStoreBuilder) {
             this.thisWindowStoreBuilder = thisWindowStoreBuilder;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowStoreBuilder(final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withOtherWindowStoreBuilder(
+            final StoreBuilder<WindowStore<K, V1>> otherWindowStoreBuilder) {
             this.otherWindowStoreBuilder = otherWindowStoreBuilder;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOuterJoinWindowStoreBuilder(final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withOuterJoinWindowStoreBuilder(
+            final Optional<StoreBuilder<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue<V, V1>>>> outerJoinWindowStoreBuilder) {
             this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withJoined(final Joined<K, V1, V2> joined) {
+        public StreamStreamJoinNodeBuilder<K, V, V1, VOut> withJoined(
+            final Joined<K, V, V1> joined) {
             this.joined = joined;
             return this;
         }
 
-        public StreamStreamJoinNode<K, V1, V2, VR> build() {
+        public StreamStreamJoinNode<K, V, V1, VOut> build() {
 
             return new StreamStreamJoinNode<>(nodeName,
-                                              valueJoiner,
-                                              joinThisProcessorParameters,
-                                              joinOtherProcessorParameters,
-                                              joinMergeProcessorParameters,
-                                              thisWindowedStreamProcessorParameters,
-                                              otherWindowedStreamProcessorParameters,
-                                              thisWindowStoreBuilder,
-                                              otherWindowStoreBuilder,
-                                              outerJoinWindowStoreBuilder,
-                                              joined);
+                valueJoiner,
+                joinThisProcessorParameters,
+                joinOtherProcessorParameters,
+                joinMergeProcessorParameters,
+                thisWindowedStreamProcessorParameters,
+                otherWindowedStreamProcessorParameters,
+                thisWindowStoreBuilder,
+                otherWindowStoreBuilder,
+                outerJoinWindowStoreBuilder,
+                joined);
 
 
         }

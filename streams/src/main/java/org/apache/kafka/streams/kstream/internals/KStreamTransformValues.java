@@ -19,15 +19,17 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
+public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V, K, R> {
 
     private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 
@@ -36,8 +38,8 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
     }
 
     @Override
-    public Processor<K, V> get() {
-        return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
+    public Processor<K, V, K, R> get() {
+        return ProcessorAdapter.adaptRaw(new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get()));
     }
 
     @Override
@@ -45,7 +47,8 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         return valueTransformerSupplier.stores();
     }
 
-    public static class KStreamTransformValuesProcessor<K, V, R> extends AbstractProcessor<K, V> {
+    public static class KStreamTransformValuesProcessor<K, V, R> extends
+        AbstractProcessor<K, V> {
 
         private final ValueTransformerWithKey<K, V, R> valueTransformer;
 
@@ -53,10 +56,11 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
             this.valueTransformer = valueTransformer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext((InternalProcessorContext) context));
         }
 
         @Override

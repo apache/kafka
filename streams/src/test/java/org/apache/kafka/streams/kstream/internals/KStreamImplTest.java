@@ -16,6 +16,35 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.core.IsNull.notNullValue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -62,51 +91,21 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.hamcrest.core.IsNull.notNullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+    private final MockOldProcessorSupplier<String, String> processorSupplier = new MockOldProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public KeyValue<String, String> transform(final String key, final String value) {
@@ -119,7 +118,7 @@ public class KStreamImplTest {
     private final TransformerSupplier<String, String, Iterable<KeyValue<String, String>>> flatTransformerSupplier =
         () -> new Transformer<String, String, Iterable<KeyValue<String, String>>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public Iterable<KeyValue<String, String>> transform(final String key, final String value) {
@@ -132,7 +131,7 @@ public class KStreamImplTest {
     private final ValueTransformerSupplier<String, String> valueTransformerSupplier =
         () -> new ValueTransformer<String, String>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public String transform(final String value) {
@@ -145,7 +144,7 @@ public class KStreamImplTest {
     private final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier =
         () -> new ValueTransformerWithKey<String, String, String>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public String transform(final String key, final String value) {
@@ -158,7 +157,7 @@ public class KStreamImplTest {
     private final ValueTransformerSupplier<String, Iterable<String>> flatValueTransformerSupplier =
         () -> new ValueTransformer<String, Iterable<String>>() {
             @Override
-            public void init(final ProcessorContext context) {}
+            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {}
 
             @Override
             public Iterable<String> transform(final String value) {
@@ -1288,9 +1287,9 @@ public class KStreamImplTest {
 
         stream4.to("topic-5");
 
-        streams2[1].through("topic-6").process(new MockProcessorSupplier<>());
+        streams2[1].through("topic-6").process(new MockOldProcessorSupplier<>());
 
-        streams2[1].repartition().process(new MockProcessorSupplier<>());
+        streams2[1].repartition().process(new MockOldProcessorSupplier<>());
 
         assertEquals(2 + // sources
                 2 + // stream1
@@ -1503,7 +1502,7 @@ public class KStreamImplTest {
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
         }
-        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockOldProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
@@ -1525,9 +1524,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1554,9 +1553,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {

@@ -20,14 +20,16 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
 
-public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {
+public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements
+    ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
     private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;
 
@@ -36,7 +38,11 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
     }
 
     @Override
-    public Processor<KIn, VIn> get() {
+    public Processor<KIn, VIn, KOut, VOut> get() {
+        return ProcessorAdapter.adaptRaw(getInternal());
+    }
+
+    org.apache.kafka.streams.processor.Processor<KIn, VIn> getInternal() {
         return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
@@ -45,7 +51,8 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
         return transformerSupplier.stores();
     }
 
-    public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends AbstractProcessor<KIn, VIn> {
+    public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends
+        AbstractProcessor<KIn, VIn> {
 
         private final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
 
@@ -61,7 +68,8 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
 
         @Override
         public void process(final KIn key, final VIn value) {
-            final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(key, value);
+            final Iterable<KeyValue<KOut, VOut>> pairs =
+                transformer.transform(key, value);
             if (pairs != null) {
                 for (final KeyValue<KOut, VOut> pair : pairs) {
                     context().forward(pair.key, pair.value);

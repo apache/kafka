@@ -31,7 +31,7 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
     private final TopicNameExtractor<KIn, VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
-    private InternalProcessorContext context;
+    private InternalProcessorContext<KOut, VOut> context;
 
     SinkNode(final String name,
              final TopicNameExtractor<KIn, VIn> topicExtractor,
@@ -55,7 +55,7 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
     }
 
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KOut, VOut> context) {
         super.init(context);
         this.context = context;
         final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);

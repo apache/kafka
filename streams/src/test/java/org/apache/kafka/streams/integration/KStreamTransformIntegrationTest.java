@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.KeyValue;
@@ -77,7 +78,8 @@ public class KStreamTransformIntegrationTest {
 
     private void verifyResult(final List<KeyValue<Integer, Integer>> expected) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        final Topology topology = builder.build();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<Integer, Integer> inputTopic =
                 driver.createInputTopic(topic, new IntegerSerializer(), new IntegerSerializer());
             inputTopic.pipeKeyValueList(Arrays.asList(

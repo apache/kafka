@@ -16,33 +16,34 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
-public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V> {
-    private final Collection<KStreamAggProcessorSupplier> parents;
+public class KTablePassThrough<K, V> implements KTableChangeProcessorSupplier<K, V, V, K, V> {
+    private final Collection<KStreamAggregateProcessorSupplier> parents;
     private final String storeName;
 
 
-    KTablePassThrough(final Collection<KStreamAggProcessorSupplier> parents, final String storeName) {
+    KTablePassThrough(final Collection<KStreamAggregateProcessorSupplier> parents, final String storeName) {
         this.parents = parents;
         this.storeName = storeName;
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTablePassThroughProcessor();
     }
 
     @Override
     public boolean enableSendingOldValues(final boolean forceMaterialization) {
         // Aggregation requires materialization so we will always enable sending old values
-        for (final KStreamAggProcessorSupplier parent : parents) {
+        for (final KStreamAggregateProcessorSupplier parent : parents) {
             parent.enableSendingOldValues();
         }
         return true;
@@ -64,20 +65,19 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
         };
     }
 
-    private class KTablePassThroughProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTablePassThroughProcessor extends ContextualProcessor<K, Change<V>, K, Change<V>> {
         @Override
-        public void process(final K key, final Change<V> value) {
-            context().forward(key, value);
+        public void process(final Record<K, Change<V>> record) {
+            context().forward(record);
         }
     }
 
     private class KTablePassThroughValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+        public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
+            store = context.getStateStore(storeName);
         }
 
         @Override

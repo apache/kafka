@@ -18,19 +18,19 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
-class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements ProcessorSupplier<K1, V1> {
+class KStreamGlobalKTableJoin<K, V, K1, V1, VOut> implements ProcessorSupplier<K, V, K, VOut> {
 
-    private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;
-    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
-    private final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper;
+    private final KTableValueGetterSupplier<K1, V1> valueGetterSupplier;
+    private final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner;
+    private final KeyValueMapper<? super K, ? super V, ? extends K1> mapper;
     private final boolean leftJoin;
 
-    KStreamGlobalKTableJoin(final KTableValueGetterSupplier<K2, V2> valueGetterSupplier,
-                            final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
-                            final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper,
+    KStreamGlobalKTableJoin(final KTableValueGetterSupplier<K1, V1> valueGetterSupplier,
+                            final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner,
+                            final KeyValueMapper<? super K, ? super V, ? extends K1> mapper,
                             final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
@@ -39,7 +39,7 @@ class KStreamGlobalKTableJoin<K1, K2, R, V1, V2> implements ProcessorSupplier<K1
     }
 
     @Override
-    public Processor<K1, V1> get() {
+    public Processor<K, V, K, VOut> get() {
         return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin);
     }
 }

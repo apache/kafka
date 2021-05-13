@@ -21,11 +21,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -40,7 +41,8 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKStreamJoin<K, V, V1, VOut> implements ProcessorSupplier<K, V, K, VOut> {
+
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
@@ -48,7 +50,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final long joinAfterMs;
     private final long joinGraceMs;
 
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner;
     private final boolean outer;
     private final Optional<String> outerJoinWindowName;
     private final boolean isLeftSide;
@@ -60,7 +62,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                        final long joinBeforeMs,
                        final long joinAfterMs,
                        final long joinGraceMs,
-                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner,
+                       final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends VOut> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final KStreamImplJoin.MaxObservedStreamTime maxObservedStreamTime) {
@@ -76,41 +78,58 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public Processor<K, V, K, VOut> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
-        private WindowStore<K, V2> otherWindowStore;
+    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V, K, VOut> {
+
+        private WindowStore<K, V1> otherWindowStore;
         private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
-        private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
+        private Optional<WindowStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional
+            .empty();
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, VOut> context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+            droppedRecordsSensor =
+
+                droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().
+
+                    getName(), context.
+
+                    taskId().
+
+                    toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
 
-            if (StreamsConfig.InternalConfig.getBoolean(context().appConfigs(), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+            if (StreamsConfig.InternalConfig.getBoolean(
+
+                context().
+
+                    appConfigs(), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
                 outerJoinWindowStore = outerJoinWindowName.map(name -> context.getStateStore(name));
             }
         }
 
         @Override
-        public void process(final K key, final V1 value) {
+
+        public void process(final Record<K, V> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             //
             // we also ignore the record if value is null, because in a key-value data model a null-value indicates
             // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
             // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
             // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-            if (key == null || value == null) {
+            if (record.key() == null || record.value() == null) {
                 LOG.warn(
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    key, value, context().topic(), context().partition(), context().offset()
+                    record.key(), record.value(),
+                    context().recordMetadata().map(RecordMetadata::topic).orElse("<>"),
+                    context().recordMetadata().map(RecordMetadata::partition).orElse(-1),
+                    context().recordMetadata().map(RecordMetadata::offset).orElse(-1L)
                 );
                 droppedRecordsSensor.record();
                 return;
@@ -118,7 +137,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
             boolean needOuterJoin = outer;
 
-            final long inputRecordTimestamp = context().timestamp();
+            final long inputRecordTimestamp = record.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
@@ -129,21 +148,24 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 outerJoinWindowStore.ifPresent(store -> emitNonJoinedOuterRecords(store));
             }
 
-            try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(key, timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V1> iter = otherWindowStore
+                .fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    final KeyValue<Long, V2> otherRecord = iter.next();
+                    final KeyValue<Long, V1> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
 
                     outerJoinWindowStore.ifPresent(store -> {
                         // Delete the joined record from the non-joined outer window store
-                        store.put(KeyAndJoinSide.make(!isLeftSide, key), null, otherRecordTimestamp);
+                        store.put(KeyAndJoinSide.make(!isLeftSide, record.key()), null,
+                            otherRecordTimestamp);
                     });
 
                     context().forward(
-                        key,
-                        joiner.apply(key, value, otherRecord.value),
-                        To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
+                        record.withValue(
+                            joiner.apply(record.key(), record.value(), otherRecord.value))
+                            .withTimestamp(
+                                Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
 
                 if (needOuterJoin) {
@@ -164,12 +186,13 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {
-                        context().forward(key, joiner.apply(key, value, null));
+                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime
+                        .get()) {
+                        context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         outerJoinWindowStore.ifPresent(store -> store.put(
-                            KeyAndJoinSide.make(isLeftSide, key),
-                            LeftOrRightValue.make(isLeftSide, value),
+                            KeyAndJoinSide.make(isLeftSide, record.key()),
+                            LeftOrRightValue.make(isLeftSide, record.value()),
                             inputRecordTimestamp));
                     }
                 }
@@ -178,33 +201,36 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(final WindowStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
-            try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store.all()) {
+            try (final KeyValueIterator<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> it = store
+                .all()) {
                 while (it.hasNext()) {
-                    final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> record = it.next();
+                    final KeyValue<Windowed<KeyAndJoinSide<K>>, LeftOrRightValue> record = it
+                        .next();
 
                     final Windowed<KeyAndJoinSide<K>> windowedKey = record.key;
                     final LeftOrRightValue value = record.value;
 
                     // Skip next records if window has not closed
-                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs >= maxObservedStreamTime.get()) {
+                    if (windowedKey.window().start() + joinAfterMs + joinGraceMs
+                        >= maxObservedStreamTime.get()) {
                         break;
                     }
 
                     final K key = windowedKey.key().getKey();
                     final long time = windowedKey.window().start();
 
-                    final R nullJoinedValue;
+                    final VOut nullJoinedValue;
                     if (isLeftSide) {
                         nullJoinedValue = joiner.apply(key,
-                            (V1) value.getLeftValue(),
-                            (V2) value.getRightValue());
+                            (V) value.getLeftValue(),
+                            (V1) value.getRightValue());
                     } else {
                         nullJoinedValue = joiner.apply(key,
-                            (V1) value.getRightValue(),
-                            (V2) value.getLeftValue());
+                            (V) value.getRightValue(),
+                            (V1) value.getLeftValue());
                     }
 
-                    context().forward(key, nullJoinedValue, To.all().withTimestamp(time));
+                    context().forward(new Record<>(key, nullJoinedValue, time));
 
                     // Delete the key from the outer window store now it is emitted
                     store.put(record.key.key(), null, record.key.window().start());

@@ -18,34 +18,44 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * {@code ProcessorContext} implementation that will throw on any forward call.
  */
-public final class ForwardingDisabledProcessorContext implements ProcessorContext {
-    private final ProcessorContext delegate;
+public final class ForwardingDisabledProcessorContext<K, V>
+    implements InternalProcessorContext<K, V> {
 
-    private static final String EXPLANATION = "ProcessorContext#forward() is not supported from this context, "
-        + "as the framework must ensure the key is not changed (#forward allows changing the key on "
-        + "messages which are sent). Try another function, which doesn't allow the key to be changed "
-        + "(for example - #tranformValues).";
+    private final InternalProcessorContext<K, V> delegate;
 
-    public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
+    private static final String EXPLANATION =
+        "ProcessorContext#forward() is not supported from this context, "
+            + "as the framework must ensure the key is not changed (#forward allows changing the key on "
+            + "messages which are sent). Try another function, which doesn't allow the key to be changed "
+            + "(for example - #tranformValues).";
+
+    public ForwardingDisabledProcessorContext(final InternalProcessorContext<K, V> delegate) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
@@ -57,6 +67,11 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     @Override
     public TaskId taskId() {
         return delegate.taskId();
+    }
+
+    @Override
+    public Optional<RecordMetadata> recordMetadata() {
+        return delegate.recordMetadata();
     }
 
     @Override
@@ -75,8 +90,89 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public StreamsMetrics metrics() {
+    public StreamsMetricsImpl metrics() {
         return delegate.metrics();
+    }
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        delegate.setSystemTimeMs(timeMs);
+    }
+
+    @Override
+    public ProcessorRecordContext recordContext() {
+        return delegate.recordContext();
+    }
+
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        delegate.setRecordContext(recordContext);
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
+        delegate.setCurrentNode(currentNode);
+    }
+
+    @Override
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
+        return delegate.currentNode();
+    }
+
+    @Override
+    public ThreadCache cache() {
+        return delegate.cache();
+    }
+
+    @Override
+    public void initialize() {
+        delegate.initialize();
+    }
+
+    @Override
+    public void uninitialize() {
+        delegate.uninitialize();
+    }
+
+    @Override
+    public TaskType taskType() {
+        return delegate.taskType();
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask,
+                                   final RecordCollector recordCollector,
+                                   final ThreadCache newCache) {
+        delegate.transitionToActive(streamTask, recordCollector, newCache);
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        delegate.transitionToStandby(newCache);
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace,
+                                           final DirtyEntryFlushListener listener) {
+        delegate.registerCacheFlushListener(namespace, listener);
+    }
+
+    @Override
+    public <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return delegate.getStateStore(builder);
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        delegate.logChange(storeName, key, value, timestamp);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return delegate.changelogFor(storeName);
     }
 
     @Override
@@ -90,8 +186,8 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
         return delegate.getStateStore(name);
     }
 
-    @Override
     @Deprecated
+    @Override
     public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
@@ -106,12 +202,23 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K1, V1> void forward(final K1 key, final V1 value) {
         throw new StreamsException(EXPLANATION);
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public <K1, V1> void forward(final K1 key, final V1 value, final To to) {
+        throw new StreamsException(EXPLANATION);
+    }
+
+    @Override
+    public <K1 extends K, V1 extends V> void forward(final Record<K1, V1> record) {
+        throw new StreamsException(EXPLANATION);
+    }
+
+    @Override
+    public <K1 extends K, V1 extends V> void forward(final Record<K1, V1> record,
+                                                     final String childName) {
         throw new StreamsException(EXPLANATION);
     }
 
@@ -162,6 +269,6 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public long currentStreamTimeMs() {
-        return delegate.currentStreamTimeMs();
+        return delegate.currentSystemTimeMs();
     }
 }

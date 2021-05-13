@@ -99,7 +99,7 @@ public class RocksDBStoreTest {
 
     private final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
 
-    InternalMockProcessorContext context;
+    InternalMockProcessorContext<?, ?> context;
     RocksDBStore rocksDBStore;
 
     @Before
@@ -107,7 +107,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -129,14 +129,14 @@ public class RocksDBStoreTest {
         return new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final Properties streamsProps) {
-        return new InternalMockProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final Properties streamsProps) {
+        return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsProps)
         );
     }
 
-    private InternalMockProcessorContext getProcessorContext(
+    private InternalMockProcessorContext<?, ?> getProcessorContext(
         final RecordingLevel recordingLevel,
         final Class<? extends RocksDBConfigSetter> rocksDBConfigSetterClass) {
 
@@ -146,7 +146,7 @@ public class RocksDBStoreTest {
         return getProcessorContext(streamsProps);
     }
 
-    private InternalMockProcessorContext getProcessorContext(final RecordingLevel recordingLevel) {
+    private InternalMockProcessorContext<?, ?> getProcessorContext(final RecordingLevel recordingLevel) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel.name());
         return getProcessorContext(streamsProps);
@@ -305,7 +305,7 @@ public class RocksDBStoreTest {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         final Object param = new Object();
         props.put("abc.def", param);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -321,7 +321,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
-        final InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final InternalMockProcessorContext<?, ?> tmpContext = new InternalMockProcessorContext<>(tmpDir, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
 
         assertTrue(tmpDir.setReadOnly());
 
@@ -690,7 +690,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
+        context = new InternalMockProcessorContext<>(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
