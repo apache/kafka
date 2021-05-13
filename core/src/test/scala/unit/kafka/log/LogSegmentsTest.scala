@@ -158,17 +158,13 @@ class LogSegmentsTest {
 
     List(seg1, seg2, seg3, seg4).foreach(segments.add)
 
-    // Test floorSegment, floorEntry
+    // Test floorSegment
     assertEquals(Some(seg1), segments.floorSegment(2))
-    assertEntry(seg1, segments.floorEntry(2).get)
     assertEquals(Some(seg2), segments.floorSegment(3))
-    assertEntry(seg2, segments.floorEntry(3).get)
 
-    // Test lowerSegment, lowerEntry
+    // Test lowerSegment
     assertEquals(Some(seg1), segments.lowerSegment(3))
-    assertEntry(seg1, segments.lowerEntry(3).get)
     assertEquals(Some(seg2), segments.lowerSegment(4))
-    assertEntry(seg2, segments.lowerEntry(4).get)
 
     // Test higherSegment, higherEntry
     assertEquals(Some(seg3), segments.higherSegment(4))

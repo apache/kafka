@@ -156,7 +156,7 @@ class LogSegments(topicPartition: TopicPartition) {
    *         if it exists.
    */
   @threadsafe
-  def floorEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.floorEntry(offset))
+  private def floorEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.floorEntry(offset))
 
   /**
    * @return the log segment with the greatest offset less than or equal to the given offset,
@@ -170,7 +170,7 @@ class LogSegments(topicPartition: TopicPartition) {
    *         if it exists.
    */
   @threadsafe
-  def lowerEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.lowerEntry(offset))
+  private def lowerEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.lowerEntry(offset))
 
   /**
    * @return the log segment with the greatest offset strictly less than the given offset,
@@ -218,8 +218,8 @@ class LogSegments(topicPartition: TopicPartition) {
   def lastSegment: Option[LogSegment] = lastEntry.map(_.getValue)
 
   /**
-   * Returns an iterable to log segments ordered from lowest base offset to highest.
-   * Each segment in the returned iterable has a base offset strictly greater than the provided baseOffset.
+   * @return an iterable with log segments ordered from lowest base offset to highest,
+   *         each segment returned  has a base offset strictly greater than the provided baseOffset.
    */
   def higherSegments(baseOffset: Long): Iterable[LogSegment] = {
     val view =
