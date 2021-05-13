@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ValueTransformerWithKeyAdapter;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -99,10 +100,11 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext<K, Change<V1>> context) {
             super.init(context);
-            valueTransformer.init(new ForwardingDisabledProcessorContext<>(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext<>((InternalProcessorContext) context));
             if (queryableName != null) {
                 store = context.getStateStore(queryableName);
                 tupleForwarder = new TupleChangeForwarder<>(
@@ -146,10 +148,11 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
-            valueTransformer.init(new ForwardingDisabledProcessorContext<>(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext<>((InternalProcessorContext) context));
         }
 
         @Override

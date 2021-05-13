@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.junit.Assert.assertTrue;
-
-import java.util.Arrays;
-import java.util.Collections;
-
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransformValues.KStreamFlatTransformValuesProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledOldProcessorContext;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
+
+import static org.junit.Assert.assertTrue;
 
 public class KStreamFlatTransformValuesTest extends EasyMockSupport {
 
@@ -53,7 +53,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
 
     @Test
     public void shouldInitializeFlatTransformValuesProcessor() {
-        valueTransformer.init(EasyMock.isA(ForwardingDisabledOldProcessorContext.class));
+        valueTransformer.init(EasyMock.isA(ForwardingDisabledProcessorContext.class));
         replayAll();
 
         processor.init(context);

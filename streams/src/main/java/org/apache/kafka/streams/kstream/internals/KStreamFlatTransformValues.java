@@ -22,7 +22,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledOldProcessorContext;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -60,10 +61,11 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements
             this.valueTransformer = valueTransformer;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            valueTransformer.init(new ForwardingDisabledOldProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext((InternalProcessorContext) context));
         }
 
         @Override

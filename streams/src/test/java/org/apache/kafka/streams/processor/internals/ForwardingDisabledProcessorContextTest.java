@@ -34,9 +34,10 @@ public class ForwardingDisabledProcessorContextTest {
     private ProcessorContext<String, String> delegate;
     private ForwardingDisabledProcessorContext<String, String> context;
 
+    @SuppressWarnings("unchecked")
     @Before
     public void setUp() {
-        context = new ForwardingDisabledProcessorContext<>(delegate);
+        context = new ForwardingDisabledProcessorContext<>((InternalProcessorContext) delegate);
     }
 
     @Test
