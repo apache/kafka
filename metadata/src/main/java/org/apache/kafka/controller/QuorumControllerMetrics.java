@@ -112,6 +112,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         eventQueueTime.update(durationMs);
     }
 
+    @Override
     public void setGlobalTopicsCount(int topicCount) {
         this.globalTopicCount = topicCount;
     }
