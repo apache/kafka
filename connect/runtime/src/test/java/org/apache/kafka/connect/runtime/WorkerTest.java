@@ -145,6 +145,8 @@ public class WorkerTest extends ThreadedTest {
     @Mock
     private DelegatingClassLoader delegatingLoader;
     @Mock
+    private List<Runnable> listAwaitTask;
+    @Mock
     private OffsetBackingStore offsetBackingStore;
     @MockStrict
     private TaskStatus.Listener taskStatusListener;
@@ -660,7 +662,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow()).andReturn(listAwaitTask);
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -743,7 +745,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow()).andReturn(listAwaitTask);
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -953,7 +955,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow()).andReturn(listAwaitTask);
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -1032,7 +1034,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow()).andReturn(listAwaitTask);
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
