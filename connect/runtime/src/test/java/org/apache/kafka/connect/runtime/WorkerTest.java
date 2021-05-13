@@ -660,6 +660,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow());
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -742,6 +743,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow());
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -951,7 +953,8 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        
+        EasyMock.expect(executorService.shutdownNow());
+
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
                 .andReturn(pluginLoader);
@@ -1029,6 +1032,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
+        EasyMock.expect(executorService.shutdownNow());
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -1500,7 +1504,6 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(Time.class),
                 anyObject(RetryWithToleranceOperator.class),
                 anyObject(StatusBackingStore.class),
-                anyObject(ExecutorService.class),
                 anyObject(Executor.class))
                 .andReturn(workerTask);
     }
