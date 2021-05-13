@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 public class TopologyMetadata {
+    //TODO KAFKA-12648: the TopologyMetadata class is filled in by Pt. 2 (PR #10683)
 
     public static class Subtopology {
         final int nodeGroupId;
