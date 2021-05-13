@@ -30,8 +30,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
-    private final static MetricName EVENT_QUEUE_SIZE = new MetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueSize", null);
     private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
         "kafka.controller", "ReplicationControlManager", "OfflinePartitionCount", null);
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
@@ -41,11 +39,9 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
-    private volatile int queueSize;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> offlinePartitionCount;
     private final Gauge<Integer> preferredReplicaImbalanceCount;
-    private final Gauge<Integer> eventQueueSize;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
@@ -53,7 +49,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.active = false;
         this.offlinePartitions = 0;
         this.preferredReplicaImbalances = 0;
-        this.queueSize = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -62,12 +57,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.eventQueueSize = registry.newGauge(EVENT_QUEUE_SIZE, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return queueSize;
-            }
-        });
         this.offlinePartitionCount = registry.newGauge(OFFLINE_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -100,16 +89,6 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueTime.update(durationMs);
-    }
-
-    @Override
-    public void setEventQueueSize(int queueSize) {
-        this.queueSize = queueSize;
-    }
-
-    @Override
-    public int eventQueueSize() {
-        return this.queueSize;
     }
 
     @Override

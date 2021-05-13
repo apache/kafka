@@ -157,8 +157,6 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private final EventContext head = new EventContext(null, null, null);
 
-        private int queueSize = 0;
-
         /**
          * An ordered map of times in monotonic nanoseconds to events to time out.
          */
@@ -179,14 +177,8 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        public int queueSize() {
-            return this.queueSize;
-        }
-
         private void remove(EventContext eventContext) {
             eventContext.remove();
-            System.out.println("removing" + eventContext.toString());
-            this.queueSize--;
             if (eventContext.deadlineNs.isPresent()) {
                 deadlineMap.remove(eventContext.deadlineNs.getAsLong());
                 eventContext.deadlineNs = OptionalLong.empty();
@@ -285,8 +277,6 @@ public final class KafkaEventQueue implements EventQueue {
                 OptionalLong deadlineNs = deadlineNsCalculator.apply(existingDeadlineNs);
                 boolean queueWasEmpty = head.isSingleton();
                 boolean shouldSignal = false;
-                queueSize++;
-                System.out.println(eventContext.toString() + eventContext.insertionType.toString() + " " + queueSize); 
                 switch (eventContext.insertionType) {
                     case APPEND:
                         head.insertBefore(eventContext);
@@ -378,10 +368,6 @@ public final class KafkaEventQueue implements EventQueue {
         this.closingTimeNs = Long.MAX_VALUE;
         this.cleanupEvent = null;
         this.eventHandlerThread.start();
-    }
-
-    public int size() {
-        return this.eventHandler.queueSize();
     }
 
     @Override

@@ -27,10 +27,6 @@ public interface ControllerMetrics {
 
     void updateEventQueueProcessingTime(long durationMs);
 
-    void setEventQueueSize(int queueSize);
-
-    int eventQueueSize();
-
     void setOfflinePartitionCount(int offlinePartitions);
 
     int offlinePartitionCount();

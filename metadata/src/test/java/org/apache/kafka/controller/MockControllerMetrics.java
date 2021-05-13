@@ -21,13 +21,11 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
-    private volatile int queueSize;
 
     public MockControllerMetrics() {
         this.active = false;
         this.offlinePartitions = 0;
         this.preferredReplicaImbalances = 0;
-        this.queueSize = 0;
     }
 
     @Override
@@ -48,16 +46,6 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
-    }
-
-    @Override
-    public void setEventQueueSize(int queueSize) {
-        this.queueSize = queueSize;
-    }
-
-    @Override
-    public int eventQueueSize() {
-        return this.queueSize;
     }
 
     @Override
