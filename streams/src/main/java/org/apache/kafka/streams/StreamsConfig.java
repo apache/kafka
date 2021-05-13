@@ -643,6 +643,26 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),

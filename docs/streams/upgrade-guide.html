@@ -150,6 +150,11 @@
       (meaning: use broker default replication factor).
       The <code>replication.factor</code> value of <code>-1</code> requires broker version 2.4 or newer.
     </p>
+    <p> The new serde type was introduced <code>ListSerde</code>: </p>
+    <ul>
+        <li> Added class <code>ListSerde</code> to (de)serialize <code>List</code>-based objects </li>
+        <li> Introduced <code>ListSerializer</code> and <code>ListDeserializer</code> to power the new functionality </li>
+    </ul>
 
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>
