@@ -32,8 +32,8 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockOldProcessor;
+import org.apache.kafka.test.MockOldProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -65,7 +65,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -92,7 +92,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -110,7 +110,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
             assertEquals(2, driver.getAllStateStores().size());
@@ -137,7 +137,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -153,7 +153,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // verifies non-joined duplicates are emitted when window has closed
             inputTopic1.pipeInput(0, "A0", 0);
@@ -195,7 +195,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -211,7 +211,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             final long windowStart = 0;
 
@@ -246,7 +246,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -262,7 +262,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             final long windowStart = 0;
 
@@ -297,7 +297,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -313,7 +313,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             final long windowStart = 0;
 
@@ -348,7 +348,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
 
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
@@ -364,7 +364,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             final long windowStart = 0;
 
@@ -399,7 +399,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -415,7 +415,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty; this should not produce any item yet
             // w1 = {}
@@ -446,7 +446,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -468,7 +468,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // push one item to the primary stream; and one item in other stream; this should not produce items because there are no joins
             // and window has not ended
@@ -536,7 +536,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -558,7 +558,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // 2 window stores + 1 shared window store should be available
             assertEquals(3, driver.getAllStateStores().size());
@@ -640,7 +640,7 @@ public class KStreamKStreamOuterJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockOldProcessorSupplier<Integer, String> supplier = new MockOldProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -662,7 +662,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            final MockOldProcessor<Integer, String> processor = supplier.theCapturedProcessor();
             final long time = 0L;
 
             // push two items to the primary stream; the other window is empty; this should not produce items because window has not closed
@@ -691,7 +691,7 @@ public class KStreamKStreamOuterJoinTest {
 
     private void testUpperWindowBound(final int[] expectedKeys,
                                       final TopologyTestDriver driver,
-                                      final MockProcessor<Integer, String> processor) {
+                                      final MockOldProcessor<Integer, String> processor) {
         long time;
 
         final TestInputTopic<Integer, String> inputTopic1 =
@@ -821,7 +821,7 @@ public class KStreamKStreamOuterJoinTest {
 
     private void testLowerWindowBound(final int[] expectedKeys,
                                       final TopologyTestDriver driver,
-                                      final MockProcessor<Integer, String> processor) {
+                                      final MockOldProcessor<Integer, String> processor) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
         // push four items with smaller timestamp (before the window) to the primary stream; this should produce four left-join and no full-join items

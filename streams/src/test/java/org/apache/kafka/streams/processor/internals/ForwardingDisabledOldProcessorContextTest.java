@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -29,18 +29,23 @@ import org.junit.runner.RunWith;
 import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
-public class ForwardingDisabledProcessorContextTest {
+public class ForwardingDisabledOldProcessorContextTest {
     @Mock(MockType.NICE)
-    private ProcessorContext<String, String> delegate;
-    private ForwardingDisabledProcessorContext<String, String> context;
+    private ProcessorContext delegate;
+    private ForwardingDisabledOldProcessorContext context;
 
     @Before
     public void setUp() {
-        context = new ForwardingDisabledProcessorContext<>(delegate);
+        context = new ForwardingDisabledOldProcessorContext(delegate);
     }
 
     @Test
     public void shouldThrowOnForward() {
-        assertThrows(StreamsException.class, () -> context.forward(new Record<>("key", "value", 0L)));
+        assertThrows(StreamsException.class, () -> context.forward("key", "value"));
+    }
+
+    @Test
+    public void shouldThrowOnForwardWithTo() {
+        assertThrows(StreamsException.class, () -> context.forward("key", "value", To.all()));
     }
 }

@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledOldProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -63,7 +63,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledOldProcessorContext(context));
         }
 
         @Override

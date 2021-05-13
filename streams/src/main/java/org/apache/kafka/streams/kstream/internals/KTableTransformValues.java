@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.ValueTransformer;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.ValueTransformerWithKeyAdapter;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -46,7 +48,8 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
 
     @Override
     public Processor<K, Change<V>, K, Change<V1>> get() {
-        return new KTableTransformValuesProcessor(transformerSupplier.get());
+        return new KTableTransformValuesProcessor(
+            ValueTransformerWithKeyAdapter.adapt(transformerSupplier.get()));
     }
 
     @Override
@@ -61,7 +64,7 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
             public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
                     parentValueGetterSupplier.get(),
-                    transformerSupplier.get());
+                    ValueTransformerWithKeyAdapter.adapt(transformerSupplier.get()));
             }
 
             @Override
@@ -86,21 +89,22 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
 
     private class KTableTransformValuesProcessor extends
         ContextualProcessor<K, Change<V>, K, Change<V1>> {
-        private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
+
+        private final ValueTransformer<? super K, ? super V, ? extends V1> valueTransformer;
         private TimestampedKeyValueStore<K, V1> store;
         private TupleChangeForwarder<K, V1> tupleForwarder;
 
-        private KTableTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
+        private KTableTransformValuesProcessor(
+            final ValueTransformer<? super K, ? super V, ? extends V1> valueTransformer) {
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext<K, Change<V1>> context) {
             super.init(context);
-//            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext<>(context));
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V1>) context.getStateStore(queryableName);
+                store = context.getStateStore(queryableName);
                 tupleForwarder = new TupleChangeForwarder<>(
                     store,
                     context,
@@ -111,10 +115,11 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
 
         @Override
         public void process(final Record<K, Change<V>> record) {
-            final V1 newValue = valueTransformer.transform(record.key(), record.value().newValue);
+            final V1 newValue = valueTransformer.transform(record.withValue(record.value().newValue));
 
             if (queryableName == null) {
-                final V1 oldValue = sendOldValues ? valueTransformer.transform(record.key(), record.value().oldValue) : null;
+                final V1 v1 = valueTransformer.transform(record.withValue(record.value().oldValue));
+                final V1 oldValue = sendOldValues ? v1 : null;
                 context().forward(record.withValue(new Change<>(newValue, oldValue)));
             } else {
                 final V1 oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
@@ -131,11 +136,12 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
 
 
     private class KTableTransformValuesGetter implements KTableValueGetter<K, V1> {
+
         private final KTableValueGetter<K, V> parentGetter;
-        private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
+        private final ValueTransformer<? super K, ? super V, ? extends V1> valueTransformer;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
-                                    final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
+                                    final ValueTransformer<? super K, ? super V, ? extends V1> valueTransformer) {
             this.parentGetter = Objects.requireNonNull(parentGetter, "parentGetter");
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
@@ -143,15 +149,19 @@ class KTableTransformValues<K, V, V1> implements KTableChangeProcessorSupplier<K
         @Override
         public <KParent, VParent> void init(final ProcessorContext<KParent, VParent> context) {
             parentGetter.init(context);
-//            valueTransformer.init(new ForwardingDisabledProcessorContext(context));
+            valueTransformer.init(new ForwardingDisabledProcessorContext<>(context));
         }
 
         @Override
         public ValueAndTimestamp<V1> get(final K key) {
             final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
-            return ValueAndTimestamp.make(
-                valueTransformer.transform(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp());
+            final long timestamp =
+                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp();
+            final Record<K, V> record = new Record<>(
+                key,
+                getValueOrNull(valueAndTimestamp),
+                timestamp);
+            return ValueAndTimestamp.make(valueTransformer.transform(record), timestamp);
         }
 
         @Override
