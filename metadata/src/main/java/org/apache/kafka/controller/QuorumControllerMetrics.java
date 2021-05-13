@@ -40,11 +40,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
-    private volatile int queueSize;
+    private volatile int eventQueueSize;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
-    private final Gauge<Integer> eventQueueSize;
+    private final Gauge<Integer> eventQueueSizeGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
@@ -52,7 +52,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.active = false;
         this.globalTopicCount = 0;
         this.globalPartitionCount = 0;
-        this.queueSize = 0;
+        this.eventQueueSize = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -61,10 +61,10 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.eventQueueSize = registry.newGauge(EVENT_QUEUE_SIZE, new Gauge<Integer>() {
+        this.eventQueueSizeGauge = registry.newGauge(EVENT_QUEUE_SIZE, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return queueSize;
+                return eventQueueSize;
             }
         });
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
@@ -102,13 +102,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setEventQueueSize(int queueSize) {
-        this.queueSize = queueSize;
+    public void setEventQueueSize(int eventQueueSize) {
+        this.eventQueueSize = eventQueueSize;
     }
 
     @Override
     public int eventQueueSize() {
-        return this.queueSize;
+        return this.eventQueueSize;
     }
 
     @Override

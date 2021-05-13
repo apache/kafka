@@ -829,7 +829,7 @@ public final class QuorumController implements Controller {
     /**
      * The controller metrics.
      */
-    final ControllerMetrics controllerMetrics;
+    private final ControllerMetrics controllerMetrics;
 
     /**
      * A registry for snapshot data.  This must be accessed only by the event queue thread.

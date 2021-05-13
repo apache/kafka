@@ -24,7 +24,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
@@ -141,15 +140,9 @@ public class BrokersToIsrs {
      */
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> isrMembers;
     
-    private final Map<Uuid, Integer> offlinePartitionCounts;
-
-    private int offlinePartitionCount;
-
     BrokersToIsrs(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.isrMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.offlinePartitionCounts = new HashMap<>();
-        this.offlinePartitionCount = 0;
     }
 
     /**
@@ -170,11 +163,6 @@ public class BrokersToIsrs {
         } else {
             if (prevLeader == NO_LEADER) {
                 prev = Replicas.copyWith(prevIsr, NO_LEADER);
-                if (nextLeader != NO_LEADER) {
-                    int offlinePartitionsForTopic = offlinePartitionCounts.getOrDefault(topicId, 0);
-                    offlinePartitionCounts.put(topicId, --offlinePartitionsForTopic);
-                    offlinePartitionCount--;
-                }
             } else {
                 prev = Replicas.clone(prevIsr);
             }
@@ -186,11 +174,6 @@ public class BrokersToIsrs {
         } else {
             if (nextLeader == NO_LEADER) {
                 next = Replicas.copyWith(nextIsr, NO_LEADER);
-                if (prevLeader != NO_LEADER) {
-                    int offlinePartitionsForTopic = offlinePartitionCounts.getOrDefault(topicId, 0);
-                    offlinePartitionCounts.put(topicId, ++offlinePartitionsForTopic);
-                    offlinePartitionCount++;
-                }
             } else {
                 next = Replicas.clone(nextIsr);
             }
@@ -236,11 +219,6 @@ public class BrokersToIsrs {
         if (topicMap != null) {
             topicMap.remove(topicId);
         }
-    }
-
-    void updateMetricsForTopicRemoval(Uuid topicId) {
-        offlinePartitionCount = offlinePartitionCount - offlinePartitionCounts.getOrDefault(topicId, 0);
-        offlinePartitionCounts.put(topicId, 0);
     }
 
     private void add(int brokerId, Uuid topicId, int newPartition, boolean leader) {
@@ -347,9 +325,5 @@ public class BrokersToIsrs {
 
     boolean hasLeaderships(int brokerId) {
         return iterator(brokerId, true).hasNext();
-    }
-
-    int offlinePartitionCount() {
-        return offlinePartitionCount;
     }
 }
