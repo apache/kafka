@@ -157,6 +157,9 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private final EventContext head = new EventContext(null, null, null);
 
+        /**
+         * The size of the event queue.
+         */
         private int queueSize = 0;
 
         /**
