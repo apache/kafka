@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -128,6 +129,17 @@ public class InternalTopologyBuilder {
     private Map<Integer, Set<String>> nodeGroups = null;
 
     private StreamsConfig config = null;
+
+    // The name of the topology this builder belongs to, or null if none
+    private final String namedTopology;
+
+    public InternalTopologyBuilder() {
+        this.namedTopology = null;
+    }
+
+    public InternalTopologyBuilder(final String namedTopology) {
+        this.namedTopology = namedTopology;
+    }
 
     public static class StateStoreFactory<S extends StateStore> {
         private final StoreBuilder<S> builder;
@@ -351,7 +363,6 @@ public class InternalTopologyBuilder {
     public synchronized final StreamsConfig getStreamsConfig() {
         return config;
     }
-
 
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
@@ -1065,8 +1076,8 @@ public class InternalTopologyBuilder {
      *
      * @return groups of topic names
      */
-    public synchronized Map<Integer, TopicsInfo> topicGroups() {
-        final Map<Integer, TopicsInfo> topicGroups = new LinkedHashMap<>();
+    public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
+        final Map<Subtopology, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null) {
             nodeGroups = makeNodeGroups();
@@ -1129,7 +1140,7 @@ public class InternalTopologyBuilder {
                 }
             }
             if (!sourceTopics.isEmpty()) {
-                topicGroups.put(entry.getKey(), new TopicsInfo(
+                topicGroups.put(new Subtopology(entry.getKey(), namedTopology), new TopicsInfo(
                         Collections.unmodifiableSet(sinkTopics),
                         Collections.unmodifiableSet(sourceTopics),
                         Collections.unmodifiableMap(repartitionTopics),
@@ -2029,7 +2040,6 @@ public class InternalTopologyBuilder {
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
     }
-
 
     public synchronized List<String> fullSourceTopicNames() {
         return maybeDecorateInternalSourceTopics(sourceTopicNames);

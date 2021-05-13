@@ -59,8 +59,8 @@ public class TaskId implements Comparable<TaskId> {
         }
     }
 
-    public Optional<String> namedTopology() {
-        return namedTopology == null ? Optional.empty() : Optional.of(namedTopology);
+    public String namedTopology() {
+        return namedTopology;
     }
 
     @Override
