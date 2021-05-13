@@ -31,23 +31,23 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
     private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "GlobalTopicCount", null);
+        "kafka.controller", "KafkaController", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "ReplicationControlManager", "GlobalPartitionCount", null);
+        "kafka.controller", "KafkaController", "GlobalPartitionCount", null);
 
     private volatile boolean active;
-    private volatile int topics;
-    private volatile int partitions;
+    private volatile int globalTopicCount;
+    private volatile int globalPartitionCount;
     private final Gauge<Integer> activeControllerCount;
-    private final Gauge<Integer> globalPartitionCount;
-    private final Gauge<Integer> globalTopicCount;
+    private final Gauge<Integer> globalPartitionCountGauge;
+    private final Gauge<Integer> globalTopicCountGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
-        this.topics = 0;
-        this.partitions = 0;
+        this.globalTopicCount = 0;
+        this.globalPartitionCount = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -56,16 +56,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.globalTopicCount = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
+        this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return topics;
+                return globalTopicCount;
             }
         });
-        this.globalPartitionCount = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
+        this.globalPartitionCountGauge = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return partitions;
+                return globalPartitionCount;
             }
         });
     }
@@ -92,21 +92,21 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     @Override
     public void setGlobalTopicsCount(int topicCount) {
-        this.topics = topicCount;
+        this.globalTopicCount = topicCount;
     }
 
     @Override
     public int globalTopicsCount() {
-        return this.topics;
+        return this.globalTopicCount;
     }
 
     @Override
     public void setGlobalPartitionCount(int partitionCount) {
-        this.partitions = partitionCount;
+        this.globalPartitionCount = partitionCount;
     }
 
     @Override
     public int globalPartitionCount() {
-        return this.partitions;
+        return this.globalPartitionCount;
     }
 }

@@ -279,6 +279,9 @@ public class ReplicationControlManager {
      */
     private final int defaultNumPartitions;
 
+    /**
+     * A count of the total number of partitions in the cluster.
+     */
     private int globalPartitionCount;
 
     /**
@@ -355,13 +358,13 @@ public class ReplicationControlManager {
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
             globalPartitionCount++;
+            controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
         } else if (!newPartInfo.equals(prevPartInfo)) {
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), prevPartInfo.isr,
                 newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
         }
-        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
     }
 
     public void replay(PartitionChangeRecord record) {
