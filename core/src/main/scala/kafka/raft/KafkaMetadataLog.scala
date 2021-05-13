@@ -23,7 +23,7 @@ import java.util.{Optional, Properties}
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
-import kafka.utils.{Logging, Scheduler}
+import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -37,8 +37,8 @@ import scala.compat.java8.OptionConverters._
 final class KafkaMetadataLog private (
   log: Log,
   scheduler: Scheduler,
-  // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
-  // polling thread when snapshots are created.
+  // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
+  // polling thread when snapshots are created. This object is also used to store any opened snapshot reader.
   snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int,
@@ -446,7 +446,9 @@ object KafkaMetadataLog {
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
   ): () => Unit = () => {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
-      snapshotReader.foreach(_.close())
+      snapshotReader.foreach { reader =>
+        CoreUtils.swallow(reader.close(), this)
+      }
       Snapshots.deleteIfExists(logDir, snapshotId)
     }
   }

@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
@@ -127,7 +128,14 @@ public final class Snapshots {
         try {
             Utils.atomicMoveWithFallback(immutablePath, deletedPath, false);
         } catch (IOException e) {
-            log.error("Error renaming snapshot file from {} to {}", immutablePath, deletedPath, e);
+            throw new UncheckedIOException(
+                String.format(
+                    "Error renaming snapshot file from %s to %s",
+                    immutablePath,
+                    deletedPath
+                ),
+                e
+            );
         }
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 
 public final class FileRawSnapshotReader implements RawSnapshotReader, AutoCloseable {
@@ -58,7 +59,14 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
         try {
             fileRecords.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(
+                String.format(
+                    "Unable to close snapshot reader %s at %s",
+                    snapshotId,
+                    fileRecords.file
+                ),
+                e
+            );
         }
     }
 
