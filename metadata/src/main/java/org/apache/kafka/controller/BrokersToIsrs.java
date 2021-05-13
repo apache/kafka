@@ -139,7 +139,7 @@ public class BrokersToIsrs {
      * Partitions with no isr members appear in this map under id NO_LEADER.
      */
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> isrMembers;
-    
+
     BrokersToIsrs(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.isrMembers = new TimelineHashMap<>(snapshotRegistry, 0);
