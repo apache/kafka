@@ -119,6 +119,7 @@ public final class KafkaEventQueue implements EventQueue {
         void run(Logger log) throws InterruptedException {
             try {
                 event.run();
+                System.out.println("just ran");
             } catch (InterruptedException e) {
                 throw e;
             } catch (Exception e) {
@@ -185,8 +186,7 @@ public final class KafkaEventQueue implements EventQueue {
 
         private void remove(EventContext eventContext) {
             eventContext.remove();
-            System.out.println("removing" + eventContext.toString());
-            this.queueSize--;
+            System.out.println("removing " + eventContext.toString() + " q size " + queueSize);
             if (eventContext.deadlineNs.isPresent()) {
                 deadlineMap.remove(eventContext.deadlineNs.getAsLong());
                 eventContext.deadlineNs = OptionalLong.empty();
@@ -204,9 +204,11 @@ public final class KafkaEventQueue implements EventQueue {
                 if (toTimeout != null) {
                     toTimeout.completeWithTimeout();
                     toTimeout = null;
+                    this.queueSize--;
                 } else if (toRun != null) {
                     toRun.run(log);
                     toRun = null;
+                    this.queueSize--;
                 }
                 lock.lock();
                 try {
@@ -246,6 +248,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                     } else {
                         toRun = head.next;
+                        System.out.println("here");
                         remove(toRun);
                         continue;
                     }
@@ -286,7 +289,7 @@ public final class KafkaEventQueue implements EventQueue {
                 boolean queueWasEmpty = head.isSingleton();
                 boolean shouldSignal = false;
                 queueSize++;
-                System.out.println(eventContext.toString() + eventContext.insertionType.toString() + " " + queueSize); 
+                System.out.println("Inserting: " + eventContext.toString() + "\n" + eventContext.insertionType.toString() + " " + queueSize); 
                 switch (eventContext.insertionType) {
                     case APPEND:
                         head.insertBefore(eventContext);
@@ -336,6 +339,7 @@ public final class KafkaEventQueue implements EventQueue {
                 EventContext eventContext = tagToEventContext.get(tag);
                 if (eventContext != null) {
                     remove(eventContext);
+                    queueSize--;
                 }
             } finally {
                 lock.unlock();
