@@ -69,7 +69,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             super.init(context);
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
-                context.taskIdMetadata().toString(),
+                context.taskInfo().toString(),
                 (StreamsMetricsImpl) context.metrics());
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(

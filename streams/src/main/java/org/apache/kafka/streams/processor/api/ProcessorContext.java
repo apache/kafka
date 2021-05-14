@@ -18,11 +18,11 @@ package org.apache.kafka.streams.processor.api;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskIdMetadata;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.io.File;
@@ -46,17 +46,17 @@ public interface ProcessorContext<KForward, VForward> {
     String applicationId();
 
     /**
-     * Returns the task id metadata.
+     * Returns the task info.
      *
-     * @return the task id metadata
+     * @return the task info
      */
-    TaskIdMetadata taskIdMetadata();
+    TaskInfo taskInfo();
 
     /**
      * Returns the task id.
      *
      * @return the task id
-     * @deprecated use {@link #taskIdMetadata()} instead.
+     * @deprecated use {@link #taskInfo()} instead.
      */
     @Deprecated
     org.apache.kafka.streams.processor.TaskId taskId();

@@ -233,7 +233,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
         @Override
         public void process(final String key, final String value) {
-            valueList.add(value + " " + context.taskIdMetadata());
+            valueList.add(value + " " + context.taskInfo());
             if (throwError.get()) {
                 throw new StreamsException(Thread.currentThread().getName());
             }

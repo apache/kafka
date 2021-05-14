@@ -97,11 +97,11 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
                 threadId,
-                context.taskIdMetadata().toString(),
+                context.taskInfo().toString(),
                 internalProcessorContext.currentNode().name(),
                 metrics
             );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskIdMetadata().toString(), metrics);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskInfo().toString(), metrics);
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
         }

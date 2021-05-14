@@ -148,7 +148,7 @@ public class MeteredWindowStoreTest {
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
         tags = mkMap(
             mkEntry(threadIdTagKey, threadId),
-            mkEntry("task-id", context.taskIdMetadata().toString()),
+            mkEntry("task-id", context.taskInfo().toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
@@ -249,7 +249,7 @@ public class MeteredWindowStoreTest {
             storeLevelGroup,
             threadIdTagKey,
             threadId,
-            context.taskIdMetadata().toString(),
+            context.taskInfo().toString(),
             STORE_TYPE,
             STORE_NAME
         )));
@@ -259,7 +259,7 @@ public class MeteredWindowStoreTest {
                 storeLevelGroup,
                 threadIdTagKey,
                 threadId,
-                context.taskIdMetadata().toString(),
+                context.taskInfo().toString(),
                 STORE_TYPE,
                 ROLLUP_VALUE
             )));

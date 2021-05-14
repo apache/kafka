@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams;
 
 /**
- * A basic wrapper class for task id metadata
+ * A wrapper class for basic task info
  */
-public interface TaskIdMetadata {
+public interface TaskInfo {
     /**
-     * @return The ID of the topic group, ie the subtopology that this task executes
+     * @return The ID of the subtopology that this task executes, ie the topicGroupId
      */
-    int topicGroupId();
+    int subtopologyId();
 
     /**
      * @return The ID number of the partition.

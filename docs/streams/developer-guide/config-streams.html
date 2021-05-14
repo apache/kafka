@@ -406,8 +406,8 @@
                                                                final Exception exception) {
 
                       log.warn("Exception caught during Deserialization, sending to the dead queue topic; " +
-                          "taskId: {}, topic: {}, partition: {}, offset: {}",
-                          context.taskId(), record.topic(), record.partition(), record.offset(),
+                          "taskInfo: {}, topic: {}, partition: {}, offset: {}",
+                          context.taskInfo(), record.topic(), record.partition(), record.offset(),
                           exception);
 
                       dlqProducer.send(new ProducerRecord&lt;&gt;(dlqTopic, record.timestamp(), record.key(), record.value(), record.headers())).get();

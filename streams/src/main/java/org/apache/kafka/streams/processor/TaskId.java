@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 
 import java.io.DataInputStream;
@@ -25,7 +26,7 @@ import java.nio.ByteBuffer;
 
 /**
  * The task ID representation composed as topic group ID plus the assigned partition ID.
- * @deprecated please use {@link TaskIdMetadata} instead.
+ * @deprecated please use {@link TaskInfo} instead.
  */
 @Deprecated
 public class TaskId implements Comparable<TaskId> {

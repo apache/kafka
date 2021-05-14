@@ -38,7 +38,7 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
 
         log.error("Exception caught during Deserialization, " +
                   "taskId: {}, topic: {}, partition: {}, offset: {}",
-                  context.taskIdMetadata(), record.topic(), record.partition(), record.offset(),
+                  context.taskInfo(), record.topic(), record.partition(), record.offset(),
                   exception);
 
         return DeserializationHandlerResponse.FAIL;

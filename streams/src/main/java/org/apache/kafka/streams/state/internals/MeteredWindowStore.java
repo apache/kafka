@@ -82,7 +82,7 @@ public class MeteredWindowStore<K, V>
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskIdMetadata().toString();
+        taskId = context.taskInfo().toString();
 
         registerMetrics();
         final Sensor restoreSensor =
@@ -98,7 +98,7 @@ public class MeteredWindowStore<K, V>
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskIdMetadata().toString();
+        taskId = context.taskInfo().toString();
 
         registerMetrics();
         final Sensor restoreSensor =

@@ -257,7 +257,7 @@ public class MockProcessorContextAPITest {
             @Override
             public void process(final Record<String, Object> record) {
                 context.forward(new Record<String, Object>("appId", context.applicationId(), 0L));
-                context.forward(new Record<String, Object>("taskId", context.taskIdMetadata(), 0L));
+                context.forward(new Record<String, Object>("taskId", context.taskInfo(), 0L));
 
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
@@ -344,7 +344,7 @@ public class MockProcessorContextAPITest {
             new MockProcessorContext<>(config, new TaskId(1, 1), dummyFile);
 
         assertThat(context.applicationId(), is("testFullConstructor"));
-        assertThat(context.taskIdMetadata(), equalTo(new TaskId(1, 1)));
+        assertThat(context.taskInfo(), equalTo(new TaskId(1, 1)));
         assertThat(context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG), is("testFullConstructor"));
         assertThat(context.appConfigsWithPrefix("application.").get("id"), is("testFullConstructor"));
         assertThat(context.keySerde().getClass(), is(Serdes.String().getClass()));

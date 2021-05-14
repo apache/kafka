@@ -90,7 +90,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             }
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
-                context.taskIdMetadata().toString(),
+                context.taskInfo().toString(),
                 (StreamsMetricsImpl) context.metrics()
             );
         }

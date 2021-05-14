@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.TaskInfo;
 
 import java.util.Collections;
 import java.util.Map;
@@ -30,7 +31,7 @@ import java.util.Set;
  */
 public class TaskMetadata {
 
-    private final TaskIdMetadata taskIdMetadata;
+    private final TaskInfo taskInfo;
 
     private final Set<TopicPartition> topicPartitions;
 
@@ -40,12 +41,12 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
-    public TaskMetadata(final TaskIdMetadata taskIdMetadata,
+    public TaskMetadata(final TaskInfo taskInfo,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
                         final Map<TopicPartition, Long> endOffsets,
                         final Optional<Long> timeCurrentIdlingStarted) {
-        this.taskIdMetadata = taskIdMetadata;
+        this.taskInfo = taskInfo;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
         this.endOffsets = Collections.unmodifiableMap(endOffsets);
@@ -55,8 +56,8 @@ public class TaskMetadata {
     /**
      * @return the TaskId with additional task metadata such as partition and group id
      */
-    public TaskIdMetadata id() {
-        return taskIdMetadata;
+    public TaskInfo id() {
+        return taskInfo;
     }
 
     /**
@@ -65,7 +66,7 @@ public class TaskMetadata {
      */
     @Deprecated
     public String taskId() {
-        return taskIdMetadata.toString();
+        return taskInfo.toString();
     }
 
     public Set<TopicPartition> topicPartitions() {
@@ -93,19 +94,19 @@ public class TaskMetadata {
             return false;
         }
         final TaskMetadata that = (TaskMetadata) o;
-        return Objects.equals(taskIdMetadata, that.taskIdMetadata) &&
+        return Objects.equals(taskInfo, that.taskInfo) &&
                Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(taskIdMetadata, topicPartitions);
+        return Objects.hash(taskInfo, topicPartitions);
     }
 
     @Override
     public String toString() {
         return "TaskMetadata{" +
-                "taskId=" + taskIdMetadata +
+                "taskId=" + taskInfo +
                 ", topicPartitions=" + topicPartitions +
                 ", committedOffsets=" + committedOffsets +
                 ", endOffsets=" + endOffsets +

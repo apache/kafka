@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -33,8 +34,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskIdMetadata;
-import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -70,7 +69,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 public class MockProcessorContext<KForward, VForward> implements ProcessorContext<KForward, VForward>, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
-    private final TaskId taskId;
+    private final org.apache.kafka.streams.processor.internals.TaskId taskId;
     private final StreamsConfig config;
     private final File stateDir;
 
@@ -216,7 +215,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
             )),
-            new TaskId(0, 0),
+            new org.apache.kafka.streams.processor.internals.TaskId(0, 0),
             null
         );
     }
@@ -230,17 +229,17 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
      * @param config a Properties object, used to configure the context and the processor.
      */
     public MockProcessorContext(final Properties config) {
-        this(config, new TaskId(0, 0), null);
+        this(config, new org.apache.kafka.streams.processor.internals.TaskId(0, 0), null);
     }
 
     /**
      * Create a {@link MockProcessorContext} with a specified taskId and null stateDir.
      *
      * @param config   a {@link Properties} object, used to configure the context and the processor.
-     * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskIdMetadata()}.
+     * @param taskId   a {@link org.apache.kafka.streams.processor.internals.TaskId}, which the context makes available via {@link MockProcessorContext#taskInfo()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
-    public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
+    public MockProcessorContext(final Properties config, final org.apache.kafka.streams.processor.internals.TaskId taskId, final File stateDir) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
@@ -267,7 +266,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
-    public TaskIdMetadata taskIdMetadata() {
+    public TaskInfo taskInfo() {
         return taskId;
     }
 
@@ -462,8 +461,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             }
 
             @Override
-            public TaskIdMetadata taskIdMetadata() {
-                return MockProcessorContext.this.taskIdMetadata();
+            public TaskInfo taskInfo() {
+                return MockProcessorContext.this.taskInfo();
             }
 
             @Deprecated

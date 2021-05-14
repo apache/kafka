@@ -115,7 +115,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>((Windowed<String>) key, (Change<Long>) value, toInternal.timestamp()));
             }
         };
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskIdMetadata().toString(), streamsMetrics);
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskInfo().toString(), streamsMetrics);
 
         initStore(enableCache);
         processor.init(context);

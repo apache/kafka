@@ -143,7 +143,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
         expect(context.metrics())
             .andStubReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, mockTime));
-        expect(context.taskIdMetadata()).andStubReturn(taskId);
+        expect(context.taskInfo()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expectSerdes();
         expect(inner.name()).andStubReturn(STORE_NAME);

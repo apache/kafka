@@ -829,7 +829,7 @@ public class StreamsPartitionAssignorTest {
 
             if (stateChangelogTopics.contains(changelogTopic)) {
                 for (final TaskId id : tasks) {
-                    if (id.topicGroupId() == entry.getKey().nodeGroupId) {
+                    if (id.subtopologyId() == entry.getKey().nodeGroupId) {
                         ids.add(id);
                     }
                 }

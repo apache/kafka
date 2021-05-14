@@ -79,7 +79,7 @@ class CachingSessionStore
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
-        cacheName = context.taskIdMetadata() + "-" + name();
+        cacheName = context.taskInfo() + "-" + name();
         context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);

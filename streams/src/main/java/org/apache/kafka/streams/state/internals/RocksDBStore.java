@@ -235,7 +235,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskIdMetadata());
+        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskInfo());
         openDB(context.appConfigs(), context.stateDir());
 
         // value getter should always read directly from rocksDB
@@ -247,7 +247,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void init(final StateStoreContext context,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskIdMetadata());
+        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskInfo());
         openDB(context.appConfigs(), context.stateDir());
 
         // value getter should always read directly from rocksDB

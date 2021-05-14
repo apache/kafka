@@ -242,7 +242,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
         final String threadId = Thread.currentThread().getName();
-        final String taskName = context.taskIdMetadata().toString();
+        final String taskName = context.taskInfo().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
             threadId,

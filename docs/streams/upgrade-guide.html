@@ -984,7 +984,7 @@
     <p> Producer's <code>client.id</code> naming schema: </p>
     <ul>
         <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
-        <li> exactly-once: <code>[client.Id]-StreamThread-[sequence-number]-[taskId]</code> </li>
+        <li> exactly-once: <code>[client.Id]-StreamThread-[sequence-number]-[taskInfo]</code> </li>
         <li> exactly-once-beta: <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
     </ul>
     <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id</code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>

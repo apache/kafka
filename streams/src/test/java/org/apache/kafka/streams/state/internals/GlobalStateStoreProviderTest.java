@@ -108,7 +108,7 @@ public class GlobalStateStoreProviderTest {
             .andStubReturn(
                 new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST, new MockTime())
             );
-        expect(mockContext.taskIdMetadata()).andStubReturn(new TaskId(0, 0));
+        expect(mockContext.taskInfo()).andStubReturn(new TaskId(0, 0));
         expect(mockContext.recordCollector()).andStubReturn(null);
         expectSerdes(mockContext);
         replay(mockContext);

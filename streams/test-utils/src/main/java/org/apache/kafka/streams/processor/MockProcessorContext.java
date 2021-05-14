@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -32,7 +33,6 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
@@ -60,7 +60,7 @@ import java.util.Properties;
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
-    private final TaskId taskId;
+    private final org.apache.kafka.streams.processor.internals.TaskId taskId;
     private final StreamsConfig config;
     private final File stateDir;
 
@@ -195,7 +195,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
                 }
             },
-            new TaskId(0, 0),
+            new org.apache.kafka.streams.processor.internals.TaskId(0, 0),
             null);
     }
 
@@ -209,18 +209,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
-        this(config, new TaskId(0, 0), null);
+        this(config, new org.apache.kafka.streams.processor.internals.TaskId(0, 0), null);
     }
 
     /**
      * Create a {@link MockProcessorContext} with a specified taskId and null stateDir.
      *
      * @param config   a {@link Properties} object, used to configure the context and the processor.
-     * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskIdMetadata()}.
+     * @param taskId   a {@link org.apache.kafka.streams.processor.internals.TaskId}, which the context makes available via {@link MockProcessorContext#taskInfo()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
+    public MockProcessorContext(final Properties config, final org.apache.kafka.streams.processor.internals.TaskId taskId, final File stateDir) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
@@ -247,7 +247,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public TaskIdMetadata taskIdMetadata() {
+    public TaskInfo taskInfo() {
         return taskId;
     }
 

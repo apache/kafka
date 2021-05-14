@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskIdMetadata;
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -36,7 +36,7 @@ import java.util.Optional;
 
 public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
-    private final TaskId taskId;
+    private final org.apache.kafka.streams.processor.internals.TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
     private final StreamsMetricsImpl metrics;
@@ -48,7 +48,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private long cachedSystemTimeMs;
     protected ThreadCache cache;
 
-    public AbstractProcessorContext(final TaskId taskId,
+    public AbstractProcessorContext(final org.apache.kafka.streams.processor.internals.TaskId taskId,
                                     final StreamsConfig config,
                                     final StreamsMetricsImpl metrics,
                                     final ThreadCache cache) {
@@ -79,7 +79,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public TaskIdMetadata taskIdMetadata() {
+    public TaskInfo taskInfo() {
         return taskId;
     }
 

@@ -121,7 +121,7 @@ public class ProcessorNodeTest {
         final String threadIdTagKey =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
         metricTags.put("processor-node-id", node.name());
-        metricTags.put("task-id", context.taskIdMetadata().toString());
+        metricTags.put("task-id", context.taskInfo().toString());
         metricTags.put(threadIdTagKey, threadId);
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {

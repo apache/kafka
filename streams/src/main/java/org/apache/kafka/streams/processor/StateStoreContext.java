@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.TaskInfo;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
@@ -36,17 +37,17 @@ public interface StateStoreContext {
     String applicationId();
 
     /**
-     * Returns the task id metadata.
+     * Returns the task info.
      *
-     * @return the task id metadata
+     * @return the task info
      */
-    TaskIdMetadata taskIdMetadata();
+    TaskInfo taskInfo();
 
     /**
      * Returns the task id.
      *
      * @return the task id
-     * @deprecated use {@link #taskIdMetadata()} instead.
+     * @deprecated use {@link #taskInfo()} instead.
      */
     @Deprecated
     org.apache.kafka.streams.processor.TaskId taskId();

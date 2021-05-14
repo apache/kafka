@@ -67,7 +67,7 @@ public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KO
         // change this.
         processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
             Thread.currentThread().getName(),
-            context.taskIdMetadata().toString(),
+            context.taskInfo().toString(),
             context.currentNode().name(),
             context.metrics()
         );

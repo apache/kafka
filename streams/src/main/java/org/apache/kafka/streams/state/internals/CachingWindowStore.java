@@ -90,7 +90,7 @@ class CachingWindowStore
             topic,
             Serdes.Bytes(),
             Serdes.ByteArray());
-        cacheName = context.taskIdMetadata() + "-" + name();
+        cacheName = context.taskInfo() + "-" + name();
 
         context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {

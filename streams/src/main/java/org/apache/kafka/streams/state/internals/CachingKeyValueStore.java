@@ -81,7 +81,7 @@ public class CachingKeyValueStore
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
-        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskIdMetadata().toString(), name());
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskInfo().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);

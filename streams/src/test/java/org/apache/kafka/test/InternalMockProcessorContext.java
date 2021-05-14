@@ -425,7 +425,7 @@ public class InternalMockProcessorContext
             key,
             value,
             null,
-            this.taskIdMetadata().partition(),
+            this.taskInfo().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);
