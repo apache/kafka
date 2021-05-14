@@ -24,21 +24,34 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Function;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignmentCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.ElectLeadersRequestData;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -57,12 +70,14 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static java.util.concurrent.TimeUnit.HOURS;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -322,5 +337,100 @@ public class QuorumControllerTest {
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
                 setRack(null), (short) 0))),
             iterator);
+    }
+
+    /**
+     * Test that certain controller operations time out if they stay on the controller
+     * queue for too long.
+     */
+    @Test
+    public void testTimeouts() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                QuorumController controller = controlEnv.activeController();
+                CountDownLatch countDownLatch = controller.pause();
+                CompletableFuture<CreateTopicsResponseData> createFuture =
+                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(0).
+                        setTopics(new CreatableTopicCollection(Collections.singleton(
+                            new CreatableTopic().setName("foo")).iterator())));
+                long now = controller.time().nanoseconds();
+                CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
+                    controller.deleteTopics(now, Collections.singletonList(Uuid.ZERO_UUID));
+                CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
+                    controller.findTopicIds(now, Collections.singletonList("foo"));
+                CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNamesFuture =
+                    controller.findTopicNames(now, Collections.singletonList(Uuid.ZERO_UUID));
+                CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
+                    controller.createPartitions(now, Collections.singletonList(
+                        new CreatePartitionsTopic()));
+                CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
+                    controller.electLeaders(new ElectLeadersRequestData().setTimeoutMs(0).
+                        setTopicPartitions(null));
+                CompletableFuture<AlterPartitionReassignmentsResponseData> alterReassignmentsFuture =
+                    controller.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTimeoutMs(0).
+                            setTopics(Collections.singletonList(new ReassignableTopic())));
+                CompletableFuture<ListPartitionReassignmentsResponseData> listReassignmentsFuture =
+                    controller.listPartitionReassignments(
+                        new ListPartitionReassignmentsRequestData().setTimeoutMs(0));
+                while (controller.time().nanoseconds() == now) {
+                    Thread.sleep(0, 10);
+                }
+                countDownLatch.countDown();
+                assertYieldsTimeout(createFuture);
+                assertYieldsTimeout(deleteFuture);
+                assertYieldsTimeout(findTopicIdsFuture);
+                assertYieldsTimeout(findTopicNamesFuture);
+                assertYieldsTimeout(createPartitionsFuture);
+                assertYieldsTimeout(electLeadersFuture);
+                assertYieldsTimeout(alterReassignmentsFuture);
+                assertYieldsTimeout(listReassignmentsFuture);
+            }
+        }
+    }
+
+    private static void assertYieldsTimeout(Future<?> future) {
+        assertEquals(TimeoutException.class, assertThrows(ExecutionException.class,
+            () -> future.get()).getCause().getClass());
+    }
+
+    /**
+     * Test that certain controller operations finish immediately without putting an event
+     * on the controller queue, if there is nothing to do.
+     */
+    @Test
+    public void testEarlyControllerResults() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                QuorumController controller = controlEnv.activeController();
+                CountDownLatch countDownLatch = controller.pause();
+                CompletableFuture<CreateTopicsResponseData> createFuture =
+                    controller.createTopics(new CreateTopicsRequestData().setTimeoutMs(120000));
+                long deadlineMs = controller.time().nanoseconds() + HOURS.toNanos(1);
+                CompletableFuture<Map<Uuid, ApiError>> deleteFuture =
+                    controller.deleteTopics(deadlineMs, Collections.emptyList());
+                CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIdsFuture =
+                    controller.findTopicIds(deadlineMs, Collections.emptyList());
+                CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNamesFuture =
+                    controller.findTopicNames(deadlineMs, Collections.emptyList());
+                CompletableFuture<List<CreatePartitionsTopicResult>> createPartitionsFuture =
+                    controller.createPartitions(deadlineMs, Collections.emptyList());
+                CompletableFuture<ElectLeadersResponseData> electLeadersFuture =
+                    controller.electLeaders(new ElectLeadersRequestData().setTimeoutMs(120000));
+                CompletableFuture<AlterPartitionReassignmentsResponseData> alterReassignmentsFuture =
+                    controller.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTimeoutMs(12000));
+                createFuture.get();
+                deleteFuture.get();
+                findTopicIdsFuture.get();
+                findTopicNamesFuture.get();
+                createPartitionsFuture.get();
+                electLeadersFuture.get();
+                alterReassignmentsFuture.get();
+                countDownLatch.countDown();
+            }
+        }
     }
 }
