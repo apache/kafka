@@ -1274,20 +1274,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       preferredLeaderMetadata.id
     }
 
+    def asIntegerList(seq: Seq[Int]): util.List[Integer] = {
+      val result = new util.ArrayList[Integer]()
+      seq.foreach(result.add(_))
+      result
+    }
+
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
     def changePreferredLeader(newAssignment: Seq[Int]) = {
       val preferred = newAssignment.head
       val prior1 = zkClient.getLeaderForPartition(partition1).get
       val prior2 = zkClient.getLeaderForPartition(partition2).get
-
-      var m = Map.empty[TopicPartition, Seq[Int]]
-
-      if (prior1 != preferred)
-        m += partition1 -> newAssignment
-      if (prior2 != preferred)
-        m += partition2 -> newAssignment
-
-      zkClient.createPartitionReassignment(m)
+      val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]()
+      if (prior1 != preferred) {
+        reassignments.put(partition1, Optional.of(new NewPartitionReassignment(asIntegerList(newAssignment))))
+      }
+      if (prior2 != preferred) {
+        reassignments.put(partition2, Optional.of(new NewPartitionReassignment(asIntegerList(newAssignment))))
+      }
+      client.alterPartitionReassignments(reassignments).all().get()
       TestUtils.waitUntilTrue(
         () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
         s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
