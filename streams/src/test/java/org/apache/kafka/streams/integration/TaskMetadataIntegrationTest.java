@@ -119,17 +119,17 @@ public class TaskMetadataIntegrationTest {
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
 
             produceMessages(0L, inputTopic, "test");
-            TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
+            TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 1L, "the record was processed");
             process.set(true);
 
             produceMessages(0L, inputTopic, "test1");
-            TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
+            TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 2L, "the record was processed");
             process.set(true);
 
             produceMessages(0L, inputTopic, "test1");
-            TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
+            TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
             TestUtils.waitForCondition(() -> taskMetadata.committedOffsets().get(topicPartition) == 3L, "the record was processed");
         } catch (final Exception e) {
             e.printStackTrace();
@@ -147,7 +147,7 @@ public class TaskMetadataIntegrationTest {
 
             for (int i = 0; i < 10; i++) {
                 produceMessages(0L, inputTopic, "test");
-                TestUtils.waitForCondition(() -> !process.get(), "the record was processed");
+                TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
                 process.set(true);
             }
             assertThat(taskMetadata.endOffsets().get(topicPartition), equalTo(9L));
