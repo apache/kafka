@@ -63,12 +63,12 @@ class ProducerIdsIntegrationTest {
     // Request enough PIDs from each broker to ensure each broker generates two PID blocks
     val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
       IntStream.range(0, 1001).parallel().mapToObj( _ => nextProducerId(broker, clusterInstance.clientListener()))
-    }).collect(Collectors.toSet[Long]).asScala.toSeq
+    }).collect(Collectors.toList[Long]).asScala.toSeq
 
-    assertEquals(3003, ids.size)
+    assertEquals(3003, ids.size, "Expected 3003 IDs")
 
-    val expectedIds = Set(0L, 999L, 1000L, 1999L, 2000L, 2999L, 3000L, 4000L, 5000L)
-    val idsAsString = expectedIds.mkString(", ")
+    val expectedIds = Set(0L, 1000L, 2000L, 3000L, 4000L, 5000L)
+    val idsAsString = ids.mkString(", ")
     expectedIds.foreach { id =>
       assertTrue(ids.contains(id), s"Expected to see $id in $idsAsString")
     }

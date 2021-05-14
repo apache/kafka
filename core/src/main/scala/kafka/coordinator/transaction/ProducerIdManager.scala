@@ -143,18 +143,21 @@ class ProducerIdManager(brokerId: Int,
   private val nextProducerIdBlock = new ArrayBlockingQueue[Try[ProducerIdsBlock]](1)
   private val requestInFlight = new AtomicBoolean(false)
   private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
-  private var nextProducerId: Long = 0L
-
-  // Send an initial request to get the first block
-  maybeRequestNextBlock()
+  private var nextProducerId: Long = -1L
 
   override def generateProducerId(): Long = {
     this synchronized {
-      nextProducerId += 1
-
-      // Check if we need to fetch the next block
-      if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdGenerator.PidPrefetchThreshold)) {
+      if (nextProducerId == -1L) {
+        // Send an initial request to get the first block
         maybeRequestNextBlock()
+        nextProducerId = 0L
+      } else {
+        nextProducerId += 1
+
+        // Check if we need to fetch the next block
+        if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdGenerator.PidPrefetchThreshold)) {
+          maybeRequestNextBlock()
+        }
       }
 
       // If we've exhausted the current block, grab the next block (waiting if necessary)
