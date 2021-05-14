@@ -19,7 +19,6 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
-    private volatile int queueSize;
     private volatile int topics;
     private volatile int partitions;
 
@@ -27,7 +26,6 @@ public final class MockControllerMetrics implements ControllerMetrics {
         this.active = false;
         this.topics = 0;
         this.partitions = 0;
-        this.queueSize = 0;
     }
 
     @Override
@@ -48,16 +46,6 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
-    }
-
-    @Override
-    public void setEventQueueSize(int queueSize) {
-        this.queueSize = queueSize;
-    }
-
-    @Override
-    public int eventQueueSize() {
-        return this.queueSize;
     }
 
     @Override

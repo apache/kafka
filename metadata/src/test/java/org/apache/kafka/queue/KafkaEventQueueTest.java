@@ -81,8 +81,9 @@ public class KafkaEventQueueTest {
 
     @Test
     public void testQueueSize() throws Exception {
+        MockEventQueueMetrics metrics = new MockEventQueueMetrics();
         KafkaEventQueue queue =
-            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testQueueSize");
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testQueueSize", metrics);
 
         CountDownLatch latch = new CountDownLatch(4);
 
@@ -109,11 +110,11 @@ public class KafkaEventQueueTest {
             __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + 1000000),
                 new FutureEvent<>(future5, latch, () -> 5));
 
-        assertEquals(5, queue.size());
+        assertEquals(5, metrics.eventQueueSize());
 
         queue.cancelDeferred(defferedTag);
 
-        assertEquals(4, queue.size());
+        assertEquals(4, metrics.eventQueueSize());
 
         latch.countDown();
         latch.countDown();
@@ -121,7 +122,7 @@ public class KafkaEventQueueTest {
         latch.countDown();
 
         Thread.sleep(1000);
-        assertEquals(0, queue.size());
+        assertEquals(0, metrics.eventQueueSize());
 
         queue.beginShutdown("testQueueSize");
         queue.close();

@@ -17,13 +17,13 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.queue.EventQueueMetrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-
-public final class QuorumControllerMetrics implements ControllerMetrics {
+public final class QuorumControllerMetrics implements ControllerMetrics, EventQueueMetrics {
     private final static MetricName ACTIVE_CONTROLLER_COUNT = new MetricName(
         "kafka.controller", "KafkaController", "ActiveControllerCount", null);
     private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(

@@ -85,6 +85,7 @@ import org.apache.kafka.metalog.MetaLogManager;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.queue.EventQueueMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -128,6 +129,7 @@ public final class QuorumController implements Controller {
         private SnapshotReader snapshotReader;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
+        private EventQueueMetrics eventQueueMetrics = null;
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -193,8 +195,9 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMetrics(ControllerMetrics controllerMetrics) {
-            this.controllerMetrics = controllerMetrics;
+        public Builder setMetrics(QuorumControllerMetrics metrics) {
+            this.controllerMetrics = metrics;
+            this.eventQueueMetrics = metrics;
             return this;
         }
 
@@ -209,9 +212,11 @@ public final class QuorumController implements Controller {
             if (logContext == null) {
                 logContext = new LogContext(String.format("[Controller %d] ", nodeId));
             }
-            if (controllerMetrics == null) {
+            if (controllerMetrics == null && eventQueueMetrics == null) {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
+                eventQueueMetrics = (EventQueueMetrics) Class.forName(
+                    "org.apache.kafka.queue.MockEventQueueMetrics").getConstructor().newInstance();
             }
             if (snapshotWriterBuilder == null) {
                 snapshotWriterBuilder = new NoOpSnapshotWriterBuilder();
@@ -221,7 +226,7 @@ public final class QuorumController implements Controller {
             }
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix, eventQueueMetrics); 
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     logManager, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacementPolicy, snapshotWriterBuilder,
@@ -331,7 +336,6 @@ public final class QuorumController implements Controller {
     private void appendControlEvent(String name, Runnable handler) {
         ControlEvent event = new ControlEvent(name, handler);
         queue.append(event);
-        controllerMetrics.setEventQueueSize(queue.size());
     }
 
     private static final String GENERATE_SNAPSHOT = "generateSnapshot";
@@ -375,14 +379,12 @@ public final class QuorumController implements Controller {
             generator.writer().close();
             generator = null;
             queue.cancelDeferred(GENERATE_SNAPSHOT);
-            controllerMetrics.setEventQueueSize(queue.size());
         }
 
         void reschedule(long delayNs) {
             ControlEvent event = new ControlEvent(GENERATE_SNAPSHOT, this);
             queue.scheduleDeferred(event.name,
                 new EarliestDeadlineFunction(time.nanoseconds() + delayNs), event);
-            controllerMetrics.setEventQueueSize(queue.size());
         }
 
         @Override
@@ -475,7 +477,6 @@ public final class QuorumController implements Controller {
     <T> CompletableFuture<T> appendReadEvent(String name, Supplier<T> handler) {
         ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
         queue.append(event);
-        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -611,7 +612,6 @@ public final class QuorumController implements Controller {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.appendWithDeadline(time.nanoseconds() +
             NANOSECONDS.convert(timeoutMs, TimeUnit.MILLISECONDS), event);
-        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -619,7 +619,6 @@ public final class QuorumController implements Controller {
                                                       ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.append(event);
-        controllerMetrics.setEventQueueSize(queue.size());
         return event.future();
     }
 
@@ -714,7 +713,6 @@ public final class QuorumController implements Controller {
                                                 ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
         queue.scheduleDeferred(name, new EarliestDeadlineFunction(deadlineNs), event);
-        controllerMetrics.setEventQueueSize(queue.size());
         event.future.exceptionally(e -> {
             if (e instanceof UnknownServerException && e.getCause() != null &&
                     e.getCause() instanceof RejectedExecutionException) {
@@ -751,7 +749,6 @@ public final class QuorumController implements Controller {
 
     private void cancelMaybeFenceReplicas() {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
-        controllerMetrics.setEventQueueSize(queue.size());
     }
 
     @SuppressWarnings("unchecked")

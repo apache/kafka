@@ -15,23 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.queue;
 
+public interface EventQueueMetrics {
+    void setEventQueueSize(int queueSize);
 
-public interface ControllerMetrics {
-    void updateEventQueueTime(long durationMs);
-
-    void updateEventQueueProcessingTime(long durationMs);
-
-    void setActive(boolean active);
-
-    boolean active();
-
-    void setGlobalTopicsCount(int topicCount);
-
-    int globalTopicsCount();
-
-    void setGlobalPartitionCount(int partitionCount);
-
-    int globalPartitionCount();
+    int eventQueueSize();
 }

@@ -182,10 +182,6 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        public int queueSize() {
-            return this.queueSize;
-        }
-
         private void remove(EventContext eventContext) {
             eventContext.remove();
             if (eventContext.deadlineNs.isPresent()) {
@@ -211,6 +207,7 @@ public final class KafkaEventQueue implements EventQueue {
                     toRun = null;
                     this.queueSize--;
                 }
+                eventQueueMetrics.setEventQueueSize(queueSize);
                 lock.lock();
                 try {
                     long awaitNs = Long.MAX_VALUE;
@@ -289,6 +286,7 @@ public final class KafkaEventQueue implements EventQueue {
                 boolean queueWasEmpty = head.isSingleton();
                 boolean shouldSignal = false;
                 queueSize++;
+                eventQueueMetrics.setEventQueueSize(queueSize);
                 switch (eventContext.insertionType) {
                     case APPEND:
                         head.insertBefore(eventContext);
@@ -339,6 +337,7 @@ public final class KafkaEventQueue implements EventQueue {
                 if (eventContext != null) {
                     remove(eventContext);
                     queueSize--;
+                    eventQueueMetrics.setEventQueueSize(queueSize);
                 }
             } finally {
                 lock.unlock();
@@ -360,6 +359,7 @@ public final class KafkaEventQueue implements EventQueue {
     private final Logger log;
     private final EventHandler eventHandler;
     private final Thread eventHandlerThread;
+    private EventQueueMetrics eventQueueMetrics;
 
     /**
      * The time in monotonic nanoseconds when the queue is closing, or Long.MAX_VALUE if
@@ -381,10 +381,15 @@ public final class KafkaEventQueue implements EventQueue {
         this.closingTimeNs = Long.MAX_VALUE;
         this.cleanupEvent = null;
         this.eventHandlerThread.start();
+        this.eventQueueMetrics = new MockEventQueueMetrics();
     }
 
-    public int size() {
-        return this.eventHandler.queueSize();
+    public KafkaEventQueue(Time time,
+                           LogContext logContext,
+                           String threadNamePrefix,
+                           EventQueueMetrics eventQueueMetrics) {
+        this(time, logContext, threadNamePrefix);
+        this.eventQueueMetrics = eventQueueMetrics;
     }
 
     @Override

@@ -15,23 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.queue;
 
+public final class MockEventQueueMetrics implements EventQueueMetrics {
+    private volatile int queueSize;
 
-public interface ControllerMetrics {
-    void updateEventQueueTime(long durationMs);
+    public MockEventQueueMetrics() {
+        this.queueSize = 0;
+    }
 
-    void updateEventQueueProcessingTime(long durationMs);
+    @Override
+    public int eventQueueSize() {
+        return this.queueSize;
+    }
 
-    void setActive(boolean active);
-
-    boolean active();
-
-    void setGlobalTopicsCount(int topicCount);
-
-    int globalTopicsCount();
-
-    void setGlobalPartitionCount(int partitionCount);
-
-    int globalPartitionCount();
+    @Override
+    public void setEventQueueSize(int queueSize) {
+        this.queueSize = queueSize;
+    }
 }
