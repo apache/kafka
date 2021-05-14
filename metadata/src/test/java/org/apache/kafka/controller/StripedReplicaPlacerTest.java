@@ -26,6 +26,9 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -179,4 +182,32 @@ public class StripedReplicaPlacerTest {
                 new UsableBroker(2, Optional.empty(), false),
                 new UsableBroker(1, Optional.empty(), false)).iterator()));
     }
+
+    @Test
+    public void testEvenDistribution() {
+        MockRandom random = new MockRandom();
+        StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
+        List<List<Integer>> replicas = placer.place(0, 200, (short) 2, Arrays.asList(
+            new UsableBroker(0, Optional.empty(), false),
+            new UsableBroker(1, Optional.empty(), false),
+            new UsableBroker(2, Optional.empty(), false),
+            new UsableBroker(3, Optional.empty(), false)).iterator());
+        Map<List<Integer>, Integer> counts = new HashMap<>();
+        for (List<Integer> partitionReplicas : replicas) {
+            counts.put(partitionReplicas, counts.getOrDefault(partitionReplicas, 0) + 1);
+        }
+        assertEquals(14, counts.get(Arrays.asList(0, 1)));
+        assertEquals(22, counts.get(Arrays.asList(0, 2)));
+        assertEquals(14, counts.get(Arrays.asList(0, 3)));
+        assertEquals(17, counts.get(Arrays.asList(1, 0)));
+        assertEquals(17, counts.get(Arrays.asList(1, 2)));
+        assertEquals(16, counts.get(Arrays.asList(1, 3)));
+        assertEquals(13, counts.get(Arrays.asList(2, 0)));
+        assertEquals(17, counts.get(Arrays.asList(2, 1)));
+        assertEquals(20, counts.get(Arrays.asList(2, 3)));
+        assertEquals(20, counts.get(Arrays.asList(3, 0)));
+        assertEquals(19, counts.get(Arrays.asList(3, 1)));
+        assertEquals(11, counts.get(Arrays.asList(3, 2)));
+    }
+
 }
