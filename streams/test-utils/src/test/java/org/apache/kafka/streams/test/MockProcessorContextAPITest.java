@@ -45,6 +45,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
 public class MockProcessorContextAPITest {
@@ -343,7 +344,7 @@ public class MockProcessorContextAPITest {
             new MockProcessorContext<>(config, new TaskId(1, 1), dummyFile);
 
         assertThat(context.applicationId(), is("testFullConstructor"));
-        assertThat(context.taskId(), is(new TaskId(1, 1)));
+        assertThat(context.taskIdMetadata(), equalTo(new TaskId(1, 1)));
         assertThat(context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG), is("testFullConstructor"));
         assertThat(context.appConfigsWithPrefix("application.").get("id"), is("testFullConstructor"));
         assertThat(context.keySerde().getClass(), is(Serdes.String().getClass()));
