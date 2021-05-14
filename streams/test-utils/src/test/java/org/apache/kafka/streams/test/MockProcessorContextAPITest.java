@@ -256,7 +256,7 @@ public class MockProcessorContextAPITest {
             @Override
             public void process(final Record<String, Object> record) {
                 context.forward(new Record<String, Object>("appId", context.applicationId(), 0L));
-                context.forward(new Record<String, Object>("taskId", context.taskId(), 0L));
+                context.forward(new Record<String, Object>("taskId", context.taskIdMetadata(), 0L));
 
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();

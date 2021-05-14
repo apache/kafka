@@ -741,7 +741,7 @@ public class RocksDBStoreTest {
 
         context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.taskIdMetadata()).andStubReturn(taskId);
         EasyMock.expect(context.appConfigs())
             .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
@@ -773,7 +773,7 @@ public class RocksDBStoreTest {
 
         context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.taskIdMetadata()).andStubReturn(taskId);
         EasyMock.expect(context.appConfigs())
                 .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
@@ -805,7 +805,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.taskIdMetadata()).andStubReturn(taskId);
         EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(props).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
         EasyMock.replay(context);

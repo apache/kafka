@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskIdMetadata;
-import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.io.File;

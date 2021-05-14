@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -234,7 +235,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskIdMetadata());
         openDB(context.appConfigs(), context.stateDir());
 
         // value getter should always read directly from rocksDB
@@ -246,7 +247,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void init(final StateStoreContext context,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(getMetricsImpl(context), (TaskId) context.taskIdMetadata());
         openDB(context.appConfigs(), context.stateDir());
 
         // value getter should always read directly from rocksDB

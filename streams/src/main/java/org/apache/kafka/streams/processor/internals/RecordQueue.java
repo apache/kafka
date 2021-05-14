@@ -64,7 +64,7 @@ public class RecordQueue {
         this.processorContext = processorContext;
         droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
             Thread.currentThread().getName(),
-            processorContext.taskId().toString(),
+            processorContext.taskIdMetadata().toString(),
             processorContext.metrics()
         );
         recordDeserializer = new RecordDeserializer(

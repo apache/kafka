@@ -57,7 +57,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     }
 
     private void init() {
-        EasyMock.expect(context.taskId()).andReturn(taskId);
+        EasyMock.expect(context.taskIdMetadata()).andReturn(taskId);
         EasyMock.expect(context.recordCollector()).andReturn(collector);
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();

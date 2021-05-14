@@ -237,7 +237,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
      * Create a {@link MockProcessorContext} with a specified taskId and null stateDir.
      *
      * @param config   a {@link Properties} object, used to configure the context and the processor.
-     * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskId()}.
+     * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskIdMetadata()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
@@ -271,6 +271,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         return taskId;
     }
 
+    @Deprecated
     @Override
     public org.apache.kafka.streams.processor.TaskId taskId() {
         return taskId.convertToOldTaskId();
@@ -465,6 +466,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                 return MockProcessorContext.this.taskIdMetadata();
             }
 
+            @Deprecated
             @Override
             public org.apache.kafka.streams.processor.TaskId taskId() {
                 return MockProcessorContext.this.taskId();

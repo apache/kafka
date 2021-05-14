@@ -38,7 +38,7 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
 
         log.warn("Exception caught during Deserialization, " +
                  "taskId: {}, topic: {}, partition: {}, offset: {}",
-                 context.taskId(), record.topic(), record.partition(), record.offset(),
+                 context.taskIdMetadata(), record.topic(), record.partition(), record.offset(),
                  exception);
 
         return DeserializationHandlerResponse.CONTINUE;

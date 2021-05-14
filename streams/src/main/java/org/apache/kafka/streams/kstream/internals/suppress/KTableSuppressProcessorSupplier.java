@@ -144,7 +144,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             internalProcessorContext = (InternalProcessorContext) context;
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
                 Thread.currentThread().getName(),
-                context.taskId().toString(),
+                context.taskIdMetadata().toString(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.metrics()
             );

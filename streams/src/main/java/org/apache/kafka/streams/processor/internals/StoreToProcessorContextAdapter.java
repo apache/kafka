@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskIdMetadata;
 import org.apache.kafka.streams.processor.To;
 
@@ -59,8 +58,9 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
         return delegate.taskIdMetadata();
     }
 
+    @Deprecated
     @Override
-    public TaskId taskId() {
+    public org.apache.kafka.streams.processor.TaskId taskId() {
         return delegate.taskId();
     }
 

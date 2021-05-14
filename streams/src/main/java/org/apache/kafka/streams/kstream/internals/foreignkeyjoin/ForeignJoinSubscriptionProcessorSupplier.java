@@ -66,7 +66,7 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                 Thread.currentThread().getName(),
-                internalProcessorContext.taskId().toString(),
+                internalProcessorContext.taskIdMetadata().toString(),
                 internalProcessorContext.metrics()
             );
             store = internalProcessorContext.getStateStore(storeBuilder);

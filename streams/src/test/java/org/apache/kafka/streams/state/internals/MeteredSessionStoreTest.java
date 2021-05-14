@@ -144,7 +144,7 @@ public class MeteredSessionStoreTest {
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
         expect(context.metrics())
             .andStubReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, mockTime));
-        expect(context.taskId()).andStubReturn(taskId);
+        expect(context.taskIdMetadata()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expect(innerStore.name()).andStubReturn(STORE_NAME);
         storeLevelGroup =

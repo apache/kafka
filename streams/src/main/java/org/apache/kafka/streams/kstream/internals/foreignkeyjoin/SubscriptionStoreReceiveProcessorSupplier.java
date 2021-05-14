@@ -64,7 +64,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
 
                 droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                     Thread.currentThread().getName(),
-                    internalProcessorContext.taskId().toString(),
+                    internalProcessorContext.taskIdMetadata().toString(),
                     internalProcessorContext.metrics()
                 );
                 store = internalProcessorContext.getStateStore(storeBuilder);

@@ -77,7 +77,7 @@ public class MeteredSessionStore<K, V>
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         initStoreSerde(context);
-        taskId = context.taskId().toString();
+        taskId = context.taskIdMetadata().toString();
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
         registerMetrics();
@@ -93,7 +93,7 @@ public class MeteredSessionStore<K, V>
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         initStoreSerde(context);
-        taskId = context.taskId().toString();
+        taskId = context.taskIdMetadata().toString();
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
         registerMetrics();

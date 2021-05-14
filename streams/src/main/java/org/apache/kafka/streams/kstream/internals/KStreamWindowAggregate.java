@@ -92,11 +92,11 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
                 threadId,
-                context.taskId().toString(),
+                context.taskIdMetadata().toString(),
                 internalProcessorContext.currentNode().name(),
                 metrics
             );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskIdMetadata().toString(), metrics);
             windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,

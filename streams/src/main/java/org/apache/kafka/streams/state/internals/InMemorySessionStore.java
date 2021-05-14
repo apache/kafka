@@ -76,7 +76,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         final String threadId = Thread.currentThread().getName();
-        final String taskName = context.taskId().toString();
+        final String taskName = context.taskIdMetadata().toString();
 
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.

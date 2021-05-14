@@ -133,7 +133,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     private void initSensors() {
         threadId = Thread.currentThread().getName();
-        final String taskId = internalProcessorContext.taskId().toString();
+        final String taskId = internalProcessorContext.taskIdMetadata().toString();
         final StreamsMetricsImpl streamsMetrics = internalProcessorContext.metrics();
         processSensor = ProcessorNodeMetrics.processSensor(threadId, taskId, name, streamsMetrics);
         punctuateSensor = ProcessorNodeMetrics.punctuateSensor(threadId, taskId, name, streamsMetrics);
@@ -156,7 +156,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             );
             internalProcessorContext.metrics().removeAllNodeLevelSensors(
                 threadId,
-                internalProcessorContext.taskId().toString(),
+                internalProcessorContext.taskIdMetadata().toString(),
                 name
             );
         } catch (final Exception e) {

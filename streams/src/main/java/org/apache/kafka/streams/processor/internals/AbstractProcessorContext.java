@@ -83,6 +83,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         return taskId;
     }
 
+    @Deprecated
     @Override
     public org.apache.kafka.streams.processor.TaskId taskId() {
         return taskId.convertToOldTaskId();

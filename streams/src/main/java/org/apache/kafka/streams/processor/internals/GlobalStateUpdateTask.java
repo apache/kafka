@@ -78,7 +78,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     logContext,
                     droppedRecordsSensorOrSkippedRecordsSensor(
                         Thread.currentThread().getName(),
-                        processorContext.taskId().toString(),
+                        processorContext.taskIdMetadata().toString(),
                         processorContext.metrics()
                     )
                 )

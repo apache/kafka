@@ -230,7 +230,7 @@ public class MockProcessorContextTest {
             @Override
             public void process(final String key, final Object value) {
                 context().forward("appId", context().applicationId());
-                context().forward("taskId", context().taskId());
+                context().forward("taskId", context().taskIdMetadata());
 
                 context().forward("topic", context().topic());
                 context().forward("partition", context().partition());
@@ -357,7 +357,7 @@ public class MockProcessorContextTest {
         final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);
 
         assertEquals("testFullConstructor", context.applicationId());
-        assertEquals(new TaskId(1, 1), context.taskId());
+        assertEquals(new TaskId(1, 1), context.taskIdMetadata());
         assertEquals("testFullConstructor", context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG));
         assertEquals("testFullConstructor", context.appConfigsWithPrefix("application.").get("id"));
         assertEquals(Serdes.String().getClass(), context.keySerde().getClass());

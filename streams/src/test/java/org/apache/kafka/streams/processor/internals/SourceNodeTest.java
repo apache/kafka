@@ -95,7 +95,7 @@ public class SourceNodeTest {
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
         final Map<String, String> metricTags = mkMap(
             mkEntry(threadIdTagKey, threadId),
-            mkEntry("task-id", context.taskId().toString()),
+            mkEntry("task-id", context.taskIdMetadata().toString()),
             mkEntry("processor-node-id", node.name())
         );
 
@@ -118,7 +118,7 @@ public class SourceNodeTest {
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
             assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
 
-            final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskId().toString();
+            final String sensorNamePrefix = "internal." + threadId + ".task." + context.taskIdMetadata().toString();
             final Sensor processSensor =
                 metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
             final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);

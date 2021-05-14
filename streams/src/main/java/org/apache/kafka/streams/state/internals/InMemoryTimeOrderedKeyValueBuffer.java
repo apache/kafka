@@ -209,7 +209,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private void init(final StateStore root) {
-        taskId = context.taskId().toString();
+        taskId = context.taskIdMetadata().toString();
         streamsMetrics = context.metrics();
 
         threadId = Thread.currentThread().getName();
@@ -232,7 +232,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         updateBufferMetrics();
         open = true;
-        partition = context.taskId().partition();
+        partition = context.taskIdMetadata().partition();
     }
 
     @Override
