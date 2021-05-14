@@ -146,7 +146,7 @@ public class WorkerTest extends ThreadedTest {
     private DelegatingClassLoader delegatingLoader;
     @Mock
     private OffsetBackingStore offsetBackingStore;
-    @Mock
+    @MockStrict
     private List<Runnable> listAwaitTask;
     @MockStrict
     private TaskStatus.Listener taskStatusListener;
