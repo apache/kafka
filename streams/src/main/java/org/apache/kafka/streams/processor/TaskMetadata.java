@@ -30,7 +30,7 @@ import java.util.Set;
  */
 public class TaskMetadata {
 
-    private final String taskId;
+    private final TaskId taskId;
 
     private final Set<TopicPartition> topicPartitions;
 
@@ -40,7 +40,7 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
-    public TaskMetadata(final String taskId,
+    public TaskMetadata(final TaskId taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
                         final Map<TopicPartition, Long> endOffsets,
@@ -52,8 +52,20 @@ public class TaskMetadata {
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
-    public String taskId() {
+    /**
+     * @return the TaskId with additional task metadata such as partition and group id
+     */
+    public TaskId id() {
         return taskId;
+    }
+
+    /**
+     * @return a string representing the TaskId metadata such as partition and group id
+     * @deprecated please use {@link #id()} instead.
+     */
+    @Deprecated
+    public String taskId() {
+        return taskId.toString();
     }
 
     public Set<TopicPartition> topicPartitions() {
