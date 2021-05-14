@@ -153,7 +153,7 @@ public class WorkerTest extends ThreadedTest {
     @MockStrict
     private ConnectorStatus.Listener connectorStatusListener;
 
-    
+
     @Mock private Herder herder;
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private SourceConnector sourceConnector;
@@ -219,6 +219,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.mockStatic(Plugins.class);
     }
 
+    
     @Test
     public void testStartAndStopConnector() throws Throwable {
         expectConverters();
