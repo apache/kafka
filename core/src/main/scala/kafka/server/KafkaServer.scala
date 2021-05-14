@@ -134,7 +134,7 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
-  var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -257,7 +257,7 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-        val brokerToControllerManager = BrokerToControllerChannelManager(
+        clientToControllerChannelManager = BrokerToControllerChannelManager(
           controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
           time = time,
           metrics = metrics,
@@ -265,12 +265,13 @@ class KafkaServer(
           channelName = "forwarding",
           threadNamePrefix = threadNamePrefix,
           retryTimeoutMs = config.requestTimeoutMs.longValue)
-        brokerToControllerManager.start()
-        clientToControllerChannelManager = Some(brokerToControllerManager)
+        clientToControllerChannelManager.start()
 
         /* start forwarding manager */
+        var autoTopicCreationChannel = Option.empty[BrokerToControllerChannelManager]
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
         val apiVersionManager = ApiVersionManager(
@@ -336,7 +337,7 @@ class KafkaServer(
           ProducerIdGenerator(
             config.brokerId,
             brokerEpochSupplier = () => kafkaController.brokerEpoch,
-            brokerToControllerManager,
+            clientToControllerChannelManager,
             config.requestTimeoutMs
           )
         } else {
@@ -354,7 +355,7 @@ class KafkaServer(
           config,
           metadataCache,
           threadNamePrefix,
-          clientToControllerChannelManager,
+          autoTopicCreationChannel,
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
@@ -710,7 +711,8 @@ class KafkaServer(
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-        CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
+        if (clientToControllerChannelManager != null)
+          CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
