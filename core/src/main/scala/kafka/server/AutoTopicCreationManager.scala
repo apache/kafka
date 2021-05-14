@@ -46,11 +46,9 @@ abstract class AutoTopicCreationManager(config: KafkaConfig,
                                      controllerMutationQuota: ControllerMutationQuota,
                                      metadataRequestContext: Option[RequestContext]): Seq[MetadataResponseTopic]
 
-  def createTopics(
-                    topicNames: Set[String],
-                    controllerMutationQuota: ControllerMutationQuota,
-                    metadataRequestContext: Option[RequestContext]
-                  ): Seq[MetadataResponseTopic] = {
+  def createTopics(topicNames: Set[String],
+                   controllerMutationQuota: ControllerMutationQuota,
+                   metadataRequestContext: Option[RequestContext]): Seq[MetadataResponseTopic] = {
     val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topicNames)
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
