@@ -26,7 +26,6 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
@@ -34,14 +33,13 @@ import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.acl.{AclBinding, AclOperation}
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
-import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
@@ -82,9 +80,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -114,13 +110,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
-  private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
-
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
+  val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
 
   def close(): Unit = {
-    alterAclsPurgatory.shutdown()
+    aclApis.close()
     info("Shutdown complete.")
   }
 
@@ -190,9 +185,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.END_TXN => handleEndTxnRequest(request)
         case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-        case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
-        case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
+        case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => maybeForwardToController(request, aclApis.handleCreateAcls)
+        case ApiKeys.DELETE_ACLS => maybeForwardToController(request, aclApis.handleDeleteAcls)
         case ApiKeys.ALTER_CONFIGS => maybeForwardToController(request, handleAlterConfigsRequest)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
@@ -2390,108 +2385,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDescribeAcls(request: RequestChannel.Request): Unit = {
-    authHelper.authorizeClusterOperation(request, DESCRIBE)
-    val describeAclsRequest = request.body[DescribeAclsRequest]
-    authorizer match {
-      case None =>
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(new DescribeAclsResponseData()
-            .setErrorCode(Errors.SECURITY_DISABLED.code)
-            .setErrorMessage("No Authorizer is configured on the broker")
-            .setThrottleTimeMs(requestThrottleMs),
-          describeAclsRequest.version))
-      case Some(auth) =>
-        val filter = describeAclsRequest.filter
-        val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).forEach(returnedAcls.add)
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new DescribeAclsResponse(new DescribeAclsResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(returnedAcls)),
-          describeAclsRequest.version))
-    }
-  }
-
-  def handleCreateAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkAuthorizerOrThrow(KafkaApis.shouldAlwaysForward(request))
-    authHelper.authorizeClusterOperation(request, ALTER)
-    val createAclsRequest = request.body[CreateAclsRequest]
-
-    authorizer match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createAclsRequest.getErrorResponse(requestThrottleMs,
-          new SecurityDisabledException("No Authorizer is configured on the broker.")))
-      case Some(auth) =>
-        val allBindings = createAclsRequest.aclCreations.asScala.map(CreateAclsRequest.aclBinding)
-        val errorResults = mutable.Map[AclBinding, AclCreateResult]()
-        val validBindings = new ArrayBuffer[AclBinding]
-        allBindings.foreach { acl =>
-          val resource = acl.pattern
-          val throwable = if (resource.resourceType == ResourceType.CLUSTER && !AuthorizerUtils.isClusterResource(resource.name))
-              new InvalidRequestException("The only valid name for the CLUSTER resource is " + CLUSTER_NAME)
-          else if (resource.name.isEmpty)
-            new InvalidRequestException("Invalid empty resource name")
-          else
-            null
-          if (throwable != null) {
-            debug(s"Failed to add acl $acl to $resource", throwable)
-            errorResults(acl) = new AclCreateResult(throwable)
-          } else
-            validBindings += acl
-        }
-
-        val createResults = auth.createAcls(request.context, validBindings.asJava).asScala.map(_.toCompletableFuture)
-
-        def sendResponseCallback(): Unit = {
-          val aclCreationResults = allBindings.map { acl =>
-            val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
-            val creationResult = new AclCreationResult()
-            result.exception.asScala.foreach { throwable =>
-              val apiError = ApiError.fromThrowable(throwable)
-              creationResult
-                .setErrorCode(apiError.error.code)
-                .setErrorMessage(apiError.message)
-            }
-            creationResult
-          }
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new CreateAclsResponse(new CreateAclsResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setResults(aclCreationResults.asJava)))
-        }
-
-        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, createResults, sendResponseCallback)
-    }
-  }
-
-  def handleDeleteAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZkAuthorizerOrThrow(KafkaApis.shouldAlwaysForward(request))
-    authHelper.authorizeClusterOperation(request, ALTER)
-    val deleteAclsRequest = request.body[DeleteAclsRequest]
-    authorizer match {
-      case None =>
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          deleteAclsRequest.getErrorResponse(requestThrottleMs,
-            new SecurityDisabledException("No Authorizer is configured on the broker.")))
-      case Some(auth) =>
-
-        val deleteResults = auth.deleteAcls(request.context, deleteAclsRequest.filters)
-          .asScala.map(_.toCompletableFuture).toList
-
-        def sendResponseCallback(): Unit = {
-          val filterResults = deleteResults.map(_.get).map(DeleteAclsResponse.filterResult).asJava
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DeleteAclsResponse(
-              new DeleteAclsResponseData()
-                .setThrottleTimeMs(requestThrottleMs)
-                .setFilterResults(filterResults),
-              deleteAclsRequest.version))
-        }
-        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
-    }
-  }
-
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
     val topics = offsetForLeaderEpoch.data.topics.asScala.toSeq
@@ -3036,7 +2929,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
       metadataSupport match {
-        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache, config) =>
+        case ZkSupport(adminManager, controller, zkClient, forwardingManager, metadataCache) =>
           val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
 
           val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
@@ -3061,7 +2954,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setEntries(entriesData.asJava)))
-        case RaftSupport(fwdMgr, metadataCache, quotaCache, config) =>
+        case RaftSupport(fwdMgr, metadataCache, quotaCache) =>
           val result = quotaCache.describeClientQuotas(
             describeClientQuotasRequest.filter().components().asScala.toSeq,
             describeClientQuotasRequest.filter().strict())

@@ -151,13 +151,13 @@ class KafkaApisTest {
       // with a RaftMetadataCache instance
       metadataCache match {
         case raftMetadataCache: RaftMetadataCache =>
-          RaftSupport(forwardingManager, raftMetadataCache, quotaCache, config)
+          RaftSupport(forwardingManager, raftMetadataCache, quotaCache)
         case _ => throw new IllegalStateException("Test must set an instance of RaftMetadataCache")
       }
     } else {
       metadataCache match {
         case zkMetadataCache: ZkMetadataCache =>
-          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache, config)
+          ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt, zkMetadataCache)
         case _ => throw new IllegalStateException("Test must set an instance of ZkMetadataCache")
       }
     }
@@ -3800,13 +3800,13 @@ class KafkaApisTest {
   @Test
   def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
     metadataCache = MetadataCache.raftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateAcls)
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).aclApis.handleCreateAcls)
   }
 
   @Test
   def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
     metadataCache = MetadataCache.raftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteAcls)
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).aclApis.handleDeleteAcls)
   }
 
   @Test
