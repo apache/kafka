@@ -16,10 +16,17 @@
  */
 package org.apache.kafka.streams.processor;
 
+/**
+ * A basic wrapper class for task metadata
+ */
 public interface TaskId {
-
+    /**
+     * @return The ID of the topic group, ie the subtopology that this task executes
+     */
     int topicGroupId();
 
-    public int partition();
-
+    /**
+     * @return The ID number of the partition.
+     */
+    int partition();
 }

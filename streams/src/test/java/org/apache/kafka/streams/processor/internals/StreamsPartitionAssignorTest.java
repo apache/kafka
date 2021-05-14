@@ -829,7 +829,7 @@ public class StreamsPartitionAssignorTest {
 
             if (stateChangelogTopics.contains(changelogTopic)) {
                 for (final TaskId id : tasks) {
-                    if (id.topicGroupId == entry.getKey().nodeGroupId) {
+                    if (id.topicGroupId() == entry.getKey().nodeGroupId) {
                         ids.add(id);
                     }
                 }
@@ -2107,8 +2107,7 @@ public class StreamsPartitionAssignorTest {
             final TaskId id = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
             for (final TopicPartition partition : partitions) {
-                // since default grouper, taskid.partition == partition.partition()
-                assertEquals(id.partition, partition.partition());
+                assertEquals(id.partition(), partition.partition());
 
                 standbyTopics.add(partition.topic());
             }

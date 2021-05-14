@@ -399,7 +399,7 @@ public class StreamThreadStateStoreProviderTest {
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
         final LogContext logContext = new LogContext("test-stream-task ");
-        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
+        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition()));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,

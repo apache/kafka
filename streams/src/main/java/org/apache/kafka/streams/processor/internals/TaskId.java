@@ -36,11 +36,11 @@ public class TaskId implements Comparable<TaskId>, org.apache.kafka.streams.proc
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);
 
     /** The ID of the topic group. */
-    public final int topicGroupId;
+    private final int topicGroupId;
     /** The ID of the partition. */
-    public final int partition;
+    private final int partition;
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
-    protected final String namedTopology;
+    private final String namedTopology;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
@@ -75,10 +75,6 @@ public class TaskId implements Comparable<TaskId>, org.apache.kafka.streams.proc
     @Override
     public String toString() {
         return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
-    }
-
-    public String toTaskDirString() {
-        return topicGroupId + "_" + partition;
     }
 
     /**
