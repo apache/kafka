@@ -1,116 +1,123 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package org.apache.kafka.connect.runtime;
 
-import java.util.*;
+        /*
+         * Licensed to the Apache Software Foundation (ASF) under one or more
+         * contributor license agreements. See the NOTICE file distributed with
+         * this work for additional information regarding copyright ownership.
+         * The ASF licenses this file to You under the Apache License, Version 2.0
+         * (the "License"); you may not use this file except in compliance with
+         * the License. You may obtain a copy of the License at
+         *
+         *    http://www.apache.org/licenses/LICENSE-2.0
+         *
+         * Unless required by applicable law or agreed to in writing, software
+         * distributed under the License is distributed on an "AS IS" BASIS,
+         * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+         * See the License for the specific language governing permissions and
+         * limitations under the License.
+         */
+        package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.config.provider.MockFileConfigProvider;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
-import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
-import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetBackingStore;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.apache.kafka.connect.storage.OffsetStorageWriter;
-import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
-import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.FutureCallback;
-import org.apache.kafka.connect.util.ParameterizedTest;
-import org.apache.kafka.connect.util.ThreadedTest;
-import org.apache.kafka.connect.util.TopicAdmin;
-import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.api.easymock.annotation.MockNice;
-import org.powermock.api.easymock.annotation.MockStrict;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+        import java.util.Collection;
+        import org.apache.kafka.clients.CommonClientConfigs;
+        import org.apache.kafka.clients.consumer.ConsumerConfig;
+        import org.apache.kafka.clients.producer.KafkaProducer;
+        import org.apache.kafka.clients.producer.ProducerConfig;
+        import org.apache.kafka.common.Configurable;
+        import org.apache.kafka.common.MetricName;
+        import org.apache.kafka.common.config.AbstractConfig;
+        import org.apache.kafka.common.config.ConfigDef;
+        import org.apache.kafka.common.config.ConfigException;
+        import org.apache.kafka.common.metrics.MetricsReporter;
+        import org.apache.kafka.common.metrics.stats.Avg;
+        import org.apache.kafka.common.config.provider.MockFileConfigProvider;
+        import org.apache.kafka.common.utils.MockTime;
+        import org.apache.kafka.common.utils.Time;
+        import org.apache.kafka.connect.connector.ConnectorContext;
+        import org.apache.kafka.connect.connector.Task;
+        import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+        import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+        import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
+        import org.apache.kafka.connect.data.Schema;
+        import org.apache.kafka.connect.data.SchemaAndValue;
+        import org.apache.kafka.connect.errors.ConnectException;
+        import org.apache.kafka.connect.json.JsonConverter;
+        import org.apache.kafka.connect.json.JsonConverterConfig;
+        import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+        import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
+        import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+        import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+        import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
+        import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+        import org.apache.kafka.connect.runtime.isolation.Plugins;
+        import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+        import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+        import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+        import org.apache.kafka.connect.sink.SinkConnector;
+        import org.apache.kafka.connect.sink.SinkTask;
+        import org.apache.kafka.connect.source.SourceConnector;
+        import org.apache.kafka.connect.source.SourceRecord;
+        import org.apache.kafka.connect.source.SourceTask;
+        import org.apache.kafka.connect.storage.Converter;
+        import org.apache.kafka.connect.storage.HeaderConverter;
+        import org.apache.kafka.connect.storage.OffsetBackingStore;
+        import org.apache.kafka.connect.storage.OffsetStorageReader;
+        import org.apache.kafka.connect.storage.OffsetStorageWriter;
+        import org.apache.kafka.connect.storage.StatusBackingStore;
+        import org.apache.kafka.connect.util.ConnectUtils;
+        import org.apache.kafka.connect.util.ConnectorTaskId;
+        import org.apache.kafka.connect.util.FutureCallback;
+        import org.apache.kafka.connect.util.ParameterizedTest;
+        import org.apache.kafka.connect.util.ThreadedTest;
+        import org.apache.kafka.connect.util.TopicAdmin;
+        import org.apache.kafka.connect.util.TopicCreationGroup;
+        import org.easymock.EasyMock;
+        import org.junit.Before;
+        import org.junit.Test;
+        import org.junit.runner.RunWith;
+        import org.powermock.api.easymock.PowerMock;
+        import org.powermock.api.easymock.annotation.Mock;
+        import org.powermock.api.easymock.annotation.MockNice;
+        import org.powermock.api.easymock.annotation.MockStrict;
+        import org.powermock.core.classloader.annotations.PowerMockIgnore;
+        import org.powermock.core.classloader.annotations.PrepareForTest;
+        import org.powermock.modules.junit4.PowerMockRunner;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
-import javax.management.ObjectName;
-import java.lang.management.ManagementFactory;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
-import org.powermock.modules.junit4.PowerMockRunnerDelegate;
-import java.util.ArrayList;
+        import javax.management.MBeanServer;
+        import javax.management.ObjectInstance;
+        import javax.management.ObjectName;
+        import java.lang.management.ManagementFactory;
+        import java.util.Arrays;
+        import java.util.Collections;
+        import java.util.HashMap;
+        import java.util.HashSet;
+        import java.util.List;
+        import java.util.Map;
+        import java.util.Set;
+        import java.util.UUID;
+        import java.util.concurrent.ConcurrentHashMap;
+        import java.util.concurrent.ConcurrentMap;
+        import java.util.concurrent.ExecutionException;
+        import java.util.concurrent.Executor;
+        import java.util.concurrent.ExecutorService;
+        import java.util.concurrent.TimeUnit;
+        import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
-import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+        import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+        import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+        import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+        import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+        import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
+        import static org.easymock.EasyMock.anyObject;
+        import static org.easymock.EasyMock.eq;
+        import static org.easymock.EasyMock.expectLastCall;
+        import static org.hamcrest.CoreMatchers.instanceOf;
+        import static org.hamcrest.MatcherAssert.assertThat;
+        import static org.junit.Assert.assertEquals;
+        import static org.junit.Assert.assertFalse;
+        import static org.junit.Assert.assertNotNull;
+        import static org.junit.Assert.assertNull;
+        import static org.junit.Assert.assertThrows;
+        import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockRunnerDelegate(ParameterizedTest.class)
@@ -132,6 +139,7 @@ public class WorkerTest extends ThreadedTest {
     private Map<String, String> defaultProducerConfigs = new HashMap<>();
     private Map<String, String> defaultConsumerConfigs = new HashMap<>();
 
+
     @Mock
     private Plugins plugins;
     @Mock
@@ -145,6 +153,7 @@ public class WorkerTest extends ThreadedTest {
     @MockStrict
     private ConnectorStatus.Listener connectorStatusListener;
 
+    
     @Mock private Herder herder;
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private SourceConnector sourceConnector;
@@ -189,9 +198,9 @@ public class WorkerTest extends ThreadedTest {
 
         defaultProducerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         defaultProducerConfigs.put(
-            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         defaultProducerConfigs.put(
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         defaultProducerConfigs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         defaultProducerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
         defaultProducerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
@@ -201,9 +210,9 @@ public class WorkerTest extends ThreadedTest {
         defaultConsumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         defaultConsumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         defaultConsumerConfigs
-            .put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                .put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         defaultConsumerConfigs
-            .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+                .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         // Some common defaults. They might change on individual tests
         connectorProps = anyConnectorConfigMap();
@@ -296,7 +305,7 @@ public class WorkerTest extends ThreadedTest {
 
     private void expectFileConfigProvider() {
         EasyMock.expect(plugins.newConfigProvider(EasyMock.anyObject(),
-                    EasyMock.eq("config.providers.file"), EasyMock.anyObject()))
+                EasyMock.eq("config.providers.file"), EasyMock.anyObject()))
                 .andAnswer(() -> {
                     MockFileConfigProvider mockFileConfigProvider = new MockFileConfigProvider();
                     mockFileConfigProvider.configure(Collections.singletonMap("testId", mockFileProviderTestId));
@@ -655,7 +664,6 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
 
-
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
                 .andReturn(pluginLoader);
@@ -683,7 +691,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -737,16 +745,15 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
-            .andReturn(pluginLoader);
+                .andReturn(pluginLoader);
         EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader)
-            .times(2);
+                .times(2);
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
-            .times(2);
+                .times(2);
         plugins.connectorClass(WorkerTestConnector.class.getName());
         EasyMock.expectLastCall().andReturn(WorkerTestConnector.class);
 
@@ -759,23 +766,23 @@ public class WorkerTest extends ThreadedTest {
         // Each time we check the task metrics, the worker will call the herder
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
-            .andReturn(new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"));
+                .andReturn(new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"));
 
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
-            .andReturn(new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg"));
+                .andReturn(new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg"));
 
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
-            .andReturn(new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg"));
+                .andReturn(new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg"));
 
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
-            .andReturn(new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg"));
+                .andReturn(new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg"));
 
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
-            .andReturn(new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg"));
+                .andReturn(new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg"));
 
         // Called when we stop the worker
         EasyMock.expect(workerTask.loader()).andReturn(pluginLoader);
@@ -787,12 +794,12 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
-            new MockTime(),
-            plugins,
-            config,
-            offsetBackingStore,
-            executorService,
-            noneConnectorClientConfigOverridePolicy);
+                new MockTime(),
+                plugins,
+                config,
+                offsetBackingStore,
+                executorService,
+                noneConnectorClientConfigOverridePolicy);
 
         worker.herder = herder;
 
@@ -801,12 +808,12 @@ public class WorkerTest extends ThreadedTest {
         assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(
-            TASK_ID,
-            ClusterConfigState.EMPTY,
-            anyConnectorConfigMap(),
-            origProps,
-            taskStatusListener,
-            TargetState.STARTED);
+                TASK_ID,
+                ClusterConfigState.EMPTY,
+                anyConnectorConfigMap(),
+                origProps,
+                taskStatusListener,
+                TargetState.STARTED);
 
         assertStatusMetrics(1L, "connector-running-task-count");
         assertStatusMetrics(1L, "connector-paused-task-count");
@@ -848,15 +855,15 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
-            new MockTime(),
-            plugins,
-            config,
-            offsetBackingStore,
-            noneConnectorClientConfigOverridePolicy);
+                new MockTime(),
+                plugins,
+                config,
+                offsetBackingStore,
+                noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
 
         Worker.ConnectorStatusMetricsGroup metricGroup = new Worker.ConnectorStatusMetricsGroup(
-            worker.metrics(), tasks, herder
+                worker.metrics(), tasks, herder
         );
         assertEquals(2L, (long) metricGroup.taskCounter("c1").metricValue(0L));
         assertEquals(1L, (long) metricGroup.taskCounter("c2").metricValue(0L));
@@ -978,7 +985,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -1055,7 +1062,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
-                            noneConnectorClientConfigOverridePolicy);
+                noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
@@ -1083,13 +1090,13 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testProducerConfigsWithoutOverrides() {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
-            new HashMap<>());
+                new HashMap<>());
         PowerMock.replayAll();
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
         assertEquals(expectedConfigs,
-                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1107,10 +1114,10 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
-            new HashMap<>());
+                new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1132,10 +1139,10 @@ public class WorkerTest extends ThreadedTest {
         connConfig.put("linger.ms", "5000");
         connConfig.put("batch.size", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX))
-            .andReturn(connConfig);
+                .andReturn(connConfig);
         PowerMock.replayAll();
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1148,7 +1155,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), config, connectorConfig,
-            null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1169,7 +1176,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
-            null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
     }
 
@@ -1192,10 +1199,10 @@ public class WorkerTest extends ThreadedTest {
         connConfig.put("max.poll.records", "5000");
         connConfig.put("max.poll.interval.ms", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX))
-            .andReturn(connConfig);
+                .andReturn(connConfig);
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
-            null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1209,10 +1216,10 @@ public class WorkerTest extends ThreadedTest {
         connConfig.put("max.poll.records", "5000");
         connConfig.put("max.poll.interval.ms", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX))
-            .andReturn(connConfig);
+                .andReturn(connConfig);
         PowerMock.replayAll();
         assertThrows(ConnectException.class, () -> Worker.consumerConfigs(new ConnectorTaskId("test", 1),
-            configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1236,10 +1243,10 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
-            .andReturn(connConfig);
+                .andReturn(connConfig);
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.adminConfigs(new ConnectorTaskId("test", 1), "", configWithOverrides, connectorConfig,
-                                                             null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1253,10 +1260,10 @@ public class WorkerTest extends ThreadedTest {
         connConfig.put("metadata.max.age.ms", "10000");
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
-            .andReturn(connConfig);
+                .andReturn(connConfig);
         PowerMock.replayAll();
         assertThrows(ConnectException.class, () -> Worker.adminConfigs(new ConnectorTaskId("test", 1),
-            "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
     }
 
@@ -1312,7 +1319,7 @@ public class WorkerTest extends ThreadedTest {
                 config,
                 offsetBackingStore,
                 noneConnectorClientConfigOverridePolicy
-                );
+        );
         MetricName name = worker.metrics().metrics().metricName("test.avg", "grp1");
         worker.metrics().metrics().addMetric(name, new Avg());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
@@ -1503,7 +1510,7 @@ public class WorkerTest extends ThreadedTest {
     public static class WorkerTestConnector extends SourceConnector {
 
         private static final ConfigDef CONFIG_DEF  = new ConfigDef()
-            .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
+                .define("configName", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Test configName.");
 
         @Override
         public String version() {
