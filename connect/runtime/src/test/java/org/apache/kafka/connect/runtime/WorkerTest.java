@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collection;
+import java.util.*;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -85,14 +86,6 @@ import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
@@ -100,6 +93,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.powermock.modules.junit4.PowerMockRunnerDelegate;
+import java.util.ArrayList;
 
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
@@ -146,8 +140,6 @@ public class WorkerTest extends ThreadedTest {
     private DelegatingClassLoader delegatingLoader;
     @Mock
     private OffsetBackingStore offsetBackingStore;
-    @Mock
-    private List<Runnable> runnableList ;
     @MockStrict
     private TaskStatus.Listener taskStatusListener;
     @MockStrict
@@ -662,7 +654,6 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(runnableList);
 
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
@@ -746,7 +737,7 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(runnableList);
+        
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -956,8 +947,6 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(runnableList);
-
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
@@ -1036,7 +1025,6 @@ public class WorkerTest extends ThreadedTest {
         expectTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
 
         EasyMock.expect(executorService.submit(workerTask)).andReturn(null);
-        EasyMock.expect(executorService.shutdownNow()).andReturn(runnableList);
 
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
