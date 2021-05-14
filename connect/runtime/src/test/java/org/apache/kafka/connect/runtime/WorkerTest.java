@@ -219,6 +219,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.mockStatic(Plugins.class);
     }
 
+
     
     @Test
     public void testStartAndStopConnector() throws Throwable {
