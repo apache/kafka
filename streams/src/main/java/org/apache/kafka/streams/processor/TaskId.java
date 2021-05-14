@@ -16,17 +16,100 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 /**
- * A basic wrapper class for task metadata
+ * The task ID representation composed as topic group ID plus the assigned partition ID.
+ * @deprecated please use {@link TaskIdMetadata} instead.
  */
-public interface TaskId {
-    /**
-     * @return The ID of the topic group, ie the subtopology that this task executes
-     */
-    int topicGroupId();
+@Deprecated
+public class TaskId implements Comparable<TaskId> {
+
+    /** The ID of the topic group. */
+    public final int topicGroupId;
+    /** The ID of the partition. */
+    public final int partition;
+
+    public TaskId(final int topicGroupId, final int partition) {
+        this.topicGroupId = topicGroupId;
+        this.partition = partition;
+    }
+
+    public String toString() {
+        return topicGroupId + "_" + partition;
+    }
 
     /**
-     * @return The ID number of the partition.
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
-    int partition();
+    public static TaskId parse(final String taskIdStr) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+
+        try {
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+
+            return new TaskId(topicGroupId, partition);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+    }
+
+    /**
+     * @throws IOException if cannot write to output stream
+     */
+    public void writeTo(final DataOutputStream out) throws IOException {
+        out.writeInt(topicGroupId);
+        out.writeInt(partition);
+    }
+
+    /**
+     * @throws IOException if cannot read from input stream
+     */
+    public static TaskId readFrom(final DataInputStream in) throws IOException {
+        return new TaskId(in.readInt(), in.readInt());
+    }
+
+    public void writeTo(final ByteBuffer buf) {
+        buf.putInt(topicGroupId);
+        buf.putInt(partition);
+    }
+
+    public static TaskId readFrom(final ByteBuffer buf) {
+        return new TaskId(buf.getInt(), buf.getInt());
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+
+        if (o instanceof TaskId) {
+            final TaskId other = (TaskId) o;
+            return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        final long n = ((long) topicGroupId << 32) | (long) partition;
+        return (int) (n % 0xFFFFFFFFL);
+    }
+
+    @Override
+    public int compareTo(final TaskId other) {
+        final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
+        return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
+    }
 }

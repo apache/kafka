@@ -30,7 +30,7 @@ import java.util.Set;
  */
 public class TaskMetadata {
 
-    private final TaskId taskId;
+    private final TaskIdMetadata taskIdMetadata;
 
     private final Set<TopicPartition> topicPartitions;
 
@@ -40,12 +40,12 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
-    public TaskMetadata(final TaskId taskId,
+    public TaskMetadata(final TaskIdMetadata taskIdMetadata,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
                         final Map<TopicPartition, Long> endOffsets,
                         final Optional<Long> timeCurrentIdlingStarted) {
-        this.taskId = taskId;
+        this.taskIdMetadata = taskIdMetadata;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
         this.endOffsets = Collections.unmodifiableMap(endOffsets);
@@ -55,8 +55,8 @@ public class TaskMetadata {
     /**
      * @return the TaskId with additional task metadata such as partition and group id
      */
-    public TaskId id() {
-        return taskId;
+    public TaskIdMetadata id() {
+        return taskIdMetadata;
     }
 
     /**
@@ -65,7 +65,7 @@ public class TaskMetadata {
      */
     @Deprecated
     public String taskId() {
-        return taskId.toString();
+        return taskIdMetadata.toString();
     }
 
     public Set<TopicPartition> topicPartitions() {
@@ -93,19 +93,19 @@ public class TaskMetadata {
             return false;
         }
         final TaskMetadata that = (TaskMetadata) o;
-        return Objects.equals(taskId, that.taskId) &&
+        return Objects.equals(taskIdMetadata, that.taskIdMetadata) &&
                Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(taskId, topicPartitions);
+        return Objects.hash(taskIdMetadata, topicPartitions);
     }
 
     @Override
     public String toString() {
         return "TaskMetadata{" +
-                "taskId=" + taskId +
+                "taskId=" + taskIdMetadata +
                 ", topicPartitions=" + topicPartitions +
                 ", committedOffsets=" + committedOffsets +
                 ", endOffsets=" + endOffsets +

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskIdMetadata;
 import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -266,8 +267,13 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
-    public TaskId taskId() {
+    public TaskIdMetadata taskIdMetadata() {
         return taskId;
+    }
+
+    @Override
+    public org.apache.kafka.streams.processor.TaskId taskId() {
+        return taskId.convertToOldTaskId();
     }
 
     @Override
@@ -455,7 +461,12 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             }
 
             @Override
-            public TaskId taskId() {
+            public TaskIdMetadata taskIdMetadata() {
+                return MockProcessorContext.this.taskIdMetadata();
+            }
+
+            @Override
+            public org.apache.kafka.streams.processor.TaskId taskId() {
                 return MockProcessorContext.this.taskId();
             }
 

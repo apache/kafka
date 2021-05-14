@@ -22,7 +22,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.TaskId;
 
 import java.io.File;
 import java.time.Duration;
@@ -41,11 +40,20 @@ public interface ProcessorContext {
     String applicationId();
 
     /**
+     * Returns the task id metadata.
+     *
+     * @return the task id metadata
+     */
+    TaskIdMetadata taskIdMetadata();
+
+    /**
      * Returns the task id.
      *
      * @return the task id
+     * @deprecated use {@link #taskIdMetadata()} instead.
      */
-    TaskId taskId();
+    @Deprecated
+    org.apache.kafka.streams.processor.TaskId taskId();
 
     /**
      * Returns the default key serde.

@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskIdMetadata;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -78,8 +79,13 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public TaskId taskId() {
+    public TaskIdMetadata taskIdMetadata() {
         return taskId;
+    }
+
+    @Override
+    public org.apache.kafka.streams.processor.TaskId taskId() {
+        return taskId.convertToOldTaskId();
     }
 
     @Override

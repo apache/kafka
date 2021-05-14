@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskIdMetadata;
 import org.apache.kafka.streams.processor.internals.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -46,11 +47,20 @@ public interface ProcessorContext<KForward, VForward> {
     String applicationId();
 
     /**
+     * Returns the task id metadata.
+     *
+     * @return the task id metadata
+     */
+    TaskIdMetadata taskIdMetadata();
+
+    /**
      * Returns the task id.
      *
      * @return the task id
+     * @deprecated use {@link #taskIdMetadata()} instead.
      */
-    TaskId taskId();
+    @Deprecated
+    org.apache.kafka.streams.processor.TaskId taskId();
 
     /**
      * The metadata of the source record, if is one. Processors may be invoked to

@@ -247,8 +247,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public TaskId taskId() {
+    public TaskIdMetadata taskIdMetadata() {
         return taskId;
+    }
+
+    @Override
+    public org.apache.kafka.streams.processor.TaskId taskId() {
+        return taskId.convertToOldTaskId();
     }
 
     @Override

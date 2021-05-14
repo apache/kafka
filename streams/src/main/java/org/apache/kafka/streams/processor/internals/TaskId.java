@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.errors.TaskIdFormatException;
+import org.apache.kafka.streams.processor.TaskIdMetadata;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -31,7 +32,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 /**
  * The task ID representation composed as topic group ID plus the assigned partition ID.
  */
-public class TaskId implements Comparable<TaskId>, org.apache.kafka.streams.processor.TaskId {
+public class TaskId implements Comparable<TaskId>, TaskIdMetadata {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);
 
@@ -70,6 +71,11 @@ public class TaskId implements Comparable<TaskId>, org.apache.kafka.streams.proc
 
     public String namedTopology() {
         return namedTopology;
+    }
+
+    @SuppressWarnings("deprecation")
+    public org.apache.kafka.streams.processor.TaskId convertToOldTaskId() {
+        return new org.apache.kafka.streams.processor.TaskId(topicGroupId, partition);
     }
 
     @Override
