@@ -23,7 +23,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +40,7 @@ public class TaskId implements Comparable<TaskId> {
     /** The ID of the partition. */
     public final int partition;
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
-    private final String namedTopology;
+    protected final String namedTopology;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
@@ -57,10 +56,6 @@ public class TaskId implements Comparable<TaskId> {
         } else {
             this.namedTopology = namedTopology;
         }
-    }
-
-    public Optional<String> namedTopology() {
-        return namedTopology == null ? Optional.empty() : Optional.of(namedTopology);
     }
 
     @Override

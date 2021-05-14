@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -89,6 +90,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -474,6 +476,12 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    <T> CompletableFuture<T> appendReadEvent(String name, long deadlineNs, Supplier<T> handler) {
+        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        queue.appendWithDeadline(deadlineNs, event);
+        return event.future();
+    }
+
     interface ControllerWriteOperation<T> {
         /**
          * Generate the metadata records needed to implement this controller write
@@ -601,11 +609,10 @@ public final class QuorumController implements Controller {
     }
 
     private <T> CompletableFuture<T> appendWriteEvent(String name,
-                                                      long timeoutMs,
+                                                      long deadlineNs,
                                                       ControllerWriteOperation<T> op) {
         ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
-        queue.appendWithDeadline(time.nanoseconds() +
-            NANOSECONDS.convert(timeoutMs, TimeUnit.MILLISECONDS), event);
+        queue.appendWithDeadline(deadlineNs, event);
         return event.future();
     }
 
@@ -927,7 +934,7 @@ public final class QuorumController implements Controller {
         this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
-            configurationControl, clusterControl);
+            configurationControl, clusterControl, controllerMetrics);
         this.logManager = logManager;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1L;
@@ -960,8 +967,9 @@ public final class QuorumController implements Controller {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
-        return appendWriteEvent("createTopics", () ->
-            replicationControl.createTopics(request));
+        return appendWriteEvent("createTopics",
+            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+            () -> replicationControl.createTopics(request));
     }
 
     @Override
@@ -971,23 +979,26 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(Collection<String> names) {
+    public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(long deadlineNs,
+                                                                            Collection<String> names) {
         if (names.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendReadEvent("findTopicIds",
+        return appendReadEvent("findTopicIds", deadlineNs,
             () -> replicationControl.findTopicIds(lastCommittedOffset, names));
     }
 
     @Override
-    public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(Collection<Uuid> ids) {
+    public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(long deadlineNs,
+                                                                              Collection<Uuid> ids) {
         if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendReadEvent("findTopicNames",
+        return appendReadEvent("findTopicNames", deadlineNs,
             () -> replicationControl.findTopicNames(lastCommittedOffset, ids));
     }
 
     @Override
-    public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
+    public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(long deadlineNs,
+                                                               Collection<Uuid> ids) {
         if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
-        return appendWriteEvent("deleteTopics",
+        return appendWriteEvent("deleteTopics", deadlineNs,
             () -> replicationControl.deleteTopics(ids));
     }
 
@@ -1001,7 +1012,13 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<ElectLeadersResponseData>
             electLeaders(ElectLeadersRequestData request) {
-        return appendWriteEvent("electLeaders", request.timeoutMs(),
+        // If topicPartitions is null, we will try to trigger a new leader election on
+        // all partitions (!).  But if it's empty, there is nothing to do.
+        if (request.topicPartitions() != null && request.topicPartitions().isEmpty()) {
+            return CompletableFuture.completedFuture(new ElectLeadersResponseData());
+        }
+        return appendWriteEvent("electLeaders",
+            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
             () -> replicationControl.electLeaders(request));
     }
 
@@ -1015,6 +1032,9 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
         boolean validateOnly) {
+        if (configChanges.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        }
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.incrementalAlterConfigs(configChanges);
@@ -1029,17 +1049,24 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<AlterPartitionReassignmentsResponseData>
             alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
-        CompletableFuture<AlterPartitionReassignmentsResponseData> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException());
-        return future;
+        if (request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterPartitionReassignmentsResponseData());
+        }
+        return appendWriteEvent("alterPartitionReassignments",
+            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+            () -> {
+                throw new UnsupportedOperationException();
+            });
     }
 
     @Override
     public CompletableFuture<ListPartitionReassignmentsResponseData>
             listPartitionReassignments(ListPartitionReassignmentsRequestData request) {
-        CompletableFuture<ListPartitionReassignmentsResponseData> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException());
-        return future;
+        return appendReadEvent("listPartitionReassignments",
+            time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs(), MILLISECONDS),
+            () -> {
+                throw new UnsupportedOperationException();
+            });
     }
 
     @Override
@@ -1117,12 +1144,12 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(List<CreatePartitionsTopic> topics) {
+            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topics) {
         if (topics.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyList());
         }
-        return appendWriteEvent("createPartitions", () ->
-            replicationControl.createPartitions(topics));
+        return appendWriteEvent("createPartitions", deadlineNs,
+            () -> replicationControl.createPartitions(topics));
     }
 
     @Override
@@ -1163,5 +1190,23 @@ public final class QuorumController implements Controller {
     @Override
     public void close() throws InterruptedException {
         queue.close();
+    }
+
+    // VisibleForTesting
+    CountDownLatch pause() {
+        final CountDownLatch latch = new CountDownLatch(1);
+        appendControlEvent("pause", () -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                log.info("Interrupted while waiting for unpause.", e);
+            }
+        });
+        return latch;
+    }
+
+    // VisibleForTesting
+    Time time() {
+        return time;
     }
 }

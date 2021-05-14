@@ -14,24 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals.namedtopology;
 
-package org.apache.kafka.controller;
+import org.apache.kafka.streams.processor.TaskId;
 
+public class NamedTaskId extends TaskId {
+    public NamedTaskId(final int topicGroupId, final int partition, final String namedTopology) {
+        super(topicGroupId, partition, namedTopology);
+        if (namedTopology == null) {
+            throw new IllegalStateException("NamedTopology is required for a NamedTaskId");
+        }
+    }
 
-public interface ControllerMetrics {
-    void setActive(boolean active);
+    public String namedTopology() {
+        return namedTopology;
+    }
 
-    boolean active();
-
-    void updateEventQueueTime(long durationMs);
-
-    void updateEventQueueProcessingTime(long durationMs);
-
-    void setGlobalTopicsCount(int topicCount);
-
-    int globalTopicsCount();
-
-    void setGlobalPartitionCount(int partitionCount);
-
-    int globalPartitionCount();
+    public static String namedTopology(final TaskId taskId) {
+        if (taskId instanceof NamedTaskId) {
+            return ((NamedTaskId) taskId).namedTopology();
+        } else {
+            return null;
+        }
+    }
 }

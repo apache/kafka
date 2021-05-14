@@ -43,14 +43,18 @@ import org.apache.kafka.metadata.UsableBroker;
  *
  * Our second goal is to spread the replicas evenly across brokers.  Since we are placing
  * multiple partitions, we try to avoid putting each partition on the same set of
- * replicas, even if it does satisfy the rack placement goal.  However, we treat the rack
- * placement goal as higher priority than this goal-- if you configure 10 brokers in rack
- * A and B, and 1 broker in rack C, you will end up with a lot of partitions on that one
- * broker in rack C.  If you were to place a lot of partitions with replication factor 3,
- * each partition would try to get a replica there.  In general racks are supposed to be
- * about the same size -- if they aren't, this is a user error.
+ * replicas, even if it does satisfy the rack placement goal.  If any specific broker is
+ * fenced, we would like the new leaders to distributed evenly across the remaining
+ * brokers.
  *
- * Thirdly, we would prefer to place replicas on unfenced brokers, rather than on fenced
+ * However, we treat the rack placement goal as higher priority than this goal-- if you
+ * configure 10 brokers in rack A and B, and 1 broker in rack C, you will end up with a
+ * lot of partitions on that one broker in rack C.  If you were to place a lot of
+ * partitions with replication factor 3, each partition would try to get a replica there.
+ * In general racks are supposed to be about the same size -- if they aren't, this is a
+ * user error.
+ *
+ * Finally, we would prefer to place replicas on unfenced brokers, rather than on fenced
  * brokers.
  *
  *
@@ -121,9 +125,23 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
     static class BrokerList {
         final static BrokerList EMPTY = new BrokerList();
         private final List<Integer> brokers = new ArrayList<>(0);
-        private int epoch = 0;
+
+        /**
+         * How many brokers we have retrieved from the list during the current iteration epoch.
+         */
         private int index = 0;
+
+        /**
+         * The offset to add to the index in order to calculate the list entry to fetch.  The
+         * addition is done modulo the list size.
+         */
         private int offset = 0;
+
+        /**
+         * The last known iteration epoch. If we call next with a different epoch than this, the
+         * index and offset will be reset.
+         */
+        private int epoch = 0;
 
         BrokerList add(int broker) {
             this.brokers.add(broker);
