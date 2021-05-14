@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -623,12 +624,12 @@ public class Worker {
                 topicCreationGroups = null;
             }
 
-            RateLimiter<SourceRecord> rateLimiter = new RecordRateLimiter<>(connConfig.recordRateMax());
+            Collection<RateLimiter<SourceRecord>> rateLimiters = connConfig.rateLimiters();
 
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, admin, topicCreationGroups,
-                    offsetReader, offsetWriter, config, configState, metrics, loader, time, retryWithToleranceOperator, herder.statusBackingStore(), executor, rateLimiter);
+                    offsetReader, offsetWriter, config, configState, metrics, loader, time, retryWithToleranceOperator, herder.statusBackingStore(), executor, rateLimiters);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -640,12 +641,12 @@ public class Worker {
             Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
-            RateLimiter<SinkRecord> rateLimiter = new RecordRateLimiter<>(connConfig.recordRateMax());
+            Collection<RateLimiter<SinkRecord>> rateLimiters = connConfig.rateLimiters();
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
                                       retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
-                                      rateLimiter);
+                                      rateLimiters);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask and current is {}", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");

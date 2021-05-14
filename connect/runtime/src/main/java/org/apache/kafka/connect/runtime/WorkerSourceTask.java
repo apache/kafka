@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
@@ -55,6 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +94,8 @@ class WorkerSourceTask extends WorkerTask {
     private final AtomicReference<Exception> producerSendException;
     private final boolean isTopicTrackingEnabled;
     private final TopicCreation topicCreation;
-    private final RateLimiter<SourceRecord> rateLimiter;
+    private final Collection<RateLimiter<SourceRecord>> rateLimiters;
+    private final Time time;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -128,7 +131,7 @@ class WorkerSourceTask extends WorkerTask {
                             RetryWithToleranceOperator retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
                             Executor closeExecutor,
-                            RateLimiter<SourceRecord> rateLimiter) {
+                            Collection<RateLimiter<SourceRecord>> rateLimiters) {
 
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -156,13 +159,16 @@ class WorkerSourceTask extends WorkerTask {
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
-        this.rateLimiter = rateLimiter;
-        rateLimiter.start(time);
+        this.rateLimiters = rateLimiters;
+        this.time = time;
     }
 
     @Override
     public void initialize(TaskConfig taskConfig) {
         try {
+            for (RateLimiter<SourceRecord> rateLimiter : rateLimiters) {
+                rateLimiter.start(time);
+            }
             this.taskConfig = taskConfig.originalsStrings();
         } catch (Throwable t) {
             log.error("{} Task failed initialization and will not be started.", this, t);
@@ -191,7 +197,9 @@ class WorkerSourceTask extends WorkerTask {
         }
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
-        Utils.closeQuietly(rateLimiter, "rate limiter");
+        for (RateLimiter<SourceRecord> rateLimiter : rateLimiters) {
+            Utils.closeQuietly(rateLimiter, "rate limiter");
+        }
     }
 
     @Override
@@ -337,7 +345,7 @@ class WorkerSourceTask extends WorkerTask {
     private boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
-        rateLimiter.accumulate(toSend);
+        throttle(toSend, rateLimiters);
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
@@ -392,7 +400,6 @@ class WorkerSourceTask extends WorkerTask {
                         }
                     });
                 lastSendFailed = false;
-                rateLimiter.throttle();
             } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
@@ -407,8 +414,6 @@ class WorkerSourceTask extends WorkerTask {
                 throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
-            } catch (InterruptedException e) {
-                // rate limiter interrupted. Just swallow.
             }
             processed++;
         }

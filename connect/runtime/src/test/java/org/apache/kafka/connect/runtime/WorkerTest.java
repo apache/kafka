@@ -1501,7 +1501,7 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(RetryWithToleranceOperator.class),
                 anyObject(StatusBackingStore.class),
                 anyObject(Executor.class),
-                anyObject(RateLimiter.class))
+                EasyMock.eq(Collections.emptyList()))
                 .andReturn(workerTask);
     }
     /* Name here needs to be unique as we are testing the aliasing mechanism */

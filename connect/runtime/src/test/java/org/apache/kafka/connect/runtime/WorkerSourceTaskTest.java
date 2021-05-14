@@ -151,7 +151,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Mock private Future<RecordMetadata> sendFuture;
     @MockStrict private TaskStatus.Listener statusListener;
     @Mock private StatusBackingStore statusBackingStore;
-    private RateLimiter<SourceRecord> rateLimiter = new RecordRateLimiter<>(10_000);
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
@@ -235,7 +234,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
             transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run, rateLimiter);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run, Collections.emptyList());
     }
 
     @Test

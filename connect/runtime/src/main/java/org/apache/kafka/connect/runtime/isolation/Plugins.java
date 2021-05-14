@@ -24,6 +24,7 @@ import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
@@ -170,6 +171,10 @@ public class Plugins {
 
     public Set<PluginDesc<Predicate>> predicates() {
         return delegatingLoader.predicates();
+    }
+
+    public Set<PluginDesc<RateLimiter>> rateLimiters() {
+        return delegatingLoader.rateLimiters();
     }
 
     public Set<PluginDesc<ConfigProvider>> configProviders() {

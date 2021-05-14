@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime;
+package org.apache.kafka.connect.connector;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.io.Closeable;
@@ -26,8 +28,7 @@ import java.util.Collection;
  * Throttles ConnectRecords based on configurable rate limits.
  *
  */
-public interface RateLimiter<R extends ConnectRecord> extends Closeable {
-
+public interface RateLimiter<R extends ConnectRecord> extends Closeable, Configurable {
 
     /**
      * Initialize and start rate-limiting based on the provided Time source.
@@ -41,13 +42,15 @@ public interface RateLimiter<R extends ConnectRecord> extends Closeable {
     void accumulate(Collection<R> records);
 
     /**
-     * Artificially pause (throttle) in order to achieve the desired throughput.
+     * How long to pause (throttle) in order to achieve the desired throughput.
      *
      */
-    void throttle() throws InterruptedException;
+    long throttleTime();
 
-    /** Signal that this instance will no longer will be used. **/
+    /** Configuration specification for this RateLimiter */
+    ConfigDef config();
+
+    /** Signal that this instance will no longer will be used. */
     @Override
     void close();
-
 }

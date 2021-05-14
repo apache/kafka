@@ -140,7 +140,6 @@ public class ErrorHandlingTaskTest {
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
     private SourceConnectorConfig sourceConfig;
-    private RateLimiter<SinkRecord> rateLimiter = new RecordRateLimiter<>(10_000);
     @Mock
     private PluginClassLoader pluginLoader;
     @SuppressWarnings("unused")
@@ -568,7 +567,7 @@ public class ErrorHandlingTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
-            retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore, rateLimiter);
+            retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore, Collections.emptyList());
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -599,7 +598,7 @@ public class ErrorHandlingTaskTest {
             producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, workerConfig,
             ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-            statusBackingStore, (Executor) Runnable::run, rateLimiter);
+            statusBackingStore, (Executor) Runnable::run, Collections.emptyList());
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

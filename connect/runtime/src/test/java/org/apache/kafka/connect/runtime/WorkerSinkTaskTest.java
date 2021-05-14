@@ -152,7 +152,6 @@ public class WorkerSinkTaskTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
-    private RateLimiter<SinkRecord> rateLimiter = new RecordRateLimiter<>(10_000);
 
     private long recordsReturnedTp1;
     private long recordsReturnedTp3;
@@ -184,7 +183,7 @@ public class WorkerSinkTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, rateLimiter);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections.emptyList());
     }
 
     @After

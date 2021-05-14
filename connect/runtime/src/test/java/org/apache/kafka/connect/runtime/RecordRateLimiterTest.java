@@ -26,12 +26,15 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 
 public class RecordRateLimiterTest {
 
     @Test
     public void testHighTargetRate() {
-        RecordRateLimiter<SinkRecord> limiter = new RecordRateLimiter<>(10_000);
+        RecordRateLimiter<SinkRecord> limiter = new RecordRateLimiter<>();
+        limiter.configure(config(10_000));      // 10,000 records per second
+ 
         MockTime time = new MockTime();
         limiter.start(time);
 
@@ -63,7 +66,9 @@ public class RecordRateLimiterTest {
 
     @Test
     public void testLowTargetRate() {
-        RecordRateLimiter<SinkRecord> limiter = new RecordRateLimiter<>(1);
+        RecordRateLimiter<SinkRecord> limiter = new RecordRateLimiter<>();
+        limiter.configure(config(1));           // 1 record per second
+
         MockTime time = new MockTime();
         limiter.start(time);
 
@@ -95,5 +100,11 @@ public class RecordRateLimiterTest {
  
     private Collection<SinkRecord> nRecords(int n) {
         return Collections.nCopies(n, new SinkRecord("test", 0, null, null, null, null, 0));
+    }
+
+    private HashMap<String, Object> config(double targetRate) {
+        HashMap<String, Object> m = new HashMap<>();
+        m.put(RecordRateLimiter.RECORD_RATE_LIMIT_CONFIG, targetRate);
+        return m;
     }
 }

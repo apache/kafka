@@ -121,7 +121,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @Mock private TaskStatus.Listener statusListener;
     @Mock private StatusBackingStore statusBackingStore;
-    private RateLimiter<SinkRecord> rateLimiter = new RecordRateLimiter<>(10_000);
 
     private long recordsReturned;
 
@@ -146,7 +145,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 valueConverter, headerConverter,
                 new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
                 consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore,
-                rateLimiter);
+                Collections.emptyList());
 
         recordsReturned = 0;
     }

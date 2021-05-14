@@ -24,38 +24,40 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Simple RateLimiter in terms of records-per-second.
+ * Simple RateLimiter in terms of record-batches-per-second.
  *
  */
-public class RecordRateLimiter<R extends ConnectRecord> extends CountingRateLimiter<R> {
+public class RecordBatchRateLimiter<R extends ConnectRecord> extends CountingRateLimiter<R> {
 
-    public final static String RECORD_RATE_LIMIT_CONFIG = "record.rate.limit";
-    public final static String RECORD_RATE_LIMIT_DOC = "Max records per second allowed through each Task.";
-    public final static String RECORD_RATE_LIMIT_DISPLAY = "Records per second";
+    public final static String RECORD_BATCH_RATE_LIMIT_CONFIG = "record.batch.rate.limit";
+    public final static String RECORD_BATCH_RATE_LIMIT_DOC = "Max record batches per second allowed through each Task.";
+    public final static String RECORD_BATCH_RATE_LIMIT_DISPLAY = "Record batches per second";
 
     public final static ConfigDef CONFIG_DEF = new ConfigDef()
         .define(
-            RECORD_RATE_LIMIT_CONFIG,
+            RECORD_BATCH_RATE_LIMIT_CONFIG,
             ConfigDef.Type.DOUBLE,
             Double.MAX_VALUE,
             ConfigDef.Importance.LOW,
-            RECORD_RATE_LIMIT_DOC,
+            RECORD_BATCH_RATE_LIMIT_DOC,
             ConnectorConfig.RATE_LIMITS_GROUP,
             1,
             ConfigDef.Width.LONG,
-            RECORD_RATE_LIMIT_DISPLAY);
+            RECORD_BATCH_RATE_LIMIT_DISPLAY);
+
 
     @Override
     public void accumulate(Collection<R> records) {
-        count(records.size());
+        // trivially count each batch
+        count(1);
     }
 
     @Override
     public void configure(Map<String, ?> props) {
         AbstractConfig config = new AbstractConfig(config(), props, true);
-        setTargetRate(config.getDouble(RECORD_RATE_LIMIT_CONFIG));
+        setTargetRate(config.getDouble(RECORD_BATCH_RATE_LIMIT_CONFIG));
     }
- 
+
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;
