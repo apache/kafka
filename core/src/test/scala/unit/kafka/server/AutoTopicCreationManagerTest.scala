@@ -103,9 +103,7 @@ class AutoTopicCreationManagerTest {
                               replicationFactor: Short = 1): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      Some(brokerToController),
-      Some(adminManager),
-      Some(controller),
+      brokerToController,
       groupCoordinator,
       transactionCoordinator)
 
@@ -129,11 +127,9 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateTopicsWithForwardingDisabled(): Unit = {
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+    autoTopicCreationManager = new ZkAutoTopicCreationManager(
       config,
-      None,
-      Some(adminManager),
-      Some(controller),
+      ZkSupport(adminManager, controller, null, None, null),
       groupCoordinator,
       transactionCoordinator)
 
@@ -314,9 +310,7 @@ class AutoTopicCreationManagerTest {
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      Some(brokerToController),
-      Some(adminManager),
-      Some(controller),
+      brokerToController,
       groupCoordinator,
       transactionCoordinator)
 
@@ -342,11 +336,9 @@ class AutoTopicCreationManagerTest {
                                         topicName: String,
                                         isInternal: Boolean,
                                         expectedError: Option[Errors] = None): Unit = {
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+    autoTopicCreationManager = new ZkAutoTopicCreationManager(
       config,
-      None,
-      Some(adminManager),
-      Some(controller),
+      ZkSupport(adminManager, controller, null, None, null),
       groupCoordinator,
       transactionCoordinator)
 

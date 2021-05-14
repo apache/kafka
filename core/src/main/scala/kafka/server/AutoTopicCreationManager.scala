@@ -20,8 +20,6 @@ package kafka.server
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-
-import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
@@ -38,83 +36,139 @@ import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestC
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
-trait AutoTopicCreationManager {
+abstract class AutoTopicCreationManager(config: KafkaConfig,
+                                        groupCoordinator: GroupCoordinator,
+                                        txnCoordinator: TransactionCoordinator) extends Logging {
+
+  private[server] val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
+
+  private[server] def doCreateTopics(createableTopics: Map[String, CreatableTopic],
+                                     controllerMutationQuota: ControllerMutationQuota,
+                                     metadataRequestContext: Option[RequestContext]): Seq[MetadataResponseTopic]
 
   def createTopics(
-    topicNames: Set[String],
-    controllerMutationQuota: ControllerMutationQuota,
-    metadataRequestContext: Option[RequestContext]
-  ): Seq[MetadataResponseTopic]
-}
-
-object AutoTopicCreationManager {
-
-  def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    threadNamePrefix: Option[String],
-    channelManager: Option[BrokerToControllerChannelManager],
-    adminManager: Option[ZkAdminManager],
-    controller: Option[KafkaController],
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-  ): AutoTopicCreationManager = {
-    new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
-      controller, groupCoordinator, txnCoordinator)
-  }
-}
-
-class DefaultAutoTopicCreationManager(
-  config: KafkaConfig,
-  channelManager: Option[BrokerToControllerChannelManager],
-  adminManager: Option[ZkAdminManager],
-  controller: Option[KafkaController],
-  groupCoordinator: GroupCoordinator,
-  txnCoordinator: TransactionCoordinator
-) extends AutoTopicCreationManager with Logging {
-  if (controller.isEmpty && channelManager.isEmpty) {
-    throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
-  }
-
-  private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
-
-  /**
-   * Initiate auto topic creation for the given topics.
-   *
-   * @param topics the topics to create
-   * @param controllerMutationQuota the controller mutation quota for topic creation
-   * @param metadataRequestContext defined when creating topics on behalf of the client. The goal here is to preserve
-   *                               original client principal for auditing, thus needing to wrap a plain CreateTopicsRequest
-   *                               inside Envelope to send to the controller when forwarding is enabled.
-   * @return auto created topic metadata responses
-   */
-  override def createTopics(
-    topics: Set[String],
-    controllerMutationQuota: ControllerMutationQuota,
-    metadataRequestContext: Option[RequestContext]
-  ): Seq[MetadataResponseTopic] = {
-    val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topics)
-
+                    topicNames: Set[String],
+                    controllerMutationQuota: ControllerMutationQuota,
+                    metadataRequestContext: Option[RequestContext]
+                  ): Seq[MetadataResponseTopic] = {
+    val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topicNames)
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
-    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
-      sendCreateTopicRequest(creatableTopics, metadataRequestContext)
     } else {
-      createTopicsInZk(creatableTopics, controllerMutationQuota)
+      doCreateTopics(creatableTopics, controllerMutationQuota, metadataRequestContext)
     }
-
     uncreatableTopicResponses ++ creatableTopicResponses
   }
 
-  private def createTopicsInZk(
-    creatableTopics: Map[String, CreatableTopic],
-    controllerMutationQuota: ControllerMutationQuota
-  ): Seq[MetadataResponseTopic] = {
+  def creatableTopic(topic: String): CreatableTopic = {
+    topic match {
+      case GROUP_METADATA_TOPIC_NAME =>
+        new CreatableTopic()
+          .setName(topic)
+          .setNumPartitions(config.offsetsTopicPartitions)
+          .setReplicationFactor(config.offsetsTopicReplicationFactor)
+          .setConfigs(convertToTopicConfigCollections(groupCoordinator.offsetsTopicConfigs))
+      case TRANSACTION_STATE_TOPIC_NAME =>
+        new CreatableTopic()
+          .setName(topic)
+          .setNumPartitions(config.transactionTopicPartitions)
+          .setReplicationFactor(config.transactionTopicReplicationFactor)
+          .setConfigs(convertToTopicConfigCollections(
+            txnCoordinator.transactionTopicConfigs))
+      case topicName =>
+        new CreatableTopic()
+          .setName(topicName)
+          .setNumPartitions(config.numPartitions)
+          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
+    }
+  }
+
+  def convertToTopicConfigCollections(config: Properties): CreateableTopicConfigCollection = {
+    val topicConfigs = new CreateableTopicConfigCollection()
+    config.forEach {
+      case (name, value) =>
+        topicConfigs.add(new CreateableTopicConfig()
+          .setName(name.toString)
+          .setValue(value.toString))
+    }
+    topicConfigs
+  }
+
+  def isValidTopicName(topic: String): Boolean = {
+    try {
+      Topic.validate(topic)
+      true
+    } catch {
+      case _: InvalidTopicException =>
+        false
+    }
+  }
+
+  def filterCreatableTopics(topics: Set[String]): (Map[String, CreatableTopic], Seq[MetadataResponseTopic]) = {
+
+    val creatableTopics = mutable.Map.empty[String, CreatableTopic]
+    val uncreatableTopics = mutable.Buffer.empty[MetadataResponseTopic]
+
+    topics.foreach { topic =>
+      // Attempt basic topic validation before sending any requests to the controller.
+      val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
+        Some(Errors.INVALID_TOPIC_EXCEPTION)
+      } else if (!inflightTopics.add(topic)) {
+        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      } else {
+        None
+      }
+
+      validationError match {
+        case Some(error) =>
+          uncreatableTopics += new MetadataResponseTopic()
+            .setErrorCode(error.code)
+            .setName(topic)
+            .setIsInternal(Topic.isInternal(topic))
+        case None =>
+          creatableTopics.put(topic, creatableTopic(topic))
+      }
+    }
+
+    (creatableTopics, uncreatableTopics)
+  }
+
+  private[server] def clearInflightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
+    creatableTopics.keySet.foreach(inflightTopics.remove)
+    debug(s"Cleared inflight topic creation state for $creatableTopics")
+  }
+}
+
+object AutoTopicCreationManager {
+  def apply(
+    config: KafkaConfig,
+    channelManager: BrokerToControllerChannelManager,
+    metadataSupport: MetadataSupport,
+    groupCoordinator: GroupCoordinator,
+    txnCoordinator: TransactionCoordinator,
+  ): AutoTopicCreationManager = {
+    metadataSupport match {
+      case zk: ZkSupport => new ZkAutoTopicCreationManager(config, zk, groupCoordinator, txnCoordinator)
+      case _: RaftSupport => new DefaultAutoTopicCreationManager(config, channelManager, groupCoordinator, txnCoordinator)
+    }
+  }
+}
+
+
+class ZkAutoTopicCreationManager(config: KafkaConfig,
+                                 zkSupport: ZkSupport,
+                                 groupCoordinator: GroupCoordinator,
+                                 txnCoordinator: TransactionCoordinator)
+  extends AutoTopicCreationManager(config, groupCoordinator, txnCoordinator) {
+
+  override def doCreateTopics(creatableTopics: Map[String, CreatableTopic],
+                              controllerMutationQuota: ControllerMutationQuota,
+                              metadataRequestContext: Option[RequestContext]): Seq[MetadataResponseTopic] = {
     val topicErrors = new AtomicReference[Map[String, ApiError]]()
     try {
       // Note that we use timeout = 0 since we do not need to wait for metadata propagation
       // and we want to get the response error immediately.
-      adminManager.get.createTopics(
+      zkSupport.adminManager.createTopics(
         timeout = 0,
         validateOnly = false,
         creatableTopics,
@@ -149,17 +203,22 @@ class DefaultAutoTopicCreationManager(
               .setIsInternal(Topic.isInternal(topic))
           }
       }
-
       creatableTopicResponses
     } finally {
       clearInflightRequests(creatableTopics)
     }
   }
+}
 
-  private def sendCreateTopicRequest(
-    creatableTopics: Map[String, CreatableTopic],
-    metadataRequestContext: Option[RequestContext]
-  ): Seq[MetadataResponseTopic] = {
+class DefaultAutoTopicCreationManager(config: KafkaConfig,
+                                      channelManager: BrokerToControllerChannelManager,
+                                      groupCoordinator: GroupCoordinator,
+                                      txnCoordinator: TransactionCoordinator)
+  extends AutoTopicCreationManager(config, groupCoordinator, txnCoordinator) {
+
+  override def doCreateTopics(creatableTopics: Map[String, CreatableTopic],
+                              controllerMutationQuota: ControllerMutationQuota,
+                              metadataRequestContext: Option[RequestContext]): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
 
@@ -171,18 +230,20 @@ class DefaultAutoTopicCreationManager(
 
     val requestCompletionHandler = new ControllerRequestCompletionHandler {
       override def onTimeout(): Unit = {
-        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
         clearInflightRequests(creatableTopics)
+        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
       }
 
       override def onComplete(response: ClientResponse): Unit = {
-        debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody.toString}.")
         clearInflightRequests(creatableTopics)
+        if (response.authenticationException() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
+        } else if (response.versionMismatch() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
+        } else {
+          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+        }
       }
-    }
-
-    val channelManager = this.channelManager.getOrElse {
-      throw new IllegalStateException("Channel manager must be defined in order to send CreateTopic requests.")
     }
 
     val request = metadataRequestContext.map { context =>
@@ -218,84 +279,5 @@ class DefaultAutoTopicCreationManager(
     info(s"Sent auto-creation request for ${creatableTopics.keys} to the active controller.")
     creatableTopicResponses
   }
-
-  private def clearInflightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
-    creatableTopics.keySet.foreach(inflightTopics.remove)
-    debug(s"Cleared inflight topic creation state for $creatableTopics")
-  }
-
-  private def creatableTopic(topic: String): CreatableTopic = {
-    topic match {
-      case GROUP_METADATA_TOPIC_NAME =>
-        new CreatableTopic()
-          .setName(topic)
-          .setNumPartitions(config.offsetsTopicPartitions)
-          .setReplicationFactor(config.offsetsTopicReplicationFactor)
-          .setConfigs(convertToTopicConfigCollections(groupCoordinator.offsetsTopicConfigs))
-      case TRANSACTION_STATE_TOPIC_NAME =>
-        new CreatableTopic()
-          .setName(topic)
-          .setNumPartitions(config.transactionTopicPartitions)
-          .setReplicationFactor(config.transactionTopicReplicationFactor)
-          .setConfigs(convertToTopicConfigCollections(
-            txnCoordinator.transactionTopicConfigs))
-      case topicName =>
-        new CreatableTopic()
-          .setName(topicName)
-          .setNumPartitions(config.numPartitions)
-          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
-    }
-  }
-
-  private def convertToTopicConfigCollections(config: Properties): CreateableTopicConfigCollection = {
-    val topicConfigs = new CreateableTopicConfigCollection()
-    config.forEach {
-      case (name, value) =>
-        topicConfigs.add(new CreateableTopicConfig()
-          .setName(name.toString)
-          .setValue(value.toString))
-    }
-    topicConfigs
-  }
-
-  private def isValidTopicName(topic: String): Boolean = {
-    try {
-      Topic.validate(topic)
-      true
-    } catch {
-      case _: InvalidTopicException =>
-        false
-    }
-  }
-
-  private def filterCreatableTopics(
-    topics: Set[String]
-  ): (Map[String, CreatableTopic], Seq[MetadataResponseTopic]) = {
-
-    val creatableTopics = mutable.Map.empty[String, CreatableTopic]
-    val uncreatableTopics = mutable.Buffer.empty[MetadataResponseTopic]
-
-    topics.foreach { topic =>
-      // Attempt basic topic validation before sending any requests to the controller.
-      val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
-        Some(Errors.INVALID_TOPIC_EXCEPTION)
-      } else if (!inflightTopics.add(topic)) {
-        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-      } else {
-        None
-      }
-
-      validationError match {
-        case Some(error) =>
-          uncreatableTopics += new MetadataResponseTopic()
-            .setErrorCode(error.code)
-            .setName(topic)
-            .setIsInternal(Topic.isInternal(topic))
-        case None =>
-          creatableTopics.put(topic, creatableTopic(topic))
-      }
-    }
-
-    (creatableTopics, uncreatableTopics)
-  }
 }
+

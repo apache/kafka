@@ -248,9 +248,10 @@ class BrokerServer(
         new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
         createTemporaryProducerIdManager, metrics, metadataCache, Time.SYSTEM)
 
-      autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, Some(clientToControllerChannelManager), None, None,
-        groupCoordinator, transactionCoordinator)
+      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
+
+      autoTopicCreationManager = AutoTopicCreationManager(config, clientToControllerChannelManager,
+        raftSupport, groupCoordinator, transactionCoordinator)
 
       /* Add all reconfigurables for config change notification before starting the metadata listener */
       config.dynamicConfig.addReconfigurables(this)
@@ -324,7 +325,6 @@ class BrokerServer(
 
       // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
       // and started all services that we previously delayed starting.
-      val raftSupport = RaftSupport(forwardingManager, metadataCache, quotaCache)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
