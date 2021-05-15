@@ -43,10 +43,11 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
-import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerState, VersionRange}
+import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._

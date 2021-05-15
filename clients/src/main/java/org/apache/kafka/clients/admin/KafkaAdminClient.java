@@ -31,6 +31,7 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
+import org.apache.kafka.clients.admin.internals.AbortTransactionHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
@@ -4743,6 +4744,15 @@ public class KafkaAdminClient extends AdminClient {
             logContext
         );
         return new DescribeTransactionsResult(invokeDriver(handler, options.timeoutMs));
+    }
+
+    @Override
+    public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
+        AbortTransactionHandler handler = new AbortTransactionHandler(
+            spec,
+            logContext
+        );
+        return new AbortTransactionResult(invokeDriver(handler, options.timeoutMs));
     }
 
     private <K, V> Map<K, KafkaFutureImpl<V>> invokeDriver(

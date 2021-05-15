@@ -265,10 +265,10 @@ public class StreamsResetterTest {
 
     @Test
     public void shouldDetermineInternalTopicBasedOnTopicName1() {
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-response-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-registration-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-12323232-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-12323232-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-named-subscription-response-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-named-subscription-registration-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-12323232-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-12323232-topic"));
     }
 
     @Test

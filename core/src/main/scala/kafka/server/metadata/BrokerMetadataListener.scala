@@ -27,9 +27,10 @@ import org.apache.kafka.common.metadata.MetadataRecordType._
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.metadata.ApiMessageAndVersion
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.raft.{BatchReader, LeaderAndEpoch, RaftClient}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -80,9 +81,18 @@ class BrokerMetadataListener(
     eventQueue.append(new HandleCommitsEvent(reader))
   }
 
+  /**
+   * Handle metadata snapshots
+   */
+  override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit = {
+    // Loading snapshot on the broker is currently not supported.
+    reader.close();
+    throw new UnsupportedOperationException(s"Loading snapshot (${reader.snapshotId()}) is not supported")
+  }
+
   // Visible for testing. It's useful to execute events synchronously in order
   // to make tests deterministic
-  private[metadata] def execCommits(batch: BatchReader.Batch[ApiMessageAndVersion]): Unit = {
+  private[metadata] def execCommits(batch: Batch[ApiMessageAndVersion]): Unit = {
     new HandleCommitsEvent(BatchReader.singleton(batch)).run()
   }
 
@@ -97,7 +107,7 @@ class BrokerMetadataListener(
       }
     }
 
-    private def apply(batch: BatchReader.Batch[ApiMessageAndVersion]): Unit = {
+    private def apply(batch: Batch[ApiMessageAndVersion]): Unit = {
       val records = batch.records
       val lastOffset = batch.lastOffset
 

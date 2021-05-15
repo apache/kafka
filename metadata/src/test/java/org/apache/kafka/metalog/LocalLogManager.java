@@ -19,9 +19,10 @@ package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -306,7 +307,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
-                            listenerData.listener.handleCommit(BatchReader.singleton(new BatchReader.Batch<>(
+                            listenerData.listener.handleCommit(BatchReader.singleton(Batch.of(
                                 entryOffset - batch.records.size() + 1,
                                 Math.toIntExact(batch.leaderEpoch),
                                 batch.records

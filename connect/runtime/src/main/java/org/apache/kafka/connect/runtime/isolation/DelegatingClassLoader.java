@@ -236,13 +236,13 @@ public class DelegatingClassLoader extends URLClassLoader {
             log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
         } catch (IOException e) {
             log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
-        } catch (InstantiationException | IllegalAccessException e) {
+        } catch (ReflectiveOperationException e) {
             log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
         }
     }
 
     private void registerPlugin(Path pluginLocation)
-            throws InstantiationException, IllegalAccessException, IOException {
+        throws IOException, ReflectiveOperationException {
         log.info("Loading plugin from: {}", pluginLocation);
         List<URL> pluginUrls = new ArrayList<>();
         for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
@@ -264,7 +264,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             ClassLoader loader,
             URL[] urls,
             Path pluginLocation
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
@@ -322,7 +322,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private PluginScanResult scanPluginPath(
             ClassLoader loader,
             URL[] urls
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
@@ -346,7 +346,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             Reflections reflections,
             Class<T> klass,
             ClassLoader loader
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         Set<Class<? extends T>> plugins;
         try {
             plugins = reflections.getSubTypesOf(klass);
@@ -387,9 +387,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
     }
 
-    private static <T> String versionFor(Class<? extends T> pluginKlass) throws IllegalAccessException, InstantiationException {
+    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         // Temporary workaround until all the plugins are versioned.
-        return Connector.class.isAssignableFrom(pluginKlass) ? versionFor(pluginKlass.newInstance()) : UNDEFINED_VERSION;
+        return Connector.class.isAssignableFrom(pluginKlass) ?
+            versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;
     }
 
     @Override

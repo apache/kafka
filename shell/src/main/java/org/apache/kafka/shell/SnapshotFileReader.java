@@ -25,13 +25,14 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -150,7 +151,7 @@ public final class SnapshotFileReader implements AutoCloseable {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);
             }
         }
-        listener.handleCommit(BatchReader.singleton(new BatchReader.Batch<>(
+        listener.handleCommit(BatchReader.singleton(Batch.of(
             batch.baseOffset(),
             batch.partitionLeaderEpoch(),
             messages

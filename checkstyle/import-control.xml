@@ -189,6 +189,7 @@
     </subpackage>
 
     <subpackage name="serialization">
+      <allow pkg="org.apache.kafka.clients" />
       <allow class="org.apache.kafka.common.errors.SerializationException" />
       <allow class="org.apache.kafka.common.header.Headers" />
     </subpackage>
@@ -220,8 +221,10 @@
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
-    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.queue" />
+    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
   </subpackage>
@@ -234,6 +237,7 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
@@ -245,6 +249,7 @@
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.queue" />
+    <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
@@ -271,12 +276,17 @@
 
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.test" />
 
-    <subpackage name="log">
-      <allow pkg="org.apache.kafka.server.log" />
+    <subpackage name="common">
+      <allow pkg="org.apache.kafka.server.common" />
     </subpackage>
 
+    <subpackage name="log">
+      <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="org.apache.kafka.server.common" />
+      <allow pkg="org.apache.kafka.server.log" />
+      <allow pkg="org.apache.kafka.test" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="shell">
@@ -289,7 +299,9 @@
     <allow pkg="org.apache.kafka.metadata"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
+    <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.kafka.snapshot"/>
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>
   </subpackage>
@@ -410,6 +422,8 @@
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.common.serialization" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
@@ -418,6 +432,7 @@
   <subpackage name="snapshot">
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test"/>
   </subpackage>
 

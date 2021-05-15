@@ -105,6 +105,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         public final WriteTxnMarkersRequestData data;
 
+        public Builder(WriteTxnMarkersRequestData data) {
+            super(ApiKeys.WRITE_TXN_MARKERS);
+            this.data = data;
+        }
+
         public Builder(short version, final List<TxnMarkerEntry> markers) {
             super(ApiKeys.WRITE_TXN_MARKERS, version);
             List<WritableTxnMarker> dataMarkers = new ArrayList<>();

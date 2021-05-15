@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 
 import java.util.Iterator;

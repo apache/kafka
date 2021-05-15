@@ -321,7 +321,7 @@ public class StreamTaskTest {
         ctrl.checkOrder(true);
         ctrl.replay();
 
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE, "100"), true, stateManager);
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true, stateManager);
         task.suspend();
         task.closeDirty();
         task = null;
@@ -525,6 +525,7 @@ public class StreamTaskTest {
         assertFalse(task.process(time.milliseconds()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
         task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
@@ -548,8 +549,8 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosBetaEnabled() {
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_BETA, "0"), StreamsConfig.METRICS_LATEST);
+    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
+        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -736,7 +737,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowTaskCorruptedExceptionOnTimeoutExceptionIfEosEnabled() {
-        createTimeoutTask(StreamsConfig.EXACTLY_ONCE);
+        createTimeoutTask(StreamsConfig.EXACTLY_ONCE_V2);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
 
@@ -1387,7 +1388,8 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
-        assertThat("Map was not empty", task.highWaterMark().isEmpty());
+        assertThat("Map did not contain the partitions", task.highWaterMark().containsKey(partition1)
+                && task.highWaterMark().containsKey(partition2));
         assertThrows(StreamsException.class, () -> task.process(0L));
     }
 
@@ -1443,7 +1445,7 @@ public class StreamTaskTest {
         EasyMock.reset(recordCollector);
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap());
         EasyMock.replay(recordCollector);
-        assertThat("Map was not empty", task.highWaterMark().isEmpty());
+        assertThat("Map did not contain the partition", task.highWaterMark().containsKey(partition1));
     }
 
     @Test
@@ -1471,7 +1473,7 @@ public class StreamTaskTest {
         task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
-        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
+        assertThat("Map was empty", task.highWaterMark().size() == 2);
     }
 
     @Test
@@ -1501,7 +1503,7 @@ public class StreamTaskTest {
         task.postCommit(false);
 
         EasyMock.verify(recordCollector);
-        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
+        assertThat("Map was empty", task.highWaterMark().size() == 2);
     }
 
     @Test
@@ -1512,7 +1514,7 @@ public class StreamTaskTest {
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE, "100"), true);
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true);
 
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });

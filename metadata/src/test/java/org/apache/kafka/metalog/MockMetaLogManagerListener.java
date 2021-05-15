@@ -18,10 +18,12 @@
 package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +35,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     public static final String NEW_LEADER = "NEW_LEADER";
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
+    public static final String SNAPSHOT = "SNAPSHOT";
 
     private final int nodeId;
     private final List<String> serializedEvents = new ArrayList<>();
@@ -46,13 +49,35 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     public synchronized void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         try {
             while (reader.hasNext()) {
-                BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                Batch<ApiMessageAndVersion> batch = reader.next();
                 long lastCommittedOffset = batch.lastOffset();
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
                     StringBuilder bld = new StringBuilder();
                     bld.append(COMMIT).append(" ").append(message.toString());
+                    serializedEvents.add(bld.toString());
+                }
+                StringBuilder bld = new StringBuilder();
+                bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
+                serializedEvents.add(bld.toString());
+            }
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Override
+    public synchronized void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+        long lastCommittedOffset = reader.snapshotId().offset - 1;
+        try {
+            while (reader.hasNext()) {
+                Batch<ApiMessageAndVersion> batch = reader.next();
+
+                for (ApiMessageAndVersion messageAndVersion : batch.records()) {
+                    ApiMessage message = messageAndVersion.message();
+                    StringBuilder bld = new StringBuilder();
+                    bld.append(SNAPSHOT).append(" ").append(message.toString());
                     serializedEvents.add(bld.toString());
                 }
                 StringBuilder bld = new StringBuilder();

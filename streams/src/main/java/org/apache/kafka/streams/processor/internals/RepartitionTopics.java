@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.slf4j.Logger;
 
@@ -59,7 +60,7 @@ public class RepartitionTopics {
     }
 
     public void setup() {
-        final Map<Integer, TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
+        final Map<Subtopology, TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicConfig(topicGroups, clusterMetadata);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
@@ -90,7 +91,7 @@ public class RepartitionTopics {
         return Collections.unmodifiableMap(topicPartitionInfos);
     }
 
-    private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Integer, TopicsInfo> topicGroups,
+    private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Subtopology, TopicsInfo> topicGroups,
                                                                            final Cluster clusterMetadata) {
 
         final Map<String, InternalTopicConfig> repartitionTopicConfigs = new HashMap<>();
@@ -129,7 +130,7 @@ public class RepartitionTopics {
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
     private void setRepartitionSourceTopicPartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                                         final Map<Integer, TopicsInfo> topicGroups,
+                                                         final Map<Subtopology, TopicsInfo> topicGroups,
                                                          final Cluster clusterMetadata) {
         boolean partitionCountNeeded;
         do {
@@ -167,7 +168,7 @@ public class RepartitionTopics {
     }
 
     private Integer computePartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                          final Map<Integer, TopicsInfo> topicGroups,
+                                          final Map<Subtopology, TopicsInfo> topicGroups,
                                           final Cluster clusterMetadata,
                                           final String repartitionSourceTopic) {
         Integer partitionCount = null;

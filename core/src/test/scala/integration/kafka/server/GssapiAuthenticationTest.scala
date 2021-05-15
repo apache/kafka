@@ -23,6 +23,7 @@ import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import javax.security.auth.login.LoginContext
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -102,6 +103,29 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   }
 
   /**
+   * Verifies that if login fails, subsequent re-login without failures works and clients
+   * are able to connect after the second re-login. Verifies that logout is performed only once
+   * since duplicate logouts without successful login results in NPE from Java 9 onwards.
+   */
+  @Test
+  def testLoginFailure(): Unit = {
+    val selector = createSelectorWithRelogin()
+    try {
+      val login = TestableKerberosLogin.instance
+      assertNotNull(login)
+      login.loginException = Some(new RuntimeException("Test exception to fail login"))
+      executor.submit(() => login.reLogin(), 0)
+      executor.submit(() => login.reLogin(), 0)
+
+      verifyRelogin(selector, login)
+      assertEquals(2, login.loginAttempts)
+      assertEquals(1, login.logoutAttempts)
+    } finally {
+      selector.close()
+    }
+  }
+
+  /**
    * Verifies that there are no authentication failures during Kerberos re-login. If authentication
    * is performed when credentials are unavailable between logout and login, we handle it as a
    * transient error and not an authentication failure so that clients may retry.
@@ -113,21 +137,24 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
       val login = TestableKerberosLogin.instance
       assertNotNull(login)
       executor.submit(() => login.reLogin(), 0)
-
-      val node1 = "1"
-      selector.connect(node1, serverAddr, 1024, 1024)
-      login.logoutResumeLatch.countDown()
-      login.logoutCompleteLatch.await(15, TimeUnit.SECONDS)
-      assertFalse(pollUntilReadyOrDisconnected(selector, node1), "Authenticated during re-login")
-
-      login.reLoginResumeLatch.countDown()
-      login.reLoginCompleteLatch.await(15, TimeUnit.SECONDS)
-      val node2 = "2"
-      selector.connect(node2, serverAddr, 1024, 1024)
-      assertTrue(pollUntilReadyOrDisconnected(selector, node2), "Authenticated failed after re-login")
+      verifyRelogin(selector, login)
     } finally {
       selector.close()
     }
+  }
+
+  private def verifyRelogin(selector: Selector, login: TestableKerberosLogin): Unit = {
+    val node1 = "1"
+    selector.connect(node1, serverAddr, 1024, 1024)
+    login.logoutResumeLatch.countDown()
+    login.logoutCompleteLatch.await(15, TimeUnit.SECONDS)
+    assertFalse(pollUntilReadyOrDisconnected(selector, node1), "Authenticated during re-login")
+
+    login.reLoginResumeLatch.countDown()
+    login.reLoginCompleteLatch.await(15, TimeUnit.SECONDS)
+    val node2 = "2"
+    selector.connect(node2, serverAddr, 1024, 1024)
+    assertTrue(pollUntilReadyOrDisconnected(selector, node2), "Authenticated failed after re-login")
   }
 
   /**
@@ -256,6 +283,9 @@ class TestableKerberosLogin extends KerberosLogin {
   val logoutCompleteLatch = new CountDownLatch(1)
   val reLoginResumeLatch = new CountDownLatch(1)
   val reLoginCompleteLatch = new CountDownLatch(1)
+  @volatile var loginException: Option[RuntimeException] = None
+  @volatile var loginAttempts = 0
+  @volatile var logoutAttempts = 0
 
   assertNull(TestableKerberosLogin.instance)
   TestableKerberosLogin.instance = this
@@ -265,7 +295,17 @@ class TestableKerberosLogin extends KerberosLogin {
     reLoginCompleteLatch.countDown()
   }
 
+  override protected def login(loginContext: LoginContext): Unit = {
+    loginAttempts += 1
+    loginException.foreach { e =>
+      loginException = None
+      throw e
+    }
+    super.login(loginContext)
+  }
+
   override protected def logout(): Unit = {
+    logoutAttempts += 1
     logoutResumeLatch.await(15, TimeUnit.SECONDS)
     super.logout()
     logoutCompleteLatch.countDown()

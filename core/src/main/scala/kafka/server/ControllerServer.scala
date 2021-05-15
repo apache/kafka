@@ -37,10 +37,11 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
-import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
+import org.apache.kafka.metadata.VersionRange
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.jdk.CollectionConverters._
 

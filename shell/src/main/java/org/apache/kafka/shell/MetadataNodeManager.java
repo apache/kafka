@@ -36,14 +36,16 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,11 +82,25 @@ public final class MetadataNodeManager implements AutoCloseable {
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    Batch<ApiMessageAndVersion> batch = reader.next();
                     log.debug("handleCommits " + batch.records() + " at offset " + batch.lastOffset());
                     DirectoryNode dir = data.root.mkdirs("metadataQuorum");
                     dir.create("offset").setContents(String.valueOf(batch.lastOffset()));
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
+                        handleMessage(messageAndVersion.message());
+                    }
+                }
+            } finally {
+                reader.close();
+            }
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            try {
+                while (reader.hasNext()) {
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    for (ApiMessageAndVersion messageAndVersion : batch) {
                         handleMessage(messageAndVersion.message());
                     }
                 }
@@ -104,7 +120,7 @@ public final class MetadataNodeManager implements AutoCloseable {
 
         @Override
         public void beginShutdown() {
-            log.debug("MetaLogListener sent beginShutdown");
+            log.debug("Metadata log listener sent beginShutdown");
         }
     }
 
