@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -510,17 +511,26 @@ public class AbstractConfigTest {
 
     @Test
     public void testConcurrentUnusedUse() throws InterruptedException {
+        ConfigDef configDef = new ConfigDef();
         Properties props = new Properties();
-        props.put("metric.reporters", "b");
-        TestConfig config = new TestConfig(props);
-        config.get("metric.reporters");
-        System.out.println(config.unused());
+        for (int i = 0; i < 1000; i++) {
+            String prop = "a"+i;
+            configDef.define(prop,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    "doc");
+            props.put(prop, "value");
+        }
+        AbstractConfig config = new AbstractConfig(configDef, props);
+        AtomicBoolean error = new AtomicBoolean(false);
         Thread t1 = new Thread("unused") {
             public void run(){
-                for (int i = 0; i < 100; i++) {
+                for (int i = 0; i < 1000; i++) {
                     try {
-                        System.out.println(config.unused());
+                        config.unused();
                     } catch (Throwable e) {
+                        error.set(true);
                         e.printStackTrace();
                     }
                 }
@@ -529,10 +539,13 @@ public class AbstractConfigTest {
         Thread t2 = new Thread("getter") {
             public void run() {
                 for (int i = 0; i < 100; i++) {
-                    try {
-                        config.get("metric.reporters");
-                    } catch (Throwable e) {
-                        e.printStackTrace();
+                    for (int j = 0; j < 1000; j++) {
+                        try {
+                            config.get("a" + j);
+                        } catch (Throwable e) {
+                            error.set(true);
+                            e.printStackTrace();
+                        }
                     }
                 }
             }
@@ -542,6 +555,7 @@ public class AbstractConfigTest {
         t2.start();
         t1.join();
         t2.join();
+        assertFalse(error.get());
     }
 
     private static class TestIndirectConfigResolution extends AbstractConfig {
