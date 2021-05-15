@@ -156,7 +156,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), Long.MAX_VALUE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 500);
             testInputTopic.pipeInput("k2", "A", 500);
@@ -212,7 +212,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), Long.MAX_VALUE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 500);
             testInputTopic.pipeInput("k2", "A", 500);
