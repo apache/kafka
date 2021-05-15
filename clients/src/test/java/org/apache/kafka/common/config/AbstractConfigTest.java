@@ -508,6 +508,42 @@ public class AbstractConfigTest {
         assertNull(config.documentationOf("xyz"));
     }
 
+    @Test
+    public void testConcurrentUnusedUse() throws InterruptedException {
+        Properties props = new Properties();
+        props.put("metric.reporters", "b");
+        TestConfig config = new TestConfig(props);
+        config.get("metric.reporters");
+        System.out.println(config.unused());
+        Thread t1 = new Thread("unused") {
+            public void run(){
+                for (int i = 0; i < 100; i++) {
+                    try {
+                        System.out.println(config.unused());
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        };
+        Thread t2 = new Thread("getter") {
+            public void run() {
+                for (int i = 0; i < 100; i++) {
+                    try {
+                        config.get("metric.reporters");
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        };
+
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+    }
+
     private static class TestIndirectConfigResolution extends AbstractConfig {
 
         private static final ConfigDef CONFIG;
