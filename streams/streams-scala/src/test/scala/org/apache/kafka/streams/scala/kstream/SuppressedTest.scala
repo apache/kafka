@@ -120,5 +120,20 @@ class SuppressedTest {
                                             BufferFullStrategy.SHUT_DOWN,
                                             Collections.singletonMap("myConfigKey", "myConfigValue")),
                  bc4.shutDownWhenFull())
+
+    val bc5 = BufferConfig
+      .unbounded()
+      .emitEarlyWhenFull()
+      .withMaxRecords(3L)
+      .withMaxBytes(4L)
+      .withMaxRecords(5L)
+      .withMaxBytes(6L)
+      .withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue"))
+    assertEquals(new EagerBufferConfigImpl(5L, 6L, Collections.singletonMap("myConfigKey", "myConfigValue")), bc5)
+    assertEquals(new StrictBufferConfigImpl(5L,
+      6L,
+      BufferFullStrategy.SHUT_DOWN,
+      Collections.singletonMap("myConfigKey", "myConfigValue")),
+      bc5.shutDownWhenFull())
   }
 }
