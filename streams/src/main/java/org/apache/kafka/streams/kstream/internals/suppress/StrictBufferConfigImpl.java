@@ -105,18 +105,21 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         final StrictBufferConfigImpl that = (StrictBufferConfigImpl) o;
         return maxRecords == that.maxRecords &&
             maxBytes == that.maxBytes &&
-            bufferFullStrategy == that.bufferFullStrategy;
+            bufferFullStrategy == that.bufferFullStrategy &&
+            Objects.equals(getLogConfig(), ((StrictBufferConfigImpl) o).getLogConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy);
+        return Objects.hash(maxRecords, maxBytes, bufferFullStrategy, getLogConfig());
     }
 
     @Override
     public String toString() {
         return "StrictBufferConfigImpl{maxKeys=" + maxRecords +
             ", maxBytes=" + maxBytes +
-            ", bufferFullStrategy=" + bufferFullStrategy + '}';
+            ", bufferFullStrategy=" + bufferFullStrategy +
+            ", logConfig=" + getLogConfig().toString() +
+             '}';
     }
 }

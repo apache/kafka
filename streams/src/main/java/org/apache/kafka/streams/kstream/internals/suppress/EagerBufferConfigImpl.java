@@ -91,16 +91,20 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
         }
         final EagerBufferConfigImpl that = (EagerBufferConfigImpl) o;
         return maxRecords == that.maxRecords &&
-            maxBytes == that.maxBytes;
+            maxBytes == that.maxBytes &&
+            Objects.equals(getLogConfig(), that.getLogConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes);
+        return Objects.hash(maxRecords, maxBytes, getLogConfig());
     }
 
     @Override
     public String toString() {
-        return "EagerBufferConfigImpl{maxRecords=" + maxRecords + ", maxBytes=" + maxBytes + '}';
+        return "EagerBufferConfigImpl{maxRecords=" + maxRecords +
+                ", maxBytes=" + maxBytes +
+                ", logConfig=" + getLogConfig() +
+                "}";
     }
 }
