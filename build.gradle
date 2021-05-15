@@ -40,7 +40,7 @@ plugins {
   id "com.github.spotbugs" version '4.7.1' apply false
   id 'org.gradle.test-retry' version '1.2.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
-  id 'com.github.johnrengelman.shadow' version '6.1.0' apply false
+  id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
 }
 
 spotless {
@@ -842,15 +842,15 @@ project(':core') {
 
   configurations {
     // manually excludes some unnecessary dependencies
-    compile.exclude module: 'javax'
-    compile.exclude module: 'jline'
-    compile.exclude module: 'jms'
-    compile.exclude module: 'jmxri'
-    compile.exclude module: 'jmxtools'
-    compile.exclude module: 'mail'
+    implementation.exclude module: 'javax'
+    implementation.exclude module: 'jline'
+    implementation.exclude module: 'jms'
+    implementation.exclude module: 'jmxri'
+    implementation.exclude module: 'jmxtools'
+    implementation.exclude module: 'mail'
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
-    testCompile.exclude module: 'api-ldap-schema-data'
+    testImplementation.exclude module: 'api-ldap-schema-data'
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
