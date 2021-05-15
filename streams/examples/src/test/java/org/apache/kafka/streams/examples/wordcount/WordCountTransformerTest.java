@@ -56,17 +56,17 @@ public class WordCountTransformerTest {
         final Transformer<String, String, KeyValue<String, String>> transformer = supplier.get();
         transformer.init(new org.apache.kafka.streams.processor.MockProcessorContext() {
             @Override
-            public <S extends StateStore> S getStateStore(String name) {
+            public <S extends StateStore> S getStateStore(final String name) {
                 return context.getStateStore(name);
             }
 
             @Override
-            public <K, V> void forward(K key, V value) {
+            public <K, V> void forward(final K key, final V value) {
                 context.forward(new Record<>(key.toString(), value.toString(), 0L));
             }
 
             @Override
-            public Cancellable schedule(Duration interval, PunctuationType type, Punctuator callback) throws IllegalArgumentException {
+            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
                 return context.schedule(interval, type, callback);
             }
         });
