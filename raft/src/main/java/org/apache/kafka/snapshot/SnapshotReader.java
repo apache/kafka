@@ -21,7 +21,7 @@ import java.util.Iterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.raft.internals.RecordsIterator;
 
 /**
