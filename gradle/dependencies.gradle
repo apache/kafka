@@ -61,7 +61,7 @@ versions += [
   bcpkix: "1.66",
   checkstyle: "8.36.2",
   commonsCli: "1.4",
-  gradle: "6.8.3",
+  gradle: "7.0.2",
   grgit: "4.1.0",
   httpclient: "4.5.13",
   easymock: "4.3",
