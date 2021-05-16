@@ -514,7 +514,7 @@ public class AbstractConfigTest {
         ConfigDef configDef = new ConfigDef();
         Properties props = new Properties();
         for (int i = 0; i < 1000; i++) {
-            String prop = "a"+i;
+            String prop = "a" + i;
             configDef.define(prop,
                     Type.LIST,
                     "",
@@ -525,7 +525,7 @@ public class AbstractConfigTest {
         AbstractConfig config = new AbstractConfig(configDef, props);
         AtomicBoolean error = new AtomicBoolean(false);
         Thread t1 = new Thread("unused") {
-            public void run(){
+            public void run() {
                 for (int i = 0; i < 1000; i++) {
                     try {
                         config.unused();
