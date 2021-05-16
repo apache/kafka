@@ -134,7 +134,11 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
+  /** Channel to send client request to controller, such as auto topic creation and forwarding */
   var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+
+  /** Channel to send broker request to controller, such as AlterIsr(KIP-497) and AlterReplicaState(KIP-589) */
+  var brokerToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -264,7 +268,7 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             config = config,
-            channelName = "forwarding",
+            channelName = "clientForwarding",
             threadNamePrefix = threadNamePrefix,
             retryTimeoutMs = config.requestTimeoutMs.longValue)
           brokerToControllerManager.start()
@@ -289,17 +293,29 @@ class KafkaServer(
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
         socketServer.startup(startProcessingRequests = false)
 
+        // Currently we only support alterIsr, maybe alterReplicaState in the future
+        if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
+          val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+          val channelManager = BrokerToControllerChannelManager(
+            controllerNodeProvider = nodeProvider,
+            time = time,
+            metrics = metrics,
+            config = config,
+            channelName = "brokerToControllerForwardingChannel",
+            threadNamePrefix = threadNamePrefix,
+            retryTimeoutMs = Long.MaxValue)
+          channelManager.start()
+          brokerToControllerChannelManager = Some(channelManager)
+        }
+
         /* start replica manager */
         alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
           AlterIsrManager(
-            config = config,
-            metadataCache = metadataCache,
+            channelManager = brokerToControllerChannelManager.get,
             scheduler = kafkaScheduler,
             time = time,
-            metrics = metrics,
-            threadNamePrefix = threadNamePrefix,
             brokerEpochSupplier = () => kafkaController.brokerEpoch,
-            config.brokerId
+            brokerId = config.brokerId
           )
         } else {
           AlterIsrManager(kafkaScheduler, time, zkClient)
@@ -699,6 +715,8 @@ class KafkaServer(
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
         CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
+
+        CoreUtils.swallow(brokerToControllerChannelManager.foreach(_.shutdown()), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

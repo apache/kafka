@@ -251,7 +251,6 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     override def run(): Unit = {
       _highestMetadataOffsetProvider = highestMetadataOffsetProvider
       _channelManager = channelManager
-      _channelManager.start()
       _state = BrokerState.STARTING
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
@@ -473,7 +472,6 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       controlledShutdownFuture.complete(null)
       initialCatchUpFuture.cancel(false)
       if (_channelManager != null) {
-        _channelManager.shutdown()
         _channelManager = null
       }
     }
