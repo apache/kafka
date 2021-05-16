@@ -393,8 +393,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        //Failure in poll should trigger automatic stop of the worker
+        //Failure in poll should trigger automatic stop of the task
         assertTrue(workerTask.awaitStop(1000));
+        assertFalse(workerTask.shouldCommitOffsets());
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -478,6 +479,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectOffsetFlush(true);
 
         expectClose();
+        EasyMock.expect(offsetWriter.willFlush()).andReturn(false);
 
         PowerMock.replayAll();
 
