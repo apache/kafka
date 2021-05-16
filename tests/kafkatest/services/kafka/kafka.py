@@ -838,7 +838,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 # configure JAAS to provide the typical client credentials
                 jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
                 use_inter_broker_mechanism_for_client = False
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if security_protocol_to_use != "SSL" else ""
+            # We are either using SASL (SASL_SSL or SASL_PLAINTEXT) or we are using SSL
+            using_sasl = security_protocol_to_use != "SSL"
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if using_sasl else ""
             optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
         return "%s%s %s%s" % \
@@ -878,7 +880,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 # configure JAAS to provide the typical client credentials
                 jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
                 use_inter_broker_mechanism_for_client = False
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if security_protocol_to_use != "SSL" else ""
+            # We are either using SASL (SASL_SSL or SASL_PLAINTEXT) or we are using SSL
+            using_sasl = security_protocol_to_use != "SSL"
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if using_sasl else ""
             optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_config_script = self.path.script("kafka-configs.sh", node)
         return "%s%s %s%s" % \
@@ -1115,7 +1119,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 # configure JAAS to provide the typical client credentials
                 jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
                 use_inter_broker_mechanism_for_client = False
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if security_protocol_to_use != "SSL" else ""
+            # We are either using SASL (SASL_SSL or SASL_PLAINTEXT) or we are using SSL
+            using_sasl = security_protocol_to_use != "SSL"
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF) if using_sasl else ""
             if override_command_config is None:
                 optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
             else:
