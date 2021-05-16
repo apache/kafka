@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A convenient base class for configurations to extend.
@@ -107,7 +107,7 @@ public class AbstractConfig {
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
         this.values = definition.parse(this.originals);
-        this.used = new CopyOnWriteArraySet<>();
+        this.used = ConcurrentHashMap.newKeySet();
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
             this.values.put(update.getKey(), update.getValue());
