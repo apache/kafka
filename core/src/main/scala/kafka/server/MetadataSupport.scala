@@ -19,10 +19,8 @@ package kafka.server
 
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclAuthorizer
 import kafka.server.metadata.{ClientQuotaCache, RaftMetadataCache}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
@@ -42,14 +40,6 @@ sealed trait MetadataSupport {
   def requireZkOrThrow(createException: => Exception): ZkSupport
 
   /**
-   * Ensure that we are using ZooKeeper for ACLs
-   *
-   * @param createException function to create an exception to throw
-   * @throws Exception if this instance is not using ZooKeeper for ACLs
-   */
-  def requireZkAuthorizerOrThrow(createException: => Exception): Unit
-
-  /**
    * Return this instance downcast for use with Raft
    *
    * @param createException function to create an exception to throw
@@ -57,6 +47,14 @@ sealed trait MetadataSupport {
    * @throws Exception if this instance is not for Raft
    */
   def requireRaftOrThrow(createException: => Exception): RaftSupport
+
+  /**
+   * Confirm that this instance is consistent with the given config
+   *
+   * @param config the config to check for consistency with this instance
+   * @throws IllegalStateException if there is an inconsistency (Raft for a ZooKeeper config or vice-versa)
+   */
+  def ensureConsistentWith(config: KafkaConfig): Unit
 
   def maybeForward(request: RequestChannel.Request,
                    handler: RequestChannel.Request => Unit,
@@ -69,17 +67,17 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      controller: KafkaController,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager],
-                     metadataCache: ZkMetadataCache,
-                     config: KafkaConfig) extends MetadataSupport {
-  if (!config.requiresZookeeper) {
-    throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
-  }
+                     metadataCache: ZkMetadataCache) extends MetadataSupport {
   val adminZkClient = new AdminZkClient(zkClient)
 
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
-  override def requireZkAuthorizerOrThrow(createException: => Exception) = {}
-
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
+
+  override def ensureConsistentWith(config: KafkaConfig): Unit = {
+    if (!config.requiresZookeeper) {
+      throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
+    }
+  }
 
   override def maybeForward(request: RequestChannel.Request,
                             handler: RequestChannel.Request => Unit,
@@ -93,40 +91,26 @@ case class ZkSupport(adminManager: ZkAdminManager,
   override def controllerId: Option[Int] =  metadataCache.getControllerId
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: RaftMetadataCache, quotaCache: ClientQuotaCache, config: KafkaConfig)
+case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: RaftMetadataCache, quotaCache: ClientQuotaCache)
     extends MetadataSupport {
-  if (config.requiresZookeeper) {
-    throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
-  }
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
-  override def requireZkAuthorizerOrThrow(createException: => Exception) = {
-    if (!hasZkAuthorizer) {
-      throw createException
+  override def requireRaftOrThrow(createException: => Exception): RaftSupport = this
+
+  override def ensureConsistentWith(config: KafkaConfig): Unit = {
+    if (config.requiresZookeeper) {
+      throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
     }
   }
-  override def requireRaftOrThrow(createException: => Exception): RaftSupport = this
 
   override def maybeForward(request: RequestChannel.Request,
                             handler: RequestChannel.Request => Unit,
                             responseCallback: Option[AbstractResponse] => Unit): Unit = {
     if (!request.isForwarded) {
-      request.header.apiKey match {
-        case ApiKeys.CREATE_ACLS | ApiKeys.DELETE_ACLS =>
-          if (hasZkAuthorizer) {
-            handler(request)
-          } else {
-            fwdMgr.forwardRequest(request, responseCallback)
-          }
-        case _ => fwdMgr.forwardRequest(request, responseCallback)
-      }
+      fwdMgr.forwardRequest(request, responseCallback)
     } else {
       handler(request) // will reject
     }
-  }
-
-  private def hasZkAuthorizer = {
-    classOf[AclAuthorizer].getName == config.getString(KafkaConfig.AuthorizerClassNameProp)
   }
 
   override def controllerId: Option[Int] = {
