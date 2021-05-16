@@ -641,13 +641,6 @@ public class KafkaProducerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    @Deprecated
-    public void testHeadersWithExtendedClasses() {
-        doTestHeaders(org.apache.kafka.common.serialization.ExtendedSerializer.class);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void testHeaders() {
         doTestHeaders(Serializer.class);
     }
@@ -907,7 +900,7 @@ public class KafkaProducerTest {
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             producer.beginTransaction();
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), groupId);
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(groupId));
             producer.commitTransaction();
         }
     }

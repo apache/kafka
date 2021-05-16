@@ -122,6 +122,14 @@ class ClientQuotaCache {
       entityFilters.put(entityType, entityMatch)
     }
 
+    // Special case for non-strict empty filter, match everything
+    if (filters.isEmpty && !strict) {
+      val allResults: Map[QuotaEntity, Map[String, Double]] = quotaCache.map {
+        entry => entry._1 -> entry._2.toMap
+      }.toMap
+      return allResults
+    }
+
     if (entityFilters.isEmpty) {
       return Map.empty
     }
@@ -130,7 +138,7 @@ class ClientQuotaCache {
     val matchingEntities: Set[QuotaEntity] = if (entityFilters.contains(ClientQuotaEntity.IP)) {
       if (entityFilters.size > 1) {
         throw new InvalidRequestException("Invalid entity filter component combination, IP filter component should " +
-          "not be used with user or clientId filter component.")
+          "not be used with User or ClientId filter component.")
       }
       val ipMatch = entityFilters.get(ClientQuotaEntity.IP)
       ipMatch.fold(Set.empty[QuotaEntity]) {
@@ -294,4 +302,6 @@ class ClientQuotaCache {
         updateCacheIndexPartial(ipEntityIndex, DefaultIp)
     }
   }
+
+  override def toString = s"ClientQuotaCache($quotaCache)"
 }

@@ -151,6 +151,10 @@ public class SnapshotRegistry {
         return result;
     }
 
+    public boolean hasSnapshot(long epoch) {
+        return snapshots.containsKey(epoch);
+    }
+
     /**
      * Gets the snapshot for a specific epoch.
      */

@@ -54,28 +54,32 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public long sizeInBytes() throws IOException {
-        return channel.size();
+    public long sizeInBytes() {
+        try {
+            return channel.size();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
-    public void append(UnalignedMemoryRecords records) throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
+    public void append(UnalignedMemoryRecords records) {
+        try {
+            checkIfFrozen("Append");
+            Utils.writeFully(channel, records.buffer());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        Utils.writeFully(channel, records.buffer());
     }
 
     @Override
-    public void append(MemoryRecords records) throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                    String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
+    public void append(MemoryRecords records) {
+        try {
+            checkIfFrozen("Append");
+            Utils.writeFully(channel, records.buffer());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        Utils.writeFully(channel, records.buffer());
     }
 
     @Override
@@ -84,34 +88,57 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void freeze() throws IOException {
-        if (frozen) {
-            throw new IllegalStateException(
-                String.format("Freeze is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
-            );
+    public void freeze() {
+        try {
+            checkIfFrozen("Freeze");
+
+            channel.close();
+            frozen = true;
+
+            if (!tempSnapshotPath.toFile().setReadOnly()) {
+                throw new IllegalStateException(String.format("Unable to set file (%s) as read-only", tempSnapshotPath));
+            }
+
+            Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
+            Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
+
+            replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-
-        channel.close();
-        frozen = true;
-
-        // Set readonly and ignore the result
-        if (!tempSnapshotPath.toFile().setReadOnly()) {
-            throw new IOException(String.format("Unable to set file (%s) as read-only", tempSnapshotPath));
-        }
-
-        Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
-        Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
-
-        replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         try {
             channel.close();
-        } finally {
             // This is a noop if freeze was called before calling close
             Files.deleteIfExists(tempSnapshotPath);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "FileRawSnapshotWriter(path=%s, snapshotId=%s, frozen=%s)",
+            tempSnapshotPath,
+            snapshotId,
+            frozen
+        );
+    }
+
+    void checkIfFrozen(String operation) {
+        if (frozen) {
+            throw new IllegalStateException(
+                String.format(
+                    "%s is not supported. Snapshot is already frozen: id = %s; temp path = %s",
+                    operation,
+                    snapshotId,
+                    tempSnapshotPath
+                )
+            );
         }
     }
 
@@ -126,14 +153,18 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         Path logDir,
         OffsetAndEpoch snapshotId,
         Optional<ReplicatedLog> replicatedLog
-    ) throws IOException {
-        Path path = Snapshots.createTempFile(logDir, snapshotId);
+    ) {
+        try {
+            Path path = Snapshots.createTempFile(logDir, snapshotId);
 
-        return new FileRawSnapshotWriter(
-            path,
-            FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
-            snapshotId,
-            replicatedLog
-        );
+            return new FileRawSnapshotWriter(
+                path,
+                FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
+                snapshotId,
+                replicatedLog
+            );
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

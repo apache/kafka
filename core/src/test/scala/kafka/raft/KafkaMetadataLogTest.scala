@@ -20,7 +20,6 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.{Collections, Optional}
-
 import kafka.log.Log
 import kafka.server.KafkaRaftServer
 import kafka.utils.{MockTime, TestUtils}
@@ -30,7 +29,8 @@ import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
-import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, RecordSerde, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.{SnapshotPath, Snapshots}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -102,6 +102,13 @@ final class KafkaMetadataLogTest {
     TestUtils.resource(log.readSnapshot(snapshotId).get()) { snapshot =>
       assertEquals(0, snapshot.sizeInBytes())
     }
+  }
+
+  @Test
+  def testTopicId(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(KafkaRaftServer.MetadataTopicId, log.topicId())
   }
 
   @Test
@@ -680,6 +687,7 @@ object KafkaMetadataLogTest {
 
     val metadataLog = KafkaMetadataLog(
       KafkaRaftServer.MetadataPartition,
+      KafkaRaftServer.MetadataTopicId,
       logDir,
       time,
       time.scheduler,

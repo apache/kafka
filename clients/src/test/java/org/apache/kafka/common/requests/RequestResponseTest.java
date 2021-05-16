@@ -71,6 +71,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
@@ -981,6 +982,52 @@ public class RequestResponseTest {
 
         ByteBufferAccessor writer = new ByteBufferAccessor(ByteBuffer.allocate(size));
         data.write(writer, cache, (short) 2);
+    }
+
+    @Test
+    public void testSerializeWithHeader() {
+        CreatableTopicCollection topicsToCreate = new CreatableTopicCollection(1);
+        topicsToCreate.add(new CreatableTopic()
+                               .setName("topic")
+                               .setNumPartitions(3)
+                               .setReplicationFactor((short) 2));
+
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+                .setTimeoutMs(10)
+                .setTopics(topicsToCreate)
+        ).build();
+
+        short requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, requestVersion, "client", 2);
+        ByteBuffer serializedRequest = createTopicsRequest.serializeWithHeader(requestHeader);
+
+        RequestHeader parsedHeader = RequestHeader.parse(serializedRequest);
+        assertEquals(requestHeader, parsedHeader);
+
+        RequestAndSize parsedRequest = AbstractRequest.parseRequest(
+            ApiKeys.CREATE_TOPICS, requestVersion, serializedRequest);
+
+        assertEquals(createTopicsRequest.data(), parsedRequest.request.data());
+    }
+
+    @Test
+    public void testSerializeWithInconsistentHeaderApiKey() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build();
+        short requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
+        RequestHeader requestHeader = new RequestHeader(DELETE_TOPICS, requestVersion, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
+    }
+
+    @Test
+    public void testSerializeWithInconsistentHeaderVersion() {
+        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData()
+        ).build((short) 2);
+        RequestHeader requestHeader = new RequestHeader(CREATE_TOPICS, (short) 1, "client", 2);
+        assertThrows(IllegalArgumentException.class, () -> createTopicsRequest.serializeWithHeader(requestHeader));
     }
 
     @Test

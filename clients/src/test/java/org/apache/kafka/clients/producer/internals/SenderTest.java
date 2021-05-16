@@ -25,6 +25,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
@@ -44,6 +45,8 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.ProduceResponseData.BatchIndexAndErrorMessage;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -86,6 +89,7 @@ import org.junit.jupiter.api.Timeout;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -2451,6 +2455,48 @@ public class SenderTest {
     }
 
     @Test
+    public void testRecordErrorPropagatedToApplication() throws InterruptedException {
+        int recordCount = 5;
+
+        setup();
+
+        Map<Integer, FutureRecordMetadata> futures = new HashMap<>(recordCount);
+        for (int i = 0; i < recordCount; i++) {
+            futures.put(i, appendToAccumulator(tp0));
+        }
+
+        sender.runOnce();  // send request
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+
+        OffsetAndError offsetAndError = new OffsetAndError(-1L, Errors.INVALID_RECORD, Arrays.asList(
+            new BatchIndexAndErrorMessage().setBatchIndex(0).setBatchIndexErrorMessage("0"),
+            new BatchIndexAndErrorMessage().setBatchIndex(2).setBatchIndexErrorMessage("2"),
+            new BatchIndexAndErrorMessage().setBatchIndex(3)
+        ));
+
+        client.respond(produceResponse(Collections.singletonMap(tp0, offsetAndError)));
+        sender.runOnce();
+
+        for (Map.Entry<Integer, FutureRecordMetadata> futureEntry : futures.entrySet()) {
+            FutureRecordMetadata future = futureEntry.getValue();
+            assertTrue(future.isDone());
+
+            KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
+            Integer index = futureEntry.getKey();
+            if (index == 0 || index == 2) {
+                assertTrue(exception instanceof InvalidRecordException);
+                assertEquals(index.toString(), exception.getMessage());
+            } else if (index == 3) {
+                assertTrue(exception instanceof InvalidRecordException);
+                assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
+            } else {
+                assertEquals(KafkaException.class, exception.getClass());
+            }
+        }
+    }
+
+    @Test
     public void testWhenFirstBatchExpireNoSendSecondBatchIfGuaranteeOrder() throws InterruptedException {
         long deliveryTimeoutMs = 1500L;
         setupWithTransactionState(null, true, null);
@@ -2867,13 +2913,25 @@ public class SenderTest {
         };
     }
 
-    class OffsetAndError {
-        long offset;
-        Errors error;
-        OffsetAndError(long offset, Errors error) {
+    private static class OffsetAndError {
+        final long offset;
+        final Errors error;
+        final List<BatchIndexAndErrorMessage> recordErrors;
+
+        OffsetAndError(
+            long offset,
+            Errors error,
+            List<BatchIndexAndErrorMessage> recordErrors
+        ) {
             this.offset = offset;
             this.error = error;
+            this.recordErrors = recordErrors;
         }
+
+        OffsetAndError(long offset, Errors error) {
+            this(offset, error, Collections.emptyList());
+        }
+
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
@@ -2893,16 +2951,29 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
-            ProduceResponse.PartitionResponse response = new ProduceResponse.PartitionResponse(entry.getValue().error,
-                    entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1);
-            partResponses.put(entry.getKey(), response);
-        }
-        return new ProduceResponse(partResponses);
+        ProduceResponseData data = new ProduceResponseData();
 
+        for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            ProduceResponseData.TopicProduceResponse topicData = data.responses().find(topicPartition.topic());
+            if (topicData == null) {
+                topicData = new ProduceResponseData.TopicProduceResponse().setName(topicPartition.topic());
+                data.responses().add(topicData);
+            }
+
+            OffsetAndError offsetAndError = entry.getValue();
+            ProduceResponseData.PartitionProduceResponse partitionData =
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(topicPartition.partition())
+                    .setBaseOffset(offsetAndError.offset)
+                    .setErrorCode(offsetAndError.error.code())
+                    .setRecordErrors(offsetAndError.recordErrors);
+
+            topicData.partitionResponses().add(partitionData);
+        }
+
+        return new ProduceResponse(data);
     }
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L, null);

@@ -60,8 +60,8 @@ public class KStreamBranchTest {
         assertEquals(3, branches.length);
 
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        for (int i = 0; i < branches.length; i++) {
-            branches[i].process(supplier);
+        for (final KStream<Integer, String> branch : branches) {
+            branch.process(supplier);
         }
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

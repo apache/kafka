@@ -79,11 +79,12 @@ public class StandbyTaskEOSIntegrationTest {
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -169,8 +170,8 @@ public class StandbyTaskEOSIntegrationTest {
         // Wait for the record to be processed
         assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-        streamInstanceOne.close(Duration.ZERO);
-        streamInstanceTwo.close(Duration.ZERO);
+        streamInstanceOne.close();
+        streamInstanceTwo.close();
 
         streamInstanceOne.cleanUp();
         streamInstanceTwo.cleanUp();

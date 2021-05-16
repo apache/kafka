@@ -595,7 +595,7 @@ public class TransactionManagerTest {
         long b1AppendTime = time.milliseconds();
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        b1.done(500L, b1AppendTime, null);
+        b1.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(b1, b1Response);
 
         // We get an UNKNOWN_PRODUCER_ID, so bump the epoch and set sequence numbers back to 0
@@ -3084,12 +3084,12 @@ public class TransactionManagerTest {
         long b1AppendTime = time.milliseconds();
         ProduceResponse.PartitionResponse t0b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp0b1.done(500L, b1AppendTime, null);
+        tp0b1.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp0b1, t0b1Response);
 
         ProduceResponse.PartitionResponse t1b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b1.done(500L, b1AppendTime, null);
+        tp1b1.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b1, t1b1Response);
 
         // We bump the epoch and set sequence numbers back to 0
@@ -3134,7 +3134,7 @@ public class TransactionManagerTest {
         // After successfully retrying, there should be no in-flight batches for tp1 and the sequence should be 0
         t1b2Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b2.done(500L, b1AppendTime, null);
+        tp1b2.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
@@ -3149,7 +3149,7 @@ public class TransactionManagerTest {
 
         ProduceResponse.PartitionResponse t1b3Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b3.done(500L, b1AppendTime, null);
+        tp1b3.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
@@ -3208,12 +3208,12 @@ public class TransactionManagerTest {
         long b1AppendTime = time.milliseconds();
         ProduceResponse.PartitionResponse t0b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp0b1.done(500L, b1AppendTime, null);
+        tp0b1.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp0b1, t0b1Response);
 
         ProduceResponse.PartitionResponse t1b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b1.done(500L, b1AppendTime, null);
+        tp1b1.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b1, t1b1Response);
 
         // We bump the epoch and set sequence numbers back to 0
@@ -3258,7 +3258,7 @@ public class TransactionManagerTest {
         // After successfully retrying, there should be no in-flight batches for tp1 and the sequence should be 0
         t1b2Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b2.done(500L, b1AppendTime, null);
+        tp1b2.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
         transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
@@ -3273,7 +3273,7 @@ public class TransactionManagerTest {
 
         ProduceResponse.PartitionResponse t1b3Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
-        tp1b3.done(500L, b1AppendTime, null);
+        tp1b3.complete(500L, b1AppendTime);
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
         assertFalse(transactionManager.hasInflightBatches(tp1));

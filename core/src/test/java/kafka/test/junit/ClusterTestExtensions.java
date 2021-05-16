@@ -98,14 +98,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         // Process single @ClusterTest annotation
         ClusterTest clusterTestAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTest.class);
         if (clusterTestAnnot != null) {
-            processClusterTest(clusterTestAnnot, defaults, generatedContexts::add);
+            processClusterTest(context, clusterTestAnnot, defaults, generatedContexts::add);
         }
 
         // Process multiple @ClusterTest annotation within @ClusterTests
         ClusterTests clusterTestsAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTests.class);
         if (clusterTestsAnnot != null) {
             for (ClusterTest annot : clusterTestsAnnot.value()) {
-                processClusterTest(annot, defaults, generatedContexts::add);
+                processClusterTest(context, annot, defaults, generatedContexts::add);
             }
         }
 
@@ -137,7 +137,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ReflectionUtils.invokeMethod(method, testInstance, generator);
     }
 
-    private void processClusterTest(ClusterTest annot, ClusterTestDefaults defaults,
+    private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
         final Type type;
         if (annot.clusterType() == Type.DEFAULT) {
@@ -182,6 +182,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
+        } else {
+            builder.name(context.getDisplayName());
         }
         if (!annot.listener().isEmpty()) {
             builder.listenerName(annot.listener());

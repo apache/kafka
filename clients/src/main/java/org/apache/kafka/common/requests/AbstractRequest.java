@@ -101,6 +101,19 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return SendBuilder.buildRequestSend(header, data());
     }
 
+    /**
+     * Serializes header and body without prefixing with size (unlike `toSend`, which does include a size prefix).
+     */
+    public final ByteBuffer serializeWithHeader(RequestHeader header) {
+        if (header.apiKey() != apiKey) {
+            throw new IllegalArgumentException("Could not build request " + apiKey + " with header api key " + header.apiKey());
+        }
+        if (header.apiVersion() != version) {
+            throw new IllegalArgumentException("Could not build request version " + version + " with header version " + header.apiVersion());
+        }
+        return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
+    }
+
     // Visible for testing
     public final ByteBuffer serialize() {
         return MessageUtil.toByteBuffer(data(), version);

@@ -21,14 +21,13 @@ import java.nio.file.Files
 import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
-
 import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -37,8 +36,8 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
-
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest}
+import org.apache.kafka.server.common.serialization.RecordSerde
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -108,6 +107,7 @@ class KafkaRaftManager[T](
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
+  topicId: Uuid,
   time: Time,
   metrics: Metrics,
   threadNamePrefixOpt: Option[String],
@@ -244,6 +244,7 @@ class KafkaRaftManager[T](
   private def buildMetadataLog(): KafkaMetadataLog = {
     KafkaMetadataLog(
       topicPartition,
+      topicId,
       dataDir,
       time,
       scheduler,
