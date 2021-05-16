@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -431,6 +432,73 @@ public class MeteredKeyValueStoreTest {
         assertThat(storeMetrics(), not(empty()));
         assertThrows(RuntimeException.class, metered::close);
         assertThat(storeMetrics(), empty());
+        verify(inner);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnGetIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.get(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.put(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfAbsentIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putIfAbsent(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnDeleteIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.delete(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutAllIfAnyKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range("from", null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        expect(inner.prefixScan(KEY, stringSerializer))
+            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        iterator.close();
+
+        final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
+        assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
 

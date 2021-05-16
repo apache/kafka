@@ -64,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 
@@ -369,6 +370,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
+        sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
@@ -406,6 +408,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldBackwardFetchExactKeys() {
+        sessionStore.close();
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
@@ -468,6 +471,8 @@ public abstract class AbstractSessionBytesStoreTest {
         assertThat(valuesToSet(sessionStore.findSessions(key2, 0L, Long.MAX_VALUE)), equalTo(expectedKey2));
         final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
         assertThat(valuesToSet(sessionStore.findSessions(key3, 0L, Long.MAX_VALUE)), equalTo(expectedKey3));
+
+        sessionStore.close();
     }
 
     @Test
@@ -497,6 +502,8 @@ public abstract class AbstractSessionBytesStoreTest {
         assertThat(valuesToSet(sessionStore.backwardFindSessions(key2, 0L, Long.MAX_VALUE)), equalTo(expectedKey2));
         final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
         assertThat(valuesToSet(sessionStore.backwardFindSessions(key3, 0L, Long.MAX_VALUE)), equalTo(expectedKey3));
+
+        sessionStore.close();
     }
 
     @Test
@@ -680,6 +687,8 @@ public abstract class AbstractSessionBytesStoreTest {
         }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
+
+        sessionStore.close();
     }
 
     @Test
@@ -687,44 +696,44 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
-        sessionStore.findSessions(null, 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() {
-        sessionStore.findSessions(null, "anyKeyTo", 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, "anyKeyTo", 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() {
-        sessionStore.findSessions("anyKeyFrom", null, 1L, 2L);
+        assertThrows(NullPointerException.class, () -> sessionStore.findSessions("anyKeyFrom", null, 1L, 2L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullFromKey() {
-        sessionStore.fetch(null, "anyToKey");
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null, "anyToKey"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullToKey() {
-        sessionStore.fetch("anyFromKey", null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch("anyFromKey", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
-        sessionStore.fetch(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRemoveNullKey() {
-        sessionStore.remove(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.remove(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        sessionStore.put(null, 1L);
+        assertThrows(NullPointerException.class, () -> sessionStore.put(null, 1L));
     }
 
     @Test

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -34,19 +37,25 @@ public class VotedState implements EpochState {
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
+    private final Optional<LogOffsetMetadata> highWatermark;
+    private final Logger log;
 
     public VotedState(
         Time time,
         int epoch,
         int votedId,
         Set<Integer> voters,
-        int electionTimeoutMs
+        Optional<LogOffsetMetadata> highWatermark,
+        int electionTimeoutMs,
+        LogContext logContext
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
         this.voters = voters;
+        this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
+        this.log = logContext.logger(VotedState.class);
     }
 
     @Override
@@ -89,6 +98,22 @@ public class VotedState implements EpochState {
     }
 
     @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        if (votedId() == candidateId) {
+            return true;
+        }
+
+        log.debug("Rejecting vote request from candidate {} since we already have voted for " +
+            "another candidate {} in epoch {}", candidateId, votedId(), epoch);
+        return false;
+    }
+
+    @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark;
+    }
+
+    @Override
     public String toString() {
         return "Voted(" +
             "epoch=" + epoch +
@@ -98,4 +123,6 @@ public class VotedState implements EpochState {
             ')';
     }
 
+    @Override
+    public void close() {}
 }

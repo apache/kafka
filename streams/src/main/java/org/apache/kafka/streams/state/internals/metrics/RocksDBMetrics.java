@@ -131,7 +131,7 @@ public class RocksDBMetrics {
     private static final String CURRENT_SIZE_OF_ACTIVE_MEMTABLE_DESCRIPTION =
         "Approximate size of active memtable in bytes";
     private static final String CURRENT_SIZE_OF_ALL_MEMTABLES_DESCRIPTION =
-        "Approximate size of active and unflushed immutable memtable in bytes";
+        "Approximate size of active and unflushed immutable memtables in bytes";
     private static final String SIZE_OF_ALL_MEMTABLES_DESCRIPTION =
         "Approximate size of active, unflushed immutable, and pinned immutable memtables in bytes";
     private static final String MEMTABLE_FLUSH_PENDING_DESCRIPTION =
@@ -145,14 +145,14 @@ public class RocksDBMetrics {
     private static final String TOTAL_SST_FILE_SIZE_DESCRIPTION = "Total size in bytes of all SST files";
     private static final String LIVE_SST_FILES_SIZE_DESCRIPTION =
         "Total size in bytes of all SST files that belong to the latest LSM tree";
-    private static final String NUMBER_OF_LIVE_VERSIONS_DESCRIPTION = "Number of live versions";
+    private static final String NUMBER_OF_LIVE_VERSIONS_DESCRIPTION = "Number of live versions of the LSM tree";
     private static final String CAPACITY_OF_BLOCK_CACHE_DESCRIPTION = "Capacity of the block cache in bytes";
     private static final String USAGE_OF_BLOCK_CACHE_DESCRIPTION =
         "Memory size of the entries residing in block cache in bytes";
     private static final String PINNED_USAGE_OF_BLOCK_CACHE_DESCRIPTION =
         "Memory size for the entries being pinned in the block cache in bytes";
     private static final String ESTIMATED_NUMBER_OF_KEYS_DESCRIPTION =
-        "Estimated number of total keys in the active and unflushed immutable memtables and storage";
+        "Estimated number of keys in the active and unflushed immutable memtables and storage";
     private static final String ESTIMATED_MEMORY_OF_TABLE_READERS_DESCRIPTION =
         "Estimated memory in bytes used for reading SST tables, excluding memory used in block cache";
     private static final String TOTAL_NUMBER_OF_BACKGROUND_ERRORS_DESCRIPTION = "Total number of background errors";

@@ -22,4 +22,4 @@
 # Instead, in development branches, the version should have a suffix of the form ".devN"
 #
 # For example, when Kafka is at version 1.0.0-SNAPSHOT, this should be something like "1.0.0.dev0"
-__version__ = '2.8.0.dev0'
+__version__ = '3.0.0.dev0'

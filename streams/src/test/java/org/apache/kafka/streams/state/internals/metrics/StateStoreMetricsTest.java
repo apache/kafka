@@ -205,6 +205,38 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldGetPrefixScanSensor() {
+        final String metricName = "prefix-scan";
+        final String descriptionOfRate = "The average number of calls to prefix-scan per second";
+        final String descriptionOfAvg = "The average latency of calls to prefix-scan";
+        final String descriptionOfMax = "The maximum latency of calls to prefix-scan";
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        StreamsMetricsImpl.addInvocationRateToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            metricName,
+            descriptionOfRate
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            latencyMetricName(metricName),
+            descriptionOfAvg,
+            descriptionOfMax
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = StateStoreMetrics.prefixScanSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetFlushSensor() {
         final String metricName = "flush";
         final String descriptionOfRate = "The average number of calls to flush per second";

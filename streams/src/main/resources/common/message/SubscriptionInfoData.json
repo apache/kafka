@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-7",
+  "validVersions": "1-9",
   "fields": [
     {
       "name": "version",
@@ -52,6 +52,16 @@
       "name": "taskOffsetSums",
       "versions": "7+",
       "type": "[]TaskOffsetSum"
+    },
+    {
+      "name": "uniqueField",
+      "versions": "8+",
+      "type": "int8"
+    },
+    {
+      "name": "errorCode",
+      "versions": "9+",
+      "type": "int32"
     }
   ],
   "commonStructs": [

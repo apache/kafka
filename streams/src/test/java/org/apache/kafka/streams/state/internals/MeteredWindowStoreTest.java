@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -138,7 +139,8 @@ public class MeteredWindowStoreTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
+            Time.SYSTEM
         );
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
@@ -288,7 +290,6 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
@@ -296,7 +297,7 @@ public class MeteredWindowStoreTest {
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
-        store.put("a", "a");
+        store.put("a", "a", context.timestamp());
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(1.0, getMetricByNameFilterByTags(
@@ -465,6 +466,42 @@ public class MeteredWindowStoreTest {
         assertThrows(RuntimeException.class, store::close);
         assertThat(storeMetrics(), empty());
         verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(null, "a", 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch(null, "to", 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch("from", null, 0L, 1L));
+    }
+
+
+    @Test
+    public void shouldThrowNullPointerOnbackwardFetchRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to", 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnbackwardFetchRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null, 0L, 1L));
     }
 
     private List<MetricName> storeMetrics() {

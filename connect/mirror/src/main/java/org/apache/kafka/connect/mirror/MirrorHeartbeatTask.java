@@ -47,7 +47,7 @@ public class MirrorHeartbeatTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // nop
     }
 

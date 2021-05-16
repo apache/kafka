@@ -50,7 +50,7 @@ class ACLs:
         :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available
         """
         cmd = "%(cmd_prefix)s --add --topic=%(topic)s %(operation_flag)s --allow-principal=%(principal)s" % {
-            'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(kafka, node, force_use_zk_connection),
+            'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, force_use_zk_connection),
             'topic': topic,
             'operation_flag': operation_flag,
             'principal': principal
@@ -71,7 +71,7 @@ class ACLs:
 
         for operation in ['ClusterAction'] + additional_cluster_operations_to_grant:
             cmd = "%(cmd_prefix)s --add --cluster --operation=%(operation)s --allow-principal=%(principal)s" % {
-                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(kafka, node, force_use_zk_connection),
+                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, force_use_zk_connection),
                 'operation': operation,
                 'principal': principal
             }
@@ -116,7 +116,7 @@ class ACLs:
         node = kafka.nodes[0]
 
         cmd = "%(cmd_prefix)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=%(principal)s" % {
-            'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(kafka, node, force_use_zk_connection),
+            'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, force_use_zk_connection),
             'topic': topic,
             'group': group,
             'principal': principal

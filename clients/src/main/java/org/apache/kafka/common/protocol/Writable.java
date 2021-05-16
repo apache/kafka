@@ -17,8 +17,11 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+
 import java.nio.ByteBuffer;
-import java.util.UUID;
 
 public interface Writable {
     void writeByte(byte val);
@@ -29,9 +32,26 @@ public interface Writable {
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
     void writeByteBuffer(ByteBuffer buf);
+    void writeVarint(int i);
+    void writeVarlong(long i);
 
-    default void writeUUID(UUID uuid) {
+    default void writeRecords(BaseRecords records) {
+        if (records instanceof MemoryRecords) {
+            MemoryRecords memRecords = (MemoryRecords) records;
+            writeByteBuffer(memRecords.buffer());
+        } else {
+            throw new UnsupportedOperationException("Unsupported record type " + records.getClass());
+        }
+    }
+
+    default void writeUuid(Uuid uuid) {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());
+    }
+
+    default void writeUnsignedShort(int i) {
+        // The setter functions in the generated code prevent us from setting
+        // ints outside the valid range of a short.
+        writeShort((short) i);
     }
 }

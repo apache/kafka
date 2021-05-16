@@ -94,6 +94,14 @@ public class Rate implements MeasurableStat {
         return totalElapsedTimeMs;
     }
 
+    @Override
+    public String toString() {
+        return "Rate(" +
+            "unit=" + unit +
+            ", stat=" + stat +
+            ')';
+    }
+
     /**
      * @deprecated since 2.4 Use {@link WindowedSum} instead.
      */

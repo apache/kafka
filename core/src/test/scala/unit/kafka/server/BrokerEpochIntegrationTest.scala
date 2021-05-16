@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Collections
+
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
@@ -33,8 +35,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -44,7 +46,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val configs = Seq(
@@ -58,7 +60,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     servers = configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -113,6 +115,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
     // create topic with 1 partition, 2 replicas, one on each broker
     createTopic(zkClient, tp.topic(), partitionReplicaAssignment = Map(0 -> Seq(brokerId1, brokerId2)), servers = servers)
+    val topicIds = getController.kafkaController.controllerContext.topicIds.toMap.asJava
 
     val controllerId = 2
     val controllerEpoch = zkClient.getControllerEpoch.get._1
@@ -153,7 +156,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, nodes.toSet.asJava)
+          partitionStates.asJava, topicIds, nodes.toSet.asJava)
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
           // stale broker epoch in LEADER_AND_ISR
@@ -195,7 +198,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, liveBrokers.asJava)
+          partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap())
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
           // stale broker epoch in UPDATE_METADATA
@@ -204,7 +207,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         else {
           // broker epoch in UPDATE_METADATA >= current broker epoch
           sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
-          TestUtils.waitUntilMetadataIsPropagated(Seq(broker2), tp.topic, tp.partition, 10000)
+          TestUtils.waitForPartitionMetadata(Seq(broker2), tp.topic, tp.partition, 10000)
           assertEquals(brokerId2,
             broker2.metadataCache.getPartitionInfo(tp.topic, tp.partition).get.leader)
         }
@@ -265,7 +268,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
       staleBrokerEpochDetected = response.errorCounts().containsKey(Errors.STALE_BROKER_EPOCH)
     })
     TestUtils.waitUntilTrue(() => staleBrokerEpochDetected, "Broker epoch should be stale")
-    assertTrue("Stale broker epoch not detected by the broker", staleBrokerEpochDetected)
+    assertTrue(staleBrokerEpochDetected, "Stale broker epoch not detected by the broker")
   }
 
   private def sendAndVerifySuccessfulResponse(controllerChannelManager: ControllerChannelManager,

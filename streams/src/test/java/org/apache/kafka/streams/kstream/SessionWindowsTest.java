@@ -25,7 +25,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
 public class SessionWindowsTest {
 
     @Test
@@ -61,25 +60,6 @@ public class SessionWindowsTest {
     @Test
     public void windowSizeMustNotBeZero() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(0)));
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated apis
-    @Test
-    public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
-        final long windowGap = 2 * SessionWindows.with(ofMillis(1)).maintainMs();
-        assertEquals(windowGap, SessionWindows.with(ofMillis(windowGap)).maintainMs());
-    }
-
-    @Deprecated
-    @Test
-    public void retentionTimeMustNotBeNegative() {
-        final SessionWindows windowSpec = SessionWindows.with(ofMillis(42));
-        try {
-            windowSpec.until(41);
-            fail("should not accept retention time smaller than gap");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
     }
 
     @Test

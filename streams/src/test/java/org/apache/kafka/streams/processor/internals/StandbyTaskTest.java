@@ -49,7 +49,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -168,7 +167,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
 
-        assertThrows(LockException.class, task::initializeIfNeeded);
+        assertThrows(LockException.class, () -> task.initializeIfNeeded());
         task = null;
     }
 
@@ -458,6 +457,7 @@ public class StandbyTaskTest {
         assertEquals(Task.State.CLOSED, task.state());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldDeleteStateDirOnTaskCreatedAndEosAlphaUncleanClose() {
         stateManager.close();
@@ -489,7 +489,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldDeleteStateDirOnTaskCreatedAndEosBetaUncleanClose() {
+    public void shouldDeleteStateDirOnTaskCreatedAndEosV2UncleanClose() {
         stateManager.close();
         EasyMock.expectLastCall();
 
@@ -502,7 +502,7 @@ public class StandbyTaskTest {
         config = new StreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA)
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
         )));
 
         task = createStandbyTask();
@@ -564,15 +564,14 @@ public class StandbyTaskTest {
     public void shouldInitTaskTimeoutAndEventuallyThrow() {
         EasyMock.replay(stateManager);
 
-        final Logger log = new LogContext().logger(StreamTaskTest.class);
         task = createStandbyTask();
 
-        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
-        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null, log);
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
 
         assertThrows(
             TimeoutException.class,
-            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log)
+            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
     }
 
@@ -580,12 +579,11 @@ public class StandbyTaskTest {
     public void shouldCLearTaskTimeout() {
         EasyMock.replay(stateManager);
 
-        final Logger log = new LogContext().logger(StreamTaskTest.class);
         task = createStandbyTask();
 
-        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
-        task.clearTaskTimeout(log);
-        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log);
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.clearTaskTimeout();
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null);
     }
 
     private StandbyTask createStandbyTask() {

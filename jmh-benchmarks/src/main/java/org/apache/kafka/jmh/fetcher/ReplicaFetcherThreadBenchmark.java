@@ -20,17 +20,17 @@ package org.apache.kafka.jmh.fetcher;
 import kafka.api.ApiVersion$;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
+import kafka.cluster.IsrChangeListener;
 import kafka.cluster.Partition;
-import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
-import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
+import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
@@ -40,19 +40,21 @@ import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Pool;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.RecordsSend;
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.mockito.Mockito;
@@ -81,7 +83,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -104,6 +105,7 @@ public class ReplicaFetcherThreadBenchmark {
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -121,7 +123,7 @@ public class ReplicaFetcherThreadBenchmark {
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new scala.collection.mutable.HashMap<>(),
+                new CachedConfigRepository(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
                 1,
@@ -131,13 +133,13 @@ public class ReplicaFetcherThreadBenchmark {
                 1000L,
                 60000,
                 scheduler,
-                new BrokerState(),
                 brokerTopicStats,
                 logDirFailureChannel,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                true);
 
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
-        scala.collection.mutable.Map<TopicPartition, OffsetAndEpoch> offsetAndEpochs = new scala.collection.mutable.HashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
+        scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
@@ -151,18 +153,17 @@ public class ReplicaFetcherThreadBenchmark {
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
-            Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
+            IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
-                    0, Time.SYSTEM, partitionStateStore, new DelayedOperationsMock(tp),
+                    0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
-            partition.makeFollower(partitionState, offsetCheckpoints);
+            partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
-            offsetAndEpochs.put(tp, new OffsetAndEpoch(0, 0));
+            initialFetchStates.put(tp, new InitialFetchState(new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {
                 @Override
                 public int sizeInBytes() {
@@ -170,23 +171,26 @@ public class ReplicaFetcherThreadBenchmark {
                 }
 
                 @Override
-                public RecordsSend toSend(String destination) {
+                public RecordsSend<? extends BaseRecords> toSend() {
                     return null;
                 }
             };
-            initialFetched.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, 0, 0, 0,
-                    new LinkedList<>(), fetched));
+            initialFetched.put(tp, new FetchResponseData.PartitionData()
+                    .setPartitionIndex(tp.partition())
+                    .setLastStableOffset(0)
+                    .setLogStartOffset(0)
+                    .setRecords(fetched));
         }
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         Mockito.when(replicaManager.brokerTopicStats()).thenReturn(brokerTopicStats);
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
-        fetcher.addPartitions(offsetAndEpochs);
+        fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(new FetchResponse<>(Errors.NONE, initialFetched, 0, 999));
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched));
     }
 
     @TearDown(Level.Trial)
@@ -292,7 +296,8 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset, FetchResponse.PartitionData partitionData) {
+        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset,
+                                                          FetchResponseData.PartitionData partitionData) {
             return Option.empty();
         }
 
@@ -302,17 +307,22 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitions) {
+        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
             scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
             Iterator<TopicPartition> iterator = partitions.keys().iterator();
             while (iterator.hasNext()) {
-                endOffsets.put(iterator.next(), new EpochEndOffset(0, 100));
+                TopicPartition tp = iterator.next();
+                endOffsets.put(tp, new EpochEndOffset()
+                    .setPartition(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(0)
+                    .setEndOffset(100));
             }
             return endOffsets;
         }
 
         @Override
-        public Map<TopicPartition, FetchResponse.PartitionData<Records>> fetchFromLeader(FetchRequest.Builder fetchRequest) {
+        public Map<TopicPartition, FetchResponseData.PartitionData> fetchFromLeader(FetchRequest.Builder fetchRequest) {
             return new scala.collection.mutable.HashMap<>();
         }
     }

@@ -108,19 +108,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         open = true;
     }
 
-    @Deprecated
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        put(key, value, context.timestamp());
-    }
-
     @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record(1.0d, ProcessorContextUtils.getCurrentSystemTime(context));
+            expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {

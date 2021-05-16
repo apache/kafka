@@ -28,8 +28,8 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.UpdateMetadataResponse
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertEquals, assertTrue, fail}
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -38,7 +38,7 @@ class ControllerEventManagerTest {
 
   private var controllerEventManager: ControllerEventManager = _
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (controllerEventManager != null)
       controllerEventManager.close()
@@ -212,7 +212,7 @@ class ControllerEventManagerTest {
       "Controller state has not changed back to Idle")
     assertEquals(1, eventProcessedListenerCount.get)
 
-    assertEquals("Timer has not been updated", initialTimerCount + 1, timer(metricName).count)
+    assertEquals(initialTimerCount + 1, timer(metricName).count, "Timer has not been updated")
   }
 
   private def timer(metricName: String): Timer = {

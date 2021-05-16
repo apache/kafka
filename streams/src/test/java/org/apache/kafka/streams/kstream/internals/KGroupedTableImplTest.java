@@ -49,6 +49,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class KGroupedTableImplTest {
 
@@ -65,64 +66,64 @@ public class KGroupedTableImplTest {
             .groupBy(MockMapper.selectValueKeyValueMapper());
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowInvalidStoreNameOnAggregate() {
-        groupedTable.aggregate(
+        assertThrows(TopologyException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.as(INVALID_STORE_NAME));
+            Materialized.as(INVALID_STORE_NAME)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullInitializerOnAggregate() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullAdderOnAggregate() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             null,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullSubtractorOnAggregate() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullAdderOnReduce() {
-        groupedTable.reduce(
+        assertThrows(NullPointerException.class, () -> groupedTable.reduce(
             null,
             MockReducer.STRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullSubtractorOnReduce() {
-        groupedTable.reduce(
+        assertThrows(NullPointerException.class, () -> groupedTable.reduce(
             MockReducer.STRING_ADDER,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowInvalidStoreNameOnReduce() {
-        groupedTable.reduce(
+        assertThrows(TopologyException.class, () -> groupedTable.reduce(
             MockReducer.STRING_ADDER,
             MockReducer.STRING_REMOVER,
-            Materialized.as(INVALID_STORE_NAME));
+            Materialized.as(INVALID_STORE_NAME)));
     }
 
     private MockProcessorSupplier<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
@@ -300,71 +301,70 @@ public class KGroupedTableImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointOnCountWhenMaterializedIsNull() {
-        groupedTable.count((Materialized) null);
+        assertThrows(NullPointerException.class, () -> groupedTable.count((Materialized) null));
     }
 
-    @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnReduceWhenMaterializedIsNull() {
-        groupedTable.reduce(
+        assertThrows(NullPointerException.class, () -> groupedTable.reduce(
             MockReducer.STRING_ADDER,
             MockReducer.STRING_REMOVER,
-            (Materialized) null);
+            null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnReduceWhenAdderIsNull() {
-        groupedTable.reduce(
+        assertThrows(NullPointerException.class, () -> groupedTable.reduce(
             null,
             MockReducer.STRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnReduceWhenSubtractorIsNull() {
-        groupedTable.reduce(
+        assertThrows(NullPointerException.class, () -> groupedTable.reduce(
             MockReducer.STRING_ADDER,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateWhenInitializerIsNull() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateWhenAdderIsNull() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             null,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateWhenSubtractorIsNull() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             null,
-            Materialized.as("store"));
+            Materialized.as("store")));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnAggregateWhenMaterializedIsNull() {
-        groupedTable.aggregate(
+        assertThrows(NullPointerException.class, () -> groupedTable.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            (Materialized) null);
+            (Materialized) null));
     }
 
     private void processData(final String topic,

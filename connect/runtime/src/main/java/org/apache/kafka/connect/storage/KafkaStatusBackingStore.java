@@ -44,6 +44,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.Table;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -61,6 +62,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Supplier;
 
 /**
  * StatusBackingStore implementation which uses a compacted topic for storage
@@ -128,17 +130,25 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     protected final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
     protected final Map<String, CacheEntry<ConnectorStatus>> connectors;
     protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
+    private final Supplier<TopicAdmin> topicAdminSupplier;
 
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
+    private SharedTopicAdmin ownTopicAdmin;
 
+    @Deprecated
     public KafkaStatusBackingStore(Time time, Converter converter) {
+        this(time, converter, null);
+    }
+
+    public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier) {
         this.time = time;
         this.converter = converter;
         this.tasks = new Table<>();
         this.connectors = new HashMap<>();
         this.topics = new ConcurrentHashMap<>();
+        this.topicAdminSupplier = topicAdminSupplier;
     }
 
     // visible for testing
@@ -169,6 +179,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        Supplier<TopicAdmin> adminSupplier;
+        if (topicAdminSupplier != null) {
+            adminSupplier = topicAdminSupplier;
+        } else {
+            // Create our own topic admin supplier that we'll close when we're stopped
+            ownTopicAdmin = new SharedTopicAdmin(adminProps);
+            adminSupplier = ownTopicAdmin;
+        }
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).statusStorageTopicSettings()
@@ -180,36 +198,26 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
-            @Override
-            public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
-                read(record);
-            }
-        };
-        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminProps);
+        Callback<ConsumerRecord<String, byte[]>> readCallback = (error, record) -> read(record);
+        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminSupplier);
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
-        Runnable createTopics = new Runnable() {
-            @Override
-            public void run() {
-                log.debug("Creating admin client to manage Connect internal status topic");
-                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    // Create the topic if it doesn't exist
-                    Set<String> newTopics = admin.createTopics(topicDescription);
-                    if (!newTopics.contains(topic)) {
-                        // It already existed, so check that the topic cleanup policy is compact only and not delete
-                        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                        admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                                DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
-                    }
-                }
+                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
+        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
+            log.debug("Creating admin client to manage Connect internal status topic");
+            // Create the topic if it doesn't exist
+            Set<String> newTopics = admin.createTopics(topicDescription);
+            if (!newTopics.contains(topic)) {
+                // It already existed, so check that the topic cleanup policy is compact only and not delete
+                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
+                        DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
             }
         };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, time, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, time, createTopics);
     }
 
     @Override
@@ -222,7 +230,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Override
     public void stop() {
-        kafkaLog.stop();
+        try {
+            kafkaLog.stop();
+        } finally {
+            if (ownTopicAdmin != null) {
+                ownTopicAdmin.close();
+            }
+        }
     }
 
     @Override

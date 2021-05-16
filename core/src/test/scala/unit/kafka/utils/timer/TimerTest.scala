@@ -18,9 +18,9 @@ package kafka.utils.timer
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+import org.junit.jupiter.api.{Test, AfterEach, BeforeEach}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -38,12 +38,12 @@ class TimerTest {
 
   private[this] var timer: Timer = null
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     timer = new SystemTimer("test", tickMs = 1, wheelSize = 3)
   }
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     timer.shutdown()
   }
@@ -62,10 +62,10 @@ class TimerTest {
     timer.advanceClock(0)
 
     latches.take(5).foreach { latch =>
-      assertEquals("already expired tasks should run immediately", true, latch.await(3, TimeUnit.SECONDS))
+      assertEquals(true, latch.await(3, TimeUnit.SECONDS), "already expired tasks should run immediately")
     }
 
-    assertEquals("output of already expired tasks", Set(-5, -4, -3, -2, -1), output.toSet)
+    assertEquals(Set(-5, -4, -3, -2, -1), output.toSet, "output of already expired tasks")
   }
 
   @Test
@@ -102,6 +102,6 @@ class TimerTest {
 
     latches.foreach { latch => latch.await() }
 
-    assertEquals("output should match", ids.sorted, output.toSeq)
+    assertEquals(ids.sorted, output.toSeq, "output should match")
   }
 }

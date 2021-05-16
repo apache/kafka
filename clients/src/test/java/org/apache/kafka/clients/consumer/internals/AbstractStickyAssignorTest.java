@@ -30,14 +30,15 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class AbstractStickyAssignorTest {
     protected AbstractStickyAssignor assignor;
@@ -49,7 +50,7 @@ public abstract class AbstractStickyAssignorTest {
 
     protected abstract Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions);
 
-    @Before
+    @BeforeEach
     public void setUp() {
         assignor = createAssignor();
 
@@ -221,6 +222,101 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    /**
+     * This unit test is testing consumer owned minQuota partitions, and expected to have maxQuota partitions situation
+     */
+    @Test
+    public void testConsumerOwningMinQuotaExpectedMaxQuota() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 2);
+        partitionsPerTopic.put(topic2, 3);
+
+        List<String> subscribedTopics = topics(topic1, topic2);
+
+        subscriptions.put(consumer1,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 0), tp(topic2, 1))));
+        subscriptions.put(consumer2,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 1), tp(topic2, 2))));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1), tp(topic2, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 2)), assignment.get(consumer2));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    /**
+     * This unit test is testing consumers owned maxQuota partitions are more than numExpectedMaxCapacityMembers situation
+     */
+    @Test
+    public void testMaxQuotaConsumerMoreThanNumExpectedMaxCapacityMembers() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 2);
+        partitionsPerTopic.put(topic2, 2);
+
+        List<String> subscribedTopics = topics(topic1, topic2);
+
+        subscriptions.put(consumer1,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 0), tp(topic2, 0))));
+        subscriptions.put(consumer2,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 1), tp(topic2, 1))));
+        subscriptions.put(consumer3, buildSubscription(subscribedTopics, Collections.emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic2, 0)), assignment.get(consumer3));
+
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    /**
+     * This unit test is testing all consumers owned less than minQuota partitions situation
+     */
+    @Test
+    public void testAllConsumerAreUnderMinQuota() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 2);
+        partitionsPerTopic.put(topic2, 3);
+
+        List<String> subscribedTopics = topics(topic1, topic2);
+
+        subscriptions.put(consumer1,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 0))));
+        subscriptions.put(consumer2,
+            buildSubscription(subscribedTopics, partitions(tp(topic1, 1))));
+        subscriptions.put(consumer3, buildSubscription(subscribedTopics, Collections.emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer3));
+
+        assertTrue(isFullyBalanced(assignment));
+    }
+
     @Test
     public void testAddRemoveConsumerOneTopic() {
         String consumer1 = "consumer1";
@@ -250,6 +346,56 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic, 1), tp(topic, 0))),
             new HashSet<>(assignment.get(consumer2)));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testAddRemoveTwoConsumersTwoTopics() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+        String consumer4 = "consumer4";
+        List<String> allTopics = topics(topic1, topic2);
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
+        partitionsPerTopic.put(topic2, 4);
+        subscriptions.put(consumer1, new Subscription(allTopics));
+        subscriptions.put(consumer2, new Subscription(allTopics));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+
+        // add 2 consumers
+        subscriptions.put(consumer1, buildSubscription(allTopics, assignment.get(consumer1)));
+        subscriptions.put(consumer2, buildSubscription(allTopics, assignment.get(consumer2)));
+        subscriptions.put(consumer3, buildSubscription(allTopics, Collections.emptyList()));
+        subscriptions.put(consumer4, buildSubscription(allTopics, Collections.emptyList()));
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer4));
+        assertTrue(isFullyBalanced(assignment));
+
+        // remove 2 consumers
+        subscriptions.remove(consumer1);
+        subscriptions.remove(consumer2);
+        subscriptions.put(consumer3, buildSubscription(allTopics, assignment.get(consumer3)));
+        subscriptions.put(consumer4, buildSubscription(allTopics, assignment.get(consumer4)));
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
@@ -422,7 +568,8 @@ public abstract class AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
-    @Test(timeout = 30 * 1000)
+    @Timeout(30)
+    @Test
     public void testLargeAssignmentAndGroupWithUniformSubscription() {
         // 1 million partitions!
         int topicCount = 500;
@@ -552,7 +699,7 @@ public abstract class AbstractStickyAssignorTest {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             int size = topicPartitions.size();
-            assertTrue("Consumer " + consumer + " is assigned more topic partitions than expected.", size <= 1);
+            assertTrue(size <= 1, "Consumer " + consumer + " is assigned more topic partitions than expected.");
             if (size == 1)
                 partitionsAssigned.put(consumer, topicPartitions.get(0));
         }
@@ -574,9 +721,9 @@ public abstract class AbstractStickyAssignorTest {
         for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
-            assertEquals("Consumer " + consumer + " is assigned more topic partitions than expected.", 1, topicPartitions.size());
-            assertTrue("Stickiness was not honored for consumer " + consumer,
-                (!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))));
+            assertEquals(1, topicPartitions.size(), "Consumer " + consumer + " is assigned more topic partitions than expected.");
+            assertTrue((!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))),
+                "Stickiness was not honored for consumer " + consumer);
         }
     }
 
@@ -588,7 +735,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions = Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(assignment.values().stream().mapToInt(topicPartitions -> topicPartitions.size()).sum(), 1 + 100);
+        assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
     }
@@ -734,9 +881,9 @@ public abstract class AbstractStickyAssignorTest {
             String consumer = consumers.get(i);
             List<TopicPartition> partitions = assignments.get(consumer);
             for (TopicPartition partition: partitions)
-                assertTrue("Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" + partition.topic()
-                        + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                    subscriptions.get(consumer).topics().contains(partition.topic()));
+                assertTrue(subscriptions.get(consumer).topics().contains(partition.topic()),
+                    "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" +
+                    partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
             if (i == size - 1)
                 continue;
@@ -747,9 +894,9 @@ public abstract class AbstractStickyAssignorTest {
 
                 Set<TopicPartition> intersection = new HashSet<>(partitions);
                 intersection.retainAll(otherPartitions);
-                assertTrue("Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection.toString()
-                        + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                    intersection.isEmpty());
+                assertTrue(intersection.isEmpty(),
+                    "Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection +
+                    "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
                 int len = partitions.size();
                 int otherLen = otherPartitions.size();
@@ -765,13 +912,11 @@ public abstract class AbstractStickyAssignorTest {
 
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
                 for (String topic: map.keySet()) {
-                    assertFalse("Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
-                            + " to achieve a better balance"
-                            + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
-                            + " partitions."
-                            + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
-                            .toString(),
-                        otherMap.containsKey(topic));
+                    assertFalse(otherMap.containsKey(topic),
+                        "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
+                        "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
+                        "\nSubscriptions: " + subscriptions +
+                        "\nAssignments: " + assignments);
                 }
             }
         }

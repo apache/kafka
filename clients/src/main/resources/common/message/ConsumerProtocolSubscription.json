@@ -26,9 +26,9 @@
     { "name": "Topics", "type": "[]string", "versions": "0+" },
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
       "default": "null", "zeroCopy": true },
-    { "name": "OwnedPartitions", "type": "[]TopicPartition", "versions": "1+",
+    { "name": "OwnedPartitions", "type": "[]TopicPartition", "versions": "1+", "ignorable": true,
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "1+" },
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "1+", "entityType": "topicName" },
         { "name": "Partitions", "type": "[]int32", "versions": "1+"}
       ]
     }

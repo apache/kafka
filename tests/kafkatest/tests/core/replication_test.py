@@ -19,9 +19,11 @@ from ducktape.mark import matrix
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
+from kafkatest.services.kafka import quorum
 from kafkatest.tests.end_to_end import EndToEndTest
 
 import signal
+import time
 
 def broker_node(test, broker_type):
     """ Discover node of requested type. For leader type, discovers leader for our topic and partition 0
@@ -63,10 +65,19 @@ def hard_bounce(test, broker_type):
 
         # Since this is a hard kill, we need to make sure the process is down and that
         # zookeeper has registered the loss by expiring the broker's session timeout.
+        # Or, for a Raft-based quorum, we simply wait at least 18 seconds (the default for broker.session.timeout.ms)
 
-        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
-                   timeout_sec=test.kafka.zk_session_timeout + 5,
-                   err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
+        gracePeriodSecs = 5
+        if test.zk:
+            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+                       timeout_sec=test.kafka.zk_session_timeout + gracePeriodSecs,
+                       err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
+        else:
+            brokerSessionTimeoutSecs = 18
+            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0,
+                       timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
+                       err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(prev_broker_node.account))
+            time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
 
         test.kafka.start_node(prev_broker_node)
 
@@ -98,11 +109,11 @@ class ReplicationTest(EndToEndTest):
         "replication-factor": 3,
         "configs": {"min.insync.replicas": 2}
     }
- 
+
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ReplicationTest, self).__init__(test_context=test_context, topic_config=self.TOPIC_CONFIG)
- 
+
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(ReplicationTest, self).min_cluster_size() + self.num_producers + self.num_consumers
@@ -114,26 +125,30 @@ class ReplicationTest(EndToEndTest):
             enable_idempotence=[True])
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader"],
-            security_protocol=["PLAINTEXT", "SASL_SSL"])
+            security_protocol=["PLAINTEXT", "SASL_SSL"],
+            metadata_quorum=quorum.all_non_upgrade)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["controller"],
             security_protocol=["PLAINTEXT", "SASL_SSL"])
     @matrix(failure_mode=["hard_bounce"],
             broker_type=["leader"],
-            security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"])
+            security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"],
+            metadata_quorum=quorum.all_non_upgrade)
     @parametrize(failure_mode="hard_bounce",
             broker_type="leader",
             security_protocol="SASL_SSL", client_sasl_mechanism="SCRAM-SHA-256", interbroker_sasl_mechanism="SCRAM-SHA-512")
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
-            security_protocol=["PLAINTEXT"], broker_type=["leader"], compression_type=["gzip"], tls_version=["TLSv1.2", "TLSv1.3"])
+            security_protocol=["PLAINTEXT"], broker_type=["leader"], compression_type=["gzip"], tls_version=["TLSv1.2", "TLSv1.3"],
+            metadata_quorum=quorum.all_non_upgrade)
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type,
                                              client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI",
-                                             compression_type=None, enable_idempotence=False, tls_version=None):
+                                             compression_type=None, enable_idempotence=False, tls_version=None,
+                                             metadata_quorum=quorum.zk):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
 
-        Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk/Raft-based controller, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
 
             - Produce messages in the background
             - Consume messages in the background
@@ -142,15 +157,19 @@ class ReplicationTest(EndToEndTest):
             - Validate that every acked message was consumed
         """
 
-        self.create_zookeeper()
-        self.zk.start()
+        if failure_mode == "controller" and metadata_quorum != quorum.zk:
+            raise Exception("There is no controller broker when using a Raft-based metadata quorum")
+        self.create_zookeeper_if_necessary()
+        if self.zk:
+            self.zk.start()
 
         self.create_kafka(num_nodes=3,
                           security_protocol=security_protocol,
                           interbroker_security_protocol=security_protocol,
                           client_sasl_mechanism=client_sasl_mechanism,
                           interbroker_sasl_mechanism=interbroker_sasl_mechanism,
-                          tls_version=tls_version)
+                          tls_version=tls_version,
+                          controller_num_nodes_override = 1)
         self.kafka.start()
 
         compression_types = None if not compression_type else [compression_type]

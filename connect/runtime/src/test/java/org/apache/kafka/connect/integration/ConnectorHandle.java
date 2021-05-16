@@ -292,8 +292,8 @@ public class ConnectorHandle {
      * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
      * connector and all tasks to be started at least the specified number of times.
      *
-     * <p>This method does not track the number of times the connector and tasks are stopped, and
-     * only tracks the number of times the connector and tasks are <em>started</em>.
+     * <p>This method does not track the number of times the connector and tasks are started, and
+     * only tracks the number of times the connector and tasks are <em>stopped</em>.
      *
      * @param expectedStops the minimum number of starts that are expected once this method is
      *                      called
@@ -315,8 +315,8 @@ public class ConnectorHandle {
      * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
      * connector and all tasks to be started at least the specified number of times.
      *
-     * <p>This method does not track the number of times the connector and tasks are stopped, and
-     * only tracks the number of times the connector and tasks are <em>started</em>.
+     * <p>This method does not track the number of times the connector and tasks are started, and
+     * only tracks the number of times the connector and tasks are <em>stopped</em>.
      *
      * @param expectedStops the minimum number of starts that are expected once this method is
      *                      called

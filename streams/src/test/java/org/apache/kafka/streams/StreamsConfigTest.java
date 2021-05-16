@@ -36,6 +36,8 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,8 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -79,15 +83,15 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.put("key.deserializer.encoding", "UTF8");
-        props.put("value.deserializer.encoding", "UTF-16");
+        props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
+        props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsRecordingLevel() {
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -97,28 +101,28 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketSendBufferSize() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketReceiveBufferSize() {
         props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfApplicationIdIsNotSet() {
         props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
         props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -126,7 +130,6 @@ public class StreamsConfigTest {
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
         assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
-        assertThat(returnedProps.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), equalTo(10000));
     }
 
     @Test
@@ -207,8 +210,8 @@ public class StreamsConfigTest {
     @Test
     public void defaultSerdeShouldBeConfigured() {
         final Map<String, Object> serializerConfigs = new HashMap<>();
-        serializerConfigs.put("key.serializer.encoding", "UTF8");
-        serializerConfigs.put("value.serializer.encoding", "UTF-16");
+        serializerConfigs.put("key.serializer.encoding", StandardCharsets.UTF_8.name());
+        serializerConfigs.put("value.serializer.encoding", StandardCharsets.UTF_16.name());
         final Serializer<String> serializer = Serdes.String().serializer();
 
         final String str = "my string for testing";
@@ -361,18 +364,18 @@ public class StreamsConfigTest {
         assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultKeySerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultKeySerde);
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultValueSerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultValueSerde);
     }
 
     @Test
@@ -489,6 +492,7 @@ public class StreamsConfigTest {
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosAlpha() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
@@ -497,9 +501,18 @@ public class StreamsConfigTest {
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosBeta() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
+    }
+
+    @Test
+    public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosV2() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
@@ -511,6 +524,7 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosAlpha() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
@@ -519,9 +533,18 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(true));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosBeta() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
+        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
+    }
+
+    @Test
+    public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosV2() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
@@ -548,10 +571,10 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -585,15 +608,23 @@ public class StreamsConfigTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosEnabled();
+    }
+
+    @Test
+    public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenIfEosEnabled();
     }
 
@@ -618,15 +649,23 @@ public class StreamsConfigTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosEnabled();
+    }
+
+    @Test
+    public void shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldResetToDefaultIfProducerEnableIdempotenceIsOverriddenIfEosEnabled();
     }
 
@@ -645,15 +684,23 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetDifferentDefaultsIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldSetDifferentDefaultsIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetDifferentDefaultsIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldSetDifferentDefaultsIfEosEnabled();
+    }
+
+    @Test
+    public void shouldSetDifferentDefaultsIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldSetDifferentDefaultsIfEosEnabled();
     }
 
@@ -669,18 +716,27 @@ public class StreamsConfigTest {
         );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
+        assertThat(producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), equalTo(10000));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldOverrideUserConfigTransactionalIdIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldOverrideUserConfigTransactionalIdIfEosEnable();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldOverrideUserConfigTransactionalIdIfEosBeatEnabled() {
+    public void shouldOverrideUserConfigTransactionalIdIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldOverrideUserConfigTransactionalIdIfEosEnable();
+    }
+
+    @Test
+    public void shouldOverrideUserConfigTransactionalIdIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldOverrideUserConfigTransactionalIdIfEosEnable();
     }
 
@@ -693,15 +749,23 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyAlphaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyBetaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigRetriesIfExactlyV2OnceEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
@@ -715,15 +779,23 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled();
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled();
     }
 
@@ -803,15 +875,23 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosEnabled();
+    }
+
+    @Test
+    public void shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldThrowExceptionIfMaxInFlightRequestsGreaterThanFiveIfEosEnabled();
     }
 
@@ -830,15 +910,23 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosBeataEnabled() {
+    public void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosEnabled();
+    }
+
+    @Test
+    public void shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosEnabled();
     }
 
@@ -848,15 +936,23 @@ public class StreamsConfigTest {
         new StreamsConfig(props).getProducerConfigs(clientId);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosAlphaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosEnabled();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosBetaEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
+        shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosEnabled();
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosEnabled();
     }
 
@@ -876,6 +972,13 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldStateDirStartsWithJavaIOTmpDir() {
+        final String expectedPrefix = System.getProperty("java.io.tmpdir") + File.separator;
+        final String actual = streamsConfig.getString(STATE_DIR_CONFIG);
+        assertTrue(actual.startsWith(expectedPrefix));
+    }
+
+    @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
         final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
@@ -891,19 +994,16 @@ public class StreamsConfigTest {
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldLogWarningWhenPartitionGrouperIsUsed() {
-        props.put(
-            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.DefaultPartitionGrouper.class
-        );
+    public void shouldLogWarningWhenEosAlphaIsUsed() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
         LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
@@ -911,8 +1011,29 @@ public class StreamsConfigTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG +
-                    "` is deprecated and will be removed in 3.0.0 release.")
+                hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE +
+                            "` is deprecated and will be removed in the 4.0.0 release. " +
+                            "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead. "  +
+                            "Note that this requires broker version 2.5+ so you should prepare " +
+                            "to upgrade your brokers if necessary.")
+            );
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldLogWarningWhenEosBetaIsUsed() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+
+        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            new StreamsConfig(props);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE_BETA +
+                            "` is deprecated and will be removed in the 4.0.0 release. " +
+                            "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead.")
             );
         }
     }
@@ -929,7 +1050,7 @@ public class StreamsConfigTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
-                    "` is deprecated and will be removed in 3.0.0 release.")
+                            "` is deprecated and will be removed in the 4.0.0 release.")
             );
         }
     }

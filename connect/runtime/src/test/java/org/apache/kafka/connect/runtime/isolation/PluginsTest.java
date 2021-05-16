@@ -50,6 +50,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class PluginsTest {
@@ -184,15 +185,15 @@ public class PluginsTest {
         assertTrue(headerConverter instanceof SimpleHeaderConverter);
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void shouldThrowIfPluginThrows() {
         TestPlugins.assertAvailable();
 
-        plugins.newPlugin(
+        assertThrows(ConnectException.class, () -> plugins.newPlugin(
             TestPlugins.ALWAYS_THROW_EXCEPTION,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
-        );
+        ));
     }
 
     @Test
@@ -251,11 +252,11 @@ public class PluginsTest {
         assertPluginClassLoaderAlwaysActive(samples);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailToFindConverterInCurrentClassloader() {
         TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
-        createConfig();
+        assertThrows(ConfigException.class, this::createConfig);
     }
 
     @Test

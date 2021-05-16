@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -73,6 +74,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
@@ -82,7 +84,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -100,7 +103,8 @@ public class InternalMockProcessorContext
             ),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -112,7 +116,8 @@ public class InternalMockProcessorContext
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -131,7 +136,8 @@ public class InternalMockProcessorContext
             ),
             config,
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -146,7 +152,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -165,7 +172,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -181,7 +189,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            cache
+            cache,
+            Time.SYSTEM
         );
     }
 
@@ -191,7 +200,8 @@ public class InternalMockProcessorContext
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache) {
+                                        final ThreadCache cache,
+                                        final Time time) {
         super(
             new TaskId(0, 0),
             config,
@@ -203,6 +213,7 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.time = time;
     }
 
     @Override
@@ -311,18 +322,6 @@ public class InternalMockProcessorContext
         forward(key, value, To.all());
     }
 
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final int childIndex) {
-        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final String childName) {
-        forward(key, value, To.child(childName));
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void forward(final Object key, final Object value, final To to) {
@@ -367,6 +366,16 @@ public class InternalMockProcessorContext
             return timestamp;
         }
         return recordContext.timestamp();
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return time.milliseconds();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
     }
 
     @Override

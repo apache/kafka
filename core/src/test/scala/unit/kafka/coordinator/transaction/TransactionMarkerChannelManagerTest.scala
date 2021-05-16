@@ -32,8 +32,8 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -132,7 +132,7 @@ class TransactionMarkerChannelManagerTest {
         response)
 
       TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.drainQueuedTransactionMarkers()
+        val requests = channelManager.generateRequests()
         if (requests.nonEmpty) {
           assertEquals(1, requests.size)
           val request = requests.head
@@ -148,8 +148,8 @@ class TransactionMarkerChannelManagerTest {
     }
 
     assertNotNull(addMarkerFuture)
-    assertTrue("Add marker task failed with exception " + addMarkerFuture.get().get,
-      addMarkerFuture.get().isSuccess)
+    assertTrue(addMarkerFuture.get().isSuccess,
+      "Add marker task failed with exception " + addMarkerFuture.get().get)
 
     EasyMock.verify(txnStateManager)
   }
@@ -188,10 +188,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
@@ -264,10 +264,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>

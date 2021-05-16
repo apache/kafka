@@ -75,18 +75,18 @@ public class WorkerConfigTest {
         new WorkerConfig(WorkerConfig.baseConfigDef(), props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testAdminListenersNotAllowingEmptyStrings() {
         Map<String, String> props = baseProps();
         props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999,");
-        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testAdminListenersNotAllowingBlankStrings() {
         Map<String, String> props = baseProps();
         props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, ,https://a.b:9999");
-        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
     }
 
     @Test

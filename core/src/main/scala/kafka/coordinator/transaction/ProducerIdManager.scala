@@ -70,7 +70,12 @@ case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) 
   }
 }
 
-class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends Logging {
+trait ProducerIdGenerator {
+  def generateProducerId(): Long
+  def shutdown() : Unit = {}
+}
+
+class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends ProducerIdGenerator with Logging {
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
@@ -150,7 +155,7 @@ class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends 
     }
   }
 
-  def shutdown(): Unit = {
+  override def shutdown(): Unit = {
     info(s"Shutdown complete: last producerId assigned $nextProducerId")
   }
 }

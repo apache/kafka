@@ -25,7 +25,7 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -47,15 +47,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param replicationFactor Replication factor
    * @param topicConfig  topic configs
    * @param rackAwareMode
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopic(topic: String,
                   partitions: Int,
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
-                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
+                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                  usesTopicId: Boolean = false): Unit = {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createTopicWithAssignment(topic, topicConfig, replicaAssignment)
+    createTopicWithAssignment(topic, topicConfig, replicaAssignment, usesTopicId = usesTopicId)
   }
 
   /**
@@ -90,11 +92,13 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param config The config of the topic
    * @param partitionReplicaAssignment The assignments of the topic
    * @param validate Boolean indicating if parameters must be validated or not (true by default)
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopicWithAssignment(topic: String,
                                 config: Properties,
                                 partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                validate: Boolean = true): Unit = {
+                                validate: Boolean = true,
+                                usesTopicId: Boolean = false): Unit = {
     if (validate)
       validateTopicCreate(topic, partitionReplicaAssignment, config)
 
@@ -106,7 +110,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     // create the partition assignment
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment.map { case (k, v) => k -> ReplicaAssignment(v) },
-      isUpdate = false)
+      isUpdate = false, usesTopicId)
   }
 
   /**
@@ -153,14 +157,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     LogConfig.validate(config)
   }
 
-  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment], isUpdate: Boolean): Unit = {
+  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
+                                            isUpdate: Boolean, usesTopicId: Boolean = false): Unit = {
     try {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.map { case (k, v) => k -> v.replicas })
+        val topicIdOpt = if (usesTopicId) Some(Uuid.randomUuid()) else None
+        zkClient.createTopicAssignment(topic, topicIdOpt, assignment.map { case (k, v) => k -> v.replicas })
       } else {
-        zkClient.setTopicAssignment(topic, assignment)
+        val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
+        zkClient.setTopicAssignment(topic, topicIds.get(topic), assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
@@ -347,7 +354,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case ConfigType.Client => changeClientIdConfig(entityName, configs)
       case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs)
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
+      case ConfigType.Ip => changeIpConfig(entityName, configs)
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.all}")
     }
   }
 
@@ -382,6 +390,28 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     else
       DynamicConfig.User.validate(configs)
     changeEntityConfig(ConfigType.User, sanitizedEntityName, configs)
+  }
+
+  /**
+   * Validates the IP configs.
+   * @param ip ip for which configs are being validated
+   * @param configs properties to validate for the IP
+   */
+  def validateIpConfig(ip: String, configs: Properties): Unit = {
+    if (!DynamicConfig.Ip.isValidIpEntity(ip))
+      throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
+    DynamicConfig.Ip.validate(configs)
+  }
+
+  /**
+   * Update the config for an IP. These overrides will be persisted between sessions, and will override any default
+   * IP properties.
+   * @param ip ip for which configs are being updated
+   * @param configs properties to update for the IP
+   */
+  def changeIpConfig(ip: String, configs: Properties): Unit = {
+    validateIpConfig(ip, configs)
+    changeEntityConfig(ConfigType.Ip, ip, configs)
   }
 
   /**
@@ -454,8 +484,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-   * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
-   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
+   * Read the entity (topic, broker, client, user, <user, client> or <ip>) config (if any) from zk
+   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user>, <user>/clients/<client-id> or <ip>.
    * @param rootEntityType
    * @param sanitizedEntityName
    * @return

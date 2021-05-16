@@ -319,7 +319,7 @@ object AclCommand extends Logging {
   }
 
   private def getResourceToAcls(opts: AclCommandOptions): Map[ResourcePattern, Set[AccessControlEntry]] = {
-    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    val patternType = opts.options.valueOf(opts.resourcePatternType)
     if (!patternType.isSpecific)
       CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
@@ -357,8 +357,8 @@ object AclCommand extends Logging {
   private def getProducerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[AccessControlEntry]] = {
     val filters = getResourceFilter(opts)
 
-    val topics: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
-    val transactionalIds: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
+    val topics = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val transactionalIds = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
     val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
     val topicAcls = getAcl(opts, Set(WRITE, DESCRIBE, CREATE))
@@ -376,8 +376,8 @@ object AclCommand extends Logging {
   private def getConsumerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourcePatternFilter, Set[AccessControlEntry]] = {
     val filters = getResourceFilter(opts)
 
-    val topics: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
-    val groups: Set[ResourcePatternFilter] = filters.filter(_.resourceType == JResourceType.GROUP)
+    val topics = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val groups = filters.filter(_.resourceType == JResourceType.GROUP)
 
     //Read, Describe on topic, Read on consumerGroup
 
@@ -445,7 +445,7 @@ object AclCommand extends Logging {
   }
 
   private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
-    val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
+    val patternType = opts.options.valueOf(opts.resourcePatternType)
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))

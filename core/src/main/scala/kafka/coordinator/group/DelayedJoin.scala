@@ -37,7 +37,6 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
   override def onExpiration(): Unit = {
-    coordinator.onExpireJoin()
     // try to complete delayed actions introduced by coordinator.onCompleteJoin
     tryToCompleteDelayedAction()
   }

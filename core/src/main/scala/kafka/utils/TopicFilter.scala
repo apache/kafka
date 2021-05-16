@@ -43,7 +43,7 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
   def isTopicAllowed(topic: String, excludeInternalTopics: Boolean): Boolean
 }
 
-case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
+case class IncludeList(rawRegex: String) extends TopicFilter(rawRegex) {
   override def isTopicAllowed(topic: String, excludeInternalTopics: Boolean) = {
     val allowed = topic.matches(regex) && !(Topic.isInternal(topic) && excludeInternalTopics)
 

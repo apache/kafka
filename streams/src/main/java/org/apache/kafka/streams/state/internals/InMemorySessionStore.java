@@ -75,18 +75,25 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        this.context = (InternalProcessorContext) context;
-
-        final StreamsMetricsImpl metrics = this.context.metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
-            threadId,
-            taskName,
-            metricScope,
-            name,
-            metrics
-        );
+
+        // The provided context is not required to implement InternalProcessorContext,
+        // If it doesn't, we can't record this metric.
+        if (context instanceof InternalProcessorContext) {
+            this.context = (InternalProcessorContext) context;
+            final StreamsMetricsImpl metrics = this.context.metrics();
+            expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+                threadId,
+                taskName,
+                metricScope,
+                name,
+                metrics
+            );
+        } else {
+            this.context = null;
+            expiredRecordSensor = null;
+        }
 
         if (root != null) {
             context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));
@@ -102,7 +109,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            // The provided context is not required to implement InternalProcessorContext,
+            // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
+            if (expiredRecordSensor != null && context != null) {
+                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            }
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {
@@ -139,18 +150,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+    public byte[] fetchSession(final Bytes key,
+                               final long earliestSessionEndTime,
+                               final long latestSessionStartTime) {
         removeExpiredSegments();
 
         Objects.requireNonNull(key, "key cannot be null");
 
         // Only need to search if the record hasn't expired yet
-        if (endTime > observedStreamTime - retentionPeriod) {
-            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
+        if (latestSessionStartTime > observedStreamTime - retentionPeriod) {
+            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(latestSessionStartTime);
             if (keyMap != null) {
                 final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
                 if (startTimeMap != null) {
-                    return startTimeMap.get(startTime);
+                    return startTimeMap.get(earliestSessionEndTime);
                 }
             }
         }
@@ -262,25 +275,26 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
 
-        Objects.requireNonNull(from, "from key cannot be null");
-        Objects.requireNonNull(to, "to key cannot be null");
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
 
         removeExpiredSegments();
 
 
-        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), false);
+        return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), false);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from, final Bytes to) {
-        Objects.requireNonNull(from, "from key cannot be null");
-        Objects.requireNonNull(to, "to key cannot be null");
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
 
         removeExpiredSegments();
 
-        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), true);
+        return registerNewIterator(
+            keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), true);
     }
 
     @Override

@@ -18,22 +18,26 @@ package kafka.cluster
 
 import java.io.File
 import java.util.Properties
-
 import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils.TestUtils.MockAlterIsrManager
+import kafka.server.metadata.CachedConfigRepository
+import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
+object AbstractPartitionTest {
+  val brokerId = 101
+}
+
 class AbstractPartitionTest {
 
-  val brokerId = 101
+  val brokerId = AbstractPartitionTest.brokerId
   val topicPartition = new TopicPartition("test-topic", 0)
   val time = new MockTime()
   var tmpDir: File = _
@@ -41,40 +45,42 @@ class AbstractPartitionTest {
   var logDir2: File = _
   var logManager: LogManager = _
   var alterIsrManager: MockAlterIsrManager = _
+  var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
-  val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+  var configRepository: CachedConfigRepository = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
   var partition: Partition = _
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     TestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
+    configRepository = TestUtils.createConfigRepository(topicPartition.topic(), logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
-    logManager = TestUtils.createLogManager(
-      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, CleanerConfig(enableCleaner = false), time)
-    logManager.startup()
+    logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
+      CleanerConfig(enableCleaner = false), time)
+    logManager.startup(Set.empty)
 
     alterIsrManager = TestUtils.createAlterIsrManager()
+    isrChangeListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
       alterIsrManager)
 
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }
@@ -88,7 +94,7 @@ class AbstractPartitionTest {
     logProps
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (tmpDir.exists()) {
       logManager.shutdown()

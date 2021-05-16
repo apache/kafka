@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -47,7 +48,7 @@ class StreamsBrokerCompatibility(Test):
                                       self.input: {'partitions': 1, 'replication-factor': 1},
                                       self.output: {'partitions': 1, 'replication-factor': 1}
                                   },
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       ["transaction.state.log.replication.factor", "1"],
                                       ["transaction.state.log.min.isr", "1"]
                                   ])
@@ -61,6 +62,7 @@ class StreamsBrokerCompatibility(Test):
         self.zk.start()
 
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -85,6 +87,7 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_6))
     @parametrize(broker_version=str(LATEST_2_5))
     @parametrize(broker_version=str(LATEST_2_4))
@@ -129,6 +132,7 @@ class StreamsBrokerCompatibility(Test):
     #     self.consumer.stop()
     #     self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_0))
@@ -146,6 +150,7 @@ class StreamsBrokerCompatibility(Test):
 
         self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -163,9 +168,9 @@ class StreamsBrokerCompatibility(Test):
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             with processor.node.account.monitor_log(processor.LOG_FILE) as log:
                 processor.start()
-                log.wait_until('Shutting down because the Kafka cluster seems to be on a too old version. Setting processing\.guarantee="exactly_once_beta" requires broker version 2\.5 or higher\.',
+                log.wait_until('Shutting down because the Kafka cluster seems to be on a too old version. Setting processing\.guarantee="exactly_once_v2"/"exactly_once_beta" requires broker version 2\.5 or higher\.',
                                timeout_sec=60,
-                               err_msg="Never saw 'Shutting down, because the Kafka cluster seems to be on a too old version. Setting `processing.guarantee=\"exaclty_once_beta\"` requires broker version 2.5 or higher.' log message " + str(processor.node.account))
+                               err_msg="Never saw 'Shutting down because the Kafka cluster seems to be on a too old version. Setting `processing.guarantee=\"exactly_once_v2\"/\"exaclty_once_beta\"` requires broker version 2.5 or higher.' log message " + str(processor.node.account))
                 monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
                                    timeout_sec=60,
                                    err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException' error message " + str(processor.node.account))

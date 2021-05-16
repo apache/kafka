@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -73,6 +72,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -80,8 +80,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-
-import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -577,6 +575,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
     private final ConsumerInterceptors<K, V> interceptors;
+    private final IsolationLevel isolationLevel;
 
     private final Time time;
     private final ConsumerNetworkClient client;
@@ -659,11 +658,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
-    @SuppressWarnings("unchecked")
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
+        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer, valueDeserializer);
+    }
+
+    @SuppressWarnings("unchecked")
+    KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -696,11 +699,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
-            // load interceptors and make sure they get clientId
-            Map<String, Object> userProvidedConfigs = config.originals();
-            userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs, false)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                    ConsumerInterceptor.class);
+            List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
+                    ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ConsumerInterceptor.class,
+                    Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
@@ -732,7 +734,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            IsolationLevel isolationLevel = IsolationLevel.valueOf(
+            this.isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -750,7 +752,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                     config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                     time,
                     true,
                     apiVersions,
@@ -765,7 +766,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
 
-            this.assignors = getAssignorInstances(config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), config.originals());
+            this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
+                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+            );
 
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = !groupId.isPresent() ? null :
@@ -844,6 +848,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.fetcher = fetcher;
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.client = client;
@@ -867,7 +872,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
         JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(config.originals());
+        jmxReporter.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)));
         reporters.add(jmxReporter);
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
@@ -952,7 +957,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
-                    if (topic == null || topic.trim().isEmpty())
+                    if (Utils.isBlank(topic))
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
@@ -1103,7 +1108,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 for (TopicPartition tp : partitions) {
                     String topic = (tp != null) ? tp.topic() : null;
-                    if (topic == null || topic.trim().isEmpty())
+                    if (Utils.isBlank(topic))
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                 }
                 fetcher.clearBufferedDataForUnassignedPartitions(partitions);
@@ -1383,16 +1388,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(Duration timeout) {
-        acquireAndEnsureOpen();
-        try {
-            maybeThrowInvalidGroupIdException();
-            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout))) {
-                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing the current consumed offsets");
-            }
-        } finally {
-            release();
-        }
+        commitSync(subscriptions.allConsumed(), timeout);
     }
 
     /**
@@ -2224,6 +2220,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Get the consumer's current lag on the partition. Returns an "empty" {@link OptionalLong} if the lag is not known,
+     * for example if there is no position yet, or if the end offset is not known yet.
+     *
+     * <p>
+     * This method uses locally cached metadata and never makes a remote call.
+     *
+     * @param topicPartition The partition to get the lag for.
+     *
+     * @return This {@code Consumer} instance's current lag for the given partition.
+     *
+     * @throws IllegalStateException if the {@code topicPartition} is not assigned
+     **/
+    @Override
+    public OptionalLong currentLag(TopicPartition topicPartition) {
+        acquireAndEnsureOpen();
+        try {
+            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
+            return lag == null ? OptionalLong.empty() : OptionalLong.of(lag);
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Return the current group metadata associated with this consumer.
      *
      * @return consumer group metadata
@@ -2267,7 +2287,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin();
+            coordinator.requestRejoin("rebalance enforced by user");
         } finally {
             release();
         }
@@ -2286,29 +2306,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void close() {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
-    }
-
-    /**
-     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and leave the group.
-     * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
-     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
-     * used to interrupt close.
-     *
-     * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
-     *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     * @param timeUnit The time unit for the {@code timeout}
-     * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws InterruptException If the thread is interrupted before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException for any other error during close
-     *
-     * @deprecated Since 2.0. Use {@link #close(Duration)} or {@link #close()}.
-     */
-    @Deprecated
-    @Override
-    public void close(long timeout, TimeUnit timeUnit) {
-        close(Duration.ofMillis(timeUnit.toMillis(timeout)));
     }
 
     /**

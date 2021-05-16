@@ -49,6 +49,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
@@ -200,9 +201,9 @@ public class StreamsMetadataStateTest {
             actualAsMap.get(hostThree).standbyStateStoreNames().contains("table-one"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfStoreNameIsNullOnGetAllInstancesWithStore() {
-        metadataState.getAllMetadataForStore(null);
+        assertThrows(NullPointerException.class, () -> metadataState.getAllMetadataForStore(null));
     }
 
     @Test
@@ -274,25 +275,25 @@ public class StreamsMetadataStateTest {
         assertNull(actual);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowWhenKeyIsNull() {
-        metadataState.getKeyQueryMetadataForKey("table-three", null, Serdes.String().serializer());
+        assertThrows(NullPointerException.class, () -> metadataState.getKeyQueryMetadataForKey("table-three", null, Serdes.String().serializer()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowWhenSerializerIsNull() {
-        metadataState.getKeyQueryMetadataForKey("table-three", "key", (Serializer<Object>) null);
+        assertThrows(NullPointerException.class, () -> metadataState.getKeyQueryMetadataForKey("table-three", "key", (Serializer<Object>) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfStoreNameIsNull() {
-        metadataState.getKeyQueryMetadataForKey(null, "key", Serdes.String().serializer());
+        assertThrows(NullPointerException.class, () -> metadataState.getKeyQueryMetadataForKey(null, "key", Serdes.String().serializer()));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfStreamPartitionerIsNull() {
-        metadataState.getKeyQueryMetadataForKey(null, "key", (StreamPartitioner) null);
+        assertThrows(NullPointerException.class, () -> metadataState.getKeyQueryMetadataForKey(null, "key", (StreamPartitioner) null));
     }
 
     @Test

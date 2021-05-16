@@ -462,44 +462,99 @@ public class MeteredSessionStoreTest {
         assertNull(store.fetchSession("a", 0, Long.MAX_VALUE));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnPutIfKeyIsNull() {
-        store.put(null, "a");
+        assertThrows(NullPointerException.class, () -> store.put(null, "a"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnRemoveIfKeyIsNull() {
-        store.remove(null);
+        assertThrows(NullPointerException.class, () -> store.remove(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnPutIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(new Windowed<>(null, new SessionWindow(0, 0)), "a"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(null, new SessionWindow(0, 0))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfWindowIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(new Windowed<>(KEY, null), "a"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfWindowIsNull() {
+        assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(KEY, null)));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
-        store.fetch(null);
+        assertThrows(NullPointerException.class, () -> store.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnFetchSessionIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetchSession(null, 0, Long.MAX_VALUE));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
-        store.fetch(null, "to");
+        assertThrows(NullPointerException.class, () -> store.fetch(null, "to"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
-        store.fetch("from", null);
+        assertThrows(NullPointerException.class, () -> store.fetch("from", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFindSessionsIfKeyIsNull() {
-        store.findSessions(null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfFromIsNull() {
-        store.findSessions(null, "a", 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, "a", 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfToIsNull() {
-        store.findSessions("a", null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions("a", null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, "a", 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions("a", null, 0, 0));
     }
 
     private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }

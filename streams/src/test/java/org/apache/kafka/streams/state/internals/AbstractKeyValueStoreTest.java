@@ -260,7 +260,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
         assertEquals("four", driver.flushedEntryStored(4));
-        assertNull(null, driver.flushedEntryStored(5));
+        assertNull(driver.flushedEntryStored(5));
 
         assertFalse(driver.flushedEntryRemoved(0));
         assertFalse(driver.flushedEntryRemoved(1));

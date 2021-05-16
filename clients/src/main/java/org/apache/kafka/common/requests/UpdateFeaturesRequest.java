@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
+import java.nio.ByteBuffer;
+import java.util.Collections;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
 
@@ -54,39 +52,22 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public UpdateFeaturesRequest(Struct struct, short version) {
-        super(ApiKeys.UPDATE_FEATURES, version);
-        this.data = new UpdateFeaturesRequestData(struct, version);
+    @Override
+    public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return UpdateFeaturesResponse.createWithErrors(
+            ApiError.fromThrowable(e),
+            Collections.emptyMap(),
+            throttleTimeMs
+        );
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        final ApiError apiError = ApiError.fromThrowable(e);
-        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        for (FeatureUpdateKey update : this.data.featureUpdates().valuesSet()) {
-            final UpdatableFeatureResult result = new UpdatableFeatureResult()
-                .setFeature(update.feature())
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message());
-            results.add(result);
-        }
-        final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
-            .setThrottleTimeMs(throttleTimeMs)
-            .setResults(results);
-        return new UpdateFeaturesResponse(responseData);    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public UpdateFeaturesRequestData data() {
         return data;
     }
 
     public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
-        return new UpdateFeaturesRequest(
-            ApiKeys.UPDATE_FEATURES.parseRequest(version, buffer), version);
+        return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {

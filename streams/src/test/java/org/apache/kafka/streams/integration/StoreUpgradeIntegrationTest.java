@@ -42,13 +42,15 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
@@ -65,8 +67,17 @@ public class StoreUpgradeIntegrationTest {
 
     private KafkaStreams kafkaStreams;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -518,8 +529,8 @@ public class StoreUpgradeIntegrationTest {
 
 
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props()),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props()),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             false);
     }
 
@@ -554,17 +565,17 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedWindowedProcessor::new, STORE_NAME);
 
-        final Properties props = props();
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             true);
     }
 
-    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final KafkaStreams kafkaStreamsOld,
-                                                                           final KafkaStreams kafkaStreamsNew,
+    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final StreamsBuilder streamsBuilderForOldStore,
+                                                                           final StreamsBuilder streamsBuilderForNewStore,
                                                                            final boolean persistentStore) throws Exception {
-        kafkaStreams = kafkaStreamsOld;
+        final Properties props = props();
+        kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
@@ -608,7 +619,7 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-        kafkaStreams = kafkaStreamsNew;
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
         verifyWindowedCountWithTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L, lastUpdateKeyOne);

@@ -40,8 +40,8 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -53,7 +53,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer1"))
   val tokenManagers = Buffer[DelegationTokenManager]()
 
-  val masterKey = "masterKey"
+  val secretKey = "secretKey"
   val maxLifeTimeMsDefault = Defaults.DelegationTokenMaxLifeTimeMsDefault
   val renewTimeMsDefault = Defaults.DelegationTokenExpiryTimeMsDefault
   var tokenCache: DelegationTokenCache = null
@@ -63,16 +63,16 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   var error: Errors = Errors.NONE
   var expiryTimeStamp: Long = 0
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
     props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
-    props.put(KafkaConfig.DelegationTokenMasterKeyProp, masterKey)
+    props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     tokenManagers.foreach(_.shutdown())
     super.tearDown()
@@ -104,11 +104,11 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
-    val password = DelegationTokenManager.createHmac(tokenId, masterKey)
+    val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     val token = tokenManager.getToken(tokenId)
-    assertTrue(!token.isEmpty )
+    assertFalse(token.isEmpty )
     assertTrue(password sameElements token.get.hmac)
   }
 
@@ -122,7 +122,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     val issueTime = time.milliseconds
     val maxLifeTime = issueTime + maxLifeTimeMsDefault
     val tokenId = createTokenResult.tokenId
-    val password = DelegationTokenManager.createHmac(tokenId, masterKey)
+    val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  maxLifeTime, tokenId, password, Errors.NONE), createTokenResult)
 
     //try renewing non-existing token
@@ -169,7 +169,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
-    val password = DelegationTokenManager.createHmac(tokenId, masterKey)
+    val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     //try expire non-existing token
@@ -204,7 +204,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
-    val password = DelegationTokenManager.createHmac(tokenId, masterKey)
+    val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     // expire the token immediately

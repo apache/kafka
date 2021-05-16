@@ -32,7 +32,7 @@
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code." },
-    { "name": "ApiKeys", "type": "[]ApiVersionsResponseKey", "versions": "0+",
+    { "name": "ApiKeys", "type": "[]ApiVersion", "versions": "0+",
       "about": "The APIs supported by the broker.", "fields": [
       { "name": "ApiKey", "type": "int16", "versions": "0+", "mapKey": true,
         "about": "The API index." },

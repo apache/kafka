@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProtoUtilsTest {
     @Test
-    public void testDelayedAllocationSchemaDetection() throws Exception {
+    public void testDelayedAllocationSchemaDetection() {
         //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
         for (ApiKeys key : ApiKeys.values()) {
             switch (key) {
@@ -34,10 +34,15 @@ public class ProtoUtilsTest {
                 case EXPIRE_DELEGATION_TOKEN:
                 case RENEW_DELEGATION_TOKEN:
                 case ALTER_USER_SCRAM_CREDENTIALS:
-                    assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
+                case ENVELOPE:
+                    assertTrue(key.requiresDelayedAllocation, key + " should require delayed allocation");
                     break;
                 default:
-                    assertFalse(key + " should not require delayed allocation", key.requiresDelayedAllocation);
+                    if (key.forwardable)
+                        assertTrue(key.requiresDelayedAllocation,
+                            key + " should require delayed allocation since it is forwardable");
+                    else
+                        assertFalse(key.requiresDelayedAllocation, key + " should not require delayed allocation");
                     break;
             }
         }

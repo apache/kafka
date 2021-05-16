@@ -19,9 +19,8 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.metrics.Sensor
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ServerMetricsTest {
 
@@ -34,16 +33,14 @@ class ServerMetricsTest {
     for (recordingLevel <- recordingLevels) {
       props.put(KafkaConfig.MetricRecordingLevelProp, recordingLevel.name)
       val config = KafkaConfig.fromProps(props)
-      val metricConfig = KafkaServer.metricConfig(config)
+      val metricConfig = Server.buildMetricsConfig(config)
       assertEquals(recordingLevel, metricConfig.recordLevel)
     }
 
     for (illegalName <- illegalNames) {
-      intercept[IllegalArgumentException] {
-        props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
-        val config = KafkaConfig.fromProps(props)
-        KafkaServer.metricConfig(config)
-      }
+      props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
+      val config = KafkaConfig.fromProps(props)
+      assertThrows(classOf[IllegalArgumentException], () => Server.buildMetricsConfig(config))
     }
 
   }

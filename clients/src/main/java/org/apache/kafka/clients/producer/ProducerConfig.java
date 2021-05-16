@@ -291,8 +291,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                                        in(ClientDnsLookup.DEFAULT.toString(),
-                                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                                        in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
@@ -434,7 +433,6 @@ public class ProducerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideEnableIdempotence(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
@@ -492,15 +490,6 @@ public class ProducerConfig extends AbstractConfig {
         }
     }
 
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
-                                                            Serializer<?> keySerializer, Serializer<?> valueSerializer) {
-        return appendSerializerToConfig(configs, keySerializer, valueSerializer);
-    }
-
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
@@ -510,22 +499,6 @@ public class ProducerConfig extends AbstractConfig {
         if (valueSerializer != null)
             newConfigs.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
         return newConfigs;
-    }
-
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Properties addSerializerToConfig(Properties properties,
-                                                   Serializer<?> keySerializer,
-                                                   Serializer<?> valueSerializer) {
-        Properties newProperties = new Properties();
-        newProperties.putAll(properties);
-        if (keySerializer != null)
-            newProperties.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName());
-        if (valueSerializer != null)
-            newProperties.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName());
-        return newProperties;
     }
 
     public ProducerConfig(Properties props) {

@@ -63,7 +63,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
         if (frequencies.isEmpty()) {
             throw new IllegalArgumentException("Must specify at least one metric name");
         }
-        Frequency[] frequencyArray = frequencies.toArray(new Frequency[frequencies.size()]);
+        Frequency[] frequencyArray = frequencies.toArray(new Frequency[0]);
         return new Frequencies(2, 0.0, 1.0, frequencyArray);
     }
 
