@@ -578,7 +578,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   private def getDeserializerProperty(isKey: Boolean)(configs: Map[String, _], propertyName: String): Deserializer[_] = {
-    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).newInstance().asInstanceOf[Deserializer[_]]
+    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]]
     val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", configs)
       .asScala
       .asJava

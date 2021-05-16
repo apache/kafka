@@ -284,7 +284,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         request.context.correlationId,
         stopReplicaRequest.controllerId,
         stopReplicaRequest.controllerEpoch,
-        stopReplicaRequest.brokerEpoch,
         partitionStates)
       // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
       // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.

@@ -69,7 +69,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -3464,12 +3463,6 @@ public class TaskManagerTest {
         @Override
         public Optional<Long> timeCurrentIdlingStarted() {
             return Optional.empty();
-        }
-
-        @Override
-        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
-            Objects.requireNonNull(topicPartition);
-            assertThat("It must be from an owned topic", inputPartitions.contains(topicPartition));
         }
 
         @Override
