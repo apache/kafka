@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SessionWindowTest {
@@ -115,8 +116,8 @@ public class SessionWindowTest {
         assertFalse(window.overlap(new SessionWindow(125, 150)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void cannotCompareSessionWindowWithDifferentWindowType() {
-        window.overlap(timeWindow);
+        assertThrows(IllegalArgumentException.class, () -> window.overlap(timeWindow));
     }
 }

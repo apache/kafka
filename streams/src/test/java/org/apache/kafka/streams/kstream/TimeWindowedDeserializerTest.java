@@ -27,7 +27,10 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedDeserializerTest {
@@ -47,6 +50,7 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
+        assertThat(timeWindowedDeserializer.getWindowSize(), is(5000000L));
     }
 
     @Test
@@ -55,5 +59,26 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
+        assertThat(timeWindowedDeserializer.getWindowSize(), is(5000000L));
+    }
+
+    @Test
+    public void shouldSetWindowSizeThroughConfigs() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        deserializer.configure(props, false);
+        assertThat(deserializer.getWindowSize(), is(500L));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeSetInConfigsAndConstructor() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        assertThrows(IllegalArgumentException.class, () -> timeWindowedDeserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeIsNotSet() {
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        assertThrows(IllegalArgumentException.class, () -> deserializer.configure(props, false));
     }
 }

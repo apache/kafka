@@ -17,10 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Record;
+
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
 
 public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -52,43 +54,37 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
-
-        // if serializers are null, get the default ones from the context
-        if (keySerializer == null) {
-            keySerializer = (Serializer<KIn>) context.keySerde().serializer();
-        }
-        if (valSerializer == null) {
-            valSerializer = (Serializer<VIn>) context.valueSerde().serializer();
-        }
-
-        // if serializers are internal wrapping serializers that may need to be given the default serializer
-        // then pass it the default one from the context
-        if (valSerializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) valSerializer).setIfUnset(
-                context.keySerde().serializer(),
-                context.valueSerde().serializer()
-            );
-        }
+        final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);
+        final Serializer<?> contextValueSerializer = ProcessorContextUtils.getValueSerializer(context);
+        keySerializer = prepareKeySerializer(keySerializer, contextKeySerializer, contextValueSerializer);
+        valSerializer = prepareValueSerializer(valSerializer, contextKeySerializer, contextValueSerializer);
     }
 
-
     @Override
-    public void process(final KIn key, final VIn value) {
+    public void process(final Record<KIn, VIn> record) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
-        final long timestamp = context.timestamp();
-        if (timestamp < 0) {
-            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
-        }
+        final KIn key = record.key();
+        final VIn value = record.value();
 
-        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        final long timestamp = record.timestamp();
 
-        collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
+        final ProcessorRecordContext contextForExtraction =
+            new ProcessorRecordContext(
+                timestamp,
+                context.offset(),
+                context.partition(),
+                context.topic(),
+                record.headers()
+            );
+
+        final String topic = topicExtractor.extract(key, value, contextForExtraction);
+
+        collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
     }
 
     /**

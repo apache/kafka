@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
@@ -36,10 +37,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -49,17 +53,18 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -190,6 +195,10 @@ public class StreamThread extends Thread {
         return state;
     }
 
+    void setPartitionAssignedTime(final long lastPartitionAssignedMs) {
+        this.lastPartitionAssignedMs = lastPartitionAssignedMs;
+    }
+
     /**
      * Sets the state
      *
@@ -224,9 +233,9 @@ public class StreamThread extends Thread {
             state = newState;
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
-            } else {
-                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
+
+            stateLock.notifyAll();
         }
 
         if (stateListener != null) {
@@ -245,7 +254,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
-    private final Object stateLock;
+    public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
     private final int maxPollTimeMs;
@@ -265,14 +274,23 @@ public class StreamThread extends Thread {
     private final Sensor processRatioSensor;
     private final Sensor punctuateRatioSensor;
     private final Sensor commitRatioSensor;
+    private final Sensor failedStreamThreadSensor;
+
+    private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
+    private long lastLogSummaryMs = -1L;
+    private long totalRecordsProcessedSinceLastSummary = 0L;
+    private long totalPunctuatorsSinceLastSummary = 0L;
+    private long totalCommittedSinceLastSummary = 0L;
 
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
+    private final Optional<String> getGroupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -280,6 +298,13 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
+    private final java.util.function.Consumer<Long> cacheResizer;
+
+    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private Runnable shutdownErrorHook;
+    private AtomicInteger assignmentErrorCode;
+    private AtomicLong cacheResizeSize;
+    private AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -293,12 +318,19 @@ public class StreamThread extends Thread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
-                                      final int threadIdx) {
+                                      final int threadIdx,
+                                      final Runnable shutdownErrorHook,
+                                      final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
         final Logger log = logContext.logger(StreamThread.class);
+
+        final ReferenceContainer referenceContainer = new ReferenceContainer();
+        referenceContainer.adminClient = adminClient;
+        referenceContainer.streamsMetadataState = streamsMetadataState;
+        referenceContainer.time = time;
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -338,28 +370,24 @@ public class StreamThread extends Thread {
             log
         );
         final TaskManager taskManager = new TaskManager(
+            time,
             changelogReader,
             processId,
             logPrefix,
+            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
             adminClient,
             stateDirectory,
-            StreamThread.processingMode(config)
+            processingMode(config)
         );
+        referenceContainer.taskManager = taskManager;
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
-        consumerConfigs.put(StreamsConfig.InternalConfig.TIME, time);
-        consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
-        consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
-        final AtomicInteger assignmentErrorCode = new AtomicInteger();
-        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
-        final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
+        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
@@ -370,6 +398,7 @@ public class StreamThread extends Thread {
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
+        referenceContainer.mainConsumer = mainConsumer;
 
         final StreamThread streamThread = new StreamThread(
             time,
@@ -384,11 +413,12 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode,
-            nextScheduledRebalanceMs
+            referenceContainer.assignmentErrorCode,
+            referenceContainer.nextScheduledRebalanceMs,
+            shutdownErrorHook,
+            streamsUncaughtExceptionHandler,
+            cache::resize
         );
-
-        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
@@ -398,7 +428,7 @@ public class StreamThread extends Thread {
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
 
-        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA");
+        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
 
         public final String name;
 
@@ -407,20 +437,28 @@ public class StreamThread extends Thread {
         }
     }
 
+    // Note: the below two methods are static methods here instead of methods on StreamsConfig because it's a public API
+
+    @SuppressWarnings("deprecation")
     public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
         } else {
             return StreamThread.ProcessingMode.AT_LEAST_ONCE;
         }
     }
 
     public static boolean eosEnabled(final StreamsConfig config) {
-        final ProcessingMode processingMode = processingMode(config);
+        return eosEnabled(processingMode(config));
+    }
+
+    public static boolean eosEnabled(final ProcessingMode processingMode) {
         return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
+            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     public StreamThread(final Time time,
@@ -436,10 +474,13 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final Runnable shutdownErrorHook,
+                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
+                        final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-
+        this.leaveGroupRequested = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -453,6 +494,12 @@ public class StreamThread extends Thread {
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
+        this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
+        this.assignmentErrorCode = assignmentErrorCode;
+        this.cacheResizeSize = new AtomicLong(-1L);
+        this.shutdownErrorHook = shutdownErrorHook;
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.cacheResizer = cacheResizer;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -470,13 +517,14 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -487,10 +535,10 @@ public class StreamThread extends Thread {
         this.numIterations = 1;
     }
 
-    @SuppressWarnings("deprecation")
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
-            super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
+            super(ConsumerConfig.appendDeserializerToConfig(props, new ByteArrayDeserializer(),
+                    new ByteArrayDeserializer()), false);
         }
     }
 
@@ -509,29 +557,10 @@ public class StreamThread extends Thread {
         }
         boolean cleanRun = false;
         try {
-            runLoop();
-            cleanRun = true;
-        } catch (final Exception e) {
-            // we have caught all Kafka related exceptions, and other runtime exceptions
-            // should be due to user application errors
-
-            if (e instanceof UnsupportedVersionException) {
-                final String errorMessage = e.getMessage();
-                if (errorMessage != null &&
-                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
-
-                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                        EXACTLY_ONCE_BETA);
-
-                    throw e;
-                }
-            }
-
-            log.error("Encountered the following exception during processing " +
-                "and the thread is going to shut down: ", e);
-            throw e;
+            cleanRun = runLoop();
+        } catch (final Throwable e) {
+            failedStreamThreadSensor.record();
+            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -543,13 +572,19 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    void runLoop() {
+    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
+    boolean runLoop() {
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                maybeSendShutdown();
+                final Long size = cacheResizeSize.getAndSet(-1L);
+                if (size != -1L) {
+                    cacheResizer.accept(size);
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -557,17 +592,89 @@ public class StreamThread extends Thread {
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
-                log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
-                             "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
+                         "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
+                    taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
+            } catch (final UnsupportedVersionException e) {
+                final String errorMessage = e.getMessage();
+                if (errorMessage != null &&
+                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+
+                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
+                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
+                          StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
+                }
+                failedStreamThreadSensor.record();
+                this.streamsUncaughtExceptionHandler.accept(e);
+                return false;
             }
         }
+        return true;
+    }
+
+    /**
+     * Sets the streams uncaught exception handler.
+     *
+     * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
+     */
+    public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void maybeSendShutdown() {
+        if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.warn("Detected that shutdown was requested. " +
+                    "All clients in this app will now begin to shutdown");
+            mainConsumer.enforceRebalance();
+        }
+    }
+
+    public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
+        final long begin = time.milliseconds();
+        synchronized (stateLock) {
+            boolean interrupted = false;
+            long elapsedMs = 0L;
+            try {
+                while (state != targetState) {
+                    if (timeoutMs >= elapsedMs) {
+                        final long remainingMs = timeoutMs - elapsedMs;
+                        try {
+                            stateLock.wait(remainingMs);
+                        } catch (final InterruptedException e) {
+                            interrupted = true;
+                        }
+                    } else {
+                        log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        return false;
+                    }
+                    elapsedMs = time.milliseconds() - begin;
+                }
+                return true;
+            } finally {
+                // Make sure to restore the interruption status before returning.
+                // We do not always own the current thread that executes this method, i.e., we do not know the
+                // interruption policy of the thread. The least we can do is restore the interruption status before
+                // the current thread exits this method.
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+    }
+
+    public void shutdownToError() {
+        shutdownErrorHook.run();
+    }
+
+    public void sendShutdownRequest(final AssignorError assignorError) {
+        assignmentErrorCode.set(assignorError.code());
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -586,6 +693,10 @@ public class StreamThread extends Thread {
         } else {
             mainConsumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
         }
+    }
+
+    public void resizeCache(final long size) {
+        cacheResizeSize.set(size);
     }
 
     /**
@@ -618,7 +729,7 @@ public class StreamThread extends Thread {
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
-            log.debug("Thread state is already {}, skipping the run once call after poll request", state);
+            log.info("Thread state is already {}, skipping the run once call after poll request", state);
             return;
         }
 
@@ -659,6 +770,7 @@ public class StreamThread extends Thread {
                     processLatencySensor.record(processLatency / (double) processed, now);
 
                     totalProcessed += processed;
+                    totalRecordsProcessedSinceLastSummary += processed;
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -666,6 +778,7 @@ public class StreamThread extends Thread {
                           numIterations);
 
                 final int punctuated = taskManager.punctuate();
+                totalPunctuatorsSinceLastSummary += punctuated;
                 final long punctuateLatency = advanceNowAndComputeLatency();
                 totalPunctuateLatency += punctuateLatency;
                 if (punctuated > 0) {
@@ -674,8 +787,10 @@ public class StreamThread extends Thread {
 
                 log.debug("{} punctuators ran.", punctuated);
 
+                final long beforeCommitMs = now;
                 final int committed = maybeCommit();
-                final long commitLatency = advanceNowAndComputeLatency();
+                totalCommittedSinceLastSummary += committed;
+                final long commitLatency = Math.max(now - beforeCommitMs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
                     commitSensor.record(commitLatency / (double) committed, now);
@@ -687,7 +802,7 @@ public class StreamThread extends Thread {
                 }
 
                 if (processed == 0) {
-                    // if there is no records to be processed, exit after punctuate / commit
+                    // if there are no records to be processed, exit after punctuate / commit
                     break;
                 } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
@@ -711,6 +826,17 @@ public class StreamThread extends Thread {
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
+
+        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
+        if (logProcessingSummary) {
+            log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
+                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
+
+            totalRecordsProcessedSinceLastSummary = 0L;
+            totalPunctuatorsSinceLastSummary = 0L;
+            totalCommittedSinceLastSummary = 0L;
+            lastLogSummaryMs = now;
+        }
     }
 
     private void initializeAndRestorePhase() {
@@ -725,9 +851,10 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration()) {
+            if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
-
+                log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
+                    taskManager.tasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -741,7 +868,7 @@ public class StreamThread extends Thread {
         }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
+        changelogReader.restore(taskManager.tasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
@@ -754,7 +881,7 @@ public class StreamThread extends Thread {
             // to unblock the restoration as soon as possible
             records = pollRequests(Duration.ZERO);
         } else if (state == State.PARTITIONS_REVOKED) {
-            // try to fetch som records with zero poll millis to unblock
+            // try to fetch some records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
         } else if (state == State.RUNNING || state == State.STARTING) {
@@ -773,13 +900,22 @@ public class StreamThread extends Thread {
 
         final long pollLatency = advanceNowAndComputeLatency();
 
-        if (log.isDebugEnabled()) {
-            log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, records.count());
+        final int numRecords = records.count();
+
+        for (final TopicPartition topicPartition: records.partitions()) {
+            records
+                .records(topicPartition)
+                .stream()
+                .max(Comparator.comparing(ConsumerRecord::offset))
+                .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
+
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+
         pollSensor.record(pollLatency, now);
 
         if (!records.isEmpty()) {
-            pollRecordsSensor.record(records.count(), now);
+            pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }
         return pollLatency;
@@ -899,6 +1035,7 @@ public class StreamThread extends Thread {
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
+                now = time.milliseconds();
                 lastCommitMs = now;
             }
         } else {
@@ -954,6 +1091,9 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
+        if (leaveGroupRequested.get()) {
+            mainConsumer.unsubscribe();
+        }
         try {
             mainConsumer.close();
         } catch (final Throwable e) {
@@ -967,6 +1107,7 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
+
         log.info("Shutdown complete");
     }
 
@@ -999,11 +1140,23 @@ public class StreamThread extends Thread {
                                       final Map<TaskId, Task> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            activeTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
+            ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            standbyTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
+            ));
         }
 
         final String adminClientId = threadMetadata.adminClientId();
@@ -1015,7 +1168,8 @@ public class StreamThread extends Thread {
             taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,
-            standbyTasksMetadata);
+            standbyTasksMetadata
+        );
     }
 
     public Map<TaskId, Task> activeTaskMap() {
@@ -1051,6 +1205,14 @@ public class StreamThread extends Thread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
+    public Optional<String> getGroupInstanceID() {
+        return getGroupInstanceID;
+    }
+
+    public void requestLeaveGroupDuringShutdown() {
+        this.leaveGroupRequested.set(true);
+    }
+
     public Map<MetricName, Metric> producerMetrics() {
         return taskManager.producerMetrics();
     }
@@ -1061,6 +1223,10 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> adminClientMetrics() {
         return ClientUtils.adminClientMetrics(adminClient);
+    }
+
+    public Object getStateLock() {
+        return stateLock;
     }
 
     // the following are for testing only
@@ -1090,9 +1256,5 @@ public class StreamThread extends Thread {
 
     Admin adminClient() {
         return adminClient;
-    }
-
-    InternalTopologyBuilder internalTopologyBuilder() {
-        return builder;
     }
 }

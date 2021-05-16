@@ -26,7 +26,9 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
-public class StreamSinkNode<K, V> extends StreamsGraphNode {
+import java.util.Properties;
+
+public class StreamSinkNode<K, V> extends GraphNode {
 
     private final TopicNameExtractor<K, V> topicNameExtractor;
     private final ProducedInternal<K, V> producedInternal;
@@ -51,21 +53,24 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    @SuppressWarnings("unchecked")
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         final Serializer<K> keySerializer = producedInternal.keySerde() == null ? null : producedInternal.keySerde().serializer();
         final Serializer<V> valSerializer = producedInternal.valueSerde() == null ? null : producedInternal.valueSerde().serializer();
-        final StreamPartitioner<? super K, ? super V> partitioner = producedInternal.streamPartitioner();
         final String[] parentNames = parentNodeNames();
 
-        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
-            @SuppressWarnings("unchecked")
-            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
-            topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, windowedPartitioner, parentNames);
-        } else if (topicNameExtractor instanceof StaticTopicNameExtractor) {
-            final String topicName = ((StaticTopicNameExtractor) topicNameExtractor).topicName;
+        final StreamPartitioner<? super K, ? super V> partitioner;
+        if (producedInternal.streamPartitioner() == null && keySerializer instanceof WindowedSerializer) {
+            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<K, V>((WindowedSerializer<K>) keySerializer);
+        } else {
+            partitioner = producedInternal.streamPartitioner();
+        }
+
+        if (topicNameExtractor instanceof StaticTopicNameExtractor) {
+            final String topicName = ((StaticTopicNameExtractor<K, V>) topicNameExtractor).topicName;
             topologyBuilder.addSink(nodeName(), topicName, keySerializer, valSerializer, partitioner, parentNames);
         } else {
-            topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, partitioner,  parentNames);
+            topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, partitioner, parentNames);
         }
     }
 

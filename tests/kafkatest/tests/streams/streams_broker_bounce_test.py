@@ -17,7 +17,7 @@ from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
-from ducktape.mark import parametrize, ignore
+from ducktape.mark import ignore
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
@@ -119,7 +119,7 @@ class StreamsBrokerBounceTest(Test):
     def fail_broker_type(self, failure_mode, broker_type):
         # Pick a random topic and bounce it's leader
         topic_index = randint(0, len(self.topics.keys()) - 1)
-        topic = self.topics.keys()[topic_index]
+        topic = list(self.topics.keys())[topic_index]
         failures[failure_mode](self, topic, broker_type)
 
     def fail_many_brokers(self, failure_mode, num_failures):

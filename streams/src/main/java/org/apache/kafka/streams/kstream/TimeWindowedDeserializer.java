@@ -33,22 +33,22 @@ import java.util.Map;
  */
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
-    private final Long windowSize;
+    private Long windowSize;
     private boolean isChangelogTopic;
 
     private Deserializer<T> inner;
-    
+
     // Default constructor needed by Kafka
     public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE);
+        this(null, null);
     }
 
-    // TODO: fix this part as last bits of KAFKA-4468
+    @Deprecated
     public TimeWindowedDeserializer(final Deserializer<T> inner) {
         this(inner, Long.MAX_VALUE);
     }
 
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
+    public TimeWindowedDeserializer(final Deserializer<T> inner, final Long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
         this.isChangelogTopic = false;
@@ -61,6 +61,21 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
+        //check to see if the window size config is set and the window size is already set from the constructor
+        final Long configWindowSize;
+        if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
+            configWindowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
+        } else {
+            configWindowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
+        }
+        if (windowSize != null && configWindowSize != null) {
+            throw new IllegalArgumentException("Window size should not be set in both the time windowed deserializer constructor and the window.size.ms config");
+        } else if (windowSize == null && configWindowSize == null) {
+            throw new IllegalArgumentException("Window size needs to be set either through the time windowed deserializer " +
+                "constructor or the window.size.ms config but not both");
+        } else {
+            windowSize = windowSize == null ? configWindowSize : windowSize;
+        }
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);

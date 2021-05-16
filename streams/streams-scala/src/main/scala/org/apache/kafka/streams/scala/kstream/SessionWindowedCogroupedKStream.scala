@@ -26,7 +26,6 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{InitializerFro
  * @tparam K Type of keys
  * @tparam V Type of values
  * @param inner The underlying Java abstraction for SessionWindowedCogroupedKStream
- *
  * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream`
  */
 class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedKStreamJ[K, V]) {
@@ -34,15 +33,32 @@ class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedK
   /**
    * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
    *
-   * @param initializer    the initializer function
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  the initializer function
+   * @param merger       a function that combines two aggregation results.
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
-   * the latest (rolling) aggregate for each key within a window
+   *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream#aggregate`
    */
   def aggregate(initializer: => V, merger: (K, V, V) => V)(
     implicit materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, merger.asMerger, materialized))
+
+  /**
+   * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
+   *
+   * @param initializer  the initializer function
+   * @param merger       a function that combines two aggregation results.
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
+   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
+   *         the latest (rolling) aggregate for each key within a window
+   * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream#aggregate`
+   */
+  def aggregate(initializer: => V, merger: (K, V, V) => V, named: Named)(
+    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  ): KTable[Windowed[K], V] =
+    new KTable(inner.aggregate((() => initializer).asInitializer, merger.asMerger, named, materialized))
 
 }

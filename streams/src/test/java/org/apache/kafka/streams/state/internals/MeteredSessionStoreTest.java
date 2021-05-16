@@ -35,6 +35,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -158,7 +160,44 @@ public class MeteredSessionStoreTest {
 
     private void init() {
         replay(innerStore, context);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final SessionStore<Bytes, byte[]> inner = mock(SessionStore.class);
+        final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
+            inner,
+            STORE_TYPE,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        expectLastCall();
+        replay(inner, context);
+        outer.init((ProcessorContext) context, outer);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final SessionStore<Bytes, byte[]> inner = mock(SessionStore.class);
+        final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
+            inner,
+            STORE_TYPE,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        expectLastCall();
+        replay(inner, context);
+        outer.init((StateStoreContext) context, outer);
+        verify(inner);
     }
 
     @Test
@@ -195,7 +234,7 @@ public class MeteredSessionStoreTest {
             valueSerde,
             new MockTime()
         );
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
         store.put(WINDOWED_KEY, VALUE);
@@ -264,6 +303,26 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
+    public void shouldBackwardFindSessionsFromStoreAndRecordFetchMetric() {
+        expect(innerStore.backwardFindSessions(KEY_BYTES, 0, 0))
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, 0, 0);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(innerStore);
+    }
+
+    @Test
     public void shouldFindSessionRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.findSessions(KEY_BYTES, KEY_BYTES, 0, 0))
                 .andReturn(new KeyValueIteratorStub<>(
@@ -271,6 +330,26 @@ public class MeteredSessionStoreTest {
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, 0, 0);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(innerStore);
+    }
+
+    @Test
+    public void shouldBackwardFindSessionRangeFromStoreAndRecordFetchMetric() {
+        expect(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, 0, 0))
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, KEY, 0, 0);
         assertThat(iterator.next().value, equalTo(VALUE));
         assertFalse(iterator.hasNext());
         iterator.close();
@@ -312,6 +391,26 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
+    public void shouldBackwardFetchForKeyAndRecordFetchMetric() {
+        expect(innerStore.backwardFetch(KEY_BYTES))
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(innerStore);
+    }
+
+    @Test
     public void shouldFetchRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.fetch(KEY_BYTES, KEY_BYTES))
                 .andReturn(new KeyValueIteratorStub<>(
@@ -319,6 +418,26 @@ public class MeteredSessionStoreTest {
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(KEY, KEY);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(innerStore);
+    }
+
+    @Test
+    public void shouldBackwardFetchRangeFromStoreAndRecordFetchMetric() {
+        expect(innerStore.backwardFetch(KEY_BYTES, KEY_BYTES))
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY, KEY);
         assertThat(iterator.next().value, equalTo(VALUE));
         assertFalse(iterator.hasNext());
         iterator.close();
@@ -343,44 +462,99 @@ public class MeteredSessionStoreTest {
         assertNull(store.fetchSession("a", 0, Long.MAX_VALUE));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnPutIfKeyIsNull() {
-        store.put(null, "a");
+        assertThrows(NullPointerException.class, () -> store.put(null, "a"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnRemoveIfKeyIsNull() {
-        store.remove(null);
+        assertThrows(NullPointerException.class, () -> store.remove(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnPutIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(new Windowed<>(null, new SessionWindow(0, 0)), "a"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfWrappedKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(null, new SessionWindow(0, 0))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfWindowIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(new Windowed<>(KEY, null), "a"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfWindowIsNull() {
+        assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(KEY, null)));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
-        store.fetch(null);
+        assertThrows(NullPointerException.class, () -> store.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnFetchSessionIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetchSession(null, 0, Long.MAX_VALUE));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
-        store.fetch(null, "to");
+        assertThrows(NullPointerException.class, () -> store.fetch(null, "to"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
-        store.fetch("from", null);
+        assertThrows(NullPointerException.class, () -> store.fetch("from", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null));
+    }
+
+    @Test
     public void shouldThrowNullPointerOnFindSessionsIfKeyIsNull() {
-        store.findSessions(null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfFromIsNull() {
-        store.findSessions(null, "a", 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, "a", 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfToIsNull() {
-        store.findSessions("a", null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions("a", null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, "a", 0, 0));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFindSessions("a", null, 0, 0));
     }
 
     private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }

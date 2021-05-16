@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import kafka.server.BrokerState;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.server.RunningAsBroker;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
@@ -47,12 +45,12 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.junit.rules.ExternalResource;
-import org.junit.rules.TemporaryFolder;
+import org.apache.kafka.metadata.BrokerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,7 +79,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
  * integration tests.
  */
-public class EmbeddedKafkaCluster extends ExternalResource {
+public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
@@ -106,16 +104,6 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         this.brokerConfig = brokerConfig;
     }
 
-    @Override
-    protected void before() {
-        start();
-    }
-
-    @Override
-    protected void after() {
-        stop();
-    }
-
     /**
      * Starts the Kafka cluster alone using the ports that were assigned during initialization of
      * the harness.
@@ -126,7 +114,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start() {
+    public void start() {
         // pick a random port
         zookeeper = new EmbeddedZookeeper();
         Arrays.fill(currentBrokerPorts, 0);
@@ -161,6 +149,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (sslEnabled()) {
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         producer = new KafkaProducer<>(producerProps);
     }
 
@@ -168,7 +161,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop(false, false);
     }
 
-    private void stop() {
+    public void stop() {
         stop(true, true);
     }
 
@@ -224,10 +217,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     private String createLogDir() {
-        TemporaryFolder tmpFolder = new TemporaryFolder();
         try {
-            tmpFolder.create();
-            return tmpFolder.newFolder().getAbsolutePath();
+            return Files.createTempDirectory(getClass().getSimpleName()).toString();
         } catch (IOException e) {
             log.error("Unable to create temporary log directory", e);
             throw new ConnectException("Unable to create temporary log directory", e);
@@ -249,13 +240,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     /**
-     * Get the brokers that have a {@link RunningAsBroker} state.
+     * Get the brokers that have a {@link BrokerState#RUNNING} state.
      *
      * @return the list of {@link KafkaServer} instances that are running;
      *         never null but  possibly empty
      */
     public Set<KafkaServer> runningBrokers() {
-        return brokersInState(state -> state.currentState() == RunningAsBroker.state());
+        return brokersInState(state -> state == BrokerState.RUNNING);
     }
 
     /**
@@ -277,6 +268,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             // Broker failed to respond.
             return false;
         }
+    }
+    
+    public boolean sslEnabled() {
+        final String listeners = brokerConfig.getProperty(KafkaConfig$.MODULE$.ListenersProp());
+        return listeners != null && listeners.contains("SSL");
     }
 
     /**
@@ -341,18 +337,28 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions) {
-        createTopic(topic, partitions, 1, new HashMap<>());
+        createTopic(topic, partitions, 1, Collections.emptyMap());
+    }
+
+    /**
+     * Create a Kafka topic with given partition, replication factor, and topic config.
+     *
+     * @param topic The name of the topic.
+     */
+    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
+        createTopic(topic, partitions, replication, topicConfig, new Properties());
     }
 
     /**
      * Create a Kafka topic with the given parameters.
      *
-     * @param topic       The name of the topic.
-     * @param partitions  The number of partitions for this topic.
-     * @param replication The replication factor for (partitions of) this topic.
-     * @param topicConfig Additional topic-level configuration settings.
+     * @param topic             The name of the topic.
+     * @param partitions        The number of partitions for this topic.
+     * @param replication       The replication factor for (partitions of) this topic.
+     * @param topicConfig       Additional topic-level configuration settings.
+     * @param adminClientConfig Additional admin client configuration settings.
      */
-    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
+    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig, Properties adminClientConfig) {
         if (replication > brokers.length) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
                     + brokers.length + ") for desired replication (" + replication + ")");
@@ -363,7 +369,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
         newTopic.configs(topicConfig);
 
-        try (final Admin adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient(adminClientConfig)) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
@@ -387,8 +393,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    public Admin createAdminClient() {
-        final Properties adminClientConfig = new Properties();
+    public Admin createAdminClient(Properties adminClientConfig) {
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         final Object listeners = brokerConfig.get(KafkaConfig$.MODULE$.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
@@ -397,6 +402,10 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
         return Admin.create(adminClientConfig);
+    }
+
+    public Admin createAdminClient() {
+        return createAdminClient(new Properties());
     }
 
     /**
@@ -444,7 +453,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
         putIfAbsent(props, KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         putIfAbsent(props, VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
+        if (sslEnabled()) {
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         KafkaConsumer<byte[], byte[]> consumer;
         try {
             consumer = new KafkaConsumer<>(props);

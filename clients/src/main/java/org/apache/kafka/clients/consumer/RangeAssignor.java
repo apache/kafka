@@ -43,7 +43,7 @@ import java.util.Map;
  *
  * Since the introduction of static membership, we could leverage <code>group.instance.id</code> to make the assignment behavior more sticky.
  * For the above example, after one rolling bounce, group coordinator will attempt to assign new <code>member.id</code> towards consumers,
- * for example <code>C0</code> -> <code>C3</code> <code>C1</code> -> <code>C2</code>.
+ * for example <code>C0</code> -&gt; <code>C3</code> <code>C1</code> -&gt; <code>C2</code>.
  *
  * <p>The assignment could be completely shuffled to:
  * <ul>

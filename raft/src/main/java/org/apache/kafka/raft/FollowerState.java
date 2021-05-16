@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -29,22 +33,33 @@ public class FollowerState implements EpochState {
     private final int epoch;
     private final int leaderId;
     private final Set<Integer> voters;
+    // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
-    private OptionalLong highWatermark;
+    private Optional<LogOffsetMetadata> highWatermark;
+    /* Used to track the currently fetching snapshot. When fetching snapshot regular
+     * Fetch request are paused
+     */
+    private Optional<RawSnapshotWriter> fetchingSnapshot;
+
+    private final Logger log;
 
     public FollowerState(
         Time time,
         int epoch,
         int leaderId,
         Set<Integer> voters,
-        int fetchTimeoutMs
+        Optional<LogOffsetMetadata> highWatermark,
+        int fetchTimeoutMs,
+        LogContext logContext
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
         this.leaderId = leaderId;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
-        this.highWatermark = OptionalLong.empty();
+        this.highWatermark = highWatermark;
+        this.fetchingSnapshot = Optional.empty();
+        this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
@@ -91,28 +106,50 @@ public class FollowerState implements EpochState {
         fetchTimer.reset(timeoutMs);
     }
 
-    public void updateHighWatermark(OptionalLong highWatermark) {
+    public boolean updateHighWatermark(OptionalLong highWatermark) {
         if (!highWatermark.isPresent() && this.highWatermark.isPresent())
             throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
                 " with unknown value");
-        this.highWatermark.ifPresent(previousHighWatermark -> {
+
+        if (this.highWatermark.isPresent()) {
+            long previousHighWatermark = this.highWatermark.get().offset;
             long updatedHighWatermark = highWatermark.getAsLong();
+
             if (updatedHighWatermark < 0)
                 throw new IllegalArgumentException("Illegal negative high watermark update");
-            if (previousHighWatermark > highWatermark.getAsLong())
+            if (previousHighWatermark > updatedHighWatermark)
                 throw new IllegalArgumentException("Non-monotonic update of high watermark attempted");
-        });
+            if (previousHighWatermark == updatedHighWatermark)
+                return false;
+        }
 
-        this.highWatermark = highWatermark;
+        this.highWatermark = highWatermark.isPresent() ?
+            Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) :
+            Optional.empty();
+        return true;
     }
 
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
-        if (highWatermark.isPresent()) {
-            return Optional.of(new LogOffsetMetadata(highWatermark.getAsLong()));
-        } else {
-            return Optional.empty();
+        return highWatermark;
+    }
+
+    public Optional<RawSnapshotWriter> fetchingSnapshot() {
+        return fetchingSnapshot;
+    }
+
+    public void setFetchingSnapshot(Optional<RawSnapshotWriter> fetchingSnapshot) throws IOException {
+        if (fetchingSnapshot.isPresent()) {
+            fetchingSnapshot.get().close();
         }
+        this.fetchingSnapshot = fetchingSnapshot;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
+                candidateId, leaderId(), epoch);
+        return false;
     }
 
     @Override
@@ -122,6 +159,15 @@ public class FollowerState implements EpochState {
             ", epoch=" + epoch +
             ", leaderId=" + leaderId +
             ", voters=" + voters +
+            ", highWatermark=" + highWatermark +
+            ", fetchingSnapshot=" + fetchingSnapshot +
             ')';
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (fetchingSnapshot.isPresent()) {
+            fetchingSnapshot.get().close();
+        }
     }
 }

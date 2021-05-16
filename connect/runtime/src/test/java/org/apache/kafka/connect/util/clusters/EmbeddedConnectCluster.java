@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -87,6 +88,9 @@ public class EmbeddedConnectCluster {
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
     private final EmbeddedConnectClusterAssertions assertions;
+    // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
+    // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
+    private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
@@ -133,7 +137,7 @@ public class EmbeddedConnectCluster {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
-        kafkaCluster.before();
+        kafkaCluster.start();
         startConnect();
     }
 
@@ -146,15 +150,18 @@ public class EmbeddedConnectCluster {
     public void stop() {
         connectCluster.forEach(this::stopWorker);
         try {
-            kafkaCluster.after();
+            kafkaCluster.stop();
         } catch (UngracefulShutdownException e) {
             log.warn("Kafka did not shutdown gracefully");
         } catch (Exception e) {
             log.error("Could not stop kafka", e);
             throw new RuntimeException("Could not stop brokers", e);
         } finally {
-            Exit.resetExitProcedure();
-            Exit.resetHaltProcedure();
+            if (maskExitProcedures) {
+                Exit.resetExitProcedure();
+                Exit.resetHaltProcedure();
+            }
+            Plugins.compareAndSwapLoaders(originalClassLoader);
         }
     }
 
@@ -252,6 +259,19 @@ public class EmbeddedConnectCluster {
         for (int i = 0; i < numInitialWorkers; i++) {
             addWorker();
         }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("EmbeddedConnectCluster(name= %s, numBrokers= %d, numInitialWorkers= %d, workerProps= %s)",
+            connectClusterName,
+            numBrokers,
+            numInitialWorkers,
+            workerProps);
+    }
+
+    public String getName() {
+        return connectClusterName;
     }
 
     /**

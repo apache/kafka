@@ -18,9 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * A response header in the kafka protocol.
@@ -28,10 +29,6 @@ import java.nio.ByteBuffer;
 public class ResponseHeader implements AbstractRequestResponse {
     private final ResponseHeaderData data;
     private final short headerVersion;
-
-    public ResponseHeader(Struct struct, short headerVersion) {
-        this(new ResponseHeaderData(struct, headerVersion), headerVersion);
-    }
 
     public ResponseHeader(int correlationId, short headerVersion) {
         this(new ResponseHeaderData().setCorrelationId(correlationId), headerVersion);
@@ -42,12 +39,8 @@ public class ResponseHeader implements AbstractRequestResponse {
         this.headerVersion = headerVersion;
     }
 
-    public int sizeOf() {
-        return toStruct().sizeOf();
-    }
-
-    public Struct toStruct() {
-        return data.toStruct(headerVersion);
+    public int size(ObjectSerializationCache serializationCache) {
+        return data().size(serializationCache, headerVersion);
     }
 
     public int correlationId() {
@@ -62,9 +55,35 @@ public class ResponseHeader implements AbstractRequestResponse {
         return data;
     }
 
+    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
+    }
+
+    @Override
+    public String toString() {
+        return "ResponseHeader("
+            + "correlationId=" + data.correlationId()
+            + ", headerVersion=" + headerVersion
+            + ")";
+    }
+
     public static ResponseHeader parse(ByteBuffer buffer, short headerVersion) {
         return new ResponseHeader(
             new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion),
                 headerVersion);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ResponseHeader that = (ResponseHeader) o;
+        return headerVersion == that.headerVersion &&
+            Objects.equals(data, that.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(data, headerVersion);
     }
 }

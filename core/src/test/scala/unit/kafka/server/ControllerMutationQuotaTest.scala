@@ -16,9 +16,9 @@ package kafka.server
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
-
 import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -41,11 +41,12 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.Before
-import org.junit.Test
+import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.fail
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -104,7 +105,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -140,14 +141,14 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       assertEquals(Set(Errors.NONE), errors.values.toSet)
 
       // Metric must be there with the correct config
-      verifyQuotaMetric(principal.getName, ControllerMutationRate)
+      waitQuotaMetric(principal.getName, ControllerMutationRate)
 
       // Update quota
       defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
       waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
 
       // Metric must be there with the updated config
-      verifyQuotaMetric(principal.getName, ControllerMutationRate * 2)
+      waitQuotaMetric(principal.getName, ControllerMutationRate * 2)
     }
   }
 
@@ -314,8 +315,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def assertThrottleTime(max: Int, actual: Int): Unit = {
     assertTrue(
-      s"Expected a throttle time between 0 and $max but got $actual",
-      (actual >= 0) && (actual <= max))
+      (actual >= 0) && (actual <= max),
+      s"Expected a throttle time between 0 and $max but got $actual")
   }
 
   private def createTopics(topics: Map[String, Int], version: Short): (Int, Map[String, Errors]) = {
@@ -354,7 +355,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def defineUserQuota(user: String, quota: Option[Double]): Unit = {
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> user).asJava)
-    val quotas = Map(DynamicConfig.Client.ControllerMutationOverrideProp -> quota)
+    val quotas = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> quota)
 
     try alterClientQuotas(Map(entity -> quotas))(entity).get(10, TimeUnit.SECONDS) catch {
       case e: ExecutionException => throw e.getCause
@@ -381,16 +382,18 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     Option(servers.head.metrics.metric(metricName))
   }
 
-  private def verifyQuotaMetric(user: String, expectedQuota: Double): Unit = {
-    quotaMetric(user) match {
-      case Some(metric) =>
-        val config = metric.config()
-        assertEquals(expectedQuota, config.quota().bound(), 0.1)
-        assertEquals(ControllerQuotaSamples, config.samples())
-        assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
+  private def waitQuotaMetric(user: String, expectedQuota: Double): Unit = {
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS) {
+      quotaMetric(user) match {
+        case Some(metric) =>
+          val config = metric.config()
+          assertEquals(expectedQuota, config.quota().bound(), 0.1)
+          assertEquals(ControllerQuotaSamples, config.samples())
+          assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
 
-      case None =>
-        fail(s"Quota metric of $user is not defined")
+        case None =>
+          fail(s"Quota metric of $user is not defined")
+      }
     }
   }
 

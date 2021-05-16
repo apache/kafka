@@ -89,7 +89,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      */
     public double currentMetricValueAsDouble(MetricGroup metricGroup, String name) {
         Object value = currentMetricValue(metricGroup, name);
-        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+        return value instanceof Double ? (Double) value : Double.NaN;
     }
 
     /**
@@ -135,7 +135,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      */
     public static double currentMetricValueAsDouble(ConnectMetrics metrics, MetricGroup metricGroup, String name) {
         Object value = currentMetricValue(metrics, metricGroup, name);
-        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+        return value instanceof Double ? (Double) value : Double.NaN;
     }
 
     /**

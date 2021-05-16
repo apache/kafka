@@ -18,14 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class WriteTxnMarkersResponseTest {
 
@@ -40,21 +40,21 @@ public class WriteTxnMarkersResponseTest {
 
     private static Map<Long, Map<TopicPartition, Errors>> errorMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         errorMap = new HashMap<>();
         errorMap.put(producerIdOne, Collections.singletonMap(tp1, pidOneError));
         errorMap.put(producerIdTwo, Collections.singletonMap(tp2, pidTwoError));
     }
-    @Test
-    public void testConstructorWithStruct() {
 
+    @Test
+    public void testConstructor() {
         Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(Errors.UNKNOWN_PRODUCER_ID, 1);
         expectedErrorCounts.put(Errors.INVALID_PRODUCER_EPOCH, 1);
         WriteTxnMarkersResponse response = new WriteTxnMarkersResponse(errorMap);
         assertEquals(expectedErrorCounts, response.errorCounts());
-        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errors(producerIdOne));
-        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errors(producerIdTwo));
+        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errorsByProducerId().get(producerIdOne));
+        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errorsByProducerId().get(producerIdTwo));
     }
 }

@@ -15,9 +15,8 @@
 
 import os.path
 import signal
-import streams_property
-import consumer_property
-from ducktape.cluster.remoteaccount import RemoteCommandError
+from . import streams_property
+from . import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -231,7 +230,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         try:
             pids = [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=str)]
             return [int(pid) for pid in pids]
-        except Exception, exception:
+        except Exception as exception:
             self.logger.debug(str(exception))
             return []
 
@@ -466,6 +465,15 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 processingMode)
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      # the old broker (< 2.4) does not support configuration replication.factor=-1
+                      "replication.factor": 1}
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):

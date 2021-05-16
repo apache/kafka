@@ -891,7 +891,7 @@ public class Values {
         }
 
         String token = parser.next();
-        if (token.trim().isEmpty()) {
+        if (Utils.isBlank(token)) {
             return new SchemaAndValue(Schema.STRING_SCHEMA, token);
         }
         token = token.trim();
@@ -943,8 +943,14 @@ public class Values {
                 } catch (ArithmeticException e) {
                     // continue
                 }
+                float fValue = decimal.floatValue();
+                if (fValue != Float.NEGATIVE_INFINITY && fValue != Float.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
+                    return new SchemaAndValue(Schema.FLOAT32_SCHEMA, fValue);
+                }
                 double dValue = decimal.doubleValue();
-                if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY) {
+                if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
                     return new SchemaAndValue(Schema.FLOAT64_SCHEMA, dValue);
                 }
                 Schema schema = Decimal.schema(decimal.scale());
@@ -1187,7 +1193,7 @@ public class Values {
             boolean escaped = false;
             int start = iter.getIndex();
             char c = iter.current();
-            while (c != CharacterIterator.DONE) {
+            while (canConsumeNextToken()) {
                 switch (c) {
                     case '\\':
                         escaped = !escaped;
@@ -1247,7 +1253,7 @@ public class Values {
                 nextToken = consumeNextToken();
             }
             if (ignoreLeadingAndTrailingWhitespace) {
-                while (nextToken.trim().isEmpty() && canConsumeNextToken()) {
+                while (Utils.isBlank(nextToken) && canConsumeNextToken()) {
                     nextToken = consumeNextToken();
                 }
             }

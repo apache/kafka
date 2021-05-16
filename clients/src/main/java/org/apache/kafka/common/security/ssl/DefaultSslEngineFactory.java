@@ -21,36 +21,58 @@ import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyFactory;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.crypto.Cipher;
+import javax.crypto.EncryptedPrivateKeyInfo;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManagerFactory;
 
 public final class DefaultSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
+    public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;
     private String protocol;
@@ -139,13 +161,16 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+                (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
+                (Password) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG),
+                (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG));
 
         this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
+                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
 
-        this.sslContext = createSSLContext();
+        this.sslContext = createSSLContext(keystore, truststore);
     }
 
     @Override
@@ -209,7 +234,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    private SSLContext createSSLContext() {
+    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
         try {
             SSLContext sslContext;
             if (provider != null)
@@ -223,9 +248,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                         this.kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
                 KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
                 if (keystore != null) {
-                    KeyStore ks = keystore.get();
-                    Password keyPassword = keystore.keyPassword != null ? keystore.keyPassword : keystore.password;
-                    kmf.init(ks, keyPassword.value().toCharArray());
+                    kmf.init(keystore.get(), keystore.keyPassword());
                 } else {
                     kmf.init(null, null);
                 }
@@ -246,47 +269,95 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    private static SecurityStore createKeystore(String type, String path, Password password, Password keyPassword) {
-        if (path == null && password != null) {
-            throw new KafkaException("SSL key store is not specified, but key store password is specified.");
+    // Visibility to override for testing
+    protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain) {
+        if (privateKey != null) {
+            if (!PEM_TYPE.equals(type))
+                throw new InvalidConfigurationException("SSL private key can be specified only for PEM, but key store type is " + type + ".");
+            else if (certificateChain == null)
+                throw new InvalidConfigurationException("SSL private key is specified, but certificate chain is not specified.");
+            else if (path != null)
+                throw new InvalidConfigurationException("Both SSL key store location and separate private key are specified.");
+            else if (password != null)
+                throw new InvalidConfigurationException("SSL key store password cannot be specified with PEM format, only key password may be specified.");
+            else
+                return new PemStore(certificateChain, privateKey, keyPassword);
+        } else if (certificateChain != null) {
+            throw new InvalidConfigurationException("SSL certificate chain is specified, but private key is not specified");
+        } else if (PEM_TYPE.equals(type) && path != null) {
+            if (password != null)
+                throw new InvalidConfigurationException("SSL key store password cannot be specified with PEM format, only key password may be specified");
+            else if (keyPassword == null)
+                throw new InvalidConfigurationException("SSL PEM key store is specified, but key password is not specified.");
+            else
+                return new FileBasedPemStore(path, keyPassword, true);
+        } else if (path == null && password != null) {
+            throw new InvalidConfigurationException("SSL key store is not specified, but key store password is specified.");
         } else if (path != null && password == null) {
-            throw new KafkaException("SSL key store is specified, but key store password is not specified.");
+            throw new InvalidConfigurationException("SSL key store is specified, but key store password is not specified.");
         } else if (path != null && password != null) {
-            return new SecurityStore(type, path, password, keyPassword);
+            return new FileBasedStore(type, path, password, keyPassword, true);
         } else
             return null; // path == null, clients may use this path with brokers that don't require client auth
     }
 
-    private static SecurityStore createTruststore(String type, String path, Password password) {
-        if (path == null && password != null) {
-            throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
+    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
+        if (trustStoreCerts != null) {
+            if (!PEM_TYPE.equals(type))
+                throw new InvalidConfigurationException("SSL trust store certs can be specified only for PEM, but trust store type is " + type + ".");
+            else if (path != null)
+                throw new InvalidConfigurationException("Both SSL trust store location and separate trust certificates are specified.");
+            else if (password != null)
+                throw new InvalidConfigurationException("SSL trust store password cannot be specified for PEM format.");
+            else
+                return new PemStore(trustStoreCerts);
+        } else if (PEM_TYPE.equals(type) && path != null) {
+            if (password != null)
+                throw new InvalidConfigurationException("SSL trust store password cannot be specified for PEM format.");
+            else
+                return new FileBasedPemStore(path, null, false);
+        } else if (path == null && password != null) {
+            throw new InvalidConfigurationException("SSL trust store is not specified, but trust store password is specified.");
         } else if (path != null) {
-            return new SecurityStore(type, path, password, null);
+            return new FileBasedStore(type, path, password, null, false);
         } else
             return null;
     }
 
+    static interface SecurityStore {
+        KeyStore get();
+        char[] keyPassword();
+        boolean modified();
+    }
+
     // package access for testing
-    static class SecurityStore {
+    static class FileBasedStore implements SecurityStore {
         private final String type;
-        private final String path;
+        protected final String path;
         private final Password password;
-        private final Password keyPassword;
+        protected final Password keyPassword;
         private final Long fileLastModifiedMs;
         private final KeyStore keyStore;
 
-        SecurityStore(String type, String path, Password password, Password keyPassword) {
+        FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
             Objects.requireNonNull(type, "type must not be null");
             this.type = type;
             this.path = path;
             this.password = password;
             this.keyPassword = keyPassword;
             fileLastModifiedMs = lastModifiedMs(path);
-            this.keyStore = load();
+            this.keyStore = load(isKeyStore);
         }
 
-        KeyStore get() {
+        @Override
+        public KeyStore get() {
             return keyStore;
+        }
+
+        @Override
+        public char[] keyPassword() {
+            Password passwd = keyPassword != null ? keyPassword : password;
+            return passwd == null ? null : passwd.value().toCharArray();
         }
 
         /**
@@ -295,7 +366,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
          * @throws KafkaException if the file could not be read or if the keystore could not be loaded
          *   using the specified configs (e.g. if the password or keystore type is invalid)
          */
-        private KeyStore load() {
+        protected KeyStore load(boolean isKeyStore) {
             try (InputStream in = Files.newInputStream(Paths.get(path))) {
                 KeyStore ks = KeyStore.getInstance(type);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
@@ -316,7 +387,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             }
         }
 
-        boolean modified() {
+        public boolean modified() {
             Long modifiedMs = lastModifiedMs(path);
             return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
         }
@@ -326,6 +397,188 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return "SecurityStore(" +
                     "path=" + path +
                     ", modificationTime=" + (fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs)) + ")";
+        }
+    }
+
+    static class FileBasedPemStore extends FileBasedStore {
+        FileBasedPemStore(String path, Password keyPassword, boolean isKeyStore) {
+            super(PEM_TYPE, path, null, keyPassword, isKeyStore);
+        }
+
+        @Override
+        protected KeyStore load(boolean isKeyStore) {
+            try {
+                Password storeContents = new Password(Utils.readFileAsString(path));
+                PemStore pemStore = isKeyStore ? new PemStore(storeContents, storeContents, keyPassword) :
+                    new PemStore(storeContents);
+                return pemStore.keyStore;
+            } catch (Exception e) {
+                throw new InvalidConfigurationException("Failed to load PEM SSL keystore " + path, e);
+            }
+        }
+    }
+
+    static class PemStore implements SecurityStore {
+        private static final PemParser CERTIFICATE_PARSER = new PemParser("CERTIFICATE");
+        private static final PemParser PRIVATE_KEY_PARSER = new PemParser("PRIVATE KEY");
+        private static final List<KeyFactory> KEY_FACTORIES = Arrays.asList(
+                keyFactory("RSA"),
+                keyFactory("DSA"),
+                keyFactory("EC")
+        );
+
+        private final char[] keyPassword;
+        private final KeyStore keyStore;
+
+        PemStore(Password certificateChain, Password privateKey, Password keyPassword) {
+            this.keyPassword = keyPassword == null ? null : keyPassword.value().toCharArray();
+            keyStore = createKeyStoreFromPem(privateKey.value(), certificateChain.value(), this.keyPassword);
+        }
+
+        PemStore(Password trustStoreCerts) {
+            this.keyPassword = null;
+            keyStore = createTrustStoreFromPem(trustStoreCerts.value());
+        }
+
+        @Override
+        public KeyStore get() {
+            return keyStore;
+        }
+
+        @Override
+        public char[] keyPassword() {
+            return keyPassword;
+        }
+
+        @Override
+        public boolean modified() {
+            return false;
+        }
+
+        private KeyStore createKeyStoreFromPem(String privateKeyPem, String certChainPem, char[] keyPassword) {
+            try {
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                ks.load(null, null);
+                Key key = privateKey(privateKeyPem, keyPassword);
+                Certificate[] certChain = certs(certChainPem);
+                ks.setKeyEntry("kafka", key, keyPassword, certChain);
+                return ks;
+            } catch (Exception e) {
+                throw new InvalidConfigurationException("Invalid PEM keystore configs", e);
+            }
+        }
+
+        private KeyStore createTrustStoreFromPem(String trustedCertsPem) {
+            try {
+                KeyStore ts = KeyStore.getInstance("PKCS12");
+                ts.load(null, null);
+                Certificate[] certs = certs(trustedCertsPem);
+                for (int i = 0; i < certs.length; i++) {
+                    ts.setCertificateEntry("kafka" + i, certs[i]);
+                }
+                return ts;
+            } catch (InvalidConfigurationException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new InvalidConfigurationException("Invalid PEM keystore configs", e);
+            }
+        }
+
+        private Certificate[] certs(String pem) throws GeneralSecurityException {
+            List<byte[]> certEntries = CERTIFICATE_PARSER.pemEntries(pem);
+            if (certEntries.isEmpty())
+                throw new InvalidConfigurationException("At least one certificate expected, but none found");
+
+            Certificate[] certs = new Certificate[certEntries.size()];
+            for (int i = 0; i < certs.length; i++) {
+                certs[i] = CertificateFactory.getInstance("X.509")
+                    .generateCertificate(new ByteArrayInputStream(certEntries.get(i)));
+            }
+            return certs;
+        }
+
+        private PrivateKey privateKey(String pem, char[] keyPassword) throws Exception {
+            List<byte[]> keyEntries = PRIVATE_KEY_PARSER.pemEntries(pem);
+            if (keyEntries.isEmpty())
+                throw new InvalidConfigurationException("Private key not provided");
+            if (keyEntries.size() != 1)
+                throw new InvalidConfigurationException("Expected one private key, but found " + keyEntries.size());
+
+            byte[] keyBytes = keyEntries.get(0);
+            PKCS8EncodedKeySpec keySpec;
+            if (keyPassword == null) {
+                keySpec = new PKCS8EncodedKeySpec(keyBytes);
+            } else {
+                EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(keyBytes);
+                String algorithm = keyInfo.getAlgName();
+                SecretKeyFactory keyFactory = SecretKeyFactory.getInstance(algorithm);
+                SecretKey pbeKey = keyFactory.generateSecret(new PBEKeySpec(keyPassword));
+                Cipher cipher = Cipher.getInstance(algorithm);
+                cipher.init(Cipher.DECRYPT_MODE, pbeKey, keyInfo.getAlgParameters());
+                keySpec = keyInfo.getKeySpec(cipher);
+            }
+
+            InvalidKeySpecException firstException = null;
+            for (KeyFactory factory : KEY_FACTORIES) {
+                try {
+                    return factory.generatePrivate(keySpec);
+                } catch (InvalidKeySpecException e) {
+                    if (firstException == null)
+                        firstException = e;
+                }
+            }
+            throw new InvalidConfigurationException("Private key could not be loaded", firstException);
+        }
+
+        private static KeyFactory keyFactory(String algorithm) {
+            try {
+                return KeyFactory.getInstance(algorithm);
+            } catch (Exception e) {
+                throw new InvalidConfigurationException("Could not create key factory for algorithm " + algorithm, e);
+            }
+        }
+    }
+
+    /**
+     * Parser to process certificate/private key entries from PEM files
+     * Examples:
+     *   -----BEGIN CERTIFICATE-----
+     *   Base64 cert
+     *   -----END CERTIFICATE-----
+     *
+     *   -----BEGIN ENCRYPTED PRIVATE KEY-----
+     *   Base64 private key
+     *   -----END ENCRYPTED PRIVATE KEY-----
+     *   Additional data may be included before headers, so we match all entries within the PEM.
+     */
+    static class PemParser {
+        private final String name;
+        private final Pattern pattern;
+
+        PemParser(String name) {
+            this.name = name;
+            String beginOrEndFormat = "-+%s\\s*.*%s[^-]*-+\\s+";
+            String nameIgnoreSpace = name.replace(" ", "\\s+");
+
+            String encodingParams = "\\s*[^\\r\\n]*:[^\\r\\n]*[\\r\\n]+";
+            String base64Pattern = "([a-zA-Z0-9/+=\\s]*)";
+            String patternStr =  String.format(beginOrEndFormat, "BEGIN", nameIgnoreSpace) +
+                String.format("(?:%s)*", encodingParams) +
+                base64Pattern +
+                String.format(beginOrEndFormat, "END", nameIgnoreSpace);
+            pattern = Pattern.compile(patternStr);
+        }
+
+        private List<byte[]> pemEntries(String pem) {
+            Matcher matcher = pattern.matcher(pem + "\n"); // allow last newline to be omitted in value
+            List<byte[]>  entries = new ArrayList<>();
+            while (matcher.find()) {
+                String base64Str = matcher.group(1).replaceAll("\\s", "");
+                entries.add(Base64.getDecoder().decode(base64Str));
+            }
+            if (entries.isEmpty())
+                throw new InvalidConfigurationException("No matching " + name + " entries in PEM file");
+            return entries;
         }
     }
 }

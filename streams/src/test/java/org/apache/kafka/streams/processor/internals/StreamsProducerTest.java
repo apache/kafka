@@ -27,6 +27,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
@@ -79,6 +80,7 @@ public class StreamsProducerTest {
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"))
     );
 
+    @SuppressWarnings("deprecation")
     private final StreamsConfig eosAlphaConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
@@ -88,7 +90,7 @@ public class StreamsProducerTest {
     private final StreamsConfig eosBetaConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA))
+        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
     );
 
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
@@ -310,7 +312,7 @@ public class StreamsProducerTest {
             () -> nonEosStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled [test]"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
     }
 
     @Test
@@ -320,7 +322,7 @@ public class StreamsProducerTest {
             () -> eosAlphaStreamsProducer.resetProducer()
         );
 
-        assertThat(thrown.getMessage(), is("Exactly-once beta is not enabled [test]"));
+        assertThat(thrown.getMessage(), is("Expected eos-v2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
 
@@ -329,7 +331,7 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
-    public void shouldNotSetTransactionIdIfEosDisable() {
+    public void shouldNotSetTransactionIdIfEosDisabled() {
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
         expect(mockConfig.getProducerConfigs("threadId-producer")).andReturn(mock(Map.class));
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.AT_LEAST_ONCE).anyTimes();
@@ -440,6 +442,7 @@ public class StreamsProducerTest {
         assertThat(eosBetaStreamsProducer.eosEnabled(), is(true));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetTransactionIdUsingTaskIdIfEosAlphaEnabled() {
         final Map<String, Object> mockMap = mock(Map.class);
@@ -466,7 +469,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldSetTransactionIdUsingProcessIdIfEosBetaEnable() {
+    public void shouldSetTransactionIdUsingProcessIdIfEosV2Enabled() {
         final UUID processId = UUID.randomUUID();
 
         final Map<String, Object> mockMap = mock(Map.class);
@@ -476,7 +479,7 @@ public class StreamsProducerTest {
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
         expect(mockConfig.getProducerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
-        expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_BETA).anyTimes();
+        expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_V2).anyTimes();
 
         replay(mockMap, mockConfig);
 
@@ -681,7 +684,7 @@ public class StreamsProducerTest {
                 logContext)
         );
 
-        assertThat(thrown.getMessage(), is("processId cannot be null for exactly-once beta"));
+        assertThat(thrown.getMessage(), is("processId cannot be null for exactly-once v2"));
     }
 
     @Test
@@ -854,10 +857,18 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnEosSendFenced() {
-        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        final ProducerFencedException exception = new ProducerFencedException("KABOOM!");
+    public void shouldThrowTaskMigratedExceptionOnEosSendProducerFenced() {
+        testThrowTaskMigratedExceptionOnEosSend(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnEosSendInvalidEpoch() {
+        testThrowTaskMigratedExceptionOnEosSend(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnEosSend(final RuntimeException exception) {
         // we need to mimic that `send()` always wraps error in a KafkaException
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
         eosAlphaMockProducer.sendException = new KafkaException(exception);
 
         final TaskMigratedException thrown = assertThrows(
@@ -893,9 +904,20 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetFenced() {
+    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetProducerFenced() {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.sendOffsetsToTransactionException = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigrateExceptionOnEosSendOffset(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetInvalidEpoch() {
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
+        testThrowTaskMigrateExceptionOnEosSendOffset(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigrateExceptionOnEosSendOffset(final RuntimeException exception) {
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
+        eosAlphaMockProducer.sendOffsetsToTransactionException = exception;
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
@@ -945,9 +967,18 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigrateExceptionOnEosCommitTxFenced() {
+    public void shouldThrowTaskMigratedExceptionOnEosCommitWithProducerFenced() {
+        testThrowTaskMigratedExceptionOnEos(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnEosCommitWithInvalidEpoch() {
+        testThrowTaskMigratedExceptionOnEos(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnEos(final RuntimeException exception) {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.commitTransactionException = new ProducerFencedException("KABOOM!");
+        eosAlphaMockProducer.commitTransactionException = exception;
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
@@ -961,21 +992,6 @@ public class StreamsProducerTest {
             is("Producer got fenced trying to commit a transaction [test];" +
                    " it means all tasks belonging to this thread should be migrated.")
         );
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnEosCommitTxTimeout() {
-        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.commitTransactionException = new TimeoutException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> eosAlphaStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
-        );
-
-        assertThat(eosAlphaMockProducer.sentOffsets(), is(true));
-        assertThat(thrown.getCause(), is(eosAlphaMockProducer.commitTransactionException));
-        assertThat(thrown.getMessage(), is("Timed out trying to commit a transaction [test]"));
     }
 
     @Test
@@ -1009,12 +1025,21 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldSwallowExceptionOnEosAbortTxFenced() {
+    public void shouldSwallowExceptionOnEosAbortTxProducerFenced() {
+        testSwallowExceptionOnEosAbortTx(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldSwallowExceptionOnEosAbortTxInvalidEpoch() {
+        testSwallowExceptionOnEosAbortTx(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testSwallowExceptionOnEosAbortTx(final RuntimeException exception) {
         mockedProducer.initTransactions();
         mockedProducer.beginTransaction();
         expect(mockedProducer.send(record, null)).andReturn(null);
         mockedProducer.abortTransaction();
-        expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        expectLastCall().andThrow(exception);
         replay(mockedProducer);
 
         eosAlphaStreamsProducerWithMock.initTransaction();

@@ -18,9 +18,9 @@ package org.apache.kafka.clients.consumer;
 
 import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -36,7 +36,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 

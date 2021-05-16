@@ -20,6 +20,7 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import javax.security.auth.login.Configuration;
 import javax.ws.rs.HttpMethod;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -49,6 +50,13 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     static final String AUTHORIZATION = "Authorization";
 
+    // Package-private for testing
+    final Configuration configuration;
+
+    public JaasBasicAuthFilter(Configuration configuration) {
+        this.configuration = configuration;
+    }
+
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         if (isInternalTaskConfigRequest(requestContext)) {
@@ -58,9 +66,11 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
         try {
             log.debug("Authenticating request");
-            LoginContext loginContext =
-                new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
-                    requestContext.getHeaderString(AUTHORIZATION)));
+            LoginContext loginContext = new LoginContext(
+                CONNECT_LOGIN_MODULE,
+                null,
+                new BasicAuthCallBackHandler(requestContext.getHeaderString(AUTHORIZATION)),
+                configuration);
             loginContext.login();
         } catch (LoginException | ConfigException e) {
             // Log at debug here in order to avoid polluting log files whenever someone mistypes their credentials

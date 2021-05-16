@@ -25,7 +25,7 @@
   "fields": [
     { "name": "AssignedPartitions", "type": "[]TopicPartition", "versions": "0+",
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "0+" },
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName" },
         { "name": "Partitions", "type": "[]int32", "versions": "0+" }
       ]
     },

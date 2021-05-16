@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
@@ -65,7 +66,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public StateStore getStateStore(final String name) {
+    public <S extends StateStore> S getStateStore(final String name) {
         return null;
     }
 
@@ -85,29 +86,37 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record.key(), record.value());
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        forward(record.key(), record.value());
+    }
+
+    @Override
     public <K, V> void forward(final K key, final V value) {
         forwardedValues.put(key, value);
     }
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        forwardedValues.put(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
     }
 
     @Override
     public void commit() {}
+
+    @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
 
     @Override
     public void initialize() {

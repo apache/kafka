@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,27 +18,27 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.serialization.Serdes._
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class JoinedTest extends FlatSpec with Matchers {
+class JoinedTest {
 
-  "Create a Joined" should "create a Joined with Serdes" in {
+  @Test
+  def testCreateJoined(): Unit = {
     val joined: Joined[String, Long, Int] = Joined.`with`[String, Long, Int]
 
-    joined.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    joined.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    joined.otherValueSerde.getClass shouldBe Serdes.intSerde.getClass
+    assertEquals(joined.keySerde.getClass, Serdes.stringSerde.getClass)
+    assertEquals(joined.valueSerde.getClass, Serdes.longSerde.getClass)
+    assertEquals(joined.otherValueSerde.getClass, Serdes.intSerde.getClass)
   }
 
-  "Create a Joined" should "create a Joined with Serdes and repartition topic name" in {
+  @Test
+  def testCreateJoinedWithSerdesAndRepartitionTopicName(): Unit = {
     val repartitionTopicName = "repartition-topic"
     val joined: Joined[String, Long, Int] = Joined.`with`(repartitionTopicName)
 
-    joined.keySerde.getClass shouldBe Serdes.stringSerde.getClass
-    joined.valueSerde.getClass shouldBe Serdes.longSerde.getClass
-    joined.otherValueSerde.getClass shouldBe Serdes.intSerde.getClass
+    assertEquals(joined.keySerde.getClass, Serdes.stringSerde.getClass)
+    assertEquals(joined.valueSerde.getClass, Serdes.longSerde.getClass)
+    assertEquals(joined.otherValueSerde.getClass, Serdes.intSerde.getClass)
   }
 }

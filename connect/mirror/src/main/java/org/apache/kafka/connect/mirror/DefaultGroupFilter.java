@@ -20,72 +20,81 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Uses a whitelist and blacklist. */
+/** Uses an include and exclude pattern. */
 public class DefaultGroupFilter implements GroupFilter {
 
-    public static final String GROUPS_WHITELIST_CONFIG = "groups";
-    private static final String GROUPS_WHITELIST_DOC = "List of consumer group names and/or regexes to replicate.";
-    public static final String GROUPS_WHITELIST_DEFAULT = ".*";
+    public static final String GROUPS_INCLUDE_CONFIG = "groups";
+    private static final String GROUPS_INCLUDE_DOC = "List of consumer group names and/or regexes to replicate.";
+    public static final String GROUPS_INCLUDE_DEFAULT = ".*";
 
-    public static final String GROUPS_BLACKLIST_CONFIG = "groups.blacklist";
-    private static final String GROUPS_BLACKLIST_DOC = "List of consumer group names and/or regexes that should not be replicated.";
-    public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*, __.*";
+    public static final String GROUPS_EXCLUDE_CONFIG = "groups.exclude";
+    public static final String GROUPS_EXCLUDE_CONFIG_ALIAS = "groups.blacklist";
 
-    private Pattern whitelistPattern;
-    private Pattern blacklistPattern;
+    private static final String GROUPS_EXCLUDE_DOC = "List of consumer group names and/or regexes that should not be replicated.";
+    public static final String GROUPS_EXCLUDE_DEFAULT = "console-consumer-.*, connect-.*, __.*";
+
+    private Pattern includePattern;
+    private Pattern excludePattern;
 
     @Override
     public void configure(Map<String, ?> props) {
         GroupFilterConfig config = new GroupFilterConfig(props);
-        whitelistPattern = config.whitelistPattern();
-        blacklistPattern = config.blacklistPattern();
+        includePattern = config.includePattern();
+        excludePattern = config.excludePattern();
     }
 
     @Override
     public void close() {
     }
 
-    private boolean whitelisted(String group) {
-        return whitelistPattern != null && whitelistPattern.matcher(group).matches();
+    private boolean included(String group) {
+        return includePattern != null && includePattern.matcher(group).matches();
     }
 
-    private boolean blacklisted(String group) {
-        return blacklistPattern != null && blacklistPattern.matcher(group).matches();
+    private boolean excluded(String group) {
+        return excludePattern != null && excludePattern.matcher(group).matches();
     }
 
     @Override
     public boolean shouldReplicateGroup(String group) {
-        return whitelisted(group) && !blacklisted(group);
+        return included(group) && !excluded(group);
     }
 
     static class GroupFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(GROUPS_WHITELIST_CONFIG,
-                Type.LIST,
-                GROUPS_WHITELIST_DEFAULT,
-                Importance.HIGH,
-                GROUPS_WHITELIST_DOC) 
-            .define(GROUPS_BLACKLIST_CONFIG,
-                Type.LIST,
-                GROUPS_BLACKLIST_DEFAULT,
-                Importance.HIGH,
-                GROUPS_BLACKLIST_DOC);
+            .define(GROUPS_INCLUDE_CONFIG,
+                    Type.LIST,
+                    GROUPS_INCLUDE_DEFAULT,
+                    Importance.HIGH,
+                    GROUPS_INCLUDE_DOC)
+            .define(GROUPS_EXCLUDE_CONFIG,
+                    Type.LIST,
+                    GROUPS_EXCLUDE_DEFAULT,
+                    Importance.HIGH,
+                    GROUPS_EXCLUDE_DOC)
+            .define(GROUPS_EXCLUDE_CONFIG_ALIAS,
+                    Type.LIST,
+                    null,
+                    Importance.HIGH,
+                    "Deprecated. Use " + GROUPS_EXCLUDE_CONFIG + " instead.");
 
-        GroupFilterConfig(Map<?, ?> props) {
-            super(DEF, props, false);
+        GroupFilterConfig(Map<String, ?> props) {
+            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
+                {GROUPS_EXCLUDE_CONFIG, GROUPS_EXCLUDE_CONFIG_ALIAS}}), false);
         }
 
-        Pattern whitelistPattern() {
-            return MirrorUtils.compilePatternList(getList(GROUPS_WHITELIST_CONFIG));
+        Pattern includePattern() {
+            return MirrorUtils.compilePatternList(getList(GROUPS_INCLUDE_CONFIG));
         }
 
-        Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(GROUPS_BLACKLIST_CONFIG));
+        Pattern excludePattern() {
+            return MirrorUtils.compilePatternList(getList(GROUPS_EXCLUDE_CONFIG));
         }
     }
 }

@@ -40,6 +40,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class CompositeReadOnlySessionStoreTest {
@@ -108,7 +109,7 @@ public class CompositeReadOnlySessionStoreTest {
         assertFalse(result.hasNext());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final QueryableStoreType<ReadOnlySessionStore<Object, Object>> queryableStoreType = QueryableStoreTypes.sessionStore();
         final CompositeReadOnlySessionStore<String, String> store =
@@ -118,7 +119,7 @@ public class CompositeReadOnlySessionStoreTest {
                 "whateva"
             );
 
-        store.fetch("a");
+        assertThrows(InvalidStateStoreException.class, () -> store.fetch("a"));
     }
 
     @Test
@@ -130,9 +131,9 @@ public class CompositeReadOnlySessionStoreTest {
         } catch (final InvalidStateStoreException e) { }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfFetchingNullKey() {
-        sessionStore.fetch(null);
+        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
     }
 
     @Test
@@ -146,18 +147,18 @@ public class CompositeReadOnlySessionStoreTest {
         assertThat(results.size(), equalTo(2));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfKeyIsNull() {
-        underlyingSessionStore.fetch(null);
+        assertThrows(NullPointerException.class, () -> underlyingSessionStore.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfFromKeyIsNull() {
-        underlyingSessionStore.fetch(null, "a");
+        assertThrows(NullPointerException.class, () -> underlyingSessionStore.fetch(null, "a"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfToKeyIsNull() {
-        underlyingSessionStore.fetch("a", null);
+        assertThrows(NullPointerException.class, () -> underlyingSessionStore.fetch("a", null));
     }
 }

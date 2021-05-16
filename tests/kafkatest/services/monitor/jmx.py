@@ -128,7 +128,7 @@ class JmxMixin(object):
 
         for name in object_attribute_names:
             aggregates_per_time = []
-            for time_sec in xrange(start_time_sec, end_time_sec + 1):
+            for time_sec in range(start_time_sec, end_time_sec + 1):
                 # assume that value is 0 if it is not read by jmx tool at the given time. This is appropriate for metrics such as bandwidth
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth

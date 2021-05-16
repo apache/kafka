@@ -21,7 +21,6 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -42,7 +41,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
@@ -118,9 +117,16 @@ object AclAuthorizer {
       zkClientConfig
     }
   }
+
+  private def validateAclBinding(aclBinding: AclBinding): Unit = {
+    if (aclBinding.isUnknown)
+      throw new IllegalArgumentException("ACL binding contains unknown elements")
+  }
 }
 
 class AclAuthorizer extends Authorizer with Logging {
+  import kafka.security.authorizer.AclAuthorizer._
+
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
@@ -130,6 +136,11 @@ class AclAuthorizer extends Authorizer with Logging {
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
+
+  @volatile
+  private var resourceCache = new scala.collection.immutable.HashMap[ResourceTypeKey,
+    scala.collection.immutable.HashSet[String]]()
+
   private val lock = new Object()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
@@ -195,7 +206,7 @@ class AclAuthorizer extends Authorizer with Logging {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
             s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
         }
-        AuthorizerUtils.validateAclBinding(aclBinding)
+        validateAclBinding(aclBinding)
         true
       } catch {
         case e: Throwable =>
@@ -220,7 +231,7 @@ class AclAuthorizer extends Authorizer with Logging {
         }
       }
     }
-    results.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
+    results.toBuffer.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
   /**
@@ -287,12 +298,9 @@ class AclAuthorizer extends Authorizer with Logging {
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
-  @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     val aclBindings = new util.ArrayList[AclBinding]()
-    // Using `forKeyValue` triggers a scalac bug related to suppression of optimizer warnings, we
-    // should change this code once that's fixed
-    aclCache.foreach { case (resource, versionedAcls) =>
+    aclCache.forKeyValue { case (resource, versionedAcls) =>
       versionedAcls.acls.foreach { acl =>
         val binding = new AclBinding(resource, acl.ace)
         if (filter.matches(binding))
@@ -306,6 +314,130 @@ class AclAuthorizer extends Authorizer with Logging {
     aclChangeListeners.foreach(listener => listener.close())
     if (zkClient != null) zkClient.close()
   }
+
+  override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
+                                       op: AclOperation,
+                                       resourceType: ResourceType): AuthorizationResult = {
+    SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType)
+
+    val principal = new KafkaPrincipal(
+      requestContext.principal().getPrincipalType,
+      requestContext.principal().getName)
+
+    if (isSuperUser(principal))
+      return AuthorizationResult.ALLOWED
+
+    val resourceSnapshot = resourceCache
+    val principalStr = principal.toString
+    val host = requestContext.clientAddress().getHostAddress
+    val action = new Action(op, new ResourcePattern(resourceType, "NONE", PatternType.UNKNOWN), 0, true, true)
+
+    val denyLiterals = matchingResources(
+      resourceSnapshot, principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
+
+    if (denyAll(denyLiterals)) {
+      logAuditMessage(requestContext, action, authorized = false)
+      return AuthorizationResult.DENIED
+    }
+
+    if (shouldAllowEveryoneIfNoAclIsFound) {
+      logAuditMessage(requestContext, action, authorized = true)
+      return AuthorizationResult.ALLOWED
+    }
+
+    val denyPrefixes = matchingResources(
+      resourceSnapshot, principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
+
+    if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
+      if (hasMatchingResources(resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+          || hasMatchingResources(resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
+        logAuditMessage(requestContext, action, authorized = true)
+        return AuthorizationResult.ALLOWED
+      } else {
+        logAuditMessage(requestContext, action, authorized = false)
+        return AuthorizationResult.DENIED
+      }
+    }
+
+    val allowLiterals = matchingResources(
+      resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
+    val allowPrefixes = matchingResources(
+      resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+
+    if (allowAny(allowLiterals, allowPrefixes, denyLiterals, denyPrefixes)) {
+      logAuditMessage(requestContext, action, authorized = true)
+      return AuthorizationResult.ALLOWED
+    }
+
+    logAuditMessage(requestContext, action, authorized = false)
+    AuthorizationResult.DENIED
+  }
+
+  private def matchingResources(resourceSnapshot: immutable.Map[ResourceTypeKey, immutable.Set[String]],
+                                principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+                                resourceType: ResourceType, patternType: PatternType): ArrayBuffer[Set[String]] = {
+    val matched = ArrayBuffer[immutable.Set[String]]()
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
+         h <- Set(host, AclEntry.WildcardHost);
+         o <- Set(op, AclOperation.ALL)) {
+      val resourceTypeKey = ResourceTypeKey(
+        new AccessControlEntry(p, h, o, permission), resourceType, patternType)
+      resourceSnapshot.get(resourceTypeKey) match {
+        case Some(resources) => matched += resources
+        case None =>
+      }
+    }
+    matched
+  }
+
+  private def hasMatchingResources(resourceSnapshot: immutable.Map[ResourceTypeKey, immutable.Set[String]],
+                                   principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+                                   resourceType: ResourceType, patternType: PatternType): Boolean = {
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
+         h <- Set(host, AclEntry.WildcardHost);
+         o <- Set(op, AclOperation.ALL)) {
+          val resourceTypeKey = ResourceTypeKey(
+            new AccessControlEntry(p, h, o, permission), resourceType, patternType)
+          if (resourceSnapshot.contains(resourceTypeKey))
+            return true
+    }
+    false
+  }
+
+  private def denyAll(denyLiterals: ArrayBuffer[immutable.Set[String]]): Boolean =
+    denyLiterals.exists(_.contains(ResourcePattern.WILDCARD_RESOURCE))
+
+
+  private def allowAny(allowLiterals: ArrayBuffer[immutable.Set[String]], allowPrefixes: ArrayBuffer[immutable.Set[String]],
+                       denyLiterals: ArrayBuffer[immutable.Set[String]], denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    (allowPrefixes.exists(_.exists(prefix => allowPrefix(prefix, denyPrefixes)))
+      || allowLiterals.exists(_.exists(literal => allowLiteral(literal, denyLiterals, denyPrefixes))))
+  }
+
+  private def allowLiteral(literalName: String, denyLiterals: ArrayBuffer[immutable.Set[String]],
+                           denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    literalName match {
+      case ResourcePattern.WILDCARD_RESOURCE => true
+      case _ => !denyLiterals.exists(_.contains(literalName)) && !hasDominantPrefixedDeny(literalName, denyPrefixes)
+    }
+  }
+
+  private def allowPrefix(prefixName: String,
+                          denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    !hasDominantPrefixedDeny(prefixName, denyPrefixes)
+  }
+
+  private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    val sb = new StringBuilder
+    for (ch <- resourceName.toCharArray) {
+      sb.append(ch)
+      if (denyPrefixes.exists(p => p.contains(sb.toString()))) {
+        return true
+      }
+    }
+    false
+  }
+
 
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = action.resourcePattern
@@ -349,8 +481,8 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     def aclsAllowAccess = {
-      //we allow an operation if no acls are found and user has configured to allow all users
-      //when no acls are found or if no deny acls are found and at least one allow acls matches.
+      // we allow an operation if no acls are found and user has configured to allow all users
+      // when no acls are found or if no deny acls are found and at least one allow acls matches.
       val acls = matchingAcls(resource.resourceType, resource.name)
       isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
     }
@@ -459,7 +591,8 @@ class AclAuthorizer extends Authorizer with Logging {
       val apiKey = if (ApiKeys.hasId(requestContext.requestType)) ApiKeys.forId(requestContext.requestType).name else requestContext.requestType
       val refCount = action.resourceReferenceCount
 
-      s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
+      s"Principal = $principal is $authResult Operation = $operation " +
+        s"from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
     }
 
     if (authorized) {
@@ -529,7 +662,8 @@ class AclAuthorizer extends Authorizer with Logging {
       throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
-      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      info(s"Updated ACLs for $resource with new version ${newVersionedAcls.zkVersion}")
+      debug(s"Updated ACLs for $resource to $newVersionedAcls")
       updateCache(resource, newVersionedAcls)
       updateAclChangedFlag(resource)
       true
@@ -540,7 +674,6 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  @nowarn("cat=optimizer")
   private def getAclsFromCache(resource: ResourcePattern): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
@@ -549,7 +682,34 @@ class AclAuthorizer extends Authorizer with Logging {
     zkClient.getVersionedAclsForResource(resource)
   }
 
-  private def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
+  // Visible for benchmark
+  def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
+    val currentAces: Set[AccessControlEntry] = aclCache.get(resource).map(_.acls.map(_.ace)).getOrElse(Set.empty)
+    val newAces: Set[AccessControlEntry] = versionedAcls.acls.map(aclEntry => aclEntry.ace)
+    val acesToAdd = newAces.diff(currentAces)
+    val acesToRemove = currentAces.diff(newAces)
+
+    acesToAdd.foreach(ace => {
+      val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
+      resourceCache.get(resourceTypeKey) match {
+        case Some(resources) => resourceCache += (resourceTypeKey -> (resources + resource.name()))
+        case None => resourceCache += (resourceTypeKey -> immutable.HashSet(resource.name()))
+      }
+    })
+    acesToRemove.foreach(ace => {
+      val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
+      resourceCache.get(resourceTypeKey) match {
+        case Some(resources) =>
+          val newResources = resources - resource.name()
+          if (newResources.isEmpty) {
+            resourceCache -= resourceTypeKey
+          } else {
+            resourceCache += (resourceTypeKey -> newResources)
+          }
+        case None =>
+      }
+    })
+
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache.updated(resource, versionedAcls)
     } else {
@@ -575,6 +735,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private[authorizer] def processAclChangeNotification(resource: ResourcePattern): Unit = {
     lock synchronized {
       val versionedAcls = getAclsFromZk(resource)
+      info(s"Processing Acl change notification for $resource, versionedAcls : ${versionedAcls.acls}, zkVersion : ${versionedAcls.zkVersion}")
       updateCache(resource, versionedAcls)
     }
   }
@@ -584,4 +745,8 @@ class AclAuthorizer extends Authorizer with Logging {
       processAclChangeNotification(resource)
     }
   }
+
+  private case class ResourceTypeKey(ace: AccessControlEntry,
+                                     resourceType: ResourceType,
+                                     patternType: PatternType)
 }

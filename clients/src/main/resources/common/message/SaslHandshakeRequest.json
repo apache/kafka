@@ -16,6 +16,7 @@
 {
   "apiKey": 17,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "SaslHandshakeRequest",
   // Version 1 supports SASL_AUTHENTICATE.
   // NOTE: Version cannot be easily bumped due to incorrect

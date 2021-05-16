@@ -16,6 +16,7 @@
 {
   "apiKey": 38,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "CreateDelegationTokenRequest",
   // Version 1 is the same as version 0.
   //

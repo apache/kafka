@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService

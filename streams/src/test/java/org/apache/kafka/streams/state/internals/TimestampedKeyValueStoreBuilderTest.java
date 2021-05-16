@@ -36,6 +36,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertThrows;
 
@@ -52,6 +53,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
         expect(inner.persistent()).andReturn(true).anyTimes();
         replay(supplier, inner);
 
@@ -168,7 +170,14 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", null));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 
 }

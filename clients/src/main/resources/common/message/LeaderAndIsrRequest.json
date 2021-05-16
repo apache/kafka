@@ -16,13 +16,18 @@
 {
   "apiKey": 4,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "LeaderAndIsrRequest",
   // Version 1 adds IsNew.
   //
   // Version 2 adds broker epoch and reorganizes the partitions by topic.
   //
-  // Version 3 adds AddingReplicas and RemovingReplicas
-  "validVersions": "0-4",
+  // Version 3 adds AddingReplicas and RemovingReplicas.
+  //
+  // Version 4 is the first flexible version.
+  //
+  // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -31,6 +36,8 @@
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
       "about": "The current broker epoch." },
+    { "name": "Type", "type": "int8", "versions": "5+",
+      "about": "The type that indicates whether all topics are included in the request"},
     { "name": "UngroupedPartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "0-1",
       "about": "The state of each partition, in a v0 or v1 message." },
     // In v0 or v1 requests, each partition is listed alongside its topic name.
@@ -40,6 +47,8 @@
       "about": "Each topic.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "2+", "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "5+", "ignorable": true,
+        "about": "The unique topic ID." },
       { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "2+",
         "about": "The state of each partition" }
     ]},
@@ -65,15 +74,15 @@
         "about": "The broker ID of the leader." },
       { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
         "about": "The leader epoch." },
-      { "name": "Isr", "type": "[]int32", "versions": "0+",
+      { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The in-sync replica IDs." },
       { "name": "ZkVersion", "type": "int32", "versions": "0+",
         "about": "The ZooKeeper version." },
-      { "name": "Replicas", "type": "[]int32", "versions": "0+",
+      { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The replica IDs." },
-      { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true,
+      { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",
         "about": "The replica IDs that we are adding this partition to, or null if no replicas are being added." },
-      { "name": "RemovingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true,
+      { "name": "RemovingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",
         "about": "The replica IDs that we are removing this partition from, or null if no replicas are being removed." },
       { "name": "IsNew", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
         "about": "Whether the replica should have existed on the broker or not." }

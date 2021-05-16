@@ -25,9 +25,11 @@ import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ScramSaslServerTest {
 
@@ -38,7 +40,7 @@ public class ScramSaslServerTest {
     private ScramFormatter formatter;
     private ScramSaslServer saslServer;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         mechanism = ScramMechanism.SCRAM_SHA_256;
         formatter  = new ScramFormatter(mechanism);
@@ -52,18 +54,18 @@ public class ScramSaslServerTest {
     @Test
     public void noAuthorizationIdSpecified() throws Exception {
         byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, null));
-        assertTrue("Next challenge is empty", nextChallenge.length > 0);
+        assertTrue(nextChallenge.length > 0, "Next challenge is empty");
     }
 
     @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_A));
-        assertTrue("Next challenge is empty", nextChallenge.length > 0);
+        assertTrue(nextChallenge.length > 0, "Next challenge is empty");
     }
 
-    @Test(expected = SaslAuthenticationException.class)
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B));
+    @Test
+    public void authorizatonIdNotEqualsAuthenticationId() {
+        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
     }
 
     private byte[] clientFirstMessage(String userName, String authorizationId) {

@@ -27,11 +27,14 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -154,7 +157,44 @@ public class MeteredKeyValueStoreTest {
 
     private void init() {
         replay(inner, context);
-        metered.init(context, metered);
+        metered.init((StateStoreContext) context, metered);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final KeyValueStore<Bytes, byte[]> inner = mock(KeyValueStore.class);
+        final MeteredKeyValueStore<String, String> outer = new MeteredKeyValueStore<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            Serdes.String()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        expectLastCall();
+        replay(inner, context);
+        outer.init((ProcessorContext) context, outer);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final KeyValueStore<Bytes, byte[]> inner = mock(KeyValueStore.class);
+        final MeteredKeyValueStore<String, String> outer = new MeteredKeyValueStore<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            Serdes.String()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        expectLastCall();
+        replay(inner, context);
+        outer.init((StateStoreContext) context, outer);
+        verify(inner);
     }
 
     @Test
@@ -190,7 +230,7 @@ public class MeteredKeyValueStoreTest {
             keySerde,
             valueSerde
         );
-        metered.init(context, metered);
+        metered.init((StateStoreContext) context, metered);
 
         metered.get(KEY);
         metered.put(KEY, VALUE);
@@ -392,6 +432,73 @@ public class MeteredKeyValueStoreTest {
         assertThat(storeMetrics(), not(empty()));
         assertThrows(RuntimeException.class, metered::close);
         assertThat(storeMetrics(), empty());
+        verify(inner);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnGetIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.get(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.put(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfAbsentIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putIfAbsent(null, VALUE));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnDeleteIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.delete(null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutAllIfAnyKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.putAll(Collections.singletonList(KeyValue.pair(null, VALUE))));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPrefixScanIfPrefixIsNull() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        assertThrows(NullPointerException.class, () -> metered.prefixScan(null, stringSerializer));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.range("from", null));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange(null, "to"));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnReverseRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        expect(inner.prefixScan(KEY, stringSerializer))
+            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        iterator.close();
+
+        final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
+        assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
 

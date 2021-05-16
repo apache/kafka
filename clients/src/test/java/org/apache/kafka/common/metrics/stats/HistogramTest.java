@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Arrays;
 import java.util.Random;
@@ -25,7 +25,7 @@ import java.util.Random;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class HistogramTest {
 
@@ -44,22 +44,22 @@ public class HistogramTest {
     @Test
     public void testConstantBinScheme() {
         ConstantBinScheme scheme = new ConstantBinScheme(5, -5, 5);
-        assertEquals("A value below the lower bound should map to the first bin", 0, scheme.toBin(-5.01));
-        assertEquals("A value above the upper bound should map to the last bin", 4, scheme.toBin(5.01));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-5.0001));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-5.0000));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-4.99999));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-3.00001));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(-3));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(-1.00001));
-        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(-1));
-        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(0.99999));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(1));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(2.99999));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(3));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.9999));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.000));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.001));
+        assertEquals(0, scheme.toBin(-5.01), "A value below the lower bound should map to the first bin");
+        assertEquals(4, scheme.toBin(5.01), "A value above the upper bound should map to the last bin");
+        assertEquals(0, scheme.toBin(-5.0001), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(-5.0000), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(-4.99999), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(-3.00001), "Check boundary of bucket 0");
+        assertEquals(1, scheme.toBin(-3), "Check boundary of bucket 1");
+        assertEquals(1, scheme.toBin(-1.00001), "Check boundary of bucket 1");
+        assertEquals(2, scheme.toBin(-1), "Check boundary of bucket 2");
+        assertEquals(2, scheme.toBin(0.99999), "Check boundary of bucket 2");
+        assertEquals(3, scheme.toBin(1), "Check boundary of bucket 3");
+        assertEquals(3, scheme.toBin(2.99999), "Check boundary of bucket 3");
+        assertEquals(4, scheme.toBin(3), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(4.9999), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(5.000), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(5.001), "Check boundary of bucket 4");
         assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
         assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(5), 0.001d);
         assertEquals(-5.0, scheme.fromBin(0), 0.001d);
@@ -73,25 +73,25 @@ public class HistogramTest {
     @Test
     public void testConstantBinSchemeWithPositiveRange() {
         ConstantBinScheme scheme = new ConstantBinScheme(5, 0, 5);
-        assertEquals("A value below the lower bound should map to the first bin", 0, scheme.toBin(-1.0));
-        assertEquals("A value above the upper bound should map to the last bin", 4, scheme.toBin(5.01));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-0.0001));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.0000));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.0001));
-        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.9999));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.0000));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.0001));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.9999));
-        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.0000));
-        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.0001));
-        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.9999));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.0000));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.0001));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.9999));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.0000));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.9999));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0000));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0001));
+        assertEquals(0, scheme.toBin(-1.0), "A value below the lower bound should map to the first bin");
+        assertEquals(4, scheme.toBin(5.01), "A value above the upper bound should map to the last bin");
+        assertEquals(0, scheme.toBin(-0.0001), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(0.0000), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(0.0001), "Check boundary of bucket 0");
+        assertEquals(0, scheme.toBin(0.9999), "Check boundary of bucket 0");
+        assertEquals(1, scheme.toBin(1.0000), "Check boundary of bucket 1");
+        assertEquals(1, scheme.toBin(1.0001), "Check boundary of bucket 1");
+        assertEquals(1, scheme.toBin(1.9999), "Check boundary of bucket 1");
+        assertEquals(2, scheme.toBin(2.0000), "Check boundary of bucket 2");
+        assertEquals(2, scheme.toBin(2.0001), "Check boundary of bucket 2");
+        assertEquals(2, scheme.toBin(2.9999), "Check boundary of bucket 2");
+        assertEquals(3, scheme.toBin(3.0000), "Check boundary of bucket 3");
+        assertEquals(3, scheme.toBin(3.0001), "Check boundary of bucket 3");
+        assertEquals(3, scheme.toBin(3.9999), "Check boundary of bucket 3");
+        assertEquals(4, scheme.toBin(4.0000), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(4.9999), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(5.0000), "Check boundary of bucket 4");
+        assertEquals(4, scheme.toBin(5.0001), "Check boundary of bucket 4");
         assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
         assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(5), 0.001d);
         assertEquals(0.0, scheme.fromBin(0), 0.001d);
@@ -137,12 +137,12 @@ public class HistogramTest {
         for (int bin = 0; bin < scheme.bins(); bin++) {
             double fromBin = scheme.fromBin(bin);
             int binAgain = scheme.toBin(fromBin + EPS);
-            assertEquals("unbinning and rebinning the bin " + bin
+            assertEquals(bin, binAgain, "unbinning and rebinning the bin " + bin
                          + " gave a different result ("
                          + fromBin
                          + " was placed in bin "
                          + binAgain
-                         + " )", bin, binAgain);
+                         + " )");
         }
     }
 

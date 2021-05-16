@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -37,11 +36,11 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,6 +67,8 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -149,28 +150,6 @@ public class GlobalStateManagerImplTest {
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
-    @After
-    public void after() throws IOException {
-        stateDirectory.unlockGlobalState();
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectory() {
-        stateManager.initialize();
-        assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
-    }
-
-    @Test(expected = LockException.class)
-    public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
-        try {
-            stateDir.lockGlobalState();
-            stateManager.initialize();
-        } finally {
-            stateDir.unlockGlobalState();
-        }
-    }
-
     @Test
     public void shouldReadCheckpointOffsets() throws IOException {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
@@ -178,6 +157,25 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        stateManager.initialize();
+        stateManager.updateChangelogOffsets(offsets);
+
+        // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
+        // and then swap to CHECKPOINT_FILE_NAME by replacing it
+        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
+        file.createNewFile();
+        file.setWritable(false);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
+            stateManager.checkpoint();
+            assertThat(appender.getMessages(), hasItem(containsString(
+                "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
+        }
     }
 
     @Test
@@ -210,10 +208,10 @@ public class GlobalStateManagerImplTest {
         assertTrue(checkpointFile.exists());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
         writeCorruptCheckpoint();
-        stateManager.initialize();
+        assertThrows(StreamsException.class, stateManager::initialize);
     }
 
     @Test
@@ -376,7 +374,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(store2.flushed);
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() {
         stateManager.initialize();
         // register the stores
@@ -387,8 +385,7 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         }, stateRestoreCallback);
-
-        stateManager.flush();
+        assertThrows(StreamsException.class, stateManager::flush);
     }
 
     @Test
@@ -405,7 +402,7 @@ public class GlobalStateManagerImplTest {
         assertFalse(store2.isOpen());
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
@@ -416,7 +413,7 @@ public class GlobalStateManagerImplTest {
             }
         }, stateRestoreCallback);
 
-        stateManager.close();
+        assertThrows(ProcessorStateException.class, stateManager::close);
     }
 
     @Test
@@ -427,19 +424,6 @@ public class GlobalStateManagerImplTest {
             fail("should have thrown due to null callback");
         } catch (final IllegalArgumentException e) {
             //pass
-        }
-    }
-
-    @Test
-    public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
-        stateManager.initialize();
-        stateManager.close();
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released in close
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
         }
     }
 
@@ -484,23 +468,6 @@ public class GlobalStateManagerImplTest {
         }
         assertFalse(store.isOpen());
         assertFalse(store2.isOpen());
-    }
-
-    @Test
-    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws IOException {
-        writeCorruptCheckpoint();
-        try {
-            stateManager.initialize();
-        } catch (final StreamsException e) {
-            // expected
-        }
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -581,31 +548,6 @@ public class GlobalStateManagerImplTest {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            new StateDirectory(streamsConfig, time, true) {
-                @Override
-                public boolean lockGlobalState() throws IOException {
-                    throw new IOException("KABOOM!");
-                }
-            },
-            stateRestoreListener,
-            streamsConfig
-        );
-
-        try {
-            stateManager.initialize();
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-            // pass
-        }
     }
 
     @Test

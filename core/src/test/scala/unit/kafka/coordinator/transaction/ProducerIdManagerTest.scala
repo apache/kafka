@@ -19,14 +19,14 @@ package kafka.coordinator.transaction
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock}
-import org.junit.{After, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 class ProducerIdManagerTest {
 
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     EasyMock.reset(zkClient)
   }
@@ -72,7 +72,7 @@ class ProducerIdManagerTest {
     assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.generateProducerId())
   }
 
-  @Test(expected = classOf[KafkaException])
+  @Test
   def testExceedProducerIdLimit(): Unit = {
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(() => {
       val json = ProducerIdManager.generateProducerIdBlockJson(
@@ -80,7 +80,7 @@ class ProducerIdManagerTest {
       (Some(json), 0)
     }).anyTimes()
     EasyMock.replay(zkClient)
-    new ProducerIdManager(0, zkClient)
+    assertThrows(classOf[KafkaException], () => new ProducerIdManager(0, zkClient))
   }
 }
 

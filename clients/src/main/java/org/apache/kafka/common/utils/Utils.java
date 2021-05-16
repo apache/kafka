@@ -17,11 +17,14 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.nio.file.StandardOpenOption;
+import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +75,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public final class Utils {
 
@@ -545,15 +551,15 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a list joined by the given separator
-     * @param list The list of items
+     * Create a string representation of a collection joined by the given separator
+     * @param collection The list of items
      * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String separator) {
-        Objects.requireNonNull(list);
+    public static <T> String join(Collection<T> collection, String separator) {
+        Objects.requireNonNull(collection);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
+        Iterator<T> iter = collection.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
@@ -750,22 +756,7 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
-
-            @Override
-            public V getValue() {
-                return v;
-            }
-
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**
@@ -819,18 +810,6 @@ public final class Utils {
      * @param rootFile The root file at which to begin deleting
      */
     public static void delete(final File rootFile) throws IOException {
-        delete(rootFile, Collections.emptyList());
-    }
-
-    /**
-     * Recursively delete the subfiles (if any exist) of the passed in root file that are not included
-     * in the list to keep
-     *
-     * @param rootFile The root file at which to begin deleting
-     * @param filesToKeep The subfiles to keep (note that if a subfile is to be kept, so are all its parent
-     *                    files in its pat)h; if empty we would also delete the root file
-     */
-    public static void delete(final File rootFile, final List<File> filesToKeep) throws IOException {
         if (rootFile == null)
             return;
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
@@ -844,9 +823,7 @@ public final class Utils {
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -857,15 +834,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                if (rootFile.toPath().equals(path)) {
-                    // only delete the parent directory if there's nothing to keep
-                    if (filesToKeep.isEmpty()) {
-                        Files.delete(path);
-                    }
-                } else if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
-
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -903,10 +872,23 @@ public final class Utils {
 
     /**
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
+     * This function also flushes the parent directory to guarantee crash consistency.
      *
      * @throws IOException if both atomic and non-atomic moves fail
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
+        atomicMoveWithFallback(source, target, true);
+    }
+
+    /**
+     * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
+     * This function allows callers to decide whether to flush the parent directory. This is needed
+     * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
+     * to repeatedly flush the same parent directory.
+     *
+     * @throws IOException if both atomic and non-atomic moves fail
+     */
+    public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
@@ -917,6 +899,28 @@ public final class Utils {
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
+            }
+        } finally {
+            if (needFlushParentDir) {
+                flushDir(target.toAbsolutePath().normalize().getParent());
+            }
+        }
+    }
+
+    /**
+     * Flushes dirty directories to guarantee crash consistency.
+     *
+     * @throws IOException if flushing the directory fails.
+     */
+    public static void flushDir(Path path) throws IOException {
+        if (path != null) {
+            FileChannel dir = null;
+            try {
+                dir = FileChannel.open(path, StandardOpenOption.READ);
+                dir.force(true);
+            } finally {
+                if (dir != null)
+                    dir.close();
             }
         }
     }
@@ -993,7 +997,7 @@ public final class Utils {
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
-     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
+     * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
@@ -1088,7 +1092,7 @@ public final class Utils {
      *
      * @throws IOException If an I/O error occurs
      */
-    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1107,6 +1111,29 @@ public final class Utils {
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
         while (sourceBuffer.hasRemaining())
             channel.write(sourceBuffer);
+    }
+
+    /**
+     * Trying to write data in source buffer to a {@link TransferableChannel}, we may need to call this method multiple
+     * times since this method doesn't ensure the data in the source buffer can be fully written to the destination channel.
+     *
+     * @param destChannel The destination channel
+     * @param position From which the source buffer will be written
+     * @param length The max size of bytes can be written
+     * @param sourceBuffer The source buffer
+     *
+     * @return The length of the actual written data
+     * @throws IOException If an I/O error occurs
+     */
+    public static long tryWriteTo(TransferableChannel destChannel,
+                                  int position,
+                                  int length,
+                                  ByteBuffer sourceBuffer) throws IOException {
+
+        ByteBuffer dup = sourceBuffer.duplicate();
+        dup.position(position);
+        dup.limit(position + length);
+        return destChannel.write(dup);
     }
 
     /**
@@ -1275,4 +1302,66 @@ public final class Utils {
         }
         return map;
     }
+
+    /**
+     * Convert timestamp to an epoch value
+     * @param timestamp the timestamp to be converted, the accepted formats are:
+     *                 (1) yyyy-MM-dd'T'HH:mm:ss.SSS, ex: 2020-11-10T16:51:38.198
+     *                 (2) yyyy-MM-dd'T'HH:mm:ss.SSSZ, ex: 2020-11-10T16:51:38.198+0800
+     *                 (3) yyyy-MM-dd'T'HH:mm:ss.SSSX, ex: 2020-11-10T16:51:38.198+08
+     *                 (4) yyyy-MM-dd'T'HH:mm:ss.SSSXX, ex: 2020-11-10T16:51:38.198+0800
+     *                 (5) yyyy-MM-dd'T'HH:mm:ss.SSSXXX, ex: 2020-11-10T16:51:38.198+08:00
+     *
+     * @return epoch value of a given timestamp (i.e. the number of milliseconds since January 1, 1970, 00:00:00 GMT)
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format or the format is not expected
+     */
+    public static long getDateTime(String timestamp) throws ParseException, IllegalArgumentException {
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Error parsing timestamp with null value");
+        }
+
+        final String[] timestampParts = timestamp.split("T");
+        if (timestampParts.length < 2) {
+            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
+        }
+
+        final String secondPart = timestampParts[1];
+        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
+            timestamp = timestamp + "Z";
+        }
+
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat();
+        // strictly parsing the date/time format
+        simpleDateFormat.setLenient(false);
+        try {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        } catch (final ParseException e) {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
+    }
+
+    /**
+     * Checks if a string is null, empty or whitespace only.
+     * @param str a string to be checked
+     * @return true if the string is null, empty or whitespace only; otherwise, return false.
+     */    
+    public static boolean isBlank(String str) {
+        return str == null || str.trim().isEmpty();
+    }
+
+    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
+        Map<K, V> res = new HashMap<>(keys.size());
+        keys.forEach(key -> res.put(key, valueSupplier.get()));
+        return res;
+    }
+
 }

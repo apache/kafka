@@ -54,6 +54,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {

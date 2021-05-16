@@ -20,8 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -42,24 +42,11 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class VoteResponse extends AbstractResponse {
-    public final VoteResponseData data;
+    private final VoteResponseData data;
 
     public VoteResponse(VoteResponseData data) {
+        super(ApiKeys.VOTE);
         this.data = data;
-    }
-
-    public VoteResponse(Struct struct, short version) {
-        this.data = new VoteResponseData(struct, version);
-    }
-
-    public VoteResponse(Struct struct) {
-        short latestVersion = (short) (VoteResponseData.SCHEMAS.length - 1);
-        this.data = new VoteResponseData(struct, latestVersion);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     public static VoteResponseData singletonResponse(Errors topLevelError,
@@ -85,21 +72,27 @@ public class VoteResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            errors.put(topLevelError, 1);
-        }
+        errors.put(Errors.forCode(data.errorCode()), 1);
 
         for (VoteResponseData.TopicData topicResponse : data.topics()) {
             for (VoteResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
-                errors.compute(Errors.forCode(partitionResponse.errorCode()),
-                    (error, count) -> count == null ? 1 : count + 1);
+                updateErrorCounts(errors, Errors.forCode(partitionResponse.errorCode()));
             }
         }
         return errors;
     }
 
+    @Override
+    public VoteResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
     public static VoteResponse parse(ByteBuffer buffer, short version) {
-        return new VoteResponse(ApiKeys.VOTE.responseSchema(version).read(buffer), version);
+        return new VoteResponse(new VoteResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

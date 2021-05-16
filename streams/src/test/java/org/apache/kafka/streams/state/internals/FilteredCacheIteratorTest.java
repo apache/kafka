@@ -33,6 +33,7 @@ import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class FilteredCacheIteratorTest {
@@ -125,9 +126,9 @@ public class FilteredCacheIteratorTest {
         assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowUnsupportedOperationExeceptionOnRemove() {
-        allIterator.remove();
+        assertThrows(UnsupportedOperationException.class, () -> allIterator.remove());
     }
 
 }

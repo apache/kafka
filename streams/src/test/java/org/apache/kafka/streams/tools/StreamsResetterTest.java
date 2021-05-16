@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -30,11 +31,9 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -43,7 +42,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class StreamsResetterTest {
 
@@ -78,6 +76,28 @@ public class StreamsResetterTest {
 
         final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
         assertEquals(3, records.count());
+    }
+
+    @Test
+    public void testResetOffsetToSpecificOffsetWhenAfterEndOffset() {
+        final long beginningOffset = 5L;
+        final long endOffset = 10L;
+        final MockConsumer<byte[], byte[]> emptyConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        emptyConsumer.assign(Collections.singletonList(topicPartition));
+
+        final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
+        beginningOffsetsMap.put(topicPartition, beginningOffset);
+        emptyConsumer.updateBeginningOffsets(beginningOffsetsMap);
+
+        final Map<TopicPartition, Long> endOffsetsMap = new HashMap<>();
+        endOffsetsMap.put(topicPartition, endOffset);
+        emptyConsumer.updateEndOffsets(endOffsetsMap);
+        // resetOffsetsTo only seeks the offset, but does not commit.
+        streamsResetter.resetOffsetsTo(emptyConsumer, inputTopicPartitions, endOffset + 2L);
+
+        final long position = emptyConsumer.position(topicPartition);
+
+        assertEquals(endOffset, position);
     }
 
     @Test
@@ -245,10 +265,33 @@ public class StreamsResetterTest {
 
     @Test
     public void shouldDetermineInternalTopicBasedOnTopicName1() {
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-response-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-named-subscription-registration-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-12323232-topic"));
-        assertTrue(streamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-12323232-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-named-subscription-response-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-named-subscription-registration-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-12323232-topic"));
+        assertTrue(StreamsResetter.matchesInternalTopicFormat("appId-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-12323232-topic"));
+    }
+
+    @Test
+    public void testResetToDatetimeWhenPartitionIsEmptyResetsToLatestOffset() {
+        final long beginningAndEndOffset = 5L; // Empty partition implies beginning offset == end offset
+        final MockConsumer<byte[], byte[]> emptyConsumer = new EmptyPartitionConsumer<>(OffsetResetStrategy.EARLIEST);
+        emptyConsumer.assign(Collections.singletonList(topicPartition));
+
+        final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
+        beginningOffsetsMap.put(topicPartition, beginningAndEndOffset);
+        emptyConsumer.updateBeginningOffsets(beginningOffsetsMap);
+
+        final Map<TopicPartition, Long> endOffsetsMap = new HashMap<>();
+        endOffsetsMap.put(topicPartition, beginningAndEndOffset);
+        emptyConsumer.updateEndOffsets(endOffsetsMap);
+
+        final long yesterdayTimestamp = Instant.now().minus(Duration.ofDays(1)).toEpochMilli();
+        // resetToDatetime only seeks the offset, but does not commit.
+        streamsResetter.resetToDatetime(emptyConsumer, inputTopicPartitions, yesterdayTimestamp);
+
+        final long position = emptyConsumer.position(topicPartition);
+
+        assertEquals(beginningAndEndOffset, position);
     }
 
     private Cluster createCluster(final int numNodes) {
@@ -261,38 +304,18 @@ public class StreamsResetterTest {
             Collections.<String>emptySet(), nodes.get(0));
     }
 
-    @Test
-    public void shouldAcceptValidDateFormats() throws ParseException {
-        //check valid formats
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
-    }
+    private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {
 
-    @Test
-    public void shouldThrowOnInvalidDateFormat() throws ParseException {
-        //check some invalid formats
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
+        public EmptyPartitionConsumer(final OffsetResetStrategy offsetResetStrategy) {
+            super(offsetResetStrategy);
         }
 
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
+        @Override
+        public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+            final Map<TopicPartition, OffsetAndTimestamp> topicPartitionToOffsetAndTimestamp = new HashMap<>();
+            timestampsToSearch.keySet().forEach(k -> topicPartitionToOffsetAndTimestamp.put(k, null));
+            return topicPartitionToOffsetAndTimestamp;
         }
     }
 
-    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
-        final Date checkpoint = new Date();
-        final StreamsResetter streamsResetter = new StreamsResetter();
-        final String formattedCheckpoint = format.format(checkpoint);
-        streamsResetter.getDateTime(formattedCheckpoint);
-    }
 }

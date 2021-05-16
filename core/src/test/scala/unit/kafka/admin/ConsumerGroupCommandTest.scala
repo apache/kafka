@@ -30,9 +30,8 @@ import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -52,13 +51,13 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     }
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, 1, 1)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     consumerGroupService.foreach(_.close())
     consumerGroupExecutors.foreach(_.shutdown())
@@ -84,7 +83,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
   }
 
-  @nowarn("cat=deprecation")
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
     val opts = new ConsumerGroupCommandOptions(args)
     val service = new ConsumerGroupService(opts, Map(AdminClientConfig.RETRIES_CONFIG -> Int.MaxValue.toString))

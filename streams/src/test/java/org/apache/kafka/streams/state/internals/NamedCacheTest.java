@@ -37,6 +37,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 
 public class NamedCacheTest {
 
@@ -180,10 +181,11 @@ public class NamedCacheTest {
         cache.evict();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry() {
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, false, 0, 0, 0, ""));
+        assertThrows(IllegalStateException.class, () -> cache.put(Bytes.wrap(new byte[]{0}),
+            new LRUCacheEntry(new byte[]{10}, null, false, 0, 0, 0, "")));
     }
 
     @Test

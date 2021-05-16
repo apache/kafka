@@ -106,7 +106,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Map<String, KafkaChannel> channels;
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
-    private final List<Send> completedSends;
+    private final List<NetworkSend> completedSends;
     private final LinkedHashMap<String, NetworkReceive> completedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
@@ -383,8 +383,8 @@ public class Selector implements Selectable, AutoCloseable {
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
-    public void send(Send send) {
-        String connectionId = send.destination();
+    public void send(NetworkSend send) {
+        String connectionId = send.destinationId();
         KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
         if (closingChannels.containsKey(connectionId)) {
             // ensure notification via `disconnected`, leave channel in the state in which closing was triggered
@@ -576,7 +576,7 @@ public class Selector implements Selectable, AutoCloseable {
                     attemptRead(channel);
                 }
 
-                if (channel.hasBytesBuffered()) {
+                if (channel.hasBytesBuffered() && !explicitlyMutedChannels.contains(channel)) {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
                     //(possibly because no memory). it may be the case that the underlying socket will
                     //not come up in the next poll() and so we need to remember this channel for the
@@ -642,7 +642,7 @@ public class Selector implements Selectable, AutoCloseable {
     void write(KafkaChannel channel) throws IOException {
         String nodeId = channel.id();
         long bytesSent = channel.write();
-        Send send = channel.maybeCompleteSend();
+        NetworkSend send = channel.maybeCompleteSend();
         // We may complete the send with bytesSent < 1 if `TransportLayer.hasPendingWrites` was true and `channel.write()`
         // caused the pending writes to be written to the socket channel buffer
         if (bytesSent > 0 || send != null) {
@@ -714,7 +714,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     @Override
-    public List<Send> completedSends() {
+    public List<NetworkSend> completedSends() {
         return this.completedSends;
     }
 
@@ -742,6 +742,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void mute(KafkaChannel channel) {
         channel.mute();
         explicitlyMutedChannels.add(channel);
+        keysWithBufferedRead.remove(channel.selectionKey());
     }
 
     @Override
@@ -754,6 +755,9 @@ public class Selector implements Selectable, AutoCloseable {
         // Remove the channel from explicitlyMutedChannels only if the channel has been actually unmuted.
         if (channel.maybeUnmute()) {
             explicitlyMutedChannels.remove(channel);
+            if (channel.hasBytesBuffered()) {
+                keysWithBufferedRead.add(channel.selectionKey());
+            }
         }
     }
 
@@ -821,7 +825,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Clears all the results from the previous poll. This is invoked by Selector at the start of
      * a poll() when all the results from the previous poll are expected to have been handled.
      * <p>
-     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedSends()} to
+     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedReceives()} to
      * clear `completedSends` and `completedReceives` as soon as they are processed to avoid
      * holding onto large request/response buffers from multiple connections longer than necessary.
      * Clients rely on Selector invoking {@link #clear()} at the start of each poll() since memory usage

@@ -21,8 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextAdapter;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.ArrayList;
@@ -41,15 +40,16 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         delegate = new MockApiProcessor<>();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context) {
         super.init(context);
-        delegate.init(ProcessorContextAdapter.adapt((InternalProcessorContext) context));
+        delegate.init((org.apache.kafka.streams.processor.api.ProcessorContext<Object, Object>) context);
     }
 
     @Override
     public void process(final K key, final V value) {
-        delegate.process(key, value);
+        delegate.process(new Record<>(key, value, context.timestamp(), context.headers()));
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {

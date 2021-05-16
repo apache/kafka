@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -30,9 +29,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 public class ElectLeadersRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ElectLeadersRequest> {
@@ -70,9 +68,14 @@ public class ElectLeadersRequest extends AbstractRequest {
                 .setTimeoutMs(timeoutMs);
 
             if (topicPartitions != null) {
-                for (Map.Entry<String, List<Integer>> tp : CollectionUtils.groupPartitionsByTopic(topicPartitions).entrySet()) {
-                    data.topicPartitions().add(new ElectLeadersRequestData.TopicPartitions().setTopic(tp.getKey()).setPartitionId(tp.getValue()));
-                }
+                topicPartitions.forEach(tp -> {
+                    ElectLeadersRequestData.TopicPartitions tps = data.topicPartitions().find(tp.topic());
+                    if (tps == null) {
+                        tps = new ElectLeadersRequestData.TopicPartitions().setTopic(tp.topic());
+                        data.topicPartitions().add(tps);
+                    }
+                    tps.partitions().add(tp.partition());
+                });
             } else {
                 data.setTopicPartitions(null);
             }
@@ -90,11 +93,7 @@ public class ElectLeadersRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public ElectLeadersRequest(Struct struct, short version) {
-        super(ApiKeys.ELECT_LEADERS, version);
-        this.data = new ElectLeadersRequestData(struct, version);
-    }
-
+    @Override
     public ElectLeadersRequestData data() {
         return data;
     }
@@ -108,7 +107,7 @@ public class ElectLeadersRequest extends AbstractRequest {
             ReplicaElectionResult electionResult = new ReplicaElectionResult();
 
             electionResult.setTopic(topic.topic());
-            for (Integer partitionId : topic.partitionId()) {
+            for (Integer partitionId : topic.partitions()) {
                 PartitionResult partitionResult = new PartitionResult();
                 partitionResult.setPartitionId(partitionId);
                 partitionResult.setErrorCode(apiError.error().code());
@@ -124,11 +123,6 @@ public class ElectLeadersRequest extends AbstractRequest {
     }
 
     public static ElectLeadersRequest parse(ByteBuffer buffer, short version) {
-        return new ElectLeadersRequest(ApiKeys.ELECT_LEADERS.parseRequest(version, buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+        return new ElectLeadersRequest(new ElectLeadersRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

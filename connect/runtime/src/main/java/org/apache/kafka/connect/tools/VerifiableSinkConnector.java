@@ -50,9 +50,9 @@ public class VerifiableSinkConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         ArrayList<Map<String, String>> configs = new ArrayList<>();
-        for (Integer i = 0; i < maxTasks; i++) {
+        for (int i = 0; i < maxTasks; i++) {
             Map<String, String> props = new HashMap<>(config);
-            props.put(VerifiableSinkTask.ID_CONFIG, i.toString());
+            props.put(VerifiableSinkTask.ID_CONFIG, String.valueOf(i));
             configs.add(props);
         }
         return configs;

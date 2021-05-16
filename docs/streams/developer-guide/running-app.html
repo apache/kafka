@@ -51,10 +51,9 @@
           <div class="section" id="starting-a-kafka-streams-application">
               <span id="streams-developer-guide-execution-starting"></span><h2><a class="toc-backref" href="#id3">Starting a Kafka Streams application</a><a class="headerlink" href="#starting-a-kafka-streams-application" title="Permalink to this headline"></a></h2>
               <p>You can package your Java application as a fat JAR file and then start the application like this:</p>
-              <div class="highlight-bash"><div class="highlight"><pre><span></span><span class="c1"># Start the application in class `com.example.MyStreamsApp`</span>
+              <div class="highlight-bash"><div class="highlight"><pre><code><span></span><span class="c1"># Start the application in class `com.example.MyStreamsApp`</span>
 <span class="c1"># from the fat JAR named `path-to-app-fatjar.jar`.</span>
-$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
-</pre></div>
+$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre></div>
               </div>
               <p>When you start your application you are launching a Kafka Streams instance of your application. You can run multiple
                   instances of your application. A common scenario is that there are multiple instances of your application running in
@@ -116,7 +115,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                       <a class="reference internal" href="config-streams.html#acceptable-recovery-lag"><span class="std std-ref"><code>acceptable.recovery.lag</code></span></a>, if one exists. This means that
                       most of the time, a task migration will <b>not</b> result in downtime for that task. It will remain active on the instance that's already caught up, while the instance that it's being
                       migrated to works on restoring the state. Streams will <a class="reference internal" href="config-streams.html#probing-rebalance-interval-ms"><span class="std std-ref">regularly probe</span></a> for warmup tasks that have finished restoring and transition them to active tasks when ready.
-                   </p>
+                  </p>
                   <p>
                       Note, the one exception to this task availability is if none of the instances have a caught up version of that task. In that case, we have no choice but to assign the active
                       task to an instance that is not caught up and will have to block further processing on restoration of the task's state from the changelog. If high availability is important
@@ -151,10 +150,10 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
 
                 <!--#include virtual="../../../includes/_header.htm" -->
                 <!--#include virtual="../../../includes/_top.htm" -->
-                    <div class="content documentation documentation--current">
+                    <div class="content documentation ">
                     <!--#include virtual="../../../includes/_nav.htm" -->
                     <div class="right">
-                    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+                    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
                     <ul class="breadcrumbs">
                     <li><a href="/documentation">Documentation</a></li>
                     <li><a href="/documentation/streams">Kafka Streams</a></li>

@@ -143,7 +143,6 @@ public class WorkerConnector implements Runnable {
                 if (pendingTargetStateChange.get() != null || stopping) {
                     // An update occurred before we entered the synchronized block; no big deal,
                     // just start the loop again until we've handled everything
-                    continue;
                 } else {
                     try {
                         wait();

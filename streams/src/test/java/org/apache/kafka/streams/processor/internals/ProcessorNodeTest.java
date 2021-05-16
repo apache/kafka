@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Properties;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -28,6 +27,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -36,6 +36,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -48,18 +49,17 @@ import static org.junit.Assert.assertTrue;
 public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
-        node.close();
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object> {
@@ -161,9 +161,6 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastException() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -173,7 +170,7 @@ public class ProcessorNodeTest {
             });
         final Topology topology = builder.build();
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology);
         final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
         final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
@@ -202,7 +199,10 @@ public class ProcessorNodeTest {
         final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
         final ProcessorNode<Object, Object, ?, ?> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
-        final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
+        final StreamsException se = assertThrows(
+            StreamsException.class,
+            () -> node.process(new Record<>("aKey", "aValue", 0))
+        );
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));
         assertThat(se.getMessage(), containsString("input types"));

@@ -36,30 +36,27 @@
         It is highly recommended to read the <a href="/{{version}}/documentation/streams/quickstart">quickstart</a> first on how to run a Streams application written in Kafka Streams if you have not done so.
     </p>
 
-    <h4><a id="tutorial_maven_setup" href="#tutorial_maven_setup">Setting up a Maven Project</a></h4>
+    <h4 class="anchor-heading"><a id="tutorial_maven_setup" class="anchor-link"></a><a href="#tutorial_maven_setup">Setting up a Maven Project</a></h4>
 
     <p>
         We are going to use a Kafka Streams Maven Archetype for creating a Streams project structure with the following commands:
     </p>
 
-    <pre class="brush: bash;">
-        mvn archetype:generate \
+    <pre class="line-numbers"><code class="language-bash">        mvn archetype:generate \
             -DarchetypeGroupId=org.apache.kafka \
             -DarchetypeArtifactId=streams-quickstart-java \
             -DarchetypeVersion={{fullDotVersion}} \
             -DgroupId=streams.examples \
             -DartifactId=streams.examples \
             -Dversion=0.1 \
-            -Dpackage=myapps
-    </pre>
+            -Dpackage=myapps</code></pre>
 
     <p>
         You can use a different value for <code>groupId</code>, <code>artifactId</code> and <code>package</code> parameters if you like.
         Assuming the above parameter values are used, this command will create a project structure that looks like this:
     </p>
 
-    <pre class="brush: bash;">
-        &gt; tree streams.examples
+    <pre class="line-numbers"><code class="language-bash">        &gt; tree streams.examples
         streams-quickstart
         |-- pom.xml
         |-- src
@@ -70,8 +67,7 @@
                 |       |-- Pipe.java
                 |       |-- WordCount.java
                 |-- resources
-                    |-- log4j.properties
-    </pre>
+                    |-- log4j.properties</code></pre>
 
     <p>
         The <code>pom.xml</code> file included in the project already has the Streams dependency defined.
@@ -83,26 +79,22 @@
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
 
-    <pre class="brush: bash;">
-        &gt; cd streams-quickstart
-        &gt; rm src/main/java/myapps/*.java
-    </pre>
+    <pre class="line-numbers"><code class="language-bash">        &gt; cd streams-quickstart
+        &gt; rm src/main/java/myapps/*.java</code></pre>
 
     <h4><a id="tutorial_code_pipe" href="#tutorial_code_pipe">Writing a first Streams application: Pipe</a></h4>
 
     It's coding time now! Feel free to open your favorite IDE and import this Maven project, or simply open a text editor and create a java file under <code>src/main/java/myapps</code>.
     Let's name it <code>Pipe.java</code>:
 
-    <pre class="brush: java;">
-        package myapps;
+    <pre class="line-numbers"><code class="language-java">        package myapps;
 
         public class Pipe {
 
             public static void main(String[] args) throws Exception {
 
             }
-        }
-    </pre>
+        }</code></pre>
 
     <p>
         We are going to fill in the <code>main</code> function to write this pipe program. Note that we will not list the import statements as we go since IDEs can usually add them automatically.
@@ -115,20 +107,16 @@
         and <code>StreamsConfig.APPLICATION_ID_CONFIG</code>, which gives the unique identifier of your Streams application to distinguish itself with other applications talking to the same Kafka cluster:
     </p>
 
-    <pre class="brush: java;">
-        Properties props = new Properties();
+    <pre class="line-numbers"><code class="language-java">        Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pipe");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");    // assuming that the Kafka broker this application is talking to runs on local machine with port 9092
-    </pre>
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");    // assuming that the Kafka broker this application is talking to runs on local machine with port 9092</code></pre>
 
     <p>
         In addition, you can customize other configurations in the same map, for example, default serialization and deserialization libraries for the record key-value pairs:
     </p>
 
-    <pre class="brush: java;">
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());</code></pre>
 
     <p>
         For a full list of configurations of Kafka Streams please refer to this <a href="/{{version}}/documentation/#streamsconfigs">table</a>.
@@ -140,17 +128,13 @@
         We can use a topology builder to construct such a topology,
     </p>
 
-    <pre class="brush: java;">
-        final StreamsBuilder builder = new StreamsBuilder();
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        final StreamsBuilder builder = new StreamsBuilder();</code></pre>
 
     <p>
         And then create a source stream from a Kafka topic named <code>streams-plaintext-input</code> using this topology builder:
     </p>
 
-    <pre class="brush: java;">
-        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");</code></pre>
 
     <p>
         Now we get a <code>KStream</code> that is continuously generating records from its source Kafka topic <code>streams-plaintext-input</code>.
@@ -158,48 +142,38 @@
         The simplest thing we can do with this stream is to write it into another Kafka topic, say it's named <code>streams-pipe-output</code>:
     </p>
 
-    <pre class="brush: java;">
-        source.to("streams-pipe-output");
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        source.to("streams-pipe-output");</code></pre>
 
     <p>
         Note that we can also concatenate the above two lines into a single line as:
     </p>
 
-    <pre class="brush: java;">
-        builder.stream("streams-plaintext-input").to("streams-pipe-output");
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        builder.stream("streams-plaintext-input").to("streams-pipe-output");</code></pre>
 
     <p>
         We can inspect what kind of <code>topology</code> is created from this builder by doing the following:
     </p>
 
-    <pre class="brush: java;">
-        final Topology topology = builder.build();
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        final Topology topology = builder.build();</code></pre>
 
     <p>
         And print its description to standard output as:
     </p>
 
-    <pre class="brush: java;">
-        System.out.println(topology.describe());
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        System.out.println(topology.describe());</code></pre>
 
     <p>
         If we just stop here, compile and run the program, it will output the following information:
     </p>
 
-    <pre class="brush: bash;">
-        &gt; mvn clean package
+    <pre class="line-numbers"><code class="language-bash">        &gt; mvn clean package
         &gt; mvn exec:java -Dexec.mainClass=myapps.Pipe
         Sub-topologies:
           Sub-topology: 0
             Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-SINK-0000000001
             Sink: KSTREAM-SINK-0000000001(topic: streams-pipe-output) <-- KSTREAM-SOURCE-0000000000
         Global Stores:
-          none
-    </pre>
+          none</code></pre>
 
     <p>
         As shown above, it illustrates that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
@@ -215,9 +189,7 @@
         we can now construct the Streams client with the two components we have just constructed above: the configuration map specified in a <code>java.util.Properties</code> instance and the <code>Topology</code> object.
     </p>
 
-    <pre class="brush: java;">
-        final KafkaStreams streams = new KafkaStreams(topology, props);
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        final KafkaStreams streams = new KafkaStreams(topology, props);</code></pre>
 
     <p>
         By calling its <code>start()</code> function we can trigger the execution of this client.
@@ -225,8 +197,7 @@
         We can, for example, add a shutdown hook with a countdown latch to capture a user interrupt and close the client upon terminating this program:
     </p>
 
-    <pre class="brush: java;">
-        final CountDownLatch latch = new CountDownLatch(1);
+    <pre class="line-numbers"><code class="language-java">        final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
         Runtime.getRuntime().addShutdownHook(new Thread("streams-shutdown-hook") {
@@ -243,15 +214,13 @@
         } catch (Throwable e) {
             System.exit(1);
         }
-        System.exit(0);
-    </pre>
+        System.exit(0);</code></pre>
 
     <p>
         The complete code so far looks like this:
     </p>
 
-    <pre class="brush: java;">
-        package myapps;
+    <pre class="line-numbers"><code class="language-java">        package myapps;
 
         import org.apache.kafka.common.serialization.Serdes;
         import org.apache.kafka.streams.KafkaStreams;
@@ -297,8 +266,7 @@
                 }
                 System.exit(0);
             }
-        }
-    </pre>
+        }</code></pre>
 
     <p>
         If you already have the Kafka broker up and running at <code>localhost:9092</code>,
@@ -306,10 +274,8 @@
         you can run this code in your IDE or on the command line, using Maven:
     </p>
 
-    <pre class="brush: brush;">
-        &gt; mvn clean package
-        &gt; mvn exec:java -Dexec.mainClass=myapps.Pipe
-    </pre>
+    <pre class="line-numbers"><code class="language-brush">        &gt; mvn clean package
+        &gt; mvn exec:java -Dexec.mainClass=myapps.Pipe</code></pre>
 
     <p>
         For detailed instructions on how to run a Streams application and observe its computing results,
@@ -325,39 +291,33 @@
         We can first create another program by first copy the existing <code>Pipe.java</code> class:
     </p>
 
-    <pre class="brush: brush;">
-        &gt; cp src/main/java/myapps/Pipe.java src/main/java/myapps/LineSplit.java
-    </pre>
+    <pre class="line-numbers"><code class="language-brush">        &gt; cp src/main/java/myapps/Pipe.java src/main/java/myapps/LineSplit.java</code></pre>
 
     <p>
         And change its class name as well as the application id config to distinguish with the original program:
     </p>
 
-    <pre class="brush: java;">
-        public class LineSplit {
+    <pre class="line-numbers"><code class="language-java">        public class LineSplit {
 
             public static void main(String[] args) throws Exception {
                 Properties props = new Properties();
                 props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-linesplit");
                 // ...
             }
-        }
-    </pre>
+        }</code></pre>
 
     <p>
         Since each of the source stream's record is a <code>String</code> typed key-value pair,
         let's treat the value string as a text line and split it into words with a <code>FlatMapValues</code> operator:
     </p>
 
-    <pre class="brush: java;">
-        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
+    <pre class="line-numbers"><code class="language-java">        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
         KStream&lt;String, String&gt; words = source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
                         return Arrays.asList(value.split("\\W+"));
                     }
-                });
-    </pre>
+                });</code></pre>
 
     <p>
         The operator will take the <code>source</code> stream as its input, and generate a new stream named <code>words</code>
@@ -367,28 +327,23 @@
         Note if you are using JDK 8 you can use lambda expression and simplify the above code as:
     </p>
 
-    <pre class="brush: java;">
-        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
-        KStream&lt;String, String&gt; words = source.flatMapValues(value -> Arrays.asList(value.split("\\W+")));
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
+        KStream&lt;String, String&gt; words = source.flatMapValues(value -> Arrays.asList(value.split("\\W+")));</code></pre>
 
     <p>
         And finally we can write the word stream back into another Kafka topic, say <code>streams-linesplit-output</code>.
         Again, these two steps can be concatenated as the following (assuming lambda expression is used):
     </p>
 
-    <pre class="brush: java;">
-        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
+    <pre class="line-numbers"><code class="language-java">        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
         source.flatMapValues(value -> Arrays.asList(value.split("\\W+")))
-              .to("streams-linesplit-output");
-    </pre>
+              .to("streams-linesplit-output");</code></pre>
 
     <p>
         If we now describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
     </p>
 
-    <pre class="brush: bash;">
-        &gt; mvn clean package
+    <pre class="line-numbers"><code class="language-bash">        &gt; mvn clean package
         &gt; mvn exec:java -Dexec.mainClass=myapps.LineSplit
         Sub-topologies:
           Sub-topology: 0
@@ -396,8 +351,7 @@
             Processor: KSTREAM-FLATMAPVALUES-0000000001(stores: []) --> KSTREAM-SINK-0000000002 <-- KSTREAM-SOURCE-0000000000
             Sink: KSTREAM-SINK-0000000002(topic: streams-linesplit-output) <-- KSTREAM-FLATMAPVALUES-0000000001
           Global Stores:
-            none
-    </pre>
+            none</code></pre>
 
     <p>
         As we can see above, a new processor node <code>KSTREAM-FLATMAPVALUES-0000000001</code> is injected into the topology between the original source and sink nodes.
@@ -411,8 +365,7 @@
         The complete code looks like this (assuming lambda expression is used):
     </p>
 
-    <pre class="brush: java;">
-        package myapps;
+    <pre class="line-numbers"><code class="language-java">        package myapps;
 
         import org.apache.kafka.common.serialization.Serdes;
         import org.apache.kafka.streams.KafkaStreams;
@@ -446,8 +399,7 @@
 
                 // ... same as Pipe.java above
             }
-        }
-    </pre>
+        }</code></pre>
 
     <h4><a id="tutorial_code_wordcount" href="#tutorial_code_wordcount">Writing a third Streams application: Wordcount</a></h4>
 
@@ -456,37 +408,32 @@
         Following similar steps let's create another program based on the <code>LineSplit.java</code> class:
     </p>
 
-    <pre class="brush: java;">
-        public class WordCount {
+    <pre class="line-numbers"><code class="language-java">        public class WordCount {
 
             public static void main(String[] args) throws Exception {
                 Properties props = new Properties();
                 props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
                 // ...
             }
-        }
-    </pre>
+        }</code></pre>
 
     <p>
         In order to count the words we can first modify the <code>flatMapValues</code> operator to treat all of them as lower case (assuming lambda expression is used):
     </p>
 
-    <pre class="brush: java;">
-        source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+    <pre class="line-numbers"><code class="language-java">        source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
-                });
-    </pre>
+                });</code></pre>
 
     <p>
         In order to do the counting aggregation we have to first specify that we want to key the stream on the value string, i.e. the lower cased word, with a <code>groupBy</code> operator.
         This operator generate a new grouped stream, which can then be aggregated by a <code>count</code> operator, which generates a running count on each of the grouped keys:
     </p>
 
-    <pre class="brush: java;">
-        KTable&lt;String, Long&gt; counts =
+    <pre class="line-numbers"><code class="language-java">        KTable&lt;String, Long&gt; counts =
         source.flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                     @Override
                     public Iterable&lt;String&gt; apply(String value) {
@@ -501,8 +448,7 @@
                 })
               // Materialize the result into a KeyValueStore named "counts-store".
               // The Materialized store is always of type &lt;Bytes, byte[]&gt; as this is the format of the inner most store.
-              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; as("counts-store"));
-    </pre>
+              .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt; as("counts-store"));</code></pre>
 
     <p>
         Note that the <code>count</code> operator has a <code>Materialized</code> parameter that specifies that the
@@ -517,9 +463,7 @@
         We need to provide overridden serialization methods for <code>Long</code> types, otherwise a runtime exception will be thrown:
     </p>
 
-    <pre class="brush: java;">
-        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
-    </pre>
+    <pre class="line-numbers"><code class="language-java">        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
 
     <p>
         Note that in order to read the changelog stream from topic <code>streams-wordcount-output</code>,
@@ -528,21 +472,18 @@
         Assuming lambda expression from JDK 8 can be used, the above code can be simplified as:
     </p>
 
-    <pre class="brush: java;">
-        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
+    <pre class="line-numbers"><code class="language-java">        KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
         source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
               .groupBy((key, value) -> value)
               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
               .toStream()
-              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
-    </pre>
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
 
     <p>
         If we again describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
     </p>
 
-    <pre class="brush: bash;">
-        &gt; mvn clean package
+    <pre class="line-numbers"><code class="language-bash">        &gt; mvn clean package
         &gt; mvn exec:java -Dexec.mainClass=myapps.WordCount
         Sub-topologies:
           Sub-topology: 0
@@ -557,8 +498,7 @@
             Processor: KTABLE-TOSTREAM-0000000007(stores: []) --> KSTREAM-SINK-0000000008 <-- KSTREAM-AGGREGATE-0000000003
             Sink: KSTREAM-SINK-0000000008(topic: streams-wordcount-output) <-- KTABLE-TOSTREAM-0000000007
         Global Stores:
-          none
-    </pre>
+          none</code></pre>
 
     <p>
         As we can see above, the topology now contains two disconnected sub-topologies.
@@ -577,15 +517,18 @@
         The complete code looks like this (assuming lambda expression is used):
     </p>
 
-    <pre class="brush: java;">
-        package myapps;
+    <pre class="line-numbers"><code class="language-java">        package myapps;
 
         import org.apache.kafka.common.serialization.Serdes;
+        import org.apache.kafka.common.utils.Bytes;
         import org.apache.kafka.streams.KafkaStreams;
         import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
         import org.apache.kafka.streams.Topology;
         import org.apache.kafka.streams.kstream.KStream;
+        import org.apache.kafka.streams.kstream.Materialized;
+        import org.apache.kafka.streams.kstream.Produced;
+        import org.apache.kafka.streams.state.KeyValueStore;
 
         import java.util.Arrays;
         import java.util.Locale;
@@ -616,8 +559,7 @@
 
                 // ... same as Pipe.java above
             }
-        }
-    </pre>
+        }</code></pre>
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__prev">Previous</a>
@@ -629,10 +571,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

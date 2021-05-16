@@ -16,6 +16,7 @@
 {
   "apiKey": 22,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "InitProducerIdRequest",
   // Version 1 is the same as version 0.
   //
@@ -31,7 +32,7 @@
       "about": "The transactional id, or null if the producer is not transactional." },
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "The time in ms to wait before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." },
-    { "name": "ProducerId", "type": "int64", "versions": "3+", "default": "-1",
+    { "name": "ProducerId", "type": "int64", "versions": "3+", "default": "-1", "entityType": "producerId",
       "about": "The producer id. This is used to disambiguate requests if a transactional id is reused following its expiration." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "3+", "default": "-1",
       "about": "The producer's current epoch. This will be checked against the producer epoch on the broker, and the request will return an error if they do not match." }

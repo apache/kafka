@@ -189,6 +189,17 @@ public class ConnectorsResource {
     }
 
     @GET
+    @Path("/{connector}/tasks-config")
+    public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
+            final @PathParam("connector") String connector,
+            final @Context HttpHeaders headers,
+            final @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
+        herder.tasksConfig(connector, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward);
+    }
+
+    @GET
     @Path("/{connector}/status")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
         return herder.connectorStatus(connector);
@@ -390,12 +401,12 @@ public class ConnectorsResource {
 
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
                                            TypeReference<T> resultType, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<T>(), forward);
+        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
     }
 
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
                                            Object body, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<T>(), forward);
+        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
     }
 
     private interface Translator<T, U> {

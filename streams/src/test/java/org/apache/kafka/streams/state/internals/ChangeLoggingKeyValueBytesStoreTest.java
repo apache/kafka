@@ -18,18 +18,28 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -48,19 +58,49 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = mockContext();
+        context.setTime(0);
+        store.init((StateStoreContext) context, store);
+    }
+
+    private InternalMockProcessorContext mockContext() {
+        return new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        context.setTime(0);
-        store.init(context, store);
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
     }
 
     @After
     public void after() {
         store.close();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((ProcessorContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((ProcessorContext) context, outer);
+        EasyMock.verify(innerMock);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((StateStoreContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((StateStoreContext) context, outer);
+        EasyMock.verify(innerMock);
     }
 
     @Test
@@ -159,6 +199,26 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldReturnValueOnGetWhenExists() {
         store.put(hello, world);
         assertThat(store.get(hello), equalTo(world));
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        store.put(hi, there);
+        store.put(Bytes.increment(hi), world);
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan(hi.toString(), new StringSerializer());
+        final List<Bytes> keys = new ArrayList<>();
+        final List<Bytes> values = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            keys.add(next.key);
+            values.add(Bytes.wrap(next.value));
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(1));
+        assertThat(keys, is(Collections.singletonList(hi)));
+        assertThat(values, is(Collections.singletonList(Bytes.wrap(there))));
     }
 
     @Test

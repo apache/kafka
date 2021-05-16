@@ -31,8 +31,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
@@ -136,7 +139,8 @@ public class MeteredWindowStoreTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
+            Time.SYSTEM
         );
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
@@ -147,6 +151,45 @@ public class MeteredWindowStoreTest {
             mkEntry("task-id", context.taskId().toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
+        final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
+            inner,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new SerdeThatDoesntHandleNull()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        expectLastCall();
+        replay(inner);
+        outer.init((ProcessorContext) context, outer);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
+        final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
+            inner,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new SerdeThatDoesntHandleNull()
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        expectLastCall();
+        replay(inner);
+        outer.init((StateStoreContext) context, outer);
+        verify(inner);
     }
 
     @Test
@@ -184,7 +227,7 @@ public class MeteredWindowStoreTest {
             keySerde,
             valueSerde
         );
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE, TIMESTAMP);
@@ -195,7 +238,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void testMetrics() {
         replay(innerStoreMock);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
         reporter.contextChange(metricsContext);
@@ -225,10 +268,10 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
-        innerStoreMock.init(context, store);
+        innerStoreMock.init((StateStoreContext) context, store);
         expectLastCall();
         replay(innerStoreMock);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(1.0, getMetricByNameFilterByTags(
@@ -247,15 +290,14 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
         expectLastCall();
         replay(innerStoreMock);
 
-        store.init(context, store);
-        store.put("a", "a");
+        store.init((StateStoreContext) context, store);
+        store.put("a", "a", context.timestamp());
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertEquals(1.0, getMetricByNameFilterByTags(
@@ -279,7 +321,7 @@ public class MeteredWindowStoreTest {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
@@ -304,7 +346,7 @@ public class MeteredWindowStoreTest {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
@@ -330,7 +372,7 @@ public class MeteredWindowStoreTest {
         expectLastCall();
         replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         store.flush();
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
@@ -355,7 +397,7 @@ public class MeteredWindowStoreTest {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
         replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         assertNull(store.fetch("a", 0));
     }
 
@@ -393,7 +435,7 @@ public class MeteredWindowStoreTest {
         innerStoreMock.close();
         expectLastCall();
         replay(innerStoreMock);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.close();
         verify(innerStoreMock);
@@ -404,7 +446,7 @@ public class MeteredWindowStoreTest {
         innerStoreMock.close();
         expectLastCall();
         replay(innerStoreMock);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         assertThat(storeMetrics(), not(empty()));
         store.close();
@@ -417,13 +459,49 @@ public class MeteredWindowStoreTest {
         innerStoreMock.close();
         expectLastCall().andThrow(new RuntimeException("Oops!"));
         replay(innerStoreMock);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         // There's always a "count" metric registered
         assertThat(storeMetrics(), not(empty()));
         assertThrows(RuntimeException.class, store::close);
         assertThat(storeMetrics(), empty());
         verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.put(null, "a", 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch(null, "to", 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.fetch("from", null, 0L, 1L));
+    }
+
+
+    @Test
+    public void shouldThrowNullPointerOnbackwardFetchRangeIfFromIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to", 0L, 1L));
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnbackwardFetchRangeIfToIsNull() {
+        assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null, 0L, 1L));
     }
 
     private List<MetricName> storeMetrics() {
