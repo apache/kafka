@@ -950,6 +950,7 @@ public final class QuorumController implements Controller {
         this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
 
+        snapshotRegistry.createSnapshot(lastCommittedOffset);
         this.raftClient.register(metaLogListener);
     }
 
