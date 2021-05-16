@@ -82,13 +82,11 @@ class ACLs:
             }
             kafka.run_cli_tool(node, cmd)
 
-    def remove_cluster_acl(self, kafka, principal, force_use_zk_connection=False, additional_cluster_operations_to_remove = [], security_protocol=None):
+    def remove_cluster_acl(self, kafka, principal, additional_cluster_operations_to_remove = [], security_protocol=None):
         """
         :param kafka: Kafka cluster upon which ClusterAction ACL is deleted
         :param principal: principal for which ClusterAction ACL is deleted
         :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
-               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
         :param additional_cluster_operations_to_remove may be set to ['Alter', 'Create'] if the cluster is secured since these are required
                to create SCRAM credentials and topics, respectively
         :param security_protocol set it to explicitly determine whether we use client or broker credentials, otherwise
@@ -100,7 +98,7 @@ class ACLs:
 
         for operation in ['ClusterAction'] + additional_cluster_operations_to_remove:
             cmd = "%(cmd_prefix)s --remove --force --cluster --operation=%(operation)s --allow-principal=%(principal)s" % {
-                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, force_use_zk_connection, security_protocol),
+                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, False, security_protocol),
                 'operation': operation,
                 'principal': principal
             }

@@ -94,5 +94,5 @@ class ZooKeeperAuthorizerTest(Test):
 
         # remove ACLs
         self.logger.info("Removing ACLs with broker credentials so ensure this operation works")
-        self.acls.remove_cluster_acl(self.kafka, client_principal, force_use_zk_connection=False,
-                                  additional_cluster_operations_to_remove=['AlterConfigs'], security_protocol=broker_security_protocol)
+        self.acls.remove_cluster_acl(self.kafka, client_principal, additional_cluster_operations_to_remove=['AlterConfigs'],
+                                     security_protocol=broker_security_protocol)
