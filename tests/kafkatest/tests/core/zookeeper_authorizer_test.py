@@ -30,6 +30,9 @@ class ZooKeeperAuthorizerTest(Test):
     Adds ACLs with super-user broker credentials.
     Alters client quotas, making sure it now works again.
     Removes ACLs.
+
+    Note that we intend to have separate test explicitly for the
+    KRaft-based replacement for the ZooKeeper-based authorizer.
     """
 
     def __init__(self, test_context):
