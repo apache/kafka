@@ -95,7 +95,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.interbroker_sasl_mechanism = new_sasl_mechanism
         self.bounce()
 
-        # Bounce again with ACLs for new mechanism. Use old SimpleAclAuthorizer here to ensure that is also tested.
+        # Bounce again with ACLs for new mechanism.
         self.kafka.client_sasl_mechanism = new_sasl_mechanism # Removes old SASL mechanism completely
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
