@@ -124,8 +124,7 @@ public final class QuorumController implements Controller {
         private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
-        private ReplicaPlacementPolicy replicaPlacementPolicy =
-            new SimpleReplicaPlacementPolicy(new Random());
+        private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private Function<Long, SnapshotWriter> snapshotWriterBuilder;
         private SnapshotReader snapshotReader;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
@@ -175,8 +174,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setReplicaPlacementPolicy(ReplicaPlacementPolicy replicaPlacementPolicy) {
-            this.replicaPlacementPolicy = replicaPlacementPolicy;
+        public Builder setReplicaPlacer(ReplicaPlacer replicaPlacer) {
+            this.replicaPlacer = replicaPlacer;
             return this;
         }
 
@@ -226,7 +225,7 @@ public final class QuorumController implements Controller {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     logManager, supportedFeatures, defaultReplicationFactor,
-                    defaultNumPartitions, replicaPlacementPolicy, snapshotWriterBuilder,
+                    defaultNumPartitions, replicaPlacer, snapshotWriterBuilder,
                     snapshotReader, sessionTimeoutNs, controllerMetrics);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -913,7 +912,7 @@ public final class QuorumController implements Controller {
                              Map<String, VersionRange> supportedFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
-                             ReplicaPlacementPolicy replicaPlacementPolicy,
+                             ReplicaPlacer replicaPlacer,
                              Function<Long, SnapshotWriter> snapshotWriterBuilder,
                              SnapshotReader snapshotReader,
                              long sessionTimeoutNs,
@@ -930,7 +929,7 @@ public final class QuorumController implements Controller {
             snapshotRegistry, configDefs);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacementPolicy);
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,

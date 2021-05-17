@@ -529,7 +529,7 @@ public class ReplicationControlManager {
             } catch (InvalidReplicationFactorException e) {
                 return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                     "Unable to replicate the partition " + replicationFactor +
-                        " times: " + e.getMessage());
+                        " time(s): " + e.getMessage());
             }
         }
         Uuid topicId = Uuid.randomUuid();
