@@ -26,15 +26,13 @@ import org.apache.kafka.connect.connector.RateLimiter;
  */
 public abstract class CountingRateLimiter<R extends ConnectRecord> implements RateLimiter<R> {
 
-    private double targetRate = Double.MAX_VALUE;
+    private double targetRate = -1;
     private Time time;
     private long prevTime;
     private int accumulatedCount = 0;
-    private boolean skipThrottling = true;
 
     protected void setTargetRate(double targetRate) {
         this.targetRate = targetRate;
-        skipThrottling = targetRate == Double.MAX_VALUE;
     }
 
     protected void count(int n) {
@@ -49,8 +47,7 @@ public abstract class CountingRateLimiter<R extends ConnectRecord> implements Ra
 
     @Override
     public long throttleTime() {
-        if (skipThrottling) {
-            // optimization for when targetRate is max double
+        if (targetRate < 0) {
             return 0L;
         }
 

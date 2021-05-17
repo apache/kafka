@@ -37,7 +37,7 @@ public class RecordBatchRateLimiter<R extends ConnectRecord> extends CountingRat
         .define(
             RECORD_BATCH_RATE_LIMIT_CONFIG,
             ConfigDef.Type.DOUBLE,
-            Double.MAX_VALUE,
+            -1,
             ConfigDef.Importance.LOW,
             RECORD_BATCH_RATE_LIMIT_DOC,
             ConnectorConfig.RATE_LIMITS_GROUP,

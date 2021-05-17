@@ -291,12 +291,16 @@ abstract class WorkerTask implements Runnable {
     protected <R extends ConnectRecord> void throttle(Collection<R> records, Collection<RateLimiter<R>> rateLimiters) {
         long maxThrottleTime = 0L;
         for (RateLimiter<R> rateLimiter : rateLimiters) {
-            rateLimiter.accumulate(records);
-            maxThrottleTime = Math.max(maxThrottleTime, rateLimiter.throttleTime());
+            try {
+                rateLimiter.accumulate(records);
+                maxThrottleTime = Math.max(maxThrottleTime, rateLimiter.throttleTime());
+            } catch (Throwable e) {
+                log.error("Caught exception in RateLimiter ({}). Ignoring.", rateLimiter.getClass().getName(), e);
+            }
         }
         // Throttling is not addative. We sleep for the max time, not the combined time.
-        if (maxThrottleTime != 0L) {
-            log.debug("Throttling {} records for {} ms.", records.size(), maxThrottleTime);
+        if (maxThrottleTime > 0L) {
+            log.error("Throttling {} records for {} ms.", records.size(), maxThrottleTime);
             time.sleep(maxThrottleTime);
         }
     }

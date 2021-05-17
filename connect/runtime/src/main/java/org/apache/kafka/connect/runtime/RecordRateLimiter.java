@@ -37,7 +37,7 @@ public class RecordRateLimiter<R extends ConnectRecord> extends CountingRateLimi
         .define(
             RECORD_RATE_LIMIT_CONFIG,
             ConfigDef.Type.DOUBLE,
-            Double.MAX_VALUE,
+            -1,
             ConfigDef.Importance.LOW,
             RECORD_RATE_LIMIT_DOC,
             ConnectorConfig.RATE_LIMITS_GROUP,
