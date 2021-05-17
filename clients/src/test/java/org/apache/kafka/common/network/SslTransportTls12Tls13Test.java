@@ -54,10 +54,10 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
         LogContext logContext = new LogContext();
+        this.watchService = FileSystems.getDefault().newWatchService();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
-        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach
@@ -162,8 +162,8 @@ public class SslTransportTls12Tls13Test {
         server.verifyAuthenticationMetrics(1, 0);
     }
 
-    private void createSelector(Map<String, Object> sslClientConfigs) throws IOException {
-        SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
+    private void createSelector(Map<String, Object> sslClientConfigs) {
+        SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());

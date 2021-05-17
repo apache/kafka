@@ -204,16 +204,16 @@ public class DefaultSslEngineFactoryTest {
     private static final Password KEY_PASSWORD = new Password("key-password");
 
     private WatchService watchService;
-    private DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService);
+    private DefaultSslEngineFactory factory;
     Map<String, Object> configs = new HashMap<>();
 
     @BeforeEach
     public void setUp() throws IOException {
+        this.watchService = FileSystems.getDefault().newWatchService();
         factory = new DefaultSslEngineFactory(watchService);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
-        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach

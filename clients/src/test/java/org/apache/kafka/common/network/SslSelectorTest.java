@@ -78,11 +78,11 @@ public class SslSelectorTest extends SelectorTest {
         this.time = new MockTime();
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
         LogContext logContext = new LogContext();
+        this.watchService = FileSystems.getDefault().newWatchService();
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
-        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach
@@ -164,6 +164,7 @@ public class SslSelectorTest extends SelectorTest {
 
         this.selector.close();
 
+        this.watchService = FileSystems.getDefault().newWatchService();
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
@@ -206,6 +207,7 @@ public class SslSelectorTest extends SelectorTest {
         String node2 = "2";
         final AtomicInteger node1Polls = new AtomicInteger();
 
+        this.watchService = FileSystems.getDefault().newWatchService();
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
@@ -296,6 +298,7 @@ public class SslSelectorTest extends SelectorTest {
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
                 .build();
+        this.watchService = FileSystems.getDefault().newWatchService();
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext(), watchService);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
