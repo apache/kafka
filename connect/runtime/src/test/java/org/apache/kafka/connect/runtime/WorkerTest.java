@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.RateLimiter;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
@@ -1501,7 +1502,7 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(RetryWithToleranceOperator.class),
                 anyObject(StatusBackingStore.class),
                 anyObject(Executor.class),
-                EasyMock.eq(Collections.emptyList()))
+                EasyMock.<Collection<RateLimiter>>anyObject())
                 .andReturn(workerTask);
     }
     /* Name here needs to be unique as we are testing the aliasing mechanism */

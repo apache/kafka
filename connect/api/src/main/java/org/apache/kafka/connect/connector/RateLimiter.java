@@ -19,7 +19,6 @@ package org.apache.kafka.connect.connector;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.io.Closeable;
 import java.util.Collection;

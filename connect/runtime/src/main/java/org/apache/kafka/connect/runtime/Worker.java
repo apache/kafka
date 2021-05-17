@@ -625,6 +625,7 @@ public class Worker {
             }
 
             Collection<RateLimiter<SourceRecord>> rateLimiters = connConfig.rateLimiters();
+            log.info("Found {} configured RateLimiters.", rateLimiters.size());
 
             // Note we pass the configState as it performs dynamic transformations under the covers
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
@@ -642,6 +643,7 @@ public class Worker {
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             Collection<RateLimiter<SinkRecord>> rateLimiters = connConfig.rateLimiters();
+            log.info("Found {} configured RateLimiters.", rateLimiters.size());
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                                       valueConverter, headerConverter, transformationChain, consumer, loader, time,
