@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
@@ -23,12 +28,6 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-
-import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class MetadataRequest extends AbstractRequest {
 
@@ -53,7 +52,9 @@ public class MetadataRequest extends AbstractRequest {
             if (topics == null)
                 data.setTopics(null);
             else {
-                topics.forEach(topic -> data.topics().add(new MetadataRequestTopic().setName(topic)));
+                for (String topic: topics) {
+                    data.topics().add(new MetadataRequestTopic().setName(topic));
+                }
             }
 
             data.setAllowAutoTopicCreation(allowAutoTopicCreation);
@@ -78,11 +79,16 @@ public class MetadataRequest extends AbstractRequest {
             return data.topics() == null;
         }
 
+        // Used for testing only
         public List<String> topics() {
-            return data.topics()
-                .stream()
-                .map(MetadataRequestTopic::name)
-                .collect(Collectors.toList());
+            if (data.topics() == null) {
+                return Collections.emptyList();
+            }
+            List<String> topicList = new ArrayList<>(data.topics().size());
+            for (MetadataRequestData.MetadataRequestTopic mdTopic: data.topics()) {
+                topicList.add(mdTopic.name());
+            }
+            return topicList;
         }
 
         @Override
@@ -162,11 +168,13 @@ public class MetadataRequest extends AbstractRequest {
     public List<String> topics() {
         if (isAllTopics()) //In version 0, we return null for empty topic list
             return null;
-        else
-            return data.topics()
-                .stream()
-                .map(MetadataRequestTopic::name)
-                .collect(Collectors.toList());
+        else {
+            List<String> topics = new ArrayList<>(data.topics().size());
+            for (MetadataRequestTopic topic: data.topics()) {
+                topics.add(topic.name());
+            }
+            return topics;
+        }
     }
 
     public boolean allowAutoTopicCreation() {
@@ -178,9 +186,11 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {
-        return topics.stream().map(topic -> new MetadataRequestTopic()
-            .setName(topic))
-            .collect(Collectors.toList());
+        List<MetadataRequestTopic> metadataRequestTopicList = new ArrayList<>(topics.size());
+        for (String topicName: topics) {
+            metadataRequestTopicList.add(new MetadataRequestTopic().setName(topicName));
+        }
+        return metadataRequestTopicList;
     }
 
     @Override

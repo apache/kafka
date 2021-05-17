@@ -16,6 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -28,18 +38,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Possible topic-level error codes:
@@ -402,8 +400,12 @@ public class MetadataResponse extends AbstractResponse {
         }
 
         private Map<Integer, Node> createBrokers(MetadataResponseData data) {
-            return data.brokers().valuesList().stream().map(b -> new Node(b.nodeId(), b.host(), b.port(), b.rack()))
-                    .collect(Collectors.toMap(Node::id, b -> b));
+            Map<Integer, Node> brokerMap = new HashMap<>(data.brokers().size());
+            for (MetadataResponseData.MetadataResponseBroker brokerMetadata: data.brokers().valuesList()) {
+                brokerMap.put(brokerMetadata.nodeId(), new Node(brokerMetadata.nodeId(), brokerMetadata.host(),
+                    brokerMetadata.port(), brokerMetadata.rack()));
+            }
+            return brokerMap;
         }
 
         private Collection<TopicMetadata> createTopicMetadata(MetadataResponseData data) {
@@ -464,26 +466,37 @@ public class MetadataResponse extends AbstractResponse {
         responseData.setControllerId(controllerId);
         responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
-        topicMetadataList.forEach(topicMetadata -> {
+        for (MetadataResponse.TopicMetadata topicMetadata : topicMetadataList) {
             MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
-            metadataResponseTopic
-                .setErrorCode(topicMetadata.error.code())
+            metadataResponseTopic.setErrorCode(topicMetadata.error.code())
                 .setName(topicMetadata.topic)
                 .setIsInternal(topicMetadata.isInternal)
                 .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
 
             for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
-                    .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition)
-                    .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
-                    .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    .setReplicaNodes(partitionMetadata.replicas.stream().map(Node::id).collect(Collectors.toList()))
-                    .setIsrNodes(partitionMetadata.isr.stream().map(Node::id).collect(Collectors.toList()))
-                    .setOfflineReplicas(partitionMetadata.offlineReplicas.stream().map(Node::id).collect(Collectors.toList())));
+                List<Integer> replicaIds = new ArrayList<>(partitionMetadata.replicas.size());
+                for (Node replica : partitionMetadata.replicas) {
+                    replicaIds.add(replica.id());
+                }
+                List<Integer> isrIds = new ArrayList<>(partitionMetadata.isr.size());
+                for (Node isr : partitionMetadata.isr) {
+                    isrIds.add(isr.id());
+                }
+                List<Integer> offlineReplicaIds = new ArrayList<>(partitionMetadata.offlineReplicas.size());
+                for (Node offlineReplica : partitionMetadata.offlineReplicas) {
+                    offlineReplicaIds.add(offlineReplica.id());
+                }
+                metadataResponseTopic.partitions()
+                    .add(new MetadataResponsePartition().setErrorCode(partitionMetadata.error.code())
+                        .setPartitionIndex(partitionMetadata.partition)
+                        .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
+                        .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                        .setReplicaNodes(replicaIds)
+                        .setIsrNodes(isrIds)
+                        .setOfflineReplicas(offlineReplicaIds));
             }
             responseData.topics().add(metadataResponseTopic);
-        });
+        }
         return new MetadataResponse(responseData);
     }
 
