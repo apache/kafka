@@ -96,7 +96,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.bounce()
 
         # Bounce again with ACLs for new mechanism.
-        self.kafka.client_sasl_mechanism = new_sasl_mechanism # Removes old SASL mechanism completely
+        self.kafka.client_sasl_mechanism = new_sasl_mechanism  # Removes old SASL mechanism completely
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):

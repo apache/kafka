@@ -503,7 +503,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self._security_config.calc_has_ssl()
         for port in self.port_mappings.values():
             if port.open:
-                self._security_config.enable_security_protocol(port.security_protocol)
+                self._security_config.enable_security_protocol(port.security_protocol, port.sasl_mechanism)
         if self.quorum_info.using_zk:
             if self.zk.zk_sasl:
                 self._security_config.enable_sasl()
