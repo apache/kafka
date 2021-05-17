@@ -1104,7 +1104,6 @@ class KafkaApisTest {
         15L,
         0.toShort,
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build()
       val request = buildRequest(offsetCommitRequest)
 
@@ -1144,7 +1143,6 @@ class KafkaApisTest {
         producerId,
         epoch,
         Map(topicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build(version.toShort)
       val request = buildRequest(offsetCommitRequest)
 
