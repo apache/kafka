@@ -21,6 +21,8 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,11 +50,11 @@ public class PartitionGrouper {
      * @param metadata      metadata of the consuming cluster
      * @return The map from generated task ids to the assigned partitions
      */
-    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Subtopology, Set<String>> topicGroups, final Cluster metadata) {
         final Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-        for (final Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
-            final Integer topicGroupId = entry.getKey();
+        for (final Map.Entry<Subtopology, Set<String>> entry : topicGroups.entrySet()) {
+            final Subtopology subtopology = entry.getKey();
             final Set<String> topicGroup = entry.getValue();
 
             final int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
@@ -66,7 +68,7 @@ public class PartitionGrouper {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
-                groups.put(new TaskId(topicGroupId, partitionId), Collections.unmodifiableSet(group));
+                groups.put(new TaskId(subtopology.nodeGroupId, partitionId, subtopology.namedTopology), Collections.unmodifiableSet(group));
             }
         }
 

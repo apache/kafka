@@ -64,6 +64,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
+
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -458,7 +461,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(false));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(0).nonSourceChangelogTopics().isEmpty(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
             equalTo(true));
     }
 
@@ -486,7 +489,7 @@ public class StreamsBuilderTest {
             equalTo(true)
         );
         assertThat(
-            internalTopologyBuilder.topicGroups().get(1).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog"))
         );
     }
@@ -509,7 +512,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(true));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 

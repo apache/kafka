@@ -372,7 +372,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void testSegmentMaintenance() {
-
+        windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
             Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);

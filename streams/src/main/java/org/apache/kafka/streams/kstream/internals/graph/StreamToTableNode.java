@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
+import java.util.Properties;
+
 /**
  * Represents a KTable convert From KStream
  */
@@ -52,7 +54,7 @@ public class StreamToTableNode<K, V> extends GraphNode {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 

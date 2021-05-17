@@ -1105,7 +1105,6 @@ class KafkaApisTest {
         15L,
         0.toShort,
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build()
       val request = buildRequest(offsetCommitRequest)
 
@@ -1145,7 +1144,6 @@ class KafkaApisTest {
         producerId,
         epoch,
         Map(topicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build(version.toShort)
       val request = buildRequest(offsetCommitRequest)
 
@@ -1675,7 +1673,6 @@ class KafkaApisTest {
       EasyMock.eq(request.context.correlationId),
       EasyMock.eq(controllerId),
       EasyMock.eq(controllerEpoch),
-      EasyMock.eq(brokerEpoch),
       EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
     )).andReturn(
       (mutable.Map(
@@ -2901,7 +2898,6 @@ class KafkaApisTest {
       EasyMock.eq(request.context.correlationId),
       EasyMock.eq(controllerId),
       EasyMock.eq(controllerEpoch),
-      EasyMock.eq(brokerEpochInRequest),
       EasyMock.eq(stopReplicaRequest.partitionStates().asScala)
     )).andStubReturn(
       (mutable.Map(
@@ -3112,14 +3108,14 @@ class KafkaApisTest {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
     val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
-    val requestBuffer = RequestTestUtils.serializeRequestWithHeader(requestHeader, request)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
 
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
-    val envelopeBuffer = RequestTestUtils.serializeRequestWithHeader(envelopeHeader, new EnvelopeRequest.Builder(
+    val envelopeBuffer = new EnvelopeRequest.Builder(
       requestBuffer,
       principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
       InetAddress.getLocalHost.getAddress
-    ).build())
+    ).build().serializeWithHeader(envelopeHeader)
     val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
@@ -3139,8 +3135,8 @@ class KafkaApisTest {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None): RequestChannel.Request = {
-    val buffer = RequestTestUtils.serializeRequestWithHeader(requestHeader.getOrElse(
-      new RequestHeader(request.apiKey, request.version, clientId, 0)), request)
+    val buffer = request.serializeWithHeader(
+      requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

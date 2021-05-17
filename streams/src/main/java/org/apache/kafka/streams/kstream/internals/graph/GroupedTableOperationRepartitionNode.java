@@ -26,6 +26,8 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Properties;
+
 public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
 
@@ -78,7 +80,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addSink(

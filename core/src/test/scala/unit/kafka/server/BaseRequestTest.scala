@@ -17,20 +17,19 @@
 
 package kafka.server
 
-import java.io.{DataInputStream, DataOutputStream}
-import java.net.Socket
-import java.nio.ByteBuffer
-import java.util.Properties
-
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils.NotNothing
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, RequestTestUtils, ResponseHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
 
+import java.io.{DataInputStream, DataOutputStream}
+import java.net.Socket
+import java.nio.ByteBuffer
+import java.util.Properties
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.reflect.ClassTag
@@ -136,7 +135,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   }
 
   def sendWithHeader(request: AbstractRequest, header: RequestHeader, socket: Socket): Unit = {
-    val serializedBytes = Utils.toArray(RequestTestUtils.serializeRequestWithHeader(header, request))
+    val serializedBytes = Utils.toArray(request.serializeWithHeader(header))
     sendRequest(socket, serializedBytes)
   }
 

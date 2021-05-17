@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -25,12 +26,17 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 
+import java.util.HashMap;
 import java.util.Optional;
+import java.util.Properties;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 
 /**
  * Too much information to generalize, so Stream-Stream joins are represented by a specific node.
  */
 public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V2, VR> {
+    private static final Properties EMPTY_PROPERTIES = new Properties();
 
     private final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
     private final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
@@ -81,8 +87,9 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                "} " + super.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
 
         final String thisProcessorName = thisProcessorParameters().processorName();
         final String otherProcessorName = otherProcessorParameters().processorName();
@@ -95,7 +102,9 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
         topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
 
-        outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder.addStateStore(builder, thisProcessorName, otherProcessorName));
+        if (props == null || StreamsConfig.InternalConfig.getBoolean(new HashMap(props), ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, true)) {
+            outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder.addStateStore(builder, thisProcessorName, otherProcessorName));
+        }
     }
 
     public static <K, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {
