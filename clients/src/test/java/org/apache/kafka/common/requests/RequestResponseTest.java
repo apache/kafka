@@ -2118,8 +2118,7 @@ public class RequestResponseTest {
                 "groupId",
                 21L,
                 (short) 42,
-                offsets,
-                false).build();
+                offsets).build();
         } else {
             return new TxnOffsetCommitRequest.Builder("transactionalId",
                 "groupId",
@@ -2128,8 +2127,7 @@ public class RequestResponseTest {
                 offsets,
                 "member",
                 2,
-                Optional.of("instance"),
-                false).build();
+                Optional.of("instance")).build();
         }
     }
 
@@ -2147,8 +2145,7 @@ public class RequestResponseTest {
             offsets,
             "member",
             2,
-            Optional.of("instance"),
-            true).build();
+            Optional.of("instance")).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
