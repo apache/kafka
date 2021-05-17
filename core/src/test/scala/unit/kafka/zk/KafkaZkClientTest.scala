@@ -469,36 +469,6 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testSetGetAndDeletePartitionReassignment(): Unit = {
-    zkClient.createRecursive(AdminZNode.path)
-
-    assertEquals(Map.empty, zkClient.getPartitionReassignment)
-
-    val reassignment = Map(
-      new TopicPartition("topic_a", 0) -> Seq(0, 1, 3),
-      new TopicPartition("topic_a", 1) -> Seq(2, 1, 3),
-      new TopicPartition("topic_b", 0) -> Seq(4, 5),
-      new TopicPartition("topic_c", 0) -> Seq(5, 3)
-    )
-
-    // Should throw ControllerMovedException if the controller epoch zkVersion does not match
-    assertThrows(classOf[ControllerMovedException], () => zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion + 1))
-
-    zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion)
-    assertEquals(reassignment, zkClient.getPartitionReassignment)
-
-    val updatedReassignment = reassignment - new TopicPartition("topic_b", 0)
-    zkClient.setOrCreatePartitionReassignment(updatedReassignment, controllerEpochZkVersion)
-    assertEquals(updatedReassignment, zkClient.getPartitionReassignment)
-
-    zkClient.deletePartitionReassignment(controllerEpochZkVersion)
-    assertEquals(Map.empty, zkClient.getPartitionReassignment)
-
-    zkClient.createPartitionReassignment(reassignment)
-    assertEquals(reassignment, zkClient.getPartitionReassignment)
-  }
-
-  @Test
   def testGetDataAndStat(): Unit = {
     val path = "/testpath"
 
@@ -1072,13 +1042,6 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.OK, statWithVersion(2)),
       otherZkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 2, zkVersion = 1), controllerEpochZkVersion).map {
         eraseMetadataAndStat}.toList)
-  }
-
-  @Test
-  def testReassignPartitionsInProgress(): Unit = {
-    assertFalse(zkClient.reassignPartitionsInProgress)
-    zkClient.createRecursive(ReassignPartitionsZNode.path)
-    assertTrue(zkClient.reassignPartitionsInProgress)
   }
 
   @Test

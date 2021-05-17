@@ -18,7 +18,6 @@
 package kafka
 
 import java.io.{File, PrintWriter}
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardOpenOption}
 
 import javax.imageio.ImageIO
@@ -26,7 +25,7 @@ import kafka.admin.ReassignPartitionsCommand
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.{Exit, Logging, TestUtils}
-import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -154,7 +153,7 @@ object ReplicationQuotasTestRig {
       println("Starting Reassignment")
       val start = System.currentTimeMillis()
       ReassignPartitionsCommand.executeAssignment(adminClient, false,
-        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8),
+        ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty),
         config.throttle)
 
       //Await completion

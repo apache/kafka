@@ -21,7 +21,6 @@ import java.util
 import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
@@ -453,50 +452,6 @@ object DeleteTopicsZNode {
 
 object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
-}
-
-/**
- * The znode for initiating a partition reassignment.
- * @deprecated Since 2.4, use the PartitionReassignment Kafka API instead.
- */
-object ReassignPartitionsZNode {
-
-  /**
-    * The assignment of brokers for a `TopicPartition`.
-    *
-    * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
-    * represent the broker ids that the `TopicPartition` is assigned to.
-    */
-  case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
-                               @BeanProperty @JsonProperty("partition") partition: Int,
-                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
-
-  /**
-    * An assignment consists of a `version` and a list of `partitions`, which represent the
-    * assignment of topic-partitions to brokers.
-    * @deprecated Use the PartitionReassignment Kafka API instead
-    */
-  @Deprecated
-  case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
-                                       @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
-
-  def path = s"${AdminZNode.path}/reassign_partitions"
-
-  def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val reassignment = LegacyPartitionAssignment(1,
-      reassignmentMap.toSeq.map { case (tp, replicas) =>
-        ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
-      }.asJava
-    )
-    Json.encodeAsBytes(reassignment)
-  }
-
-  def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
-    Json.parseBytesAs[LegacyPartitionAssignment](bytes).map { partitionAssignment =>
-      partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
-        new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
-      }.toMap
-    }
 }
 
 object PreferredReplicaElectionZNode {

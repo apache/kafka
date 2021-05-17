@@ -17,7 +17,8 @@
 
 package kafka.controller
 
-import java.util.Properties
+import java.util
+import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
@@ -26,10 +27,13 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
@@ -291,19 +295,36 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
-    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
+    val reassignment = Map(tp -> Seq(otherBrokerId))
+    reassign(reassignment)
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
-      "failed to remove reassign partitions path after completion")
 
     val updatedTimerCount = timer(metricName).count
     assertTrue(updatedTimerCount > timerCount,
       s"Timer count $updatedTimerCount should be greater than $timerCount")
+  }
+
+  private def reassign(input: Map[TopicPartition, Seq[Int]]): Unit = {
+    val properties = new Properties()
+    properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.
+      bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+    val adminClient = Admin.create(properties)
+    try {
+      val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]()
+      input.foreach {
+        case (tp, replicas) =>
+          val list = new util.ArrayList[Integer]()
+          replicas.foreach(list.add(_))
+          reassignments.put(tp, Optional.of(new NewPartitionReassignment(list)))
+      }
+      adminClient.alterPartitionReassignments(reassignments).all().get()
+    } finally {
+      adminClient.close()
+    }
   }
 
   @Test
@@ -332,13 +353,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val assignment = Map(tp.partition -> Seq(controllerId))
     val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
+    reassign(reassignment.map { case (k, v) => k -> v.replicas })
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
       "with an offline log directory on the target broker, the partition reassignment stalls")
     TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
-      "failed to remove reassign partitions path after completion")
 
     val updatedTimerCount = timer(metricName).count
     assertTrue(updatedTimerCount > timerCount,
@@ -356,12 +375,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    val controller = getController()
-    zkClient.setOrCreatePartitionReassignment(reassignment, controller.kafkaController.controllerContext.epochZkVersion)
+    reassign(reassignment)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
-    TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress,
-      "partition reassignment path should remain while reassignment in progress")
   }
 
   @Test
@@ -375,7 +391,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
+    reassign(reassignment.map { case (k, v) => k -> v.replicas })
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
@@ -383,8 +399,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
-      "failed to remove reassign partitions path after completion")
   }
 
   @Test
@@ -585,17 +599,17 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPreferredReplicaElection(Set(tp)))
   }
 
-  @Test
-  def testControllerMoveOnPartitionReassignment(): Unit = {
-    servers = makeServers(1)
-    TestUtils.waitUntilControllerElected(zkClient)
-    val tp = new TopicPartition("t", 0)
-    val assignment = Map(tp.partition -> Seq(0))
-    TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
-
-    val reassignment = Map(tp -> Seq(0))
-    testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
-  }
+//  @Test
+//  def testControllerMoveOnPartitionReassignment(): Unit = {
+//    servers = makeServers(1)
+//    TestUtils.waitUntilControllerElected(zkClient)
+//    val tp = new TopicPartition("t", 0)
+//    val assignment = Map(tp.partition -> Seq(0))
+//    TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
+//
+//    val reassignment = Map(tp -> Seq(0))
+//    testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
+//  }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
