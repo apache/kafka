@@ -615,14 +615,14 @@ public class KafkaConsumerTest {
             ListOffsetsPartition expectedTp1 = new ListOffsetsPartition()
                     .setPartitionIndex(tp1.partition())
                     .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP);
-            return partitions.contains(expectedTp0) && partitions.contains(expectedTp1);
+            assertTrue(partitions.contains(expectedTp0));
+            assertTrue(partitions.contains(expectedTp1));
         }, listOffsetsResponse(Collections.singletonMap(tp0, 50L), Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                return request.fetchData().keySet().equals(singleton(tp0)) &&
-                        request.fetchData().get(tp0).fetchOffset == 50L;
-
+                assertEquals(singleton(tp0), request.fetchData().keySet());
+                assertEquals(50L, request.fetchData().get(tp0).fetchOffset);
             }, fetchResponse(tp0, 50L, 5));
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
@@ -1627,7 +1627,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // heartbeat fails due to rebalance in progress
-        client.prepareResponseFrom(body -> true, new HeartbeatResponse(
+        client.prepareResponseFrom(body -> { }, new HeartbeatResponse(
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())), coordinator);
 
         // join group
@@ -1659,8 +1659,10 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
-        client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+        client.prepareResponseFrom(body -> {
+            assertTrue(body instanceof FetchRequest);
+            assertTrue(((FetchRequest) body).fetchData().containsKey(tp0));
+        }, fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -2146,7 +2148,7 @@ public class KafkaConsumerTest {
 
             ByteBuffer protocolMetadata = ByteBuffer.wrap(protocolIterator.next().metadata());
             ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
-            return subscribedTopics.equals(new HashSet<>(subscription.topics()));
+            assertEquals(subscribedTopics, new HashSet<>(subscription.topics()));
         }, joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
@@ -2175,7 +2177,6 @@ public class KafkaConsumerTest {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(body -> {
             heartbeatReceived.set(true);
-            return true;
         }, new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code())), coordinator);
         return heartbeatReceived;
     }
@@ -2194,10 +2195,9 @@ public class KafkaConsumerTest {
                 // verify that the expected offset has been committed
                 if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
                     commitReceived.set(false);
-                    return false;
+                    fail();
                 }
             }
-            return true;
         }, offsetCommitResponse(response), coordinator);
         return commitReceived;
     }

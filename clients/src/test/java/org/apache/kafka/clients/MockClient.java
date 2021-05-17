@@ -47,22 +47,22 @@ import java.util.stream.Collectors;
  * A mock network client for use testing code
  */
 public class MockClient implements KafkaClient {
-    public static final RequestMatcher ALWAYS_TRUE = body -> true;
+    public static final RequestAssertion ALWAYS_TRUE = body -> { };
 
     private static class FutureResponse {
         private final Node node;
-        private final RequestMatcher requestMatcher;
+        private final RequestAssertion requestAssertion;
         private final AbstractResponse responseBody;
         private final boolean disconnected;
         private final boolean isUnsupportedRequest;
 
         public FutureResponse(Node node,
-                              RequestMatcher requestMatcher,
+                              RequestAssertion requestAssertion,
                               AbstractResponse responseBody,
                               boolean disconnected,
                               boolean isUnsupportedRequest) {
             this.node = node;
-            this.requestMatcher = requestMatcher;
+            this.requestAssertion = requestAssertion;
             this.responseBody = responseBody;
             this.disconnected = disconnected;
             this.isUnsupportedRequest = isUnsupportedRequest;
@@ -246,9 +246,12 @@ public class MockClient implements KafkaClient {
                         "Api " + request.apiKey() + " with version " + version);
             } else {
                 AbstractRequest abstractRequest = request.requestBuilder().build(version);
-                if (!futureResp.requestMatcher.matches(abstractRequest))
+                try {
+                    futureResp.requestAssertion.assertRequest(abstractRequest);
+                } catch (AssertionError e) {
                     throw new IllegalStateException("Request matcher did not match next-in-line request "
-                            + abstractRequest + " with prepared response " + futureResp.responseBody);
+                            + abstractRequest + " with prepared response " + futureResp.responseBody, e);
+                }
             }
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
@@ -351,14 +354,17 @@ public class MockClient implements KafkaClient {
         respond(response, false);
     }
 
-    public void respond(RequestMatcher matcher, AbstractResponse response) {
+    public void respond(RequestAssertion assertion, AbstractResponse response) {
         ClientRequest nextRequest = requests.peek();
         if (nextRequest == null)
             throw new IllegalStateException("No current requests queued");
 
         AbstractRequest request = nextRequest.requestBuilder().build();
-        if (!matcher.matches(request))
-            throw new IllegalStateException("Request matcher did not match next-in-line request " + request);
+        try {
+            assertion.assertRequest(request);
+        } catch (AssertionError e) {
+            throw new IllegalStateException("Request assertion did not match next-in-line request " + request, e);
+        }
 
         respond(response);
     }
@@ -409,21 +415,17 @@ public class MockClient implements KafkaClient {
     }
 
     /**
-     * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
-     * @param matcher The matcher to apply
+     * Prepare a response for a request using the provided assertion. If the assertion is not satisfied,
+     * {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
+     * @param assertion The assertion to apply
      * @param response The response body
      */
-    public void prepareResponse(RequestMatcher matcher, AbstractResponse response) {
-        prepareResponse(matcher, response, false);
+    public void prepareResponse(RequestAssertion assertion, AbstractResponse response) {
+        prepareResponse(assertion, response, false);
     }
 
-    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node) {
-        prepareResponseFrom(matcher, response, node, false, false);
-    }
-
-    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
-        prepareResponseFrom(matcher, response, node, disconnected, false);
+    public void prepareResponseFrom(RequestAssertion assertion, AbstractResponse response, Node node) {
+        prepareResponseFrom(assertion, response, node, false, false);
     }
 
     public void prepareResponse(AbstractResponse response, boolean disconnected) {
@@ -435,31 +437,31 @@ public class MockClient implements KafkaClient {
     }
 
     /**
-     * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
-     * @param matcher The request matcher to apply
+     * Prepare a response for a request using the provided assertion. If the assertion is not satisfied,
+     * {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     * @param assertion The request assertion to apply
      * @param response The response body
      * @param disconnected Whether the request was disconnected
      */
-    public void prepareResponse(RequestMatcher matcher, AbstractResponse response, boolean disconnected) {
-        prepareResponseFrom(matcher, response, null, disconnected, false);
+    public void prepareResponse(RequestAssertion assertion, AbstractResponse response, boolean disconnected) {
+        prepareResponseFrom(assertion, response, null, disconnected, false);
     }
 
     /**
-     * Raise an unsupported version error on the next request if it matches the given matcher.
-     * If the matcher does not match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
-     * @param matcher The request matcher to apply
+     * Raise an unsupported version error on the next request if it satisfies the given assertion.
+     * If the assertion is not satisfied, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     * @param assertion The request assertion to apply
      */
-    public void prepareUnsupportedVersionResponse(RequestMatcher matcher) {
-        prepareResponseFrom(matcher, null, null, false, true);
+    public void prepareUnsupportedVersionResponse(RequestAssertion assertion) {
+        prepareResponseFrom(assertion, null, null, false, true);
     }
 
-    private void prepareResponseFrom(RequestMatcher matcher,
+    public void prepareResponseFrom(RequestAssertion assertion,
                                      AbstractResponse response,
                                      Node node,
                                      boolean disconnected,
                                      boolean isUnsupportedVersion) {
-        futureResponses.add(new FutureResponse(node, matcher, response, disconnected, isUnsupportedVersion));
+        futureResponses.add(new FutureResponse(node, assertion, response, disconnected, isUnsupportedVersion));
     }
 
     public void waitForRequests(final int minRequests, long maxWaitMs) throws InterruptedException {
@@ -588,14 +590,14 @@ public class MockClient implements KafkaClient {
     }
 
     /**
-     * The RequestMatcher provides a way to match a particular request to a response prepared
-     * through {@link #prepareResponse(RequestMatcher, AbstractResponse)}. Basically this allows testers
+     * The RequestAssertion provides a way to assert on a particular request
+     * through {@link #prepareResponse(RequestAssertion, AbstractResponse)}. Basically this allows testers
      * to inspect the request body for the type of the request or for specific fields that should be set,
      * and to fail the test if it doesn't match.
      */
     @FunctionalInterface
-    public interface RequestMatcher {
-        boolean matches(AbstractRequest body);
+    public interface RequestAssertion {
+        void assertRequest(AbstractRequest body);
     }
 
     public void setNodeApiVersions(NodeApiVersions nodeApiVersions) {

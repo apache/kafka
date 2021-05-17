@@ -799,15 +799,19 @@ public class KafkaProducerTest {
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
             client.prepareResponse(
-                request -> request instanceof FindCoordinatorRequest &&
-                    ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+                request -> {
+                    assertTrue(request instanceof FindCoordinatorRequest);
+                    assertEquals(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(), ((FindCoordinatorRequest) request).data().keyType());
+                },
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
             client.prepareResponse(
-                request -> request instanceof FindCoordinatorRequest &&
-                               ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+                request -> {
+                    assertTrue(request instanceof FindCoordinatorRequest);
+                    assertEquals(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(), ((FindCoordinatorRequest) request).data().keyType());
+                },
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
 
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
@@ -890,8 +894,7 @@ public class KafkaProducerTest {
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
         String groupId = "group";
-        client.prepareResponse(request ->
-            ((TxnOffsetCommitRequest) request).data().groupId().equals(groupId),
+        client.prepareResponse(request -> assertEquals(groupId, ((TxnOffsetCommitRequest) request).data().groupId()),
             txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));
@@ -943,16 +946,15 @@ public class KafkaProducerTest {
         String groupInstanceId = "instance";
         client.prepareResponse(request -> {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
+            assertEquals(groupId, data.groupId());
             if (maxVersion < 3) {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) &&
-                           data.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
-                           data.groupInstanceId() == null;
+                assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, data.memberId());
+                assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, data.generationId());
+                assertNull(data.groupInstanceId());
             } else {
-                return data.groupId().equals(groupId) &&
-                           data.memberId().equals(memberId) &&
-                           data.generationId() == generationId &&
-                           data.groupInstanceId().equals(groupInstanceId);
+                assertEquals(memberId, data.memberId());
+                assertEquals(generationId, data.generationId());
+                assertEquals(groupInstanceId, data.groupInstanceId());
             }
         }, txnOffsetsCommitResponse(Collections.singletonMap(
             new TopicPartition("topic", 0), Errors.NONE)));
