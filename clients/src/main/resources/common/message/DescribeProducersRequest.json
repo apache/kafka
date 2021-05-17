@@ -27,6 +27,5 @@
         { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
           "about": "The indexes of the partitions to list producers for." }
        ]}
-    ]}
   ]
 }
