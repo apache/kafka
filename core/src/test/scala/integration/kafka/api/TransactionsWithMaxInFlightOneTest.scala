@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package integration.kafka.api
+package kafka.api
 
 import java.util.Properties
 
@@ -25,8 +25,8 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.Seq
 import scala.collection.mutable.Buffer
@@ -70,7 +70,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testTransactionalProducerSingleBrokerMaxInFlightOne() = {
+  def testTransactionalProducerSingleBrokerMaxInFlightOne(): Unit = {
     // We want to test with one broker to verify multiple requests queued on a connection
     assertEquals(1, servers.size)
 

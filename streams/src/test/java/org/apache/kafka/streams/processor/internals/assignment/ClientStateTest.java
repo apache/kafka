@@ -21,10 +21,13 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -364,6 +367,9 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnAssignedTasksForConsumer() {
+        final List<TaskId> allTasks = new ArrayList<>(asList(TASK_0_0, TASK_0_1, TASK_0_2));
+        client.assignActiveTasks(allTasks);
+
         client.assignActiveToConsumer(TASK_0_0, "c1");
         // calling it multiple tasks should be idempotent
         client.assignActiveToConsumer(TASK_0_0, "c1");
@@ -477,6 +483,11 @@ public class ClientStateTest {
     public void shouldThrowIllegalStateExceptionIfAttemptingToInitializeNonEmptyPrevTaskSets() {
         client.addPreviousActiveTasks(Collections.singleton(TASK_0_1));
         assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionIfAssignedTasksForConsumerToNonClientAssignActive() {
+        assertThrows(IllegalStateException.class, () -> client.assignActiveToConsumer(TASK_0_0, "c1"));
     }
 
 }

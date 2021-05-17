@@ -34,7 +34,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -142,7 +142,7 @@ public class ClusterControlManagerTest {
                 String.format("broker %d was not unfenced.", i));
         }
         for (int i = 0; i < 100; i++) {
-            List<List<Integer>> results = clusterControl.placeReplicas(1, (short) 3);
+            List<List<Integer>> results = clusterControl.placeReplicas(0, 1, (short) 3);
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0)) {
                 assertTrue(result >= 0);

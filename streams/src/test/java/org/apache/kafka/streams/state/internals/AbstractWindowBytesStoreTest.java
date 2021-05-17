@@ -783,6 +783,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testPutSameKeyTimestamp() {
+        windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
 
@@ -899,6 +900,7 @@ public abstract class AbstractWindowBytesStoreTest {
                 windowedPair("aa", "0004", 1, windowSize)
             )))
         );
+        windowStore.close();
     }
 
     @Test
@@ -978,6 +980,8 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSet(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
             equalTo(expectedKey3)
         );
+
+        windowStore.close();
     }
 
     @Test
@@ -1101,6 +1105,8 @@ public abstract class AbstractWindowBytesStoreTest {
         }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
+
+        windowStore.close();
     }
 
     @Test
@@ -1168,6 +1174,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testFetchDuplicates() {
+        windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
 

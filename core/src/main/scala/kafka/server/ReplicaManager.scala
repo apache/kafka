@@ -325,7 +325,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
     // In this case, the broker receiving the request cannot determine whether it is safe to create a partition if a log directory has failed.
-    // Thus, we choose to halt the broker on any log diretory failure if IBP < 1.0
+    // Thus, we choose to halt the broker on any log directory failure if IBP < 1.0
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
@@ -349,7 +349,6 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplicas(correlationId: Int,
                    controllerId: Int,
                    controllerEpoch: Int,
-                   brokerEpoch: Long,
                    partitionStates: Map[TopicPartition, StopReplicaPartitionState]
                   ): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
@@ -434,7 +433,6 @@ class ReplicaManager(val config: KafkaConfig,
                 s"controller $controllerId with correlation id $correlationId " +
                 s"epoch $controllerEpoch for partition $topicPartition due to an unexpected " +
                 s"${e.getClass.getName} exception: ${e.getMessage}")
-              responseMap.put(topicPartition, Errors.forException(e))
           }
           responseMap.put(topicPartition, Errors.forException(e))
         }

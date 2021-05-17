@@ -15,19 +15,15 @@
   * limitations under the License.
   */
 
-package unit.kafka.controller
+package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assertions.assertFalse
 
 
 class ControllerContextTest {

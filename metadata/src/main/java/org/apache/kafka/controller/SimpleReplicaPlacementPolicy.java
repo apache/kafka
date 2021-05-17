@@ -41,7 +41,8 @@ public class SimpleReplicaPlacementPolicy implements ReplicaPlacementPolicy {
     }
 
     @Override
-    public List<List<Integer>> createPlacement(int numPartitions,
+    public List<List<Integer>> createPlacement(int startPartition,
+                                               int numPartitions,
                                                short numReplicas,
                                                Iterator<UsableBroker> iterator) {
         List<UsableBroker> usable = new ArrayList<>();

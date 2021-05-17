@@ -298,11 +298,6 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
-
-    }
-
-    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
     }

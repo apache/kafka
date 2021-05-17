@@ -231,7 +231,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks = newConsumerUserData.activeTasks();
 
         // The tasks were returned to their prior owner
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         // There is a rebalance scheduled
@@ -282,7 +284,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks =
             AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
 
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         assertThat(referenceContainer.assignmentErrorCode.get(), equalTo(AssignorError.NONE.code()));

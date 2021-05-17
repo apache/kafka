@@ -40,7 +40,7 @@
       "about": "The results for each topic we tried to delete.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "6+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name" },
-      {"name": "TopicId", "type": "uuid", "versions": "6+", "ignorable": "true", "about": "the unique topic ID"},
+      {"name": "TopicId", "type": "uuid", "versions": "6+", "ignorable": true, "about": "the unique topic ID"},
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." },
       { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",

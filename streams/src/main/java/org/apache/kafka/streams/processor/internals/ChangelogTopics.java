@@ -20,6 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -34,8 +36,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public class ChangelogTopics {
 
     private final InternalTopicManager internalTopicManager;
-    private final Map<Integer, TopicsInfo> topicGroups;
-    private final Map<Integer, Set<TaskId>> tasksForTopicGroup;
+    private final Map<Subtopology, TopicsInfo> topicGroups;
+    private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
     private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForStatefulTask = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> preExistingChangelogPartitionsForTask = new HashMap<>();
     private final Set<TopicPartition> preExistingNonSourceTopicBasedChangelogPartitions = new HashSet<>();
@@ -44,8 +46,8 @@ public class ChangelogTopics {
     private final Logger log;
 
     public ChangelogTopics(final InternalTopicManager internalTopicManager,
-                           final Map<Integer, TopicsInfo> topicGroups,
-                           final Map<Integer, Set<TaskId>> tasksForTopicGroup,
+                           final Map<Subtopology, TopicsInfo> topicGroups,
+                           final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
                            final String logPrefix) {
         this.internalTopicManager = internalTopicManager;
         this.topicGroups = topicGroups;
@@ -57,13 +59,13 @@ public class ChangelogTopics {
     public void setup() {
         // add tasks to state change log topic subscribers
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
-        for (final Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
-            final int topicGroupId = entry.getKey();
+        for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
+            final Subtopology subtopology = entry.getKey();
             final TopicsInfo topicsInfo = entry.getValue();
 
-            final Set<TaskId> topicGroupTasks = tasksForTopicGroup.get(topicGroupId);
+            final Set<TaskId> topicGroupTasks = tasksForTopicGroup.get(subtopology);
             if (topicGroupTasks == null) {
-                log.debug("No tasks found for topic group {}", topicGroupId);
+                log.debug("No tasks found for subtopology {}", subtopology);
                 continue;
             } else if (topicsInfo.stateChangelogTopics.isEmpty()) {
                 continue;

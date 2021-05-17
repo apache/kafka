@@ -134,12 +134,13 @@ public class RocksDBMetricsIntegrationTest {
     private static final String ESTIMATED_MEMORY_OF_TABLE_READERS = "estimate-table-readers-mem";
     private static final String NUMBER_OF_BACKGROUND_ERRORS = "background-errors";
 
+    @SuppressWarnings("deprecation")
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
             {StreamsConfig.AT_LEAST_ONCE},
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 

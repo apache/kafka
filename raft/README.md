@@ -16,6 +16,7 @@ Create 3 separate KRaft quorum properties as the following:
     
     node.id=1
     listeners=PLAINTEXT://localhost:9092
+    controller.listener.names=PLAINTEXT
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/kraft-logs-1
     EOF
@@ -24,6 +25,7 @@ Create 3 separate KRaft quorum properties as the following:
     
     node.id=2
     listeners=PLAINTEXT://localhost:9093
+    controller.listener.names=PLAINTEXT
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/kraft-logs-2
     EOF
@@ -32,6 +34,7 @@ Create 3 separate KRaft quorum properties as the following:
     
     node.id=3
     listeners=PLAINTEXT://localhost:9094
+    controller.listener.names=PLAINTEXT
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/kraft-logs-3
     EOF

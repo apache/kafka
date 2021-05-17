@@ -33,7 +33,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
@@ -310,11 +310,13 @@ public class ClusterControlManager {
         }
     }
 
-    public List<List<Integer>> placeReplicas(int numPartitions, short numReplicas) {
+    public List<List<Integer>> placeReplicas(int startPartition,
+                                             int numPartitions,
+                                             short numReplicas) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        return heartbeatManager.placeReplicas(numPartitions, numReplicas,
+        return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
             id -> brokerRegistrations.get(id).rack(), placementPolicy);
     }
 
