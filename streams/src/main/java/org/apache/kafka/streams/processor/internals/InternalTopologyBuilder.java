@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.TopologyDescription.Subtopology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,6 +28,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -1076,8 +1076,8 @@ public class InternalTopologyBuilder {
      *
      * @return groups of topic names
      */
-    public synchronized Map<TopologyMetadata.Subtopology, TopicsInfo> topicGroups() {
-        final Map<TopologyMetadata.Subtopology, TopicsInfo> topicGroups = new LinkedHashMap<>();
+    public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
+        final Map<Subtopology, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null) {
             nodeGroups = makeNodeGroups();
@@ -1140,7 +1140,7 @@ public class InternalTopologyBuilder {
                 }
             }
             if (!sourceTopics.isEmpty()) {
-                topicGroups.put(new TopologyMetadata.Subtopology(entry.getKey(), namedTopology), new TopicsInfo(
+                topicGroups.put(new Subtopology(entry.getKey(), namedTopology), new TopicsInfo(
                         Collections.unmodifiableSet(sinkTopics),
                         Collections.unmodifiableSet(sourceTopics),
                         Collections.unmodifiableMap(repartitionTopics),
@@ -1754,7 +1754,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class SubtopologyDescription implements Subtopology {
+    public final static class SubtopologyDescription implements TopologyDescription.Subtopology {
         private final int id;
         private final Set<TopologyDescription.Node> nodes;
 
@@ -1891,10 +1891,10 @@ public class InternalTopologyBuilder {
 
     private final static GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
 
-    private static class SubtopologyComparator implements Comparator<Subtopology>, Serializable {
+    private static class SubtopologyComparator implements Comparator<TopologyDescription.Subtopology>, Serializable {
         @Override
-        public int compare(final Subtopology subtopology1,
-                           final Subtopology subtopology2) {
+        public int compare(final TopologyDescription.Subtopology subtopology1,
+                           final TopologyDescription.Subtopology subtopology2) {
             if (subtopology1.equals(subtopology2)) {
                 return 0;
             }
@@ -1905,10 +1905,10 @@ public class InternalTopologyBuilder {
     private final static SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
 
     public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
-        private final TreeSet<Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
+        private final TreeSet<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
         private final TreeSet<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
 
-        public void addSubtopology(final Subtopology subtopology) {
+        public void addSubtopology(final TopologyDescription.Subtopology subtopology) {
             subtopologies.add(subtopology);
         }
 
@@ -1917,7 +1917,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public Set<Subtopology> subtopologies() {
+        public Set<TopologyDescription.Subtopology> subtopologies() {
             return Collections.unmodifiableSet(subtopologies);
         }
 
@@ -1930,8 +1930,8 @@ public class InternalTopologyBuilder {
         public String toString() {
             final StringBuilder sb = new StringBuilder();
             sb.append("Topologies:\n ");
-            final Subtopology[] sortedSubtopologies =
-                subtopologies.descendingSet().toArray(new Subtopology[0]);
+            final TopologyDescription.Subtopology[] sortedSubtopologies =
+                subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[0]);
             final TopologyDescription.GlobalStore[] sortedGlobalStores =
                 globalStores.descendingSet().toArray(new GlobalStore[0]);
             int expectedId = 0;
@@ -1939,7 +1939,7 @@ public class InternalTopologyBuilder {
             int globalStoresIndex = sortedGlobalStores.length - 1;
             while (subtopologiesIndex != -1 && globalStoresIndex != -1) {
                 sb.append("  ");
-                final Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
+                final TopologyDescription.Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
                 final TopologyDescription.GlobalStore globalStore = sortedGlobalStores[globalStoresIndex];
                 if (subtopology.id() == expectedId) {
                     sb.append(subtopology);
@@ -1951,7 +1951,7 @@ public class InternalTopologyBuilder {
                 expectedId++;
             }
             while (subtopologiesIndex != -1) {
-                final Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
+                final TopologyDescription.Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
                 sb.append("  ");
                 sb.append(subtopology);
                 subtopologiesIndex--;
