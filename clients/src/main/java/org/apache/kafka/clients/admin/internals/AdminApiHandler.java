@@ -135,5 +135,30 @@ public interface AdminApiHandler<K, V> {
             this.failedKeys = Collections.unmodifiableMap(failedKeys);
             this.unmappedKeys = Collections.unmodifiableList(unmappedKeys);
         }
+
+        public static <K, V> ApiResult<K, V> completed(K key, V value) {
+            return new ApiResult<>(
+                Collections.singletonMap(key, value),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
+        }
+
+        public static <K, V> ApiResult<K, V> failed(K key, Throwable t) {
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.singletonMap(key, t),
+                Collections.emptyList()
+            );
+        }
+
+        public static <K, V> ApiResult<K, V> unmapped(List<K> keys) {
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                keys
+            );
+        }
     }
+
 }

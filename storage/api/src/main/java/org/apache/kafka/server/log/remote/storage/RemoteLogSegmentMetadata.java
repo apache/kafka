@@ -33,7 +33,7 @@ import java.util.TreeMap;
  * {@code RemoteLogSegmentMetadata}.
  */
 @InterfaceStability.Evolving
-public class RemoteLogSegmentMetadata {
+public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
     /**
      * Universally unique remote log segment id.
@@ -51,19 +51,9 @@ public class RemoteLogSegmentMetadata {
     private final long endOffset;
 
     /**
-     * Broker id from which this event is generated.
-     */
-    private final int brokerId;
-
-    /**
      * Maximum timestamp in milli seconds in the segment
      */
     private final long maxTimestampMs;
-
-    /**
-     * Epoch time in milli seconds at which the respective {@link #state} is set.
-     */
-    private final long eventTimestampMs;
 
     /**
      * LeaderEpoch vs offset for messages within this segment.
@@ -105,14 +95,13 @@ public class RemoteLogSegmentMetadata {
                                      int segmentSizeInBytes,
                                      RemoteLogSegmentState state,
                                      Map<Integer, Long> segmentLeaderEpochs) {
+        super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
 
         this.startOffset = startOffset;
         this.endOffset = endOffset;
-        this.brokerId = brokerId;
         this.maxTimestampMs = maxTimestampMs;
-        this.eventTimestampMs = eventTimestampMs;
         this.segmentSizeInBytes = segmentSizeInBytes;
 
         if (segmentLeaderEpochs == null || segmentLeaderEpochs.isEmpty()) {
@@ -178,13 +167,6 @@ public class RemoteLogSegmentMetadata {
     }
 
     /**
-     * @return Epoch time in milli seconds at which this event is occurred.
-     */
-    public long eventTimestampMs() {
-        return eventTimestampMs;
-    }
-
-    /**
      * @return Total size of this segment in bytes.
      */
     public int segmentSizeInBytes() {
@@ -203,13 +185,6 @@ public class RemoteLogSegmentMetadata {
      */
     public NavigableMap<Integer, Long> segmentLeaderEpochs() {
         return segmentLeaderEpochs;
-    }
-
-    /**
-     * @return Broker id from which this event is generated.
-     */
-    public int brokerId() {
-        return brokerId;
     }
 
     /**
@@ -251,17 +226,19 @@ public class RemoteLogSegmentMetadata {
             return false;
         }
         RemoteLogSegmentMetadata that = (RemoteLogSegmentMetadata) o;
-        return startOffset == that.startOffset && endOffset == that.endOffset && brokerId == that.brokerId
-               && maxTimestampMs == that.maxTimestampMs && eventTimestampMs == that.eventTimestampMs
-               && segmentSizeInBytes == that.segmentSizeInBytes
-               && Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId)
-               && Objects.equals(segmentLeaderEpochs, that.segmentLeaderEpochs) && state == that.state;
+        return startOffset == that.startOffset && endOffset == that.endOffset
+                && maxTimestampMs == that.maxTimestampMs
+                && segmentSizeInBytes == that.segmentSizeInBytes
+                && Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId)
+                && Objects.equals(segmentLeaderEpochs, that.segmentLeaderEpochs) && state == that.state
+                && eventTimestampMs() == that.eventTimestampMs()
+                && brokerId() == that.brokerId();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(remoteLogSegmentId, startOffset, endOffset, brokerId, maxTimestampMs,
-                eventTimestampMs, segmentLeaderEpochs, segmentSizeInBytes, state);
+        return Objects.hash(remoteLogSegmentId, startOffset, endOffset, brokerId(), maxTimestampMs,
+                eventTimestampMs(), segmentLeaderEpochs, segmentSizeInBytes, state);
     }
 
     @Override
@@ -270,9 +247,9 @@ public class RemoteLogSegmentMetadata {
                "remoteLogSegmentId=" + remoteLogSegmentId +
                ", startOffset=" + startOffset +
                ", endOffset=" + endOffset +
-               ", brokerId=" + brokerId +
+               ", brokerId=" + brokerId() +
                ", maxTimestampMs=" + maxTimestampMs +
-               ", eventTimestampMs=" + eventTimestampMs +
+               ", eventTimestampMs=" + eventTimestampMs() +
                ", segmentLeaderEpochs=" + segmentLeaderEpochs +
                ", segmentSizeInBytes=" + segmentSizeInBytes +
                ", state=" + state +

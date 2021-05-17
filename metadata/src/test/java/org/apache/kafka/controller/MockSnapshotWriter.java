@@ -18,7 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.io.IOException;
 import java.util.ArrayList;

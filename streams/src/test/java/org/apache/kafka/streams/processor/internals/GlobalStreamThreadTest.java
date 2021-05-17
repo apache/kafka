@@ -50,6 +50,7 @@ import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.St
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -119,26 +120,30 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         try {
             globalStreamThread.start();
             fail("Should have thrown StreamsException if start up failed");
         } catch (final StreamsException e) {
             // ok
         }
+        globalStreamThread.join();
+        assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() {
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
         final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");
             }
         };
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         globalStreamThread = new GlobalStreamThread(
             builder.buildGlobalStateTopology(),
             config,
@@ -159,14 +164,19 @@ public class GlobalStreamThreadTest {
             assertThat(e.getCause(), instanceOf(RuntimeException.class));
             assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }
+        globalStreamThread.join();
+        assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
     }
 
     @Test
-    public void shouldBeRunningAfterSuccessfulStart() {
+    public void shouldBeRunningAfterSuccessfulStart() throws Exception {
         initializeConsumer();
         startAndSwallowError();
         assertTrue(globalStreamThread.stillRunning());
+
+        globalStreamThread.shutdown();
+        globalStreamThread.join();
     }
 
     @Test(timeout = 30000)
@@ -187,16 +197,6 @@ public class GlobalStreamThreadTest {
         globalStreamThread.shutdown();
         globalStreamThread.join();
         assertFalse(globalStore.isOpen());
-    }
-
-    @Test
-    public void shouldTransitionToDeadOnClose() throws Exception {
-        initializeConsumer();
-        startAndSwallowError();
-        globalStreamThread.shutdown();
-        globalStreamThread.join();
-
-        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
     @Test
@@ -225,6 +225,7 @@ public class GlobalStreamThreadTest {
 
     @Test
     public void shouldDieOnInvalidOffsetExceptionDuringStartup() throws Exception {
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         initializeConsumer();
         mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
@@ -240,12 +241,15 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "GlobalStreamThread should have died."
         );
+        globalStreamThread.join();
 
+        assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
 
     @Test
     public void shouldDieOnInvalidOffsetExceptionWhileRunning() throws Exception {
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         initializeConsumer();
         startAndSwallowError();
 
@@ -274,7 +278,9 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "GlobalStreamThread should have died."
         );
+        globalStreamThread.join();
 
+        assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
 

@@ -144,7 +144,7 @@ public class MockController implements Controller {
 
     @Override
     synchronized public CompletableFuture<Map<String, ResultOrError<Uuid>>>
-            findTopicIds(Collection<String> topicNames) {
+            findTopicIds(long deadlineNs, Collection<String> topicNames) {
         Map<String, ResultOrError<Uuid>> results = new HashMap<>();
         for (String topicName : topicNames) {
             if (!topicNameToId.containsKey(topicName)) {
@@ -158,7 +158,7 @@ public class MockController implements Controller {
 
     @Override
     synchronized public CompletableFuture<Map<Uuid, ResultOrError<String>>>
-            findTopicNames(Collection<Uuid> topicIds) {
+            findTopicNames(long deadlineNs, Collection<Uuid> topicIds) {
         Map<Uuid, ResultOrError<String>> results = new HashMap<>();
         for (Uuid topicId : topicIds) {
             MockTopic topic = topics.get(topicId);
@@ -173,7 +173,7 @@ public class MockController implements Controller {
 
     @Override
     synchronized public CompletableFuture<Map<Uuid, ApiError>>
-            deleteTopics(Collection<Uuid> topicIds) {
+            deleteTopics(long deadlineNs, Collection<Uuid> topicIds) {
         if (!active) {
             CompletableFuture<Map<Uuid, ApiError>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
@@ -303,7 +303,7 @@ public class MockController implements Controller {
 
     @Override
     synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(List<CreatePartitionsTopic> topicList) {
+            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topicList) {
         if (!active) {
             CompletableFuture<List<CreatePartitionsTopicResult>> future = new CompletableFuture<>();
             future.completeExceptionally(NOT_CONTROLLER_EXCEPTION);
