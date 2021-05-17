@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -98,7 +99,7 @@ public final class ClientUtils {
      *
      * @return configured ChannelBuilder based on the configs.
      */
-    public static ChannelBuilder createChannelBuilder(AbstractConfig config, Time time, LogContext logContext) {
+    public static ChannelBuilder createChannelBuilder(AbstractConfig config, Time time, LogContext logContext) throws IOException {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,

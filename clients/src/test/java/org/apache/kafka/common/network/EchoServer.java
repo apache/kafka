@@ -27,6 +27,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -49,7 +50,7 @@ class EchoServer extends Thread {
     public EchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs) throws Exception {
         switch (securityProtocol) {
             case SSL:
-                this.sslFactory = new SslFactory(Mode.SERVER);
+                this.sslFactory = new SslFactory(Mode.SERVER, FileSystems.getDefault().newWatchService());
                 this.sslFactory.configure(configs);
                 SSLContext sslContext = ((DefaultSslEngineFactory) this.sslFactory.sslEngineFactory()).sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);

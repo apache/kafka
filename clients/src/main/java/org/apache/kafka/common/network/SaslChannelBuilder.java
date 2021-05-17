@@ -65,6 +65,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.file.WatchService;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -87,6 +88,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
     private final Supplier<ApiVersionsResponse> apiVersionSupplier;
+    private final WatchService watchService;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
@@ -111,7 +113,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               String sslClientAuthOverride,
                               Time time,
                               LogContext logContext,
-                              Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                              Supplier<ApiVersionsResponse> apiVersionSupplier,
+                              final WatchService watchService) {
         this.mode = mode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -130,6 +133,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.apiVersionSupplier = apiVersionSupplier;
+        this.watchService = watchService;
 
         if (mode == Mode.SERVER && apiVersionSupplier == null) {
             throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
@@ -176,7 +180,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             }
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, sslClientAuthOverride, isInterBrokerListener);
+                this.sslFactory = new SslFactory(mode, sslClientAuthOverride, isInterBrokerListener, watchService);
                 this.sslFactory.configure(configs);
             }
         } catch (Throwable e) {
@@ -249,6 +253,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         for (AuthenticateCallbackHandler handler : saslCallbackHandlers.values())
             handler.close();
         if (sslFactory != null) sslFactory.close();
+
+        Utils.closeQuietly(watchService, "Watch service");
     }
 
     // Visible to override for testing

@@ -19,9 +19,11 @@ package org.apache.kafka.common.security.ssl;
 import org.junit.jupiter.api.condition.DisabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
 
+import java.io.IOException;
+
 @DisabledOnJre(JRE.JAVA_8)
 public class Tls13SslFactoryTest extends SslFactoryTest {
-    public Tls13SslFactoryTest() {
+    public Tls13SslFactoryTest() throws IOException {
         super("TLSv1.3");
     }
 }

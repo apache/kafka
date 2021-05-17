@@ -51,6 +51,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -80,6 +82,10 @@ public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+
+    public SslTransportLayerTest() throws IOException {
+    }
 
     private static class Args {
         private final String tlsProtocol;
@@ -777,7 +783,7 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
@@ -968,7 +974,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext(), watchService);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1279,12 +1285,12 @@ public class SslTransportLayerTest {
         assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }
 
-    private Selector createSelector(Map<String, Object> sslClientConfigs) {
+    private Selector createSelector(Map<String, Object> sslClientConfigs) throws IOException {
         return createSelector(sslClientConfigs, null, null, null);
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
-                                final Integer netWriteBufSize, final Integer appBufSize) {
+                                final Integer netWriteBufSize, final Integer appBufSize) throws IOException {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
@@ -1302,7 +1308,7 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Args args) {
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(args.sslClientConfigs);
         selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
         return selector;
@@ -1356,8 +1362,8 @@ public class SslTransportLayerTest {
         FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false, new LogContext());
+        public TestSslChannelBuilder(Mode mode) throws IOException {
+            super(mode, null, false, new LogContext(), FileSystems.getDefault().newWatchService());
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

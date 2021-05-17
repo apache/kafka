@@ -46,7 +46,10 @@ import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -60,6 +63,12 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 
 public class SaslChannelBuilderTest {
+
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+
+    public SaslChannelBuilderTest() throws IOException {
+    }
+
 
     @AfterEach
     public void tearDown() {
@@ -164,7 +173,7 @@ public class SaslChannelBuilderTest {
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
-            true, null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier()) {
+            true, null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), watchService) {
 
             @Override
             protected GSSManager gssManager() {
@@ -204,7 +213,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, true, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), watchService);
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

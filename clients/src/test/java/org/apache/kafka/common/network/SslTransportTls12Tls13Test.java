@@ -18,6 +18,8 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -41,6 +43,10 @@ public class SslTransportTls12Tls13Test {
     private Selector selector;
     private Map<String, Object> sslClientConfigs;
     private Map<String, Object> sslServerConfigs;
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+
+    public SslTransportTls12Tls13Test() throws IOException {
+    }
 
     @BeforeEach
     public void setup() throws Exception {
@@ -51,7 +57,7 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
         LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
     }
@@ -156,7 +162,7 @@ public class SslTransportTls12Tls13Test {
         server.verifyAuthenticationMetrics(1, 0);
     }
 
-    private void createSelector(Map<String, Object> sslClientConfigs) {
+    private void createSelector(Map<String, Object> sslClientConfigs) throws IOException {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);

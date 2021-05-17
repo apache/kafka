@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.security.ssl;
 
+import java.io.IOException;
+
 public class Tls12SslFactoryTest extends SslFactoryTest {
-    public Tls12SslFactoryTest() {
+    public Tls12SslFactoryTest() throws IOException {
         super("TLSv1.2");
     }
 }

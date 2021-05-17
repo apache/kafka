@@ -51,13 +51,13 @@
     <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
-              files="Sender.java"/>
-    <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
     <suppress checks="ParameterNumber"
               files="DefaultRecordBatch.java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>
+    <suppress checks="ParameterNumber"
+              files="SaslChannelBuilder.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>

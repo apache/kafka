@@ -120,6 +120,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -163,6 +165,10 @@ public class SaslAuthenticatorTest {
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
     private int nextCorrelationId;
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+
+    public SaslAuthenticatorTest() throws IOException {
+    }
 
     @BeforeEach
     public void setup() throws Exception {
@@ -1913,7 +1919,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, watchService);
 
         serverChannelBuilder.configure(saslServerConfigs);
         server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
@@ -1954,7 +1960,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                credentialCache, null, null, time, new LogContext(), apiVersionSupplier) {
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier, watchService) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -1989,7 +1995,7 @@ public class SaslAuthenticatorTest {
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
-                null, null, null, time, new LogContext(), null) {
+                null, null, null, time, new LogContext(), null, watchService) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -2113,7 +2119,7 @@ public class SaslAuthenticatorTest {
                 TestDigestLoginModule.DigestServerCallbackHandler.class);
     }
 
-    private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
+    private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) throws IOException {
         if (selector != null) {
             selector.close();
             selector = null;
@@ -2529,10 +2535,11 @@ public class SaslAuthenticatorTest {
         public AlternateSaslChannelBuilder(Mode mode, Map<String, JaasContext> jaasContexts,
                 SecurityProtocol securityProtocol, ListenerName listenerName, boolean isInterBrokerListener,
                 String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
-                DelegationTokenCache tokenCache, Time time) {
+                DelegationTokenCache tokenCache, Time time) throws IOException {
             super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
-                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER),
+                FileSystems.getDefault().newWatchService());
         }
 
         @Override

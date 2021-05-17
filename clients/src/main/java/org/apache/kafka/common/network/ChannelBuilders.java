@@ -36,6 +36,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +73,7 @@ public class ChannelBuilders {
             String clientSaslMechanism,
             Time time,
             boolean saslHandshakeRequestEnable,
-            LogContext logContext) {
+            LogContext logContext) throws IOException {
 
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
@@ -103,7 +106,7 @@ public class ChannelBuilders {
                                                       DelegationTokenCache tokenCache,
                                                       Time time,
                                                       LogContext logContext,
-                                                      Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                                                      Supplier<ApiVersionsResponse> apiVersionSupplier) throws IOException {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, true, credentialCache,
                 tokenCache, time, logContext, apiVersionSupplier);
@@ -121,14 +124,14 @@ public class ChannelBuilders {
                                          DelegationTokenCache tokenCache,
                                          Time time,
                                          LogContext logContext,
-                                         Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                                         Supplier<ApiVersionsResponse> apiVersionSupplier) throws IOException {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
         switch (securityProtocol) {
             case SSL:
                 requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SslChannelBuilder(mode, listenerName, isInterBrokerListener, logContext);
+                channelBuilder = new SslChannelBuilder(mode, listenerName, isInterBrokerListener, logContext, createWatchService());
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:
@@ -180,7 +183,8 @@ public class ChannelBuilders {
                         sslClientAuthOverride,
                         time,
                         logContext,
-                        apiVersionSupplier);
+                        apiVersionSupplier,
+                        createWatchService());
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);
@@ -241,4 +245,12 @@ public class ChannelBuilders {
         return builder;
     }
 
+    private static WatchService createWatchService() throws IOException {
+        try {
+            return FileSystems.getDefault().newWatchService();
+        } catch (IOException e) {
+            log.error("Failed to start SSL factory due to IO exception", e);
+            throw e;
+        }
+    }
 }

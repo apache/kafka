@@ -72,6 +72,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -385,7 +386,7 @@ public class KafkaProducerTest {
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
                 new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, timer) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) throws IOException {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
                 return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
             }

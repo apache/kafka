@@ -35,7 +35,6 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.FileSystems;
 import java.nio.file.WatchService;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -64,8 +63,8 @@ public class SslFactory implements Reconfigurable, Closeable {
     private Map<String, Object> sslEngineFactoryConfig;
     private final WatchService watchService;
 
-    public SslFactory(Mode mode) throws IOException {
-        this(mode, null, false);
+    public SslFactory(Mode mode, final WatchService watchService) throws IOException {
+        this(mode, null, false, watchService);
     }
 
     /**
@@ -76,19 +75,17 @@ public class SslFactory implements Reconfigurable, Closeable {
      *                                              if we don't want to override it.
      * @param keystoreVerifiableUsingTruststore     True if we should require the keystore to be verifiable
      *                                              using the truststore.
+     * @param watchService                          File watch service to track security file changes.
+     *
      */
     public SslFactory(Mode mode,
                       String clientAuthConfigOverride,
-                      boolean keystoreVerifiableUsingTruststore) throws IOException {
+                      boolean keystoreVerifiableUsingTruststore,
+                      final WatchService watchService) {
         this.mode = mode;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
-        try {
-            watchService = FileSystems.getDefault().newWatchService();
-        } catch (IOException e) {
-            log.error("Failed to start SSL factory due to IO exception", e);
-            throw e;
-        }
+        this.watchService = watchService;
     }
 
     @SuppressWarnings("unchecked")
@@ -293,12 +290,6 @@ public class SslFactory implements Reconfigurable, Closeable {
     @Override
     public void close() {
         Utils.closeQuietly(sslEngineFactory, "close engine factory");
-
-        try {
-            watchService.close();
-        } catch (IOException e) {
-            log.warn("Failed to terminate the file watch service", e);
-        }
     }
 
     static class CertificateEntries {

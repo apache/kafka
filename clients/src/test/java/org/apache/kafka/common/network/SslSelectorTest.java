@@ -42,6 +42,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -64,6 +66,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SslSelectorTest extends SelectorTest {
 
     private Map<String, Object> sslClientConfigs;
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+
+    public SslSelectorTest() throws IOException {
+    }
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -75,7 +81,7 @@ public class SslSelectorTest extends SelectorTest {
         this.time = new MockTime();
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
         LogContext logContext = new LogContext();
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
@@ -291,10 +297,10 @@ public class SslSelectorTest extends SelectorTest {
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext());
+        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, new LogContext(), watchService);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+            new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -377,8 +383,8 @@ public class SslSelectorTest extends SelectorTest {
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false, new LogContext());
+        public TestSslChannelBuilder(Mode mode) throws IOException {
+            super(mode, null, false, new LogContext(), FileSystems.getDefault().newWatchService());
         }
 
         @Override

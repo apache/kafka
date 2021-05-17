@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -162,7 +163,7 @@ public class SslVersionsTransportLayerTest {
         return sslConfig;
     }
 
-    private Selector createClientSelector(Map<String, Object> sslClientConfigs) {
+    private Selector createClientSelector(Map<String, Object> sslClientConfigs) throws IOException {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder =
             new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
