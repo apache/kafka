@@ -184,6 +184,15 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private final Condition cond = lock.newCondition();
 
+        /**
+         * A reference to the EventQueue's metrics registry.
+         */
+        private final EventQueueMetrics eventQueueMetrics;
+
+        public EventHandler(EventQueueMetrics metrics) {
+            this.eventQueueMetrics = metrics;
+        }
+
         @Override
         public void run() {
             try {
@@ -371,7 +380,6 @@ public final class KafkaEventQueue implements EventQueue {
     private final Logger log;
     private final EventHandler eventHandler;
     private final Thread eventHandlerThread;
-    private EventQueueMetrics eventQueueMetrics;
 
     /**
      * The time in monotonic nanoseconds when the queue is closing, or Long.MAX_VALUE if
@@ -387,21 +395,27 @@ public final class KafkaEventQueue implements EventQueue {
         this.time = time;
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
-        this.eventHandler = new EventHandler();
+        this.eventHandler = new EventHandler(new MockEventQueueMetrics());
         this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
             this.eventHandler, false);
         this.closingTimeNs = Long.MAX_VALUE;
         this.cleanupEvent = null;
         this.eventHandlerThread.start();
-        this.eventQueueMetrics = new MockEventQueueMetrics();
     }
 
     public KafkaEventQueue(Time time,
                            LogContext logContext,
                            String threadNamePrefix,
                            EventQueueMetrics eventQueueMetrics) {
-        this(time, logContext, threadNamePrefix);
-        this.eventQueueMetrics = eventQueueMetrics;
+        this.time = time;
+        this.lock = new ReentrantLock();
+        this.log = logContext.logger(KafkaEventQueue.class);
+        this.eventHandler = new EventHandler(eventQueueMetrics);
+        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
+            this.eventHandler, false);
+        this.closingTimeNs = Long.MAX_VALUE;
+        this.cleanupEvent = null;
+        this.eventHandlerThread.start();
     }
 
     @Override
