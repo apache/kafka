@@ -328,7 +328,8 @@ public class ProcessorStateManager implements StateManager {
                 converterForStore(store)) :
             new StateStoreMetadata(store);
 
-
+        // register the store first, so that if later an exception is thrown then eventually while we call `close`
+        // on the state manager this state store would be closed as well
         stores.put(storeName, storeMetadata);
 
         maybeRegisterStoreWithChangelogReader(storeName);

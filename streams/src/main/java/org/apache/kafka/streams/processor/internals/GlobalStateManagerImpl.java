@@ -166,6 +166,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+        log.info("Restoring state for global store {}", store.name());
+
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
@@ -174,12 +176,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new IllegalArgumentException(String.format("Trying to register store %s that is not a known global store", store.name()));
         }
 
+        // register the store first, so that if later an exception is thrown then eventually while we call `close`
+        // on the state manager this state store would be closed as well
+        globalStores.put(store.name(), Optional.of(store));
+
         if (stateRestoreCallback == null) {
             throw new IllegalArgumentException(String.format("The stateRestoreCallback provided for store %s was null", store.name()));
         }
-
-        log.info("Restoring state for global store {}", store.name());
-        globalStores.put(store.name(), Optional.of(store));
 
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
         final Map<TopicPartition, Long> highWatermarks = retryUntilSuccessOrThrowOnTaskTimeout(
