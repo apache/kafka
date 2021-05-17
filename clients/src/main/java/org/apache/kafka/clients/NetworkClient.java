@@ -1089,6 +1089,8 @@ public class NetworkClient implements KafkaClient {
             if (!errors.isEmpty())
                 log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
 
+            // Don't update the cluster if there are no valid nodes which may happened during the startup phase of
+            // the visited node.
             if (response.brokers().isEmpty()) {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
