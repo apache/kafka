@@ -902,27 +902,26 @@ public final class Utils {
             }
         } finally {
             if (needFlushParentDir) {
-                flushParentDir(target);
+                flushDir(target.toAbsolutePath().normalize().getParent());
             }
         }
     }
 
     /**
-     * Flushes the parent directory to guarantee crash consistency.
+     * Flushes dirty directories to guarantee crash consistency.
      *
-     * @throws IOException if flushing the parent directory fails.
+     * @throws IOException if flushing the directory fails.
      */
-    public static void flushParentDir(Path path) throws IOException {
-        FileChannel dir = null;
-        try {
-            Path parent = path.toAbsolutePath().getParent();
-            if (parent != null) {
-                dir = FileChannel.open(parent, StandardOpenOption.READ);
+    public static void flushDir(Path path) throws IOException {
+        if (path != null) {
+            FileChannel dir = null;
+            try {
+                dir = FileChannel.open(path, StandardOpenOption.READ);
                 dir.force(true);
+            } finally {
+                if (dir != null)
+                    dir.close();
             }
-        } finally {
-            if (dir != null)
-                dir.close();
         }
     }
 

@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Properties;
+
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
     private OptimizableRepartitionNode(final String nodeName,
@@ -64,7 +66,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addProcessor(

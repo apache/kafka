@@ -56,6 +56,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -811,7 +812,7 @@ public class StreamsPartitionAssignorTest {
         assertEquals(new HashSet<>(tasks), allTasks);
 
         // check tasks for state topics
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
         assertEquals(mkSet(TASK_0_0, TASK_0_1, TASK_0_2), tasksForState("store1", tasks, topicGroups));
         assertEquals(mkSet(TASK_1_0, TASK_1_1, TASK_1_2), tasksForState("store2", tasks, topicGroups));
@@ -820,16 +821,16 @@ public class StreamsPartitionAssignorTest {
 
     private static Set<TaskId> tasksForState(final String storeName,
                                              final List<TaskId> tasks,
-                                             final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups) {
+                                             final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups) {
         final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName);
 
         final Set<TaskId> ids = new HashSet<>();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+        for (final Map.Entry<Subtopology, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             final Set<String> stateChangelogTopics = entry.getValue().stateChangelogTopics.keySet();
 
             if (stateChangelogTopics.contains(changelogTopic)) {
                 for (final TaskId id : tasks) {
-                    if (id.topicGroupId == entry.getKey()) {
+                    if (id.topicGroupId == entry.getKey().nodeGroupId) {
                         ids.add(id);
                     }
                 }
@@ -2024,13 +2025,13 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
-        private Map<Integer, TopicsInfo> corruptedTopicGroups;
+        private Map<Subtopology, TopicsInfo> corruptedTopicGroups;
 
         @Override
-        public synchronized Map<Integer, TopicsInfo> topicGroups() {
+        public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
             if (corruptedTopicGroups == null) {
                 corruptedTopicGroups = new HashMap<>();
-                for (final Map.Entry<Integer, TopicsInfo> topicGroupEntry : super.topicGroups().entrySet()) {
+                for (final Map.Entry<Subtopology, TopicsInfo> topicGroupEntry : super.topicGroups().entrySet()) {
                     final TopicsInfo originalInfo = topicGroupEntry.getValue();
                     corruptedTopicGroups.put(
                         topicGroupEntry.getKey(),

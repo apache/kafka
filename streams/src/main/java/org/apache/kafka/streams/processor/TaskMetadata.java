@@ -60,14 +60,23 @@ public class TaskMetadata {
         return topicPartitions;
     }
 
+    /**
+     * This function will return a map of TopicPartitions and the highest committed offset seen so far
+     */
     public Map<TopicPartition, Long> committedOffsets() {
         return committedOffsets;
     }
 
+    /**
+     * This function will return a map of TopicPartitions and the highest offset seen so far in the Topic
+     */
     public Map<TopicPartition, Long> endOffsets() {
         return endOffsets;
     }
 
+    /**
+     * This function will return the time task idling started, if the task is not currently idling it will return empty
+     */
     public Optional<Long> timeCurrentIdlingStarted() {
         return timeCurrentIdlingStarted;
     }

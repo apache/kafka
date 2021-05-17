@@ -80,27 +80,36 @@ public interface Controller extends AutoCloseable {
     /**
      * Find the ids for topic names.
      *
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
      * @param topicNames    The topic names to resolve.
      * @return              A future yielding a map from topic name to id.
      */
-    CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(Collection<String> topicNames);
+    CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(long deadlineNs,
+                                                                     Collection<String> topicNames);
 
     /**
      * Find the names for topic ids.
      *
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
      * @param topicIds      The topic ids to resolve.
      * @return              A future yielding a map from topic id to name.
      */
-    CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(Collection<Uuid> topicIds);
+    CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(long deadlineNs,
+                                                                       Collection<Uuid> topicIds);
 
     /**
      * Delete a batch of topics.
      *
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
      * @param topicIds      The IDs of the topics to delete.
      *
      * @return              A future yielding the response.
      */
-    CompletableFuture<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> topicIds);
+    CompletableFuture<Map<Uuid, ApiError>> deleteTopics(long deadlineNs,
+                                                        Collection<Uuid> topicIds);
 
     /**
      * Describe the current configuration of various resources.
@@ -225,11 +234,13 @@ public interface Controller extends AutoCloseable {
     /**
      * Create partitions on certain topics.
      *
-     * @param topics            The list of topics to create partitions for.
-     * @return                  A future yielding per-topic results.
+     * @param deadlineNs    The time by which this operation needs to be complete, before
+     *                      we will complete this operation with a timeout.
+     * @param topics        The list of topics to create partitions for.
+     * @return              A future yielding per-topic results.
      */
     CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(List<CreatePartitionsTopic> topics);
+            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topics);
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all

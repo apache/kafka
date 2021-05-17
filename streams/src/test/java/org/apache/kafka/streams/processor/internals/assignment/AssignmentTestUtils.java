@@ -25,6 +25,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
 import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
@@ -89,6 +91,10 @@ public final class AssignmentTestUtils {
     public static final TaskId NAMED_TASK_0_1 = new TaskId(0, 1, "topology0");
     public static final TaskId NAMED_TASK_1_0 = new TaskId(1, 0, "topology1");
     public static final TaskId NAMED_TASK_1_1 = new TaskId(1, 1, "topology1");
+
+    public static final Subtopology SUBTOPOLOGY_0 = new Subtopology(0, null);
+    public static final Subtopology SUBTOPOLOGY_1 = new Subtopology(1, null);
+    public static final Subtopology SUBTOPOLOGY_2 = new Subtopology(2, null);
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
