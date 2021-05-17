@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 public final class StreamsAssignmentProtocolVersions {
     public static final int UNKNOWN = -1;
     public static final int EARLIEST_PROBEABLE_VERSION = 3;
-    public static final int LATEST_SUPPORTED_VERSION = 9;
+    public static final int LATEST_SUPPORTED_VERSION = 10;
     //When changing the versions update this test: streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
     //Add add a unit test in SubscriptionInfoTest
 

@@ -668,7 +668,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 1, 0, 60_000L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 1, 0, 60_000L, null)
         );
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -687,7 +687,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbys, 60_000L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbys, 60_000L, null)
         );
     }
 
@@ -714,7 +714,7 @@ public class StickyTaskAssignorTest {
     }
 
     private ClientState createClientWithPreviousActiveTasks(final UUID processId, final int capacity, final TaskId... taskIds) {
-        final ClientState clientState = new ClientState(capacity);
+        final ClientState clientState = new ClientState(capacity, Collections.emptyMap());
         clientState.addPreviousActiveTasks(mkSet(taskIds));
         clients.put(processId, clientState);
         return clientState;

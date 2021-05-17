@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -216,7 +217,7 @@ public class TaskMovementTest {
     }
 
     private static ClientState getClientStateWithActiveAssignment(final Collection<TaskId> activeTasks) {
-        final ClientState client1 = new ClientState(1);
+        final ClientState client1 = new ClientState(1, Collections.emptyMap());
         client1.assignActiveTasks(activeTasks);
         return client1;
     }

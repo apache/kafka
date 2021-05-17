@@ -34,7 +34,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
@@ -42,6 +41,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
+
+    private final StandbyTaskAssignmentStrategy standbyTaskAssignmentStrategy;
+
+    public HighAvailabilityTaskAssignor() {
+        standbyTaskAssignmentStrategy = new StandbyTaskAssignmentStrategy();
+    }
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
@@ -51,12 +56,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        assignActiveStatefulTasks(clientStates, statefulTasks);
+        final Map<TaskId, UUID> statefulTasksClientMappings = assignActiveStatefulTasks(clientStates, statefulTasks);
 
         assignStandbyReplicaTasks(
             clientStates,
-            statefulTasks,
-            configs.numStandbyReplicas
+            statefulTasksClientMappings,
+            configs
         );
 
         final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas);
@@ -93,77 +98,64 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final boolean probingRebalanceNeeded = neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
         log.info("Decided on assignment: " +
-                     clientStates +
-                     " with" +
-                     (probingRebalanceNeeded ? "" : " no") +
-                     " followup probing rebalance.");
+                 clientStates +
+                 " with" +
+                 (probingRebalanceNeeded ? "" : " no") +
+                 " followup probing rebalance.");
 
         return probingRebalanceNeeded;
     }
 
-    private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
-                                                  final SortedSet<TaskId> statefulTasks) {
-        Iterator<ClientState> clientStateIterator = null;
+    private static Map<TaskId, UUID> assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
+                                                               final SortedSet<TaskId> statefulTasks) {
+        final Map<TaskId, UUID> taskAndClients = new HashMap<>();
+        Iterator<Map.Entry<UUID, ClientState>> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
-                clientStateIterator = clientStates.values().iterator();
+                clientStateIterator = clientStates.entrySet().iterator();
             }
-            clientStateIterator.next().assignActive(task);
+            final Map.Entry<UUID, ClientState> next = clientStateIterator.next();
+            taskAndClients.put(task, next.getKey());
+            next.getValue().assignActive(task);
         }
 
         balanceTasksOverThreads(
             clientStates,
             ClientState::activeTasks,
             ClientState::unassignActive,
-            ClientState::assignActive
+            new BiConsumer<UUID, TaskId>() {
+                @Override
+                public void accept(final UUID uuid, final TaskId taskId) {
+                    clientStates.get(uuid).assignActive(taskId);
+                    taskAndClients.put(taskId, uuid);
+                }
+            }
         );
+
+        return taskAndClients;
     }
 
-    private static void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
-                                                  final Set<TaskId> statefulTasks,
-                                                  final int numStandbyReplicas) {
-        final Map<TaskId, Integer> tasksToRemainingStandbys =
-            statefulTasks.stream().collect(Collectors.toMap(task -> task, t -> numStandbyReplicas));
+    private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
+                                           final Map<TaskId, UUID> statefulTasks,
+                                           final AssignmentConfigs configs) {
+        standbyTaskAssignmentStrategy.initStandbyTaskAssignor(configs)
+                                     .assignStandbyTasks(statefulTasks,
+                                                         clientStates,
+                                                         configs.numStandbyReplicas,
+                                                         configs.rackAwareAssignmentTags);
 
-        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, task) -> !clientStates.get(client).hasAssignedTask(task),
-            client -> clientStates.get(client).assignedTaskLoad()
-        );
-        standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
-
-        for (final TaskId task : statefulTasks) {
-            int numRemainingStandbys = tasksToRemainingStandbys.get(task);
-            while (numRemainingStandbys > 0) {
-                final UUID client = standbyTaskClientsByTaskLoad.poll(task);
-                if (client == null) {
-                    break;
-                }
-                clientStates.get(client).assignStandby(task);
-                numRemainingStandbys--;
-                standbyTaskClientsByTaskLoad.offer(client);
-            }
-
-            if (numRemainingStandbys > 0) {
-                log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                             "There is not enough available capacity. You should " +
-                             "increase the number of application instances " +
-                             "to maintain the requested number of standby replicas.",
-                         numRemainingStandbys, numStandbyReplicas, task);
-            }
-        }
-
-        balanceTasksOverThreads(
-            clientStates,
-            ClientState::standbyTasks,
-            ClientState::unassignStandby,
-            ClientState::assignStandby
-        );
+//        balanceTasksOverThreads(
+//            clientStates,
+//            ClientState::standbyTasks,
+//            ClientState::unassignStandby,
+//            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId)
+//        );
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
-                                                final BiConsumer<ClientState, TaskId> taskAssignor) {
+                                                final BiConsumer<UUID, TaskId> taskAssignor) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -183,9 +175,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
+                        //TODO: additional check to make sure that movement doesn't break standby task distribution?
                         if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
-                            taskAssignor.accept(destinationClientState, taskToMove);
+                            taskAssignor.accept(destinationClient, taskToMove);
                             keepBalancing = true;
                         }
                     }

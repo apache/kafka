@@ -16,22 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThrows;
+import java.util.Objects;
 
-public class AssignorConfigurationTest {
+/**
+ * Decides which {@link TaskAssignor} implementation to use for standby task assignment.
+ * <p>
+ * FIXME: maybe it should be called initializer?
+ */
+class StandbyTaskAssignmentStrategy {
 
-    @Test
-    public void configsShouldRejectZeroWarmups() {
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, null)
-        );
-
-        assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
+    StandbyTaskAssignor initStandbyTaskAssignor(final AssignmentConfigs configs) {
+        if (configs.numStandbyReplicas == 0) {
+            return new NoopStandbyTaskAssignor();
+        } else if (Objects.nonNull(configs.rackAwareAssignmentTags)) {
+            return new ClientTagAwareStandbyTaskAssignor();
+        } else {
+            return new DefaultStandbyTaskAssignor();
+        }
     }
 }

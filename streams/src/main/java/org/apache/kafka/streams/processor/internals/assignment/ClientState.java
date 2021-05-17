@@ -23,8 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -67,15 +67,19 @@ public class ClientState {
     private int capacity;
 
     public ClientState() {
-        this(0);
+        this(0, Collections.emptyMap());
     }
 
-    ClientState(final int capacity) {
+    public ClientState(final Map<String, String> clientTags) {
+        this(0, clientTags);
+    }
+
+    ClientState(final int capacity, final Map<String, String> clientTags) {
         prevActiveTasks = new TreeSet<>();
         prevStandbyTasks = new TreeSet<>();
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
-        clientTags = new HashMap<>();
+        this.clientTags = clientTags;
         this.capacity = capacity;
     }
 

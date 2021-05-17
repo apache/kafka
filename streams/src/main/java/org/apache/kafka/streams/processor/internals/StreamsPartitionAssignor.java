@@ -127,7 +127,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final ClientState state;
         private final SortedSet<String> consumers;
 
-        ClientMetadata(final String endPoint) {
+        ClientMetadata(final String endPoint, final Map<String, String> clientTags) {
 
             // get the host info, or null if no endpoint is configured (ie endPoint == null)
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
@@ -135,15 +135,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // initialize the consumer memberIds
             consumers = new TreeSet<>();
 
-            // initialize the client state
-            state = new ClientState();
+            // initialize the client state with client tags
+            state = new ClientState(clientTags);
         }
 
         void addConsumer(final String consumerMemberId,
-                         final Map<String, String> clientTags,
                          final List<TopicPartition> ownedPartitions) {
             consumers.add(consumerMemberId);
-            state.assignClientTags(clientTags);
             state.incrementCapacity();
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
         }
@@ -332,7 +330,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(null));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(null, Collections.emptyMap()));
                 }
             } else {
                 processId = info.processId();
@@ -342,13 +340,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // create the new client metadata if necessary
             if (clientMetadata == null) {
-                clientMetadata = new ClientMetadata(info.userEndPoint());
+                clientMetadata = new ClientMetadata(info.userEndPoint(), info.clientTags());
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
             // add the consumer and any info in its subscription to the client
-            final Map<String, String> clientTags = info.clientTags();
-            clientMetadata.addConsumer(consumerId, clientTags, subscription.ownedPartitions());
+            clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
         }
@@ -1262,6 +1259,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 7:
             case 8:
             case 9:
+            case 10:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

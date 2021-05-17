@@ -16,22 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.TaskId;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThrows;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.UUID;
 
-public class AssignorConfigurationTest {
+class NoopStandbyTaskAssignor implements StandbyTaskAssignor {
 
-    @Test
-    public void configsShouldRejectZeroWarmups() {
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new AssignorConfiguration.AssignmentConfigs(1L, 0, 1, 1L, null)
-        );
+    @Override
+    public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
+                                   final TreeMap<UUID, ClientState> clientStates,
+                                   final int numStandbyReplicas,
+                                   final String rackAwareAssignmentTags) {
+        // nothing do to here
+    }
 
-        assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
+    @Override
+    public boolean canTaskBeMoved(final TaskId taskId, final UUID assignedClientId, final TreeMap<UUID, ClientState> clientStates) {
+        return true;
     }
 }
