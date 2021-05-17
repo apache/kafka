@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -98,6 +97,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     private long trustStoreRefreshIntervalMs = DEFAULT_SECURITY_STORE_REFRESH_INTERVAL_MS;
     private final SecurityFileChangeListener securityFileChangeListener;
     private final Thread securityStoreRefreshThread;
+    private final WatchService watchService;
 
     private String[] cipherSuites;
     private String[] enabledProtocols;
@@ -105,14 +105,16 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     private AtomicReference<SSLContext> sslContext = new AtomicReference<>(null);
     private SslClientAuth sslClientAuth;
 
-    public DefaultSslEngineFactory() throws IOException {
-        this(SystemTime.SYSTEM);
+    public DefaultSslEngineFactory(final WatchService watchService) {
+        this(watchService, SystemTime.SYSTEM);
     }
 
     // For testing only
-    DefaultSslEngineFactory(Time time) throws IOException {
+    DefaultSslEngineFactory(final WatchService watchService,
+                            final Time time) {
         this.securityFileChangeListener = new SecurityFileChangeListener(time.timer(Long.MAX_VALUE), time.timer(Long.MAX_VALUE));
         this.securityStoreRefreshThread = new Thread(securityFileChangeListener, "security-store-refresh-thread");
+        this.watchService = watchService;
     }
 
     // For testing only
@@ -159,21 +161,14 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     class SecurityFileChangeListener implements Runnable {
         private final Timer keyStoreRefreshTimer;
         private final Timer trustStoreRefreshTimer;
-        private final WatchService watchService;
         private final Map<WatchKey, Path> watchKeyPathMap = new HashMap<>();
         private final Map<Path, SecurityStore> fileToStoreMap = new HashMap<>();
         private final AtomicReference<Exception> lastLoadFailure = new AtomicReference<>(null);
 
         SecurityFileChangeListener(final Timer keyStoreRefreshTimer,
-                                   final Timer trustStoreRefreshTimer) throws IOException {
+                                   final Timer trustStoreRefreshTimer) {
             this.keyStoreRefreshTimer = keyStoreRefreshTimer;
             this.trustStoreRefreshTimer = trustStoreRefreshTimer;
-            try {
-                watchService = FileSystems.getDefault().newWatchService();
-            } catch (IOException e) {
-                log.error("Failed to run the listener thread due to IO exception", e);
-                throw e;
-            }
         }
 
         void updateStoreKey(SecurityStore store, final String watchFile) {
@@ -351,12 +346,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.sslContext = null;
         this.securityStoreRefreshThread.interrupt();
         securityFileChangeListener.watchKeyPathMap.keySet().forEach(WatchKey::cancel);
-
-        try {
-            securityFileChangeListener.watchService.close();
-        } catch (IOException e) {
-            log.warn("Failed to terminate the watch service on the security listener", e);
-        }
 
         try {
             this.securityStoreRefreshThread.join(TimeUnit.SECONDS.toMillis(30));

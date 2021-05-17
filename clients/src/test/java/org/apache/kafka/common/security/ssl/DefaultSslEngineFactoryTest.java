@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Collections;
@@ -200,7 +202,8 @@ public class DefaultSslEngineFactoryTest {
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
-    private DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
+    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+    private DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService);
     Map<String, Object> configs = new HashMap<>();
 
     public DefaultSslEngineFactoryTest() throws IOException {
@@ -208,7 +211,7 @@ public class DefaultSslEngineFactoryTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        factory = new DefaultSslEngineFactory();
+        factory = new DefaultSslEngineFactory(watchService);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
@@ -334,7 +337,7 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testKeyStoreFileTriggerReload() throws Exception {
         MockTime time = new MockTime(0L, 0L, 0L);
-        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(time);
+        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService, time);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 1000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
@@ -361,7 +364,7 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testKeyStoreTimeBasedReload() throws Exception {
         MockTime time = new MockTime(0L, 0L, 0L);
-        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(time);
+        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService, time);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 1000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
@@ -383,11 +386,9 @@ public class DefaultSslEngineFactoryTest {
             "key store not reloaded or encountered expected failure");
     }
 
-
-
     @Test
     public void testTrustStoreFileTriggerReload() throws Exception {
-        DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
+        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 1000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 1000L);
@@ -412,7 +413,7 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testTrustStoreTimeBasedReload() throws Exception {
         MockTime time = new MockTime(0L, 0L, 0L);
-        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(time);
+        DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService, time);
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 1000L);

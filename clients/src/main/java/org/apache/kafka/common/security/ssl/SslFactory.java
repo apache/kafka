@@ -35,6 +35,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.GeneralSecurityException;
@@ -60,8 +62,9 @@ public class SslFactory implements Reconfigurable, Closeable {
     private String endpointIdentification;
     private SslEngineFactory sslEngineFactory;
     private Map<String, Object> sslEngineFactoryConfig;
+    private final WatchService watchService;
 
-    public SslFactory(Mode mode) {
+    public SslFactory(Mode mode) throws IOException {
         this(mode, null, false);
     }
 
@@ -76,10 +79,16 @@ public class SslFactory implements Reconfigurable, Closeable {
      */
     public SslFactory(Mode mode,
                       String clientAuthConfigOverride,
-                      boolean keystoreVerifiableUsingTruststore) {
+                      boolean keystoreVerifiableUsingTruststore) throws IOException {
         this.mode = mode;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
+        try {
+            watchService = FileSystems.getDefault().newWatchService();
+        } catch (IOException e) {
+            log.error("Failed to start SSL factory due to IO exception", e);
+            throw e;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -133,12 +142,8 @@ public class SslFactory implements Reconfigurable, Closeable {
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
                 (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
         SslEngineFactory sslEngineFactory;
-        if (sslEngineFactoryClass == null) {
-            try {
-                sslEngineFactory = new DefaultSslEngineFactory();
-            } catch (IOException e) {
-                throw new KafkaException("Failed to instantiate new ssl factory due to IOException", e);
-            }
+        if (sslEngineFactoryClass == null || sslEngineFactoryClass.equals(DefaultSslEngineFactory.class)) {
+            sslEngineFactory = new DefaultSslEngineFactory(watchService);
         } else {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }
@@ -288,6 +293,12 @@ public class SslFactory implements Reconfigurable, Closeable {
     @Override
     public void close() {
         Utils.closeQuietly(sslEngineFactory, "close engine factory");
+
+        try {
+            watchService.close();
+        } catch (IOException e) {
+            log.warn("Failed to terminate the file watch service", e);
+        }
     }
 
     static class CertificateEntries {

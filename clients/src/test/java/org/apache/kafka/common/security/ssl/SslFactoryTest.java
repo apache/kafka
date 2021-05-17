@@ -80,7 +80,7 @@ public abstract class SslFactoryTest {
     }
 
     @Test
-    public void testSslFactoryWithCustomKeyManagerConfiguration() {
+    public void testSslFactoryWithCustomKeyManagerConfiguration() throws IOException {
         TestProviderCreator testProviderCreator = new TestProviderCreator();
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
@@ -95,7 +95,7 @@ public abstract class SslFactoryTest {
     }
 
     @Test
-    public void testSslFactoryWithoutProviderClassConfiguration() {
+    public void testSslFactoryWithoutProviderClassConfiguration() throws IOException {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
@@ -107,7 +107,7 @@ public abstract class SslFactoryTest {
     }
 
     @Test
-    public void testSslFactoryWithIncorrectProviderClassConfiguration() {
+    public void testSslFactoryWithIncorrectProviderClassConfiguration() throws IOException {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,

@@ -60,6 +60,7 @@ import java.io.OutputStreamWriter;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -581,7 +582,7 @@ public class TestSslUtils {
 
         public boolean closed = false;
 
-        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory(FileSystems.getDefault().newWatchService());
 
         public TestSslEngineFactory() throws IOException {
         }
