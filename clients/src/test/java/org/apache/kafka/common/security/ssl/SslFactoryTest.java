@@ -34,6 +34,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
@@ -45,6 +46,8 @@ import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,10 +64,20 @@ import java.util.Properties;
 
 public abstract class SslFactoryTest {
     private final String tlsProtocol;
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+    private WatchService watchService;
 
-    public SslFactoryTest(String tlsProtocol) throws IOException {
+    public SslFactoryTest(String tlsProtocol) {
         this.tlsProtocol = tlsProtocol;
+    }
+
+    @BeforeEach
+    public void setup() throws IOException {
+        watchService = FileSystems.getDefault().newWatchService();
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        watchService.close();
     }
 
     @Test

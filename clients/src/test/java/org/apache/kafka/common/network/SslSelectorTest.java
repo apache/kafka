@@ -66,10 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SslSelectorTest extends SelectorTest {
 
     private Map<String, Object> sslClientConfigs;
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
-
-    public SslSelectorTest() throws IOException {
-    }
+    private WatchService watchService;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -85,6 +82,7 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
+        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach
@@ -92,6 +90,7 @@ public class SslSelectorTest extends SelectorTest {
         this.selector.close();
         this.server.close();
         this.metrics.close();
+        this.watchService.close();
     }
 
     @Override
@@ -125,7 +124,7 @@ public class SslSelectorTest extends SelectorTest {
         File trustStoreFile = new File(TestKeyManagerFactory.TestKeyManager.mockTrustStoreFile);
         Map<String, Object> sslClientConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT, trustStoreFile, "client");
 
-        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configure(sslClientConfigs);
         Metrics metrics = new Metrics();
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
@@ -165,7 +164,7 @@ public class SslSelectorTest extends SelectorTest {
 
         this.selector.close();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
         connect(node, new InetSocketAddress("localhost", server.port));
@@ -207,7 +206,7 @@ public class SslSelectorTest extends SelectorTest {
         String node2 = "2";
         final AtomicInteger node1Polls = new AtomicInteger();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
@@ -383,8 +382,8 @@ public class SslSelectorTest extends SelectorTest {
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
-        public TestSslChannelBuilder(Mode mode) throws IOException {
-            super(mode, null, false, new LogContext(), FileSystems.getDefault().newWatchService());
+        public TestSslChannelBuilder(Mode mode, WatchService watchService) {
+            super(mode, null, false, new LogContext(), watchService);
         }
 
         @Override

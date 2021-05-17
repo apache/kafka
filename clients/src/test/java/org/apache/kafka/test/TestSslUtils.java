@@ -63,6 +63,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.WatchService;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyPair;
@@ -581,8 +582,9 @@ public class TestSslUtils {
     public static final class TestSslEngineFactory implements SslEngineFactory {
 
         public boolean closed = false;
+        private final WatchService watchService = FileSystems.getDefault().newWatchService();
 
-        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory(FileSystems.getDefault().newWatchService());
+        DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory(watchService);
 
         public TestSslEngineFactory() throws IOException {
         }
@@ -618,9 +620,10 @@ public class TestSslUtils {
         }
 
         @Override
-        public void close() {
+        public void close() throws IOException {
             defaultSslEngineFactory.close();
             closed = true;
+            watchService.close();
         }
 
         @Override

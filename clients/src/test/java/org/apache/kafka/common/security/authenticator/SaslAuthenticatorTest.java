@@ -165,10 +165,7 @@ public class SaslAuthenticatorTest {
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
     private int nextCorrelationId;
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
-
-    public SaslAuthenticatorTest() throws IOException {
-    }
+    private WatchService watchService;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -180,6 +177,7 @@ public class SaslAuthenticatorTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         TestLogin.loginCount.set(0);
+        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach
@@ -188,6 +186,8 @@ public class SaslAuthenticatorTest {
             this.server.close();
         if (selector != null)
             this.selector.close();
+        if (watchService != null)
+            this.watchService.close();
     }
 
     /**
@@ -1633,7 +1633,7 @@ public class SaslAuthenticatorTest {
         Map<String, ?> configs = new TestSecurityConfig(saslClientConfigs).values();
         this.channelBuilder = new AlternateSaslChannelBuilder(Mode.CLIENT,
                 Collections.singletonMap(saslMechanism, JaasContext.loadClientContext(configs)), securityProtocol, null,
-                false, saslMechanism, true, credentialCache, null, time);
+                false, saslMechanism, true, credentialCache, null, time, watchService);
         this.channelBuilder.configure(configs);
         // initial authentication must succeed
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
@@ -2535,11 +2535,11 @@ public class SaslAuthenticatorTest {
         public AlternateSaslChannelBuilder(Mode mode, Map<String, JaasContext> jaasContexts,
                 SecurityProtocol securityProtocol, ListenerName listenerName, boolean isInterBrokerListener,
                 String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
-                DelegationTokenCache tokenCache, Time time) throws IOException {
+                DelegationTokenCache tokenCache, Time time, WatchService watchService) {
             super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
                 () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER),
-                FileSystems.getDefault().newWatchService());
+                watchService);
         }
 
         @Override

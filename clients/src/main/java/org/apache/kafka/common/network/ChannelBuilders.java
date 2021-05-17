@@ -249,7 +249,7 @@ public class ChannelBuilders {
         try {
             return FileSystems.getDefault().newWatchService();
         } catch (IOException e) {
-            log.error("Failed to start SSL factory due to IO exception", e);
+            log.error("Failed to start the watch service", e);
             throw e;
         }
     }

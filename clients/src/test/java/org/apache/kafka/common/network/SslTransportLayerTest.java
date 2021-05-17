@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -82,9 +83,16 @@ public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+    private WatchService watchService;
 
-    public SslTransportLayerTest() throws IOException {
+    @BeforeEach
+    public void setup() throws IOException {
+        watchService = FileSystems.getDefault().newWatchService();
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        watchService.close();
     }
 
     private static class Args {
@@ -253,7 +261,7 @@ public class SslTransportLayerTest {
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
         // Create a server with endpoint validation enabled on the server SSL engine
-        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
+        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER, watchService) {
             @Override
             protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 SSLParameters sslParams = sslEngine.getSSLParameters();
@@ -893,7 +901,7 @@ public class SslTransportLayerTest {
     private void testIOExceptionsDuringHandshake(Args args,
                                                  FailureAction readFailureAction,
                                                  FailureAction flushFailureAction) throws Exception {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
             String node = String.valueOf(i);
@@ -943,7 +951,7 @@ public class SslTransportLayerTest {
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
             String node = "0";
-            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
+            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER, watchService);
             serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
@@ -1291,7 +1299,7 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
                                 final Integer netWriteBufSize, final Integer appBufSize) throws IOException {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, watchService);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
@@ -1362,8 +1370,8 @@ public class SslTransportLayerTest {
         FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
-        public TestSslChannelBuilder(Mode mode) throws IOException {
-            super(mode, null, false, new LogContext(), FileSystems.getDefault().newWatchService());
+        public TestSslChannelBuilder(Mode mode, WatchService watchService) {
+            super(mode, null, false, new LogContext(), watchService);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

@@ -38,7 +38,9 @@ import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSManager;
 import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -64,15 +66,17 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class SaslChannelBuilderTest {
 
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+    private WatchService watchService;
 
-    public SaslChannelBuilderTest() throws IOException {
+    @BeforeEach
+    public void setup() throws IOException {
+        watchService = FileSystems.getDefault().newWatchService();
     }
 
-
     @AfterEach
-    public void tearDown() {
+    public void tearDown() throws IOException {
         System.clearProperty(SaslChannelBuilder.GSS_NATIVE_PROP);
+        watchService.close();
     }
 
     @Test

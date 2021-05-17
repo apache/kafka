@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -202,12 +203,9 @@ public class DefaultSslEngineFactoryTest {
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
+    private WatchService watchService;
     private DefaultSslEngineFactory factory = new DefaultSslEngineFactory(watchService);
     Map<String, Object> configs = new HashMap<>();
-
-    public DefaultSslEngineFactoryTest() throws IOException {
-    }
 
     @BeforeEach
     public void setUp() throws IOException {
@@ -215,6 +213,13 @@ public class DefaultSslEngineFactoryTest {
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
         configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
+        this.watchService = FileSystems.getDefault().newWatchService();
+    }
+
+    @AfterEach
+    public void teardown() throws Exception {
+        if (watchService != null)
+            this.watchService.close();
     }
 
     @Test

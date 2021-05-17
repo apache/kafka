@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.FileSystems;
+import java.nio.file.WatchService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -46,11 +47,13 @@ class EchoServer extends Thread {
     private volatile boolean closing = false;
     private final SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
+    private final WatchService watchService;
 
     public EchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs) throws Exception {
+        watchService = FileSystems.getDefault().newWatchService();
         switch (securityProtocol) {
             case SSL:
-                this.sslFactory = new SslFactory(Mode.SERVER, FileSystems.getDefault().newWatchService());
+                this.sslFactory = new SslFactory(Mode.SERVER, watchService);
                 this.sslFactory.configure(configs);
                 SSLContext sslContext = ((DefaultSslEngineFactory) this.sslFactory.sslEngineFactory()).sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
@@ -133,5 +136,6 @@ class EchoServer extends Thread {
         for (Thread t : threads)
             t.join();
         join();
+        watchService.close();
     }
 }

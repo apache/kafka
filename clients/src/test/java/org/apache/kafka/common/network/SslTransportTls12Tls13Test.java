@@ -43,10 +43,7 @@ public class SslTransportTls12Tls13Test {
     private Selector selector;
     private Map<String, Object> sslClientConfigs;
     private Map<String, Object> sslServerConfigs;
-    private final WatchService watchService = FileSystems.getDefault().newWatchService();
-
-    public SslTransportTls12Tls13Test() throws IOException {
-    }
+    private WatchService watchService;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -60,6 +57,7 @@ public class SslTransportTls12Tls13Test {
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext, watchService);
         channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        this.watchService = FileSystems.getDefault().newWatchService();
     }
 
     @AfterEach
@@ -68,6 +66,8 @@ public class SslTransportTls12Tls13Test {
             this.selector.close();
         if (server != null)
             this.server.close();
+        if (this.watchService != null)
+            this.watchService.close();
     }
 
     /**
