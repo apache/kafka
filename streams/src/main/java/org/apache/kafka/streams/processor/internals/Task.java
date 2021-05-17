@@ -248,11 +248,4 @@ public interface Task {
      * @return This returns the time the task started idling. If it is not idling it returns empty.
      */
     Optional<Long> timeCurrentIdlingStarted();
-
-    /**
-     * Update the committed offsets in the Task
-     * @param topicPartition
-     * @param offset
-     */
-    void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset);
 }
