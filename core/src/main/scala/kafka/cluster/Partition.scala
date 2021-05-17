@@ -1385,10 +1385,15 @@ class Partition(val topicPartition: TopicPartition,
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
             debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
             isrChangeListener.markFailed()
-          } else if (leaderAndIsr.zkVersion <= zkVersion) {
+          } else if (leaderAndIsr.zkVersion < zkVersion) {
             debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
             isrChangeListener.markFailed()
           } else {
+            // This is one of two states:
+            //   1) leaderAndIsr.zkVersion > zkVersion: Controller updated to new version with proposedIsrState.
+            //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
+            // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
+
             isrState = CommittedIsr(leaderAndIsr.isr.toSet)
             zkVersion = leaderAndIsr.zkVersion
             info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
