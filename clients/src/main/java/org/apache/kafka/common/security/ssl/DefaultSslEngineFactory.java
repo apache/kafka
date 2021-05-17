@@ -110,7 +110,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     // For testing only
-    public DefaultSslEngineFactory(Time time) throws IOException {
+    DefaultSslEngineFactory(Time time) throws IOException {
         this.securityFileChangeListener = new SecurityFileChangeListener(time.timer(Long.MAX_VALUE), time.timer(Long.MAX_VALUE));
         this.securityStoreRefreshThread = new Thread(securityFileChangeListener, "security-store-refresh-thread");
     }
@@ -351,6 +351,12 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.sslContext = null;
         this.securityStoreRefreshThread.interrupt();
         securityFileChangeListener.watchKeyPathMap.keySet().forEach(WatchKey::cancel);
+
+        try {
+            securityFileChangeListener.watchService.close();
+        } catch (IOException e) {
+            log.warn("Failed to terminate the watch service on the security listener", e);
+        }
 
         try {
             this.securityStoreRefreshThread.join(TimeUnit.SECONDS.toMillis(30));
