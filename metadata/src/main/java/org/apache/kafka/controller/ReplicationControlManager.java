@@ -65,6 +65,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineInteger;
 import org.slf4j.Logger;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -282,7 +283,7 @@ public class ReplicationControlManager {
     /**
      * A count of the total number of partitions in the cluster.
      */
-    private int globalPartitionCount;
+    private final TimelineInteger globalPartitionCount;
 
     /**
      * A count of the number of partitions that do not have their first replica as a leader.
@@ -333,7 +334,7 @@ public class ReplicationControlManager {
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
-        this.globalPartitionCount = 0;
+        this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.preferredReplicaImbalanceCount = 0;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -363,8 +364,8 @@ public class ReplicationControlManager {
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
                 newPartInfo.isr, NO_LEADER, newPartInfo.leader);
-            globalPartitionCount++;
-            controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
+            globalPartitionCount.increment();
+            controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
         } else if (!newPartInfo.equals(prevPartInfo)) {
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
@@ -425,12 +426,12 @@ public class ReplicationControlManager {
             if (partition.leader != partition.preferredReplica()) {
                 preferredReplicaImbalanceCount--;
             }
-            globalPartitionCount--;
+            globalPartitionCount.decrement();
         }
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
 
         controllerMetrics.setGlobalTopicsCount(topics.size());
-        controllerMetrics.setGlobalPartitionCount(globalPartitionCount);
+        controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
         controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
@@ -823,16 +824,40 @@ public class ReplicationControlManager {
         boolean uncleanOk = electionTypeIsUnclean(request.electionType());
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ElectLeadersResponseData response = new ElectLeadersResponseData();
-        for (TopicPartitions topic : request.topicPartitions()) {
-            ReplicaElectionResult topicResults =
-                new ReplicaElectionResult().setTopic(topic.topic());
-            response.replicaElectionResults().add(topicResults);
-            for (int partitionId : topic.partitions()) {
-                ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
-                topicResults.partitionResult().add(new PartitionResult().
-                    setPartitionId(partitionId).
-                    setErrorCode(error.error().code()).
-                    setErrorMessage(error.message()));
+        if (request.topicPartitions() == null) {
+            // If topicPartitions is null, we try to elect a new leader for every partition.  There
+            // are some obvious issues with this wire protocol.  For example, what if we have too
+            // many partitions to fit the results in a single RPC?  This behavior should probably be
+            // removed from the protocol.  For now, however, we have to implement this for
+            // compatibility with the old controller.
+            for (Entry<String, Uuid> topicEntry : topicsByName.entrySet()) {
+                String topicName = topicEntry.getKey();
+                ReplicaElectionResult topicResults =
+                    new ReplicaElectionResult().setTopic(topicName);
+                response.replicaElectionResults().add(topicResults);
+                TopicControlInfo topic = topics.get(topicEntry.getValue());
+                if (topic != null) {
+                    for (int partitionId : topic.parts.keySet()) {
+                        ApiError error = electLeader(topicName, partitionId, uncleanOk, records);
+                        topicResults.partitionResult().add(new PartitionResult().
+                            setPartitionId(partitionId).
+                            setErrorCode(error.error().code()).
+                            setErrorMessage(error.message()));
+                    }
+                }
+            }
+        } else {
+            for (TopicPartitions topic : request.topicPartitions()) {
+                ReplicaElectionResult topicResults =
+                    new ReplicaElectionResult().setTopic(topic.topic());
+                response.replicaElectionResults().add(topicResults);
+                for (int partitionId : topic.partitions()) {
+                    ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
+                    topicResults.partitionResult().add(new PartitionResult().
+                        setPartitionId(partitionId).
+                        setErrorCode(error.error().code()).
+                        setErrorMessage(error.message()));
+                }
             }
         }
         return ControllerResult.of(records, response);
