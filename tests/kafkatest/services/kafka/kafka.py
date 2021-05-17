@@ -37,11 +37,12 @@ from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 class KafkaListener:
 
-    def __init__(self, name, port_number, security_protocol, open=False):
+    def __init__(self, name, port_number, security_protocol, open=False, sasl_mechanism = None):
         self.name = name
         self.port_number = port_number
         self.security_protocol = security_protocol
         self.open = open
+        self.sasl_mechanism = sasl_mechanism
 
     def listener(self):
         return "%s://:%s" % (self.name, str(self.port_number))
@@ -487,17 +488,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                    serves_intercontroller_sasl_mechanism=serves_intercontroller_sasl_mechanism,
                                                    uses_controller_sasl_mechanism=uses_controller_sasl_mechanism,
                                                    raft_tls=raft_tls)
+        # Ensure we have the correct client security protocol and SASL mechanism because they may have been mutated
+        self._security_config.properties['security.protocol'] = self.security_protocol
+        self._security_config.properties['sasl.mechanism'] = self.client_sasl_mechanism
         # Ensure we have the right inter-broker security protocol because it may have been mutated
         # since we cached our security config (ignore if this is a remote raft controller quorum case; the
         # inter-broker security protocol is not used there).
-        if (self.quorum_info.using_zk or self.quorum_info.has_brokers) and \
-                self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
-            self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
-            self._security_config.calc_has_sasl()
-            self._security_config.calc_has_ssl()
+        if (self.quorum_info.using_zk or self.quorum_info.has_brokers):
+            # in case inter-broker SASL mechanism has changed without changing the inter-broker security protocol
+            self._security_config.properties['sasl.mechanism.inter.broker.protocol'] = self.interbroker_sasl_mechanism
+            if self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
+                self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
+                self._security_config.calc_has_sasl()
+                self._security_config.calc_has_ssl()
         for port in self.port_mappings.values():
             if port.open:
-                self._security_config.enable_security_protocol(port.security_protocol)
+                self._security_config.enable_security_protocol(port.security_protocol, port.sasl_mechanism)
         if self.quorum_info.using_zk:
             if self.zk.zk_sasl:
                 self._security_config.enable_sasl()
