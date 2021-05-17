@@ -19,10 +19,6 @@ package org.apache.kafka.controller;
 
 
 public interface ControllerMetrics {
-    void updateEventQueueTime(long durationMs);
-
-    void updateEventQueueProcessingTime(long durationMs);
-
     void setActive(boolean active);
 
     boolean active();

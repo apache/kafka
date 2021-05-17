@@ -25,6 +25,16 @@ public final class MockEventQueueMetrics implements EventQueueMetrics {
     }
 
     @Override
+    public void updateEventQueueTime(long durationMs) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
+    public void updateEventQueueProcessingTime(long durationMs) {
+        // TODO Auto-generated method stub
+    }
+
+    @Override
     public int eventQueueSize() {
         return this.queueSize;
     }

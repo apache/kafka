@@ -18,6 +18,10 @@
 package org.apache.kafka.queue;
 
 public interface EventQueueMetrics {
+    void updateEventQueueTime(long durationMs);
+
+    void updateEventQueueProcessingTime(long durationMs);
+
     void setEventQueueSize(int queueSize);
 
     int eventQueueSize();

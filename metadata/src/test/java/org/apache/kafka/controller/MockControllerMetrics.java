@@ -39,16 +39,6 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void updateEventQueueTime(long durationMs) {
-        // nothing to do
-    }
-
-    @Override
-    public void updateEventQueueProcessingTime(long durationMs) {
-        // nothing to do
-    }
-
-    @Override
     public void setGlobalTopicsCount(int topicCount) {
         this.topics = topicCount;
     }
