@@ -427,7 +427,6 @@ public class ReplicationControlManager {
             }
             globalPartitionCount--;
         }
-        brokersToIsrs.updateMetricsForTopicRemoval(topic.id);
         brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
 
         controllerMetrics.setGlobalTopicsCount(topics.size());
