@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineInteger;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -140,12 +141,12 @@ public class BrokersToIsrs {
      */
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> isrMembers;
     
-    private int offlinePartitionCount;
+    private final TimelineInteger offlinePartitionCount;
 
     BrokersToIsrs(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.isrMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.offlinePartitionCount = 0;
+        this.offlinePartitionCount = new TimelineInteger(snapshotRegistry);
     }
 
     /**
@@ -167,7 +168,7 @@ public class BrokersToIsrs {
             if (prevLeader == NO_LEADER) {
                 prev = Replicas.copyWith(prevIsr, NO_LEADER);
                 if (nextLeader != NO_LEADER) {
-                    offlinePartitionCount--;
+                    offlinePartitionCount.decrement();
                 }
             } else {
                 prev = Replicas.clone(prevIsr);
@@ -181,7 +182,7 @@ public class BrokersToIsrs {
             if (nextLeader == NO_LEADER) {
                 next = Replicas.copyWith(nextIsr, NO_LEADER);
                 if (prevLeader != NO_LEADER) {
-                    offlinePartitionCount++;
+                    offlinePartitionCount.increment();
                 }
             } else {
                 next = Replicas.clone(nextIsr);
@@ -227,7 +228,7 @@ public class BrokersToIsrs {
         Map<Uuid, int[]> topicMap = isrMembers.get(brokerId);
         if (topicMap != null) {
             if (brokerId == NO_LEADER) {
-                offlinePartitionCount -= topicMap.get(topicId).length;
+                offlinePartitionCount.set(offlinePartitionCount.get() - topicMap.get(topicId).length);
             }
             topicMap.remove(topicId);
         }
@@ -340,6 +341,6 @@ public class BrokersToIsrs {
     }
 
     int offlinePartitionCount() {
-        return offlinePartitionCount;
+        return offlinePartitionCount.get();
     }
 }

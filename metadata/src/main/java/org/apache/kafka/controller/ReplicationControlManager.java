@@ -288,7 +288,7 @@ public class ReplicationControlManager {
     /**
      * A count of the number of partitions that do not have their first replica as a leader.
      */
-    private int preferredReplicaImbalanceCount;
+    private final TimelineInteger preferredReplicaImbalanceCount;
 
     /**
      * A reference to the controller's configuration control manager.
@@ -335,7 +335,7 @@ public class ReplicationControlManager {
         this.controllerMetrics = controllerMetrics;
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
-        this.preferredReplicaImbalanceCount = 0;
+        this.preferredReplicaImbalanceCount = new TimelineInteger(snapshotRegistry);
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
@@ -373,10 +373,10 @@ public class ReplicationControlManager {
                 newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
         }
         if (newPartInfo.leader != newPartInfo.preferredReplica()) {
-            preferredReplicaImbalanceCount++;
+            preferredReplicaImbalanceCount.increment();
         }
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
+        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
     }
 
     public void replay(PartitionChangeRecord record) {
@@ -400,10 +400,10 @@ public class ReplicationControlManager {
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
         if ((newPartitionInfo.leader != newPartitionInfo.preferredReplica()) && 
                 (prevPartitionInfo.leader == prevPartitionInfo.preferredReplica())) {
-            preferredReplicaImbalanceCount++;
+            preferredReplicaImbalanceCount.increment();
         }
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
+        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
     }
 
     public void replay(RemoveTopicRecord record) {
@@ -424,7 +424,7 @@ public class ReplicationControlManager {
                 brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
             }
             if (partition.leader != partition.preferredReplica()) {
-                preferredReplicaImbalanceCount--;
+                preferredReplicaImbalanceCount.decrement();
             }
             globalPartitionCount.decrement();
         }
@@ -433,7 +433,7 @@ public class ReplicationControlManager {
         controllerMetrics.setGlobalTopicsCount(topics.size());
         controllerMetrics.setGlobalPartitionCount(globalPartitionCount.get());
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
-        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount);
+        controllerMetrics.setPreferredReplicaImbalanceCount(preferredReplicaImbalanceCount.get());
         log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
