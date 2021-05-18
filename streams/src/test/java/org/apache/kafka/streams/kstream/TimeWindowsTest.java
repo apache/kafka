@@ -36,23 +36,28 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldSetWindowSize() {
+
         assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).sizeMs);
+        assertEquals(ANY_SIZE, TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE)).sizeMs);
     }
 
     @Test
     public void shouldSetWindowAdvance() {
         final long anyAdvance = 4;
         assertEquals(anyAdvance, TimeWindows.of(ofMillis(ANY_SIZE)).advanceBy(ofMillis(anyAdvance)).advanceMs);
+        assertEquals(anyAdvance, TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE)).advanceBy(ofMillis(anyAdvance)).advanceMs);
     }
 
     @Test
     public void windowSizeMustNotBeZero() {
         assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(0)));
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(0)));
     }
 
     @Test
     public void windowSizeMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(-1)));
     }
 
     @Test
@@ -141,6 +146,10 @@ public class TimeWindowsTest {
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4)),
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4))
         );
+
+        verifyEquality(TimeWindows.ofSizeWithNoGrace(ofMillis(3)), TimeWindows.ofSizeWithNoGrace(ofMillis(3)));
+
+        verifyEquality(TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(1)), TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(1)));
     }
 
     @Test

@@ -44,11 +44,26 @@ public class JoinWindowsTest {
                    .after(ofMillis(0))                           // [ -anyOtherSize ; 0 ]
                    .after(ofMillis(-ANY_SIZE))                    // [ -anyOtherSize ; -anySize ]
                    .after(ofMillis(-ANY_OTHER_SIZE));              // [ -anyOtherSize ; -anyOtherSize ]
+
+        JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_OTHER_SIZE))   // [ -anyOtherSize ; anyOtherSize ]
+                .after(ofMillis(ANY_SIZE))                     // [ -anyOtherSize ; anySize ]
+                .after(ofMillis(0))                           // [ -anyOtherSize ; 0 ]
+                .after(ofMillis(-ANY_SIZE))                    // [ -anyOtherSize ; -anySize ]
+                .after(ofMillis(-ANY_OTHER_SIZE));              // [ -anyOtherSize ; -anyOtherSize ]
     }
 
     @Test
     public void timeDifferenceMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> JoinWindows.of(ofMillis(-1)));
+
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(-1)));
+
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(1)));
+    }
+
+    @Test
+    public void gracePeriodMustNotBeNegative() {
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(1), ofMillis(-1)));
     }
 
     @Test
@@ -113,6 +128,10 @@ public class JoinWindowsTest {
             JoinWindows.of(ofMillis(9)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60)),
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
         );
+
+        verifyEquality(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3)), JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3)));
+
+        verifyEquality(JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)), JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)));
     }
 
     @Test
@@ -141,6 +160,16 @@ public class JoinWindowsTest {
         verifyInEquality(
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(9)),
             JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(9)),
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(9)).before(ofMillis(1)).after(ofMillis(2)),
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)).before(ofMillis(1)).after(ofMillis(2))
         );
     }
 }

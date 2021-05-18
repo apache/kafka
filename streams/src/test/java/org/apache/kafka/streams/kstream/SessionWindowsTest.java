@@ -32,6 +32,7 @@ public class SessionWindowsTest {
     public void shouldSetWindowGap() {
         final long anyGap = 42L;
         assertEquals(anyGap, SessionWindows.with(ofMillis(anyGap)).inactivityGap());
+        assertEquals(anyGap, SessionWindows.ofInactivityGapWithNoGrace(ofMillis(anyGap)).inactivityGap());
     }
 
     @Test
@@ -56,11 +57,15 @@ public class SessionWindowsTest {
     @Test
     public void windowSizeMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(-1), ofMillis(1)));
     }
 
     @Test
     public void windowSizeMustNotBeZero() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(0)));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0)));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(0), ofMillis(1)));
     }
 
     @Test
@@ -72,6 +77,12 @@ public class SessionWindowsTest {
         verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
 
         verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
+
+        verifyEquality(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)), SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)));
+
+        verifyEquality(SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(2)), SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(2)));
+
+        verifyEquality(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)), SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(0)));
     }
 
     @Test
@@ -85,5 +96,9 @@ public class SessionWindowsTest {
         verifyInEquality(SessionWindows.with(ofMillis(2)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
 
         verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+
+        verifyInEquality(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(9)), SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)));
+
+        verifyInEquality(SessionWindows.ofInactivityGapAndGrace(ofMillis(9), ofMillis(9)), SessionWindows.ofInactivityGapAndGrace(ofMillis(1), ofMillis(9)));
     }
 }

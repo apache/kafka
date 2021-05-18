@@ -32,21 +32,27 @@ public class SlidingWindowsTest {
     @Test
     public void shouldSetTimeDifference() {
         assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifferenceMs());
+        assertEquals(ANY_SIZE, SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifferenceMs());
+        assertEquals(ANY_SIZE, SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE)).timeDifferenceMs());
     }
 
     @Test
     public void timeDifferenceMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.withTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5)));
+        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5)));
+        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(-1)));
     }
 
     @Test
     public void shouldSetGracePeriod() {
         assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(ANY_SIZE)).gracePeriodMs());
+        assertEquals(ANY_SIZE, SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(ANY_SIZE)).gracePeriodMs());
     }
 
     @Test
     public void gracePeriodMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1)));
     }
 
     @Test
@@ -56,6 +62,21 @@ public class SlidingWindowsTest {
         verifyEquality(
                 SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace)),
                 SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace))
+        );
+
+        verifyEquality(
+                SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace)),
+                SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace))
+        );
+
+        verifyEquality(
+                SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(timeDifference)),
+                SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(timeDifference))
+        );
+
+        verifyEquality(
+                SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(timeDifference)),
+                SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(0L))
         );
     }
 
