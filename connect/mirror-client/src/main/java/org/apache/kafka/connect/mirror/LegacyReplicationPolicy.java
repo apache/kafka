@@ -19,7 +19,9 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.Configurable;
 
 import java.util.Map;
-import java.util.regex.Pattern;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** LegacyReplicationPolicy attempts to mimic MirrorMaker v1, and thus by default does not
   * rename topics. In order to support active/active replication with careful configuration,
@@ -39,8 +41,9 @@ import java.util.regex.Pattern;
   * already be the case.
   */
 public class LegacyReplicationPolicy implements ReplicationPolicy, Configurable {
+    private static final Logger log = LoggerFactory.getLogger(LegacyReplicationPolicy.class);
 
-    public static final String REMOTE_TOPIC_SUFFIX_CONFIG = "remote.topic.suffix";
+    public static final String REMOTE_TOPIC_SUFFIX_CONFIG = "replication.policy.remote.topic.suffix";
     public static final String SOURCE_CLUSTER_ALIAS_CONFIG = "source.cluster.alias";
 
     private String remoteTopicSuffix = "";
@@ -51,17 +54,19 @@ public class LegacyReplicationPolicy implements ReplicationPolicy, Configurable 
 
     // Visible for testing
     LegacyReplicationPolicy(String remoteTopicSuffix, String sourceClusterAlias) {
-      this.remoteTopicSuffix = remoteTopicSuffix;
-      this.sourceClusterAlias = sourceClusterAlias;
+        this.remoteTopicSuffix = remoteTopicSuffix;
+        this.sourceClusterAlias = sourceClusterAlias;
     }
 
     @Override
     public void configure(Map<String, ?> props) {
         if (props.containsKey(REMOTE_TOPIC_SUFFIX_CONFIG)) {
             remoteTopicSuffix = (String) props.get(REMOTE_TOPIC_SUFFIX_CONFIG);
+            log.info("Using custom remote topic suffix `{}`.", remoteTopicSuffix);
         }
         if (props.containsKey(SOURCE_CLUSTER_ALIAS_CONFIG)) {
             sourceClusterAlias = (String) props.get(SOURCE_CLUSTER_ALIAS_CONFIG);
+            log.info("Using source cluster alias `{}`.", sourceClusterAlias);
         }
     }
 

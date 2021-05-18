@@ -29,7 +29,7 @@ public class MirrorConnectorsIntegrationLegacyTest extends MirrorConnectorsInteg
     protected Map<String, String> configOverrides() {
         Map<String, String> m = new HashMap<>();
         m.put("replication.policy.class", LegacyReplicationPolicy.class.getName());
-        m.put("remote.topic.suffix", ".replica");
+        m.put("replication.policy.remote.topic.suffix", ".replica");
         return m;
     }
 }
