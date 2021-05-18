@@ -87,7 +87,7 @@ public class ReplicationControlManagerTest {
         final MockRandom random = new MockRandom();
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(random));
+            new StripedReplicaPlacer(random));
         final ControllerMetrics metrics = new MockControllerMetrics();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap());
@@ -164,7 +164,8 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
-                setErrorMessage("Unable to replicate the partition 3 times: there are only 0 usable brokers"));
+                setErrorMessage("Unable to replicate the partition 3 time(s): All " +
+                    "brokers are currently fenced."));
         assertEquals(expectedResponse, result.response());
 
         registerBroker(0, ctx);
@@ -182,8 +183,8 @@ public class ReplicationControlManagerTest {
             setTopicId(result2.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse2, result2.response());
         ctx.replay(result2.records());
-        assertEquals(new PartitionControlInfo(new int[] {2, 0, 1},
-            new int[] {2, 0, 1}, null, null, 2, 0, 0),
+        assertEquals(new PartitionControlInfo(new int[] {1, 2, 0},
+            new int[] {1, 2, 0}, null, null, 1, 0, 0),
             replicationControl.getPartition(
                 ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result3 =
@@ -197,8 +198,8 @@ public class ReplicationControlManagerTest {
         ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
-                    setReplicas(Arrays.asList(2, 0, 1)).setIsr(Arrays.asList(2, 0, 1)).
-                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(2).
+                    setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
+                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(1).
                     setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),

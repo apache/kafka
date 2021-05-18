@@ -194,6 +194,7 @@ class SecurityConfig(TemplateRenderer):
         self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
         self.listener_security_config = listener_security_config
+        self.additional_sasl_mechanisms = []
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -258,8 +259,10 @@ class SecurityConfig(TemplateRenderer):
     def enable_ssl(self):
         self.has_ssl = True
 
-    def enable_security_protocol(self, security_protocol):
+    def enable_security_protocol(self, security_protocol, sasl_mechanism = None):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
+        if sasl_mechanism is not None:
+            self.additional_sasl_mechanisms.append(sasl_mechanism)
         self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
 
     def setup_ssl(self, node):
@@ -387,6 +390,7 @@ class SecurityConfig(TemplateRenderer):
             sasl_mechanisms += list(self.uses_raft_sasl)
         if self.zk_sasl:
             sasl_mechanisms += [SecurityConfig.SASL_MECHANISM_GSSAPI]
+        sasl_mechanisms.extend(self.additional_sasl_mechanisms)
         return set(sasl_mechanisms)
 
     @property
