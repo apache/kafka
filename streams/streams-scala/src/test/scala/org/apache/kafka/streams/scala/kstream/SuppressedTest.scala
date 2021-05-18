@@ -131,9 +131,9 @@ class SuppressedTest {
       .withLoggingEnabled(Collections.singletonMap("myConfigKey", "myConfigValue"))
     assertEquals(new EagerBufferConfigImpl(5L, 6L, Collections.singletonMap("myConfigKey", "myConfigValue")), bc5)
     assertEquals(new StrictBufferConfigImpl(5L,
-      6L,
-      BufferFullStrategy.SHUT_DOWN,
-      Collections.singletonMap("myConfigKey", "myConfigValue")),
-      bc5.shutDownWhenFull())
+                                            6L,
+                                            BufferFullStrategy.SHUT_DOWN,
+                                            Collections.singletonMap("myConfigKey", "myConfigValue")),
+                 bc5.shutDownWhenFull())
   }
 }
