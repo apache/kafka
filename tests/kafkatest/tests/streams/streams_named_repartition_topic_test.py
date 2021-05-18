@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsNamedRepartitionTopicService
@@ -50,6 +51,7 @@ class StreamsNamedRepartitionTopicTest(Test):
                                            throughput=1000,
                                            acks=1)
 
+    @cluster(num_nodes=8)
     def test_upgrade_topology_with_named_repartition_topic(self):
         self.zookeeper.start()
         self.kafka.start()

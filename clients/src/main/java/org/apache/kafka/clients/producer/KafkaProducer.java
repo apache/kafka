@@ -524,19 +524,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            final boolean autoDowngradeTxnCommit = config.getBoolean(ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
-            // Only log a warning if being used outside of Streams, which we know includes "StreamThread-" in the client id
-            if (autoDowngradeTxnCommit && !clientId.contains("StreamThread-")) {
-                log.warn("The configuration parameter `{}` is internal and not intended for public use, it will be " +
-                    "removed in 4.0", ProducerConfig.AUTO_DOWNGRADE_TXN_COMMIT);
-            }
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
                 transactionTimeoutMs,
                 retryBackoffMs,
-                apiVersions,
-                autoDowngradeTxnCommit);
+                apiVersions
+            );
 
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");

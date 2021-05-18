@@ -265,9 +265,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
 
         @Override
         public AGG fetchSession(final K key,
-                                final long startTime,
-                                final long endTime) {
-            return wrapped().fetchSession(key, startTime, endTime);
+                                final long earliestSessionEndTime,
+                                final long latestSessionStartTime) {
+            return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -276,9 +276,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return wrapped().fetch(from, to);
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
+                                                        final K keyTo) {
+            return wrapped().fetch(keyFrom, keyTo);
         }
     }
 }

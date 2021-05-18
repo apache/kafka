@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -87,7 +87,8 @@ public class ReplicationControlManagerTest {
         final MockRandom random = new MockRandom();
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(random));
+            new StripedReplicaPlacer(random));
+        final ControllerMetrics metrics = new MockControllerMetrics();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap());
         final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
@@ -95,7 +96,8 @@ public class ReplicationControlManagerTest {
             (short) 3,
             1,
             configurationControl,
-            clusterControl);
+            clusterControl,
+            metrics);
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
             ControllerTestUtils.replayAll(clusterControl, records);
@@ -162,7 +164,8 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
-                setErrorMessage("Unable to replicate the partition 3 times: there are only 0 usable brokers"));
+                setErrorMessage("Unable to replicate the partition 3 time(s): All " +
+                    "brokers are currently fenced."));
         assertEquals(expectedResponse, result.response());
 
         registerBroker(0, ctx);
@@ -180,8 +183,8 @@ public class ReplicationControlManagerTest {
             setTopicId(result2.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse2, result2.response());
         ctx.replay(result2.records());
-        assertEquals(new PartitionControlInfo(new int[] {2, 0, 1},
-            new int[] {2, 0, 1}, null, null, 2, 0, 0),
+        assertEquals(new PartitionControlInfo(new int[] {1, 2, 0},
+            new int[] {1, 2, 0}, null, null, 1, 0, 0),
             replicationControl.getPartition(
                 ((TopicRecord) result2.records().get(0).message()).topicId(), 0));
         ControllerResult<CreateTopicsResponseData> result3 =
@@ -195,12 +198,59 @@ public class ReplicationControlManagerTest {
         ControllerTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).setTopicId(fooId).
-                    setReplicas(Arrays.asList(2, 0, 1)).setIsr(Arrays.asList(2, 0, 1)).
-                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(2).
+                    setReplicas(Arrays.asList(1, 2, 0)).setIsr(Arrays.asList(1, 2, 0)).
+                    setRemovingReplicas(null).setAddingReplicas(null).setLeader(1).
                     setLeaderEpoch(0).setPartitionEpoch(0), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testGlobalTopicAndPartitionMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+
+        registerBroker(0, ctx);
+        unfenceBroker(0, ctx);
+        registerBroker(1, ctx);
+        unfenceBroker(1, ctx);
+        registerBroker(2, ctx);
+        unfenceBroker(2, ctx);
+
+        List<Uuid> topicsToDelete = new ArrayList<>();
+
+        ControllerResult<CreateTopicsResponseData> result =
+            replicationControl.createTopics(request);
+        topicsToDelete.add(result.response().topics().find("foo").topicId());
+
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+
+        request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("bar").
+            setNumPartitions(1).setReplicationFactor((short) -1));
+        request.topics().add(new CreatableTopic().setName("baz").
+            setNumPartitions(2).setReplicationFactor((short) -1));
+        result = replicationControl.createTopics(request);
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertEquals(3, ctx.metrics.globalTopicsCount());
+        assertEquals(4, ctx.metrics.globalPartitionCount());
+
+        topicsToDelete.add(result.response().topics().find("baz").topicId());
+        ControllerResult<Map<Uuid, ApiError>> deleteResult = replicationControl.deleteTopics(topicsToDelete);
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(1, ctx.metrics.globalTopicsCount());
+        assertEquals(1, ctx.metrics.globalPartitionCount());
+
+        Uuid topicToDelete = result.response().topics().find("bar").topicId();
+        deleteResult = replicationControl.deleteTopics(Collections.singletonList(topicToDelete));
+        ControllerTestUtils.replayAll(replicationControl, deleteResult.records());
+        assertEquals(0, ctx.metrics.globalTopicsCount());
+        assertEquals(0, ctx.metrics.globalPartitionCount());
     }
 
     @Test
