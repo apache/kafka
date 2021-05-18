@@ -221,6 +221,9 @@ class ProducerIdManager(brokerId: Int,
       case Errors.STALE_BROKER_EPOCH =>
         warn("Our broker epoch was stale, trying again.")
         maybeRequestNextBlock()
+      case Errors.BROKER_ID_NOT_REGISTERED =>
+        warn("Our broker ID is not yet known by the controller, trying again.")
+        maybeRequestNextBlock()
       case e: Errors =>
         warn("Had an unknown error from the controller, giving up.")
         nextProducerIdBlock.put(Failure(e.exception()))

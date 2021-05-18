@@ -2402,7 +2402,7 @@ class KafkaController(val config: KafkaConfig,
     val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
     if (brokerEpochOpt.isEmpty) {
       warn(s"Ignoring AllocateProducerIds due to unknown broker $brokerId")
-      callback.apply(Left(Errors.STALE_BROKER_EPOCH))
+      callback.apply(Left(Errors.BROKER_ID_NOT_REGISTERED))
       return
     }
 
