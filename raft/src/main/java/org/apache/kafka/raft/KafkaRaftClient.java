@@ -1246,51 +1246,50 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        try (RawSnapshotReader snapshot = snapshotOpt.get()) {
-            long snapshotSize = snapshot.sizeInBytes();
-            if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshotSize) {
-                return FetchSnapshotResponse.singleton(
-                    log.topicPartition(),
-                    responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code())
-                );
-            }
-
-            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
-                throw new IllegalStateException(
-                    String.format(
-                        "Trying to fetch a snapshot with size (%s) and a position (%s) larger than %s",
-                        snapshotSize,
-                        partitionSnapshot.position(),
-                        Integer.MAX_VALUE
-                    )
-                );
-            }
-
-            int maxSnapshotSize;
-            try {
-                maxSnapshotSize = Math.toIntExact(snapshotSize);
-            } catch (ArithmeticException e) {
-                maxSnapshotSize = Integer.MAX_VALUE;
-            }
-
-            UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
-
+        RawSnapshotReader snapshot = snapshotOpt.get();
+        long snapshotSize = snapshot.sizeInBytes();
+        if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshotSize) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    addQuorumLeader(responsePartitionSnapshot)
-                        .snapshotId()
-                        .setEndOffset(snapshotId.offset)
-                        .setEpoch(snapshotId.epoch);
-
-                    return responsePartitionSnapshot
-                        .setSize(snapshotSize)
-                        .setPosition(partitionSnapshot.position())
-                        .setUnalignedRecords(records);
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code())
             );
         }
+
+        if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+            throw new IllegalStateException(
+                String.format(
+                    "Trying to fetch a snapshot with size (%s) and a position (%s) larger than %s",
+                    snapshotSize,
+                    partitionSnapshot.position(),
+                    Integer.MAX_VALUE
+                )
+            );
+        }
+
+        int maxSnapshotSize;
+        try {
+            maxSnapshotSize = Math.toIntExact(snapshotSize);
+        } catch (ArithmeticException e) {
+            maxSnapshotSize = Integer.MAX_VALUE;
+        }
+
+        UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
+
+        return FetchSnapshotResponse.singleton(
+            log.topicPartition(),
+            responsePartitionSnapshot -> {
+                addQuorumLeader(responsePartitionSnapshot)
+                    .snapshotId()
+                    .setEndOffset(snapshotId.offset)
+                    .setEpoch(snapshotId.epoch);
+
+                return responsePartitionSnapshot
+                    .setSize(snapshotSize)
+                    .setPosition(partitionSnapshot.position())
+                    .setUnalignedRecords(records);
+            }
+        );
     }
 
     private boolean handleFetchSnapshotResponse(
