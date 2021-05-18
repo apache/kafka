@@ -26,6 +26,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static java.time.Duration.ofMillis;
 
 /**
  * The fixed-size time-based window specifications used for aggregations.
@@ -90,12 +91,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      */
     @Deprecated
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
-        final long sizeMs = validateMillisecondDuration(size, msgPrefix);
-        if (sizeMs <= 0) {
-            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
-        }
-        return new TimeWindows(sizeMs, sizeMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofSizeWithNoGrace(size);
     }
 
     /**
@@ -172,13 +168,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @since 3.0
      */
     public static TimeWindows ofSizeWithNoGrace(final Duration size) throws IllegalArgumentException {
-
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
-        final long sizeMs = validateMillisecondDuration(size, msgPrefix);
-        if (sizeMs <= 0) {
-            throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
-        }
-        return new TimeWindows(sizeMs, sizeMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofSizeAndGrace(size, ofMillis(DEFAULT_GRACE_PERIOD_MS));
     }
 
     /**

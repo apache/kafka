@@ -24,6 +24,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static java.time.Duration.ofMillis;
 
 /**
  * The window specifications used for joins.
@@ -99,9 +100,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     @Deprecated
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofTimeDifferenceWithNoGrace(timeDifference);
     }
 
     /**
@@ -184,15 +183,7 @@ public final class JoinWindows extends Windows<Window> {
      * @since 3.0
      */
     public static JoinWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) {
-
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefix);
-
-        if (timeDifferenceMs < 0) {
-            throw new IllegalArgumentException("Time difference must not be negative.");
-        }
-
-        return new JoinWindows(timeDifferenceMs, timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofTimeDifferenceAndGrace(timeDifference, ofMillis(DEFAULT_GRACE_PERIOD_MS));
     }
 
     /**

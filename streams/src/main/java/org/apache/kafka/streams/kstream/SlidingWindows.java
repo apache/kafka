@@ -22,6 +22,7 @@ import java.util.Objects;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.kstream.Windows.DEFAULT_GRACE_PERIOD_MS;
+import static java.time.Duration.ofMillis;
 
 /**
  * A sliding window used for aggregating events.
@@ -94,17 +95,7 @@ public final class SlidingWindows {
      */
     @Deprecated
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
-        final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefixSize);
-        if (timeDifferenceMs < 0) {
-            throw new IllegalArgumentException("Window time difference must not be negative.");
-        }
-        final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "grace");
-        final long graceMs = validateMillisecondDuration(grace, msgPrefixGrace);
-        if (graceMs < 0) {
-            throw new IllegalArgumentException("Window grace period must not be negative.");
-        }
-        return new SlidingWindows(timeDifferenceMs, graceMs);
+        return ofTimeDifferenceAndGrace(timeDifference, grace);
     }
 
     /**
@@ -116,14 +107,7 @@ public final class SlidingWindows {
      * @since 3.0
      */
     public static SlidingWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) throws IllegalArgumentException {
-
-        final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, msgPrefixSize);
-        if (timeDifferenceMs < 0) {
-            throw new IllegalArgumentException("Window time difference must not be negative.");
-        }
-
-        return new SlidingWindows(timeDifferenceMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofTimeDifferenceAndGrace(timeDifference, ofMillis(DEFAULT_GRACE_PERIOD_MS));
     }
 
     /**

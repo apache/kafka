@@ -24,6 +24,7 @@ import java.util.Objects;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.kstream.Windows.DEFAULT_GRACE_PERIOD_MS;
+import static java.time.Duration.ofMillis;
 
 
 /**
@@ -92,12 +93,7 @@ public final class SessionWindows {
      */
     @Deprecated
     public static SessionWindows with(final Duration inactivityGap) {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
-        final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
-        if (inactivityGapMs <= 0) {
-            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
-        }
-        return new SessionWindows(inactivityGapMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofInactivityGapWithNoGrace(inactivityGap);
     }
 
     /**
@@ -134,13 +130,7 @@ public final class SessionWindows {
      * @since 3.0
      */
     public static SessionWindows ofInactivityGapWithNoGrace(final Duration inactivityGap) {
-
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
-        final long inactivityGapMs = validateMillisecondDuration(inactivityGap, msgPrefix);
-        if (inactivityGapMs <= 0) {
-            throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
-        }
-        return new SessionWindows(inactivityGapMs, DEFAULT_GRACE_PERIOD_MS);
+        return ofInactivityGapAndGrace(inactivityGap, ofMillis(DEFAULT_GRACE_PERIOD_MS));
     }
 
     /**
