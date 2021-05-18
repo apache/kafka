@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates an error condition where the specified broker identifier was not previously registered
+ */
 public class BrokerIdNotRegisteredException extends ApiException {
 
     public BrokerIdNotRegisteredException(String message) {

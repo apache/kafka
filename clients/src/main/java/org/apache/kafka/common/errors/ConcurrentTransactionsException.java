@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that a concurrent exception has occurred.
+ *
+ * The producer attempted to update a transaction while
+ * another concurrent operation on the same transaction was ongoing.
+ */
 public class ConcurrentTransactionsException extends ApiException {
     private static final long serialVersionUID = 1L;
 

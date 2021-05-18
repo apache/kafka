@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception is thrown when eligible topic partition leaders are not available
+ *
+ */
 public class EligibleLeadersNotAvailableException extends InvalidMetadataException {
 
     public EligibleLeadersNotAvailableException(String message) {

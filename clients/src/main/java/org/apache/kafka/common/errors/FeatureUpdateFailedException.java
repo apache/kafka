@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception is thrown when the server is unable to update finalized features due to an unexpected server error
+ */
 public class FeatureUpdateFailedException extends ApiException {
     private static final long serialVersionUID = 1L;
 

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception is a base class for several authorization error conditions
+ *
+ */
 public class AuthorizationException extends ApiException {
 
     public AuthorizationException(String message) {

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the specified broker identifier is already in use
+ *
+ */
 public class DuplicateBrokerRegistrationException extends ApiException {
 
     public DuplicateBrokerRegistrationException(String message) {

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the clusterId in the request does not match that found on the server
+ */
 public class InconsistentClusterIdException extends ApiException {
 
     public InconsistentClusterIdException(String message) {

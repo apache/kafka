@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This error condition indicates that the specified update version is not valid
+ */
 public class InvalidUpdateVersionException extends ApiException {
 
     public InvalidUpdateVersionException(String message) {

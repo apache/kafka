@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the group identifier could not be found
+ */
 public class GroupIdNotFoundException extends ApiException {
     public GroupIdNotFoundException(String message) {
         super(message);

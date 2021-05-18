@@ -17,6 +17,9 @@
 
 package org.apache.kafka.common.errors;
 
+/**
+ * Represents an error condition where the fetch session epoch is not valid
+ */
 public class InvalidFetchSessionEpochException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

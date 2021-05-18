@@ -18,7 +18,7 @@ package org.apache.kafka.common.errors;
 
 /**
  * This exception indicates unexpected requests prior to SASL authentication.
- * This could be due to misconfigured security, e.g. if PLAINTEXT protocol
+ * This could be due to mis-configured security, e.g. if PLAINTEXT protocol
  * is used to connect to a SASL endpoint.
  */
 public class IllegalSaslStateException extends AuthenticationException {

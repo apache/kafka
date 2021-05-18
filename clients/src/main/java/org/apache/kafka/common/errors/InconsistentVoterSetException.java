@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception represents an error condition where the either the
+ * sender or recipient of a voter-only request is not one of the expected voters
+ */
 public class InconsistentVoterSetException extends ApiException {
 
     private static final long serialVersionUID = 1;

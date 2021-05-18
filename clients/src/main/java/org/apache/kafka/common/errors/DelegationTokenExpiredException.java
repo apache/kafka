@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the Delegation Token has expired
+ *
+ */
 public class DelegationTokenExpiredException extends ApiException {
 
     private static final long serialVersionUID = 1L;

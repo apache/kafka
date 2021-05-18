@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the log's topic ID did not match the topic ID in the request
+ */
 public class InconsistentTopicIdException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

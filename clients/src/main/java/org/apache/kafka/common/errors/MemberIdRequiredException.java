@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * The group member needs to have a valid member id before actually entering a consumer group
+ *
+ * This exception is generated when this is not the case
+ */
 public class MemberIdRequiredException extends ApiException {
 
     private static final long serialVersionUID = 1L;
