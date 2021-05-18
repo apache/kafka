@@ -179,9 +179,11 @@ public class QuorumControllerTest {
                         new CreatableTopicCollection(Collections.singleton(
                             new CreatableTopic().setName("foo").setNumPartitions(1).
                                 setReplicationFactor((short) 1)).iterator()));
-                // TODO: place on a fenced broker if we have no choice
                 assertEquals(Errors.INVALID_REPLICATION_FACTOR.code(), active.createTopics(
                     createTopicsRequestData).get().topics().find("foo").errorCode());
+                assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
+                    "are currently fenced.", active.createTopics(
+                    createTopicsRequestData).get().topics().find("foo").errorMessage());
                 assertEquals(new BrokerHeartbeatReply(true, false, false, false),
                     active.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                             setWantFence(false).setBrokerEpoch(0L).setBrokerId(0).

@@ -28,7 +28,7 @@ import org.apache.kafka.metadata.UsableBroker;
  * The interface which a Kafka replica placement policy must implement.
  */
 @InterfaceStability.Unstable
-interface ReplicaPlacementPolicy {
+interface ReplicaPlacer {
     /**
      * Create a new replica placement.
      *
@@ -42,9 +42,9 @@ interface ReplicaPlacementPolicy {
      *
      * @throws InvalidReplicationFactorException    If too many replicas were requested.
      */
-    List<List<Integer>> createPlacement(int startPartition,
-                                        int numPartitions,
-                                        short numReplicas,
-                                        Iterator<UsableBroker> iterator)
+    List<List<Integer>> place(int startPartition,
+                              int numPartitions,
+                              short numReplicas,
+                              Iterator<UsableBroker> iterator)
         throws InvalidReplicationFactorException;
 }

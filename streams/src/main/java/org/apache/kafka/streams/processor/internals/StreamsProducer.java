@@ -237,13 +237,16 @@ public class StreamsProducer {
      * @throws TaskMigratedException
      */
     protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final ConsumerGroupMetadata consumerGroupMetadata) {
+                                     final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         maybeBeginTransaction();
         try {
-            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
+            // EOS-v2 assumes brokers are on version 2.5+ and thus can understand the full set of consumer group metadata
+            // Thus if we are using EOS-v1 and can't make this assumption, we must downgrade the request to include only the group id metadata
+            final ConsumerGroupMetadata maybeDowngradedGroupMetadata = processingMode == EXACTLY_ONCE_V2 ? consumerGroupMetadata : new ConsumerGroupMetadata(consumerGroupMetadata.groupId());
+            producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error) {
