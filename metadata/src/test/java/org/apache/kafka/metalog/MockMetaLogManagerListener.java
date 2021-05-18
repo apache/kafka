@@ -97,11 +97,11 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
         if (newLeaderAndEpoch.isLeader(nodeId)) {
             StringBuilder bld = new StringBuilder();
             bld.append(NEW_LEADER).append(" ").
-                append(nodeId).append(" ").append(newLeaderAndEpoch.epoch);
+                append(nodeId).append(" ").append(newLeaderAndEpoch.epoch());
             serializedEvents.add(bld.toString());
         } else if (oldLeaderAndEpoch.isLeader(nodeId)) {
             StringBuilder bld = new StringBuilder();
-            bld.append(RENOUNCE).append(" ").append(newLeaderAndEpoch.epoch);
+            bld.append(RENOUNCE).append(" ").append(newLeaderAndEpoch.epoch());
             serializedEvents.add(bld.toString());
         }
     }

@@ -60,7 +60,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
-                logManager.register(new MockMetaLogManagerListener(logManager.nodeId));
+                logManager.register(new MockMetaLogManagerListener(logManager.nodeId().getAsInt()));
             }
         } catch (Exception e) {
             testEnv.close();
@@ -107,10 +107,11 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             LeaderAndEpoch result = null;
             for (LocalLogManager logManager : logManagers) {
                 LeaderAndEpoch leader = logManager.leaderAndEpoch();
-                if (leader.isLeader(logManager.nodeId)) {
+                int nodeId = logManager.nodeId().getAsInt();
+                if (leader.isLeader(nodeId)) {
                     if (result != null) {
-                        throw new RuntimeException("node " + logManager.nodeId +
-                            " thinks it's the leader, but so does " + result.leaderId);
+                        throw new RuntimeException("node " + nodeId +
+                            " thinks it's the leader, but so does " + result.leaderId());
                     }
                     result = leader;
                 }

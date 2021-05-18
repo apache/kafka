@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.raft.internals.MemoryBatchReader;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.OptionalLong;
 
@@ -60,9 +58,4 @@ public interface BatchReader<T> extends Iterator<Batch<T>>, AutoCloseable {
      */
     @Override
     void close();
-
-    static <T> BatchReader<T> singleton(Batch<T> batch) {
-        return new MemoryBatchReader<>(Collections.singletonList(batch), reader -> {
-        });
-    }
 }

@@ -73,21 +73,21 @@ public class LocalLogManagerTest {
             LeaderAndEpoch first = env.waitForLeader();
             LeaderAndEpoch cur = first;
             do {
-                int currentLeaderId = cur.leaderId.orElseThrow(() ->
+                int currentLeaderId = cur.leaderId().orElseThrow(() ->
                     new AssertionError("Current leader is undefined")
                 );
-                env.logManagers().get(currentLeaderId).resign(cur.epoch);
+                env.logManagers().get(currentLeaderId).resign(cur.epoch());
 
                 LeaderAndEpoch next = env.waitForLeader();
-                while (next.epoch == cur.epoch) {
+                while (next.epoch() == cur.epoch()) {
                     Thread.sleep(1);
                     next = env.waitForLeader();
                 }
-                long expectedNextEpoch = cur.epoch + 2;
-                assertEquals(expectedNextEpoch, next.epoch, "Expected next epoch to be " + expectedNextEpoch +
+                long expectedNextEpoch = cur.epoch() + 2;
+                assertEquals(expectedNextEpoch, next.epoch(), "Expected next epoch to be " + expectedNextEpoch +
                     ", but found  " + next);
                 cur = next;
-            } while (cur.leaderId.equals(first.leaderId));
+            } while (cur.leaderId().equals(first.leaderId()));
             env.close();
             assertEquals(null, env.firstError.get());
         }
@@ -125,12 +125,12 @@ public class LocalLogManagerTest {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(3)) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
-            int leaderId = leaderInfo.leaderId.orElseThrow(() ->
+            int leaderId = leaderInfo.leaderId().orElseThrow(() ->
                 new AssertionError("Current leader is undefined")
             );
 
             LocalLogManager activeLogManager = env.logManagers().get(leaderId);
-            int epoch = activeLogManager.leaderAndEpoch().epoch;
+            int epoch = activeLogManager.leaderAndEpoch().epoch();
             List<ApiMessageAndVersion> messages = Arrays.asList(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),

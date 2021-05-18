@@ -91,9 +91,9 @@ class BrokerMetadataListener(
   }
 
   // Visible for testing. It's useful to execute events synchronously in order
-  // to make tests deterministic
-  private[metadata] def execCommits(batch: Batch[ApiMessageAndVersion]): Unit = {
-    new HandleCommitsEvent(BatchReader.singleton(batch)).run()
+  // to make tests deterministic. This object is responsible for closing the reader.
+  private[metadata] def execCommits(batchReader: BatchReader[ApiMessageAndVersion]): Unit = {
+    new HandleCommitsEvent(batchReader).run()
   }
 
   class HandleCommitsEvent(
@@ -270,9 +270,7 @@ class BrokerMetadataListener(
   }
 
   override def handleLeaderChange(leader: LeaderAndEpoch): Unit = {
-    if (leader.isLeader(brokerId)) {
-      eventQueue.append(new HandleNewLeaderEvent(leader))
-    }
+    eventQueue.append(new HandleNewLeaderEvent(leader))
   }
 
   class ShutdownEvent() extends EventQueue.FailureLoggingEvent(log) {

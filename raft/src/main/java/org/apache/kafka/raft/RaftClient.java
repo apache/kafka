@@ -59,9 +59,18 @@ public interface RaftClient<T> extends AutoCloseable {
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
          * when a leader steps down or fails.
-         * Invoked after this node has become a leader. This is only called after
-         * all commits up to the start of the leader's epoch have been sent to
+         *
+         * If this node is the leader, then the notification of leadership will be delayed until
+         * the implementaiton of this interface has caughup to the high-watermark through calls to
          * {@link #handleCommit(BatchReader)}.
+         *
+         * If this node is not the leader, then this method will be called as soon as possible. In
+         * this case the leader may or may not be known for the current epoch.
+         *
+         * Subsequent calls to this method will expose a monotonically increasing epoch. For a
+         * given epoch the leader may be unknown, {@code leader.leaderId} is {@code OptionalInt#empty},
+         * or known {@code leader.leaderId} is {@code OptionalInt#of}. Once a leader is known for
+         * a given epoch it will remain the leader for that epoch.
          *
          * @param leader the current leader and epoch
          */

@@ -201,7 +201,7 @@ public final class QuorumController implements Controller {
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
-                throw new RuntimeException("You must set a metadata log manager.");
+                throw new RuntimeException("You must set a raft client.");
             }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
@@ -234,7 +234,7 @@ public final class QuorumController implements Controller {
         "The active controller appears to be node ";
 
     private NotControllerException newNotControllerException() {
-        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId;
+        OptionalInt latestController = raftClient.leaderAndEpoch().leaderId();
         if (latestController.isPresent()) {
             return new NotControllerException(ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX +
                 latestController.getAsInt());
@@ -559,8 +559,8 @@ public final class QuorumController implements Controller {
             } else {
                 // If the operation returned a batch of records, those records need to be
                 // written before we can return our result to the user.  Here, we hand off
-                // the batch of records to the metadata log manager.  They will be written
-                // out asynchronously.
+                // the batch of records to the raft client.  They will be written out
+                // asynchronously.
                 final long offset;
                 if (result.isAtomic()) {
                     offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
@@ -679,7 +679,7 @@ public final class QuorumController implements Controller {
         @Override
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             if (newLeader.isLeader(nodeId)) {
-                final int newEpoch = newLeader.epoch;
+                final int newEpoch = newLeader.epoch();
                 appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
                     int curEpoch = curClaimEpoch;
                     if (curEpoch != -1) {

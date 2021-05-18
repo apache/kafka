@@ -2435,10 +2435,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         private boolean shouldFireLeaderChange(LeaderAndEpoch leaderAndEpoch) {
             if (leaderAndEpoch.equals(lastFiredLeaderChange)) {
                 return false;
-            } else if (leaderAndEpoch.epoch > lastFiredLeaderChange.epoch) {
+            } else if (leaderAndEpoch.epoch() > lastFiredLeaderChange.epoch()) {
                 return true;
             } else {
-                return leaderAndEpoch.leaderId.isPresent() && !lastFiredLeaderChange.leaderId.isPresent();
+                return leaderAndEpoch.leaderId().isPresent() &&
+                    !lastFiredLeaderChange.leaderId().isPresent();
             }
         }
 

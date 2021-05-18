@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTo
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.Batch
+import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -114,11 +115,18 @@ class BrokerMetadataListenerTest {
   ): Unit = {
     val baseOffset = lastMetadataOffset + 1
     lastMetadataOffset += records.size
-    listener.execCommits(Batch.of(
-      baseOffset,
-      leaderEpoch,
-      records.asJava
-    ))
+    listener.execCommits(
+      new MemoryBatchReader(
+        List(
+          Batch.of(
+            baseOffset,
+            leaderEpoch,
+            records.asJava
+          )
+        ).asJava,
+        reader => ()
+      )
+    )
   }
 
   private def createAndAssert(

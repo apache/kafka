@@ -365,11 +365,11 @@ public final class RaftClientTestContext {
     }
 
     OptionalInt currentLeader() {
-        return currentLeaderAndEpoch().leaderId;
+        return currentLeaderAndEpoch().leaderId();
     }
 
     int currentEpoch() {
-        return currentLeaderAndEpoch().epoch;
+        return currentLeaderAndEpoch().epoch();
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
@@ -1153,8 +1153,8 @@ public final class RaftClientTestContext {
             if (localId.isPresent() && leader.isLeader(localId.getAsInt())) {
                 long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
                     lastCommitOffset().getAsLong() + 1 : 0L;
-                this.currentClaimedEpoch = OptionalInt.of(leader.epoch);
-                this.claimedEpochStartOffsets.put(leader.epoch, claimedEpochStartOffset);
+                this.currentClaimedEpoch = OptionalInt.of(leader.epoch());
+                this.claimedEpochStartOffsets.put(leader.epoch(), claimedEpochStartOffset);
             } else {
                 this.currentClaimedEpoch = OptionalInt.empty();
             }

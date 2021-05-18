@@ -145,7 +145,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
                 committed, newLeader);
             uncommitted = committed;
-            claimedEpoch = OptionalInt.of(newLeader.epoch);
+            claimedEpoch = OptionalInt.of(newLeader.epoch());
         } else {
             log.debug("Counter uncommitted value reset after resigning leadership");
             uncommitted = -1;
