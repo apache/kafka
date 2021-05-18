@@ -37,11 +37,12 @@ from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 class KafkaListener:
 
-    def __init__(self, name, port_number, security_protocol, open=False):
+    def __init__(self, name, port_number, security_protocol, open=False, sasl_mechanism = None):
         self.name = name
         self.port_number = port_number
         self.security_protocol = security_protocol
         self.open = open
+        self.sasl_mechanism = sasl_mechanism
 
     def listener(self):
         return "%s://:%s" % (self.name, str(self.port_number))
@@ -187,7 +188,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
+                 jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overrides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None,
@@ -199,29 +200,33 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int num_nodes: the number of nodes in the service.  There are 4 possibilities:
             1) Zookeeper quorum:
                 The number of brokers is defined by this parameter.
+                The broker.id values will be 1..num_nodes.
             2) Co-located Raft quorum:
                 The number of nodes having a broker role is defined by this parameter.
+                The node.id values will be 1..num_nodes
                 The number of nodes having a controller role will by default be 1, 3, or 5 depending on num_nodes
                 (1 if num_nodes < 3, otherwise 3 if num_nodes < 5, otherwise 5).  This calculation
                 can be overridden via controller_num_nodes_override, which must be between 1 and num_nodes,
                 inclusive, when non-zero.  Here are some possibilities:
                 num_nodes = 1:
-                    node 0: broker.roles=broker+controller
+                    broker having node.id=1: broker.roles=broker+controller
                 num_nodes = 2:
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker
                 num_nodes = 3:
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker+controller
-                    node 2: broker.roles=broker+controller
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker+controller
+                    broker having node.id=3: broker.roles=broker+controller
                 num_nodes = 3, controller_num_nodes_override = 1
-                    node 0: broker.roles=broker+controller
-                    node 1: broker.roles=broker
-                    node 2: broker.roles=broker
+                    broker having node.id=1: broker.roles=broker+controller
+                    broker having node.id=2: broker.roles=broker
+                    broker having node.id=3: broker.roles=broker
             3) Remote Raft quorum when instantiating the broker service:
                 The number of nodes, all of which will have broker.roles=broker, is defined by this parameter.
+                The node.id values will be 1..num_nodes
             4) Remote Raft quorum when instantiating the controller service:
                 The number of nodes, all of which will have broker.roles=controller, is defined by this parameter.
+                The node.id values will be 3001..(3000 + num_nodes)
                 The value passed in is determined by the broker service when that is instantiated, and it uses the
                 same algorithm as described above: 1, 3, or 5 unless controller_num_nodes_override is provided.
         :param ZookeeperService zk:
@@ -237,13 +242,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param jmx_attributes:
         :param int zk_connect_timeout:
         :param int zk_session_timeout:
-        :param dict server_prop_overides: overrides for kafka.properties file
+        :param list[list] server_prop_overrides: overrides for kafka.properties file
+            e.g: [["config1", "true"], ["config2", "1000"]]
         :param str zk_chroot:
         :param bool zk_client_secure: connect to Zookeeper over secure client port (TLS) when True
         :param ListenerSecurityConfig listener_security_config: listener config to use
-        :param dict per_node_server_prop_overrides: overrides for kafka.properties file keyed by 0-based node number
+        :param dict per_node_server_prop_overrides: overrides for kafka.properties file keyed by 1-based node number
+            e.g: {1: [["config1", "true"], ["config2", "1000"]], 2: [["config1", "false"], ["config2", "0"]]}
         :param str extra_kafka_opts: jvm args to add to KAFKA_OPTS variable
-        :param str tls_version: TLS version to use
         :param KafkaService remote_kafka: process.roles=controller for this cluster when not None; ignored when using ZooKeeper
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and remote_kafka is not None; ignored otherwise
 
@@ -314,10 +320,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
-        if server_prop_overides is None:
-            self.server_prop_overides = []
+        if server_prop_overrides is None:
+            self.server_prop_overrides = []
         else:
-            self.server_prop_overides = server_prop_overides
+            self.server_prop_overrides = server_prop_overrides
         if per_node_server_prop_overrides is None:
             self.per_node_server_prop_overrides = {}
         else:
@@ -482,17 +488,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                    serves_intercontroller_sasl_mechanism=serves_intercontroller_sasl_mechanism,
                                                    uses_controller_sasl_mechanism=uses_controller_sasl_mechanism,
                                                    raft_tls=raft_tls)
+        # Ensure we have the correct client security protocol and SASL mechanism because they may have been mutated
+        self._security_config.properties['security.protocol'] = self.security_protocol
+        self._security_config.properties['sasl.mechanism'] = self.client_sasl_mechanism
         # Ensure we have the right inter-broker security protocol because it may have been mutated
         # since we cached our security config (ignore if this is a remote raft controller quorum case; the
         # inter-broker security protocol is not used there).
-        if (self.quorum_info.using_zk or self.quorum_info.has_brokers) and \
-                self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
-            self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
-            self._security_config.calc_has_sasl()
-            self._security_config.calc_has_ssl()
+        if (self.quorum_info.using_zk or self.quorum_info.has_brokers):
+            # in case inter-broker SASL mechanism has changed without changing the inter-broker security protocol
+            self._security_config.properties['sasl.mechanism.inter.broker.protocol'] = self.interbroker_sasl_mechanism
+            if self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
+                self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
+                self._security_config.calc_has_sasl()
+                self._security_config.calc_has_ssl()
         for port in self.port_mappings.values():
             if port.open:
-                self._security_config.enable_security_protocol(port.security_protocol)
+                self._security_config.enable_security_protocol(port.security_protocol, port.sasl_mechanism)
         if self.quorum_info.using_zk:
             if self.zk.zk_sasl:
                 self._security_config.enable_sasl()
@@ -560,12 +571,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if self.quorum_info.using_zk:
             self.logger.info("Waiting for brokers to register at ZK")
 
-            retries = 30
             expected_broker_ids = set(self.nodes)
-            wait_until(lambda: {node for node in self.nodes if self.is_registered(node)} == expected_broker_ids, 30, 1)
-
-            if retries == 0:
-                raise RuntimeError("Kafka servers didn't register at ZK within 30 seconds")
+            wait_until(lambda: {node for node in self.nodes if self.is_registered(node)} == expected_broker_ids,
+                       timeout_sec=30, backoff_sec=1, err_msg="Kafka servers didn't register at ZK within 30 seconds")
 
         # Create topics if necessary
         if self.topics is not None:
@@ -634,7 +642,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
-        for prop in self.server_prop_overides:
+        for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):

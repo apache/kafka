@@ -477,7 +477,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
         brokerOptions ++ Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(3, rows.size)
-    rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:2")
+    assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
   }
 
   @Test
@@ -755,7 +755,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(2, rows.size)
-    rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:1")
+    assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
   }
 
   @Test

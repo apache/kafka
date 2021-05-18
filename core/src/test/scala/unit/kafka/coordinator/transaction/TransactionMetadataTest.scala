@@ -465,6 +465,12 @@ class TransactionMetadataTest {
     for (state <- TransactionState.AllStates) {
       assertEquals(state, TransactionState.fromId(state.id))
       assertEquals(Some(state), TransactionState.fromName(state.name))
+
+      if (state != Dead) {
+        val clientTransactionState = org.apache.kafka.clients.admin.TransactionState.parse(state.name)
+        assertEquals(state.name, clientTransactionState.toString)
+        assertNotEquals(org.apache.kafka.clients.admin.TransactionState.UNKNOWN, clientTransactionState)
+      }
     }
   }
 

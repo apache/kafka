@@ -810,18 +810,6 @@ public final class Utils {
      * @param rootFile The root file at which to begin deleting
      */
     public static void delete(final File rootFile) throws IOException {
-        delete(rootFile, Collections.emptyList());
-    }
-
-    /**
-     * Recursively delete the subfiles (if any exist) of the passed in root file that are not included
-     * in the list to keep
-     *
-     * @param rootFile The root file at which to begin deleting
-     * @param filesToKeep The subfiles to keep (note that if a subfile is to be kept, so are all its parent
-     *                    files in its pat)h; if empty we would also delete the root file
-     */
-    public static void delete(final File rootFile, final List<File> filesToKeep) throws IOException {
         if (rootFile == null)
             return;
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
@@ -835,9 +823,7 @@ public final class Utils {
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -848,15 +834,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                if (rootFile.toPath().equals(path)) {
-                    // only delete the parent directory if there's nothing to keep
-                    if (filesToKeep.isEmpty()) {
-                        Files.delete(path);
-                    }
-                } else if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
-
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -924,27 +902,26 @@ public final class Utils {
             }
         } finally {
             if (needFlushParentDir) {
-                flushParentDir(target);
+                flushDir(target.toAbsolutePath().normalize().getParent());
             }
         }
     }
 
     /**
-     * Flushes the parent directory to guarantee crash consistency.
+     * Flushes dirty directories to guarantee crash consistency.
      *
-     * @throws IOException if flushing the parent directory fails.
+     * @throws IOException if flushing the directory fails.
      */
-    public static void flushParentDir(Path path) throws IOException {
-        FileChannel dir = null;
-        try {
-            Path parent = path.toAbsolutePath().getParent();
-            if (parent != null) {
-                dir = FileChannel.open(parent, StandardOpenOption.READ);
+    public static void flushDir(Path path) throws IOException {
+        if (path != null) {
+            FileChannel dir = null;
+            try {
+                dir = FileChannel.open(path, StandardOpenOption.READ);
                 dir.force(true);
+            } finally {
+                if (dir != null)
+                    dir.close();
             }
-        } finally {
-            if (dir != null)
-                dir.close();
         }
     }
 
