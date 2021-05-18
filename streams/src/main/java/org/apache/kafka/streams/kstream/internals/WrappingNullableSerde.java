@@ -60,9 +60,12 @@ public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<
     }
 
     public void setIfUnset(final Serde<InnerK> defaultKeySerde, final Serde<InnerV> defaultValueSerde) {
-        Objects.requireNonNull(defaultKeySerde);
-        Objects.requireNonNull(defaultValueSerde);
-        serializer.setIfUnset(defaultKeySerde.serializer(), defaultValueSerde.serializer());
-        deserializer.setIfUnset(defaultKeySerde.deserializer(), defaultValueSerde.deserializer());
+        //Objects.requireNonNull(defaultKeySerde);
+        //Objects.requireNonNull(defaultValueSerde);
+        if (defaultKeySerde != null && defaultValueSerde != null) {
+            serializer.setIfUnset(defaultKeySerde.serializer(), defaultValueSerde.serializer());
+            deserializer.setIfUnset(defaultKeySerde.deserializer(), defaultValueSerde.deserializer());
+        }
+
     }
 }

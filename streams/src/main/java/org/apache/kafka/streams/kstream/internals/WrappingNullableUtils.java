@@ -88,10 +88,16 @@ public class WrappingNullableUtils {
     }
 
     public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
+        if (specificSerde == null && keySerde == null) {
+            throw new StreamsException("Please specify a key serde or set one through the default.key.serde config");
+        }
         return prepareSerde(specificSerde, keySerde, valueSerde, true);
     }
 
     public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
+        if (specificSerde == null && valueSerde == null) {
+            throw new StreamsException("Please specify a value serde or set one through the default.value.serde config");
+        }
         return prepareSerde(specificSerde, keySerde, valueSerde, false);
     }
     @SuppressWarnings({"rawtypes", "unchecked"})

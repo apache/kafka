@@ -1428,8 +1428,12 @@ public class StreamsConfig extends AbstractConfig {
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(
-                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
+            if (e instanceof NullPointerException) {
+                return null;
+            } else {
+                throw new StreamsException(
+                        String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
+            }
         }
     }
 
@@ -1447,8 +1451,12 @@ public class StreamsConfig extends AbstractConfig {
             serde.configure(originals(), false);
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(
-                String.format("Failed to configure value serde %s, please check your default serde", valueSerdeConfigSetting), e);
+            if (e instanceof NullPointerException) {
+                return null;
+            } else {
+                throw new StreamsException(
+                        String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
+            }
         }
     }
 

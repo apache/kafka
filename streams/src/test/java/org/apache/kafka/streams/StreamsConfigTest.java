@@ -862,15 +862,28 @@ public class StreamsConfigTest {
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
-    @Test
-    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
+    /*@Test
+    public void shouldThrowErrorOnDefaults() {
+        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
         try {
-            final StreamsConfig config = new StreamsConfig(getStreamsConfig());
-            fail("Test should throw a NullPointerException");
-        } catch (final NullPointerException e) {
-            assertEquals(NullPointerException.class, e.getClass());
+            config.defaultValueSerde();
+            fail("Test should throw a StreamsException");
+        } catch (final StreamsException e) {
+            assertEquals(
+                    "Failed to configure value serde null, please check your default value serde",
+                    e.getMessage()
+            );
         }
-    }
+        try {
+            config.defaultKeySerde();
+            fail("Test should throw a StreamsException");
+        } catch (final StreamsException e) {
+            assertEquals(
+                    "Failed to configure key serde null, please check your default key serde",
+                    e.getMessage()
+            );
+        }
+    }*/
 
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
