@@ -577,13 +577,19 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
+            Subscription subscription = subscriptionEntry.getValue();
+            if (subscription.userData() != null) {
+                // since this is our 2nd time to deserialize memberData, rewind userData is necessary
+                subscription.userData().rewind();
+            }
             MemberData memberData = memberData(subscriptionEntry.getValue());
 
             // we already have the maxGeneration info, so just compare the current generation of memberData, and put into prevAssignment
             if (memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
-                // If the current member's generation is lower than maxGeneration, put into prevAssignment if needed
+                // if the current member's generation is lower than maxGeneration, put into prevAssignment if needed
                 updatePrevAssignment(prevAssignment, memberData.partitions, consumer, memberData.generation.get());
-            } else if (!memberData.generation.isPresent()) {
+            } else if (!memberData.generation.isPresent() && maxGeneration > DEFAULT_GENERATION) {
+                // if maxGeneration is larger then DEFAULT_GENERATION
                 // put all (no generation) partitions as DEFAULT_GENERATION into prevAssignment if needed
                 updatePrevAssignment(prevAssignment, memberData.partitions, consumer, DEFAULT_GENERATION);
             }
