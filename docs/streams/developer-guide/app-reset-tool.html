@@ -80,14 +80,14 @@
             <p>Warning! This tool makes irreversible changes to your application. It is strongly recommended that you run this once with <code class="docutils literal"><span class="pre">--dry-run</span></code> to preview your changes before making them.</p>
             <pre class="line-numbers"><code class="language-bash">&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset</code></pre>
             <p>The tool accepts the following parameters:</p>
-            <pre class="line-numbers"><code class="language-bash">Option (* = required)                 Description
+            <pre class="line-numbers"><code class="language-text">Option (* = required)                 Description
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
                                         (application.id).
 --bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
                                         format: HOST1:PORT1,HOST2:PORT2
                                         (default: localhost:9092)
---by-duration &lt;String: urls&gt;      Reset offsets to offset by duration from
+--by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
                                         passed to admin clients and embedded
@@ -95,7 +95,7 @@
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
---from-file &lt;String: urls&gt;        Reset offsets to values defined in CSV
+--from-file &lt;String: urls&gt;            Reset offsets to values defined in CSV
                                         file.
 --input-topics &lt;String: list&gt;         Comma-separated list of user input
                                         topics. For these topics, the tool will
@@ -110,7 +110,7 @@
                                         internal topics marked for deletion by
                                         the default behaviour (do a dry-run without
                                         this option to view these topics).
---shift-by &lt;Long: number-of-offsets&gt; Reset offsets shifting current offset by
+--shift-by &lt;Long: number-of-offsets&gt;  Reset offsets shifting current offset by
                                         &#39;n&#39;, where &#39;n&#39; can be positive or
                                         negative
 --to-datetime &lt;String&gt;                Reset offsets to offset from datetime.
