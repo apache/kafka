@@ -165,6 +165,8 @@ public class FetcherTest {
     private FetcherMetricsRegistry metricsRegistry;
     private MockClient client;
     private Metrics metrics;
+    private boolean nearestOffsetReset = false;
+    private long createTimeStamp = System.currentTimeMillis();
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
     private Fetcher<?, ?> fetcher;
@@ -3244,6 +3246,8 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
+                nearestOffsetReset,
+                createTimeStamp,
                 apiVersions) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
@@ -4434,6 +4438,8 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
+                nearestOffsetReset,
+                createTimeStamp,
                 apiVersions);
     }
 

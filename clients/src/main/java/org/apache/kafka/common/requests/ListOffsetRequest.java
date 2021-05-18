@@ -41,6 +41,8 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class ListOffsetRequest extends AbstractRequest {
+    public static final long UNLIMITED_TIMESTAMP = Long.MIN_VALUE;
+    public static final long NEAREST_TIMESTAMP = -3L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
 
@@ -59,6 +61,8 @@ public class ListOffsetRequest extends AbstractRequest {
                     "result, which allows consumers to discard ABORTED transactional records");
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "Topics to list offsets.");
+    private static final Field.Int64 LIMIT_TIMESTAMP = new Field.Int64("limit_timestamp",
+            "The limit timestamp to calibrate.");
 
     // topic level fields
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
@@ -123,20 +127,29 @@ public class ListOffsetRequest extends AbstractRequest {
     // V5 bump to include new possible error code (OFFSET_NOT_AVAILABLE)
     private static final Schema LIST_OFFSET_REQUEST_V5 = LIST_OFFSET_REQUEST_V4;
 
+    // V6 add a field for the limit timestamp
+    private static final Schema LIST_OFFSET_REQUEST_V6 = new Schema(
+            REPLICA_ID,
+            ISOLATION_LEVEL,
+            TOPICS_V4,
+            LIMIT_TIMESTAMP);
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
-            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5};
+            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5, LIST_OFFSET_REQUEST_V6};
     }
 
     private final int replicaId;
     private final IsolationLevel isolationLevel;
     private final Map<TopicPartition, PartitionData> partitionTimestamps;
     private final Set<TopicPartition> duplicatePartitions;
+    private final long limitTimeStamp;
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
         private final int replicaId;
         private final IsolationLevel isolationLevel;
         private Map<TopicPartition, PartitionData> partitionTimestamps = new HashMap<>();
+        private long limitTimeStamp;
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
@@ -165,9 +178,14 @@ public class ListOffsetRequest extends AbstractRequest {
             return this;
         }
 
+        public Builder setLimitTimeStamp(long limitTimeStamp) {
+            this.limitTimeStamp = limitTimeStamp;
+            return this;
+        }
+
         @Override
         public ListOffsetRequest build(short version) {
-            return new ListOffsetRequest(replicaId, partitionTimestamps, isolationLevel, version);
+            return new ListOffsetRequest(replicaId, partitionTimestamps, isolationLevel, limitTimeStamp, version);
         }
 
         @Override
@@ -179,6 +197,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 bld.append(", partitionTimestamps=").append(partitionTimestamps);
             }
             bld.append(", isolationLevel=").append(isolationLevel);
+            bld.append(", limitTimeStamp=").append(limitTimeStamp);
             bld.append(")");
             return bld.toString();
         }
@@ -234,12 +253,14 @@ public class ListOffsetRequest extends AbstractRequest {
     private ListOffsetRequest(int replicaId,
                               Map<TopicPartition, PartitionData> targetTimes,
                               IsolationLevel isolationLevel,
+                              long limitTimeStamp,
                               short version) {
         super(ApiKeys.LIST_OFFSETS, version);
         this.replicaId = replicaId;
         this.isolationLevel = isolationLevel;
         this.partitionTimestamps = targetTimes;
         this.duplicatePartitions = Collections.emptySet();
+        this.limitTimeStamp = limitTimeStamp;
     }
 
     public ListOffsetRequest(Struct struct, short version) {
@@ -250,6 +271,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 IsolationLevel.forId(struct.get(ISOLATION_LEVEL)) :
                 IsolationLevel.READ_UNCOMMITTED;
         partitionTimestamps = new HashMap<>();
+        limitTimeStamp = struct.get(LIMIT_TIMESTAMP);
         for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
@@ -297,6 +319,10 @@ public class ListOffsetRequest extends AbstractRequest {
         return partitionTimestamps;
     }
 
+    public long limitTimeStamp() {
+        return limitTimeStamp;
+    }
+
     public Set<TopicPartition> duplicatePartitions() {
         return duplicatePartitions;
     }
@@ -333,6 +359,7 @@ public class ListOffsetRequest extends AbstractRequest {
             topicArray.add(topicData);
         }
         struct.set(TOPICS, topicArray.toArray());
+        struct.set(LIMIT_TIMESTAMP, limitTimeStamp);
         return struct;
     }
 }

@@ -3939,7 +3939,8 @@ public class KafkaAdminClient extends AdminClient {
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
                     return ListOffsetRequest.Builder
                             .forConsumer(true, context.options().isolationLevel())
-                            .setTargetTimes(partitionsToQuery);
+                            .setTargetTimes(partitionsToQuery)
+                            .setLimitTimeStamp(ListOffsetRequest.UNLIMITED_TIMESTAMP);
                 }
 
                 @Override

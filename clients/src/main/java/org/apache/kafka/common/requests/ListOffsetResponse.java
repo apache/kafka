@@ -129,9 +129,11 @@ public class ListOffsetResponse extends AbstractResponse {
 
     private static final Schema LIST_OFFSET_RESPONSE_V5 = LIST_OFFSET_RESPONSE_V4;
 
+    private static final Schema LIST_OFFSET_RESPONSE_V6 = LIST_OFFSET_RESPONSE_V5;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2,
-            LIST_OFFSET_RESPONSE_V3, LIST_OFFSET_RESPONSE_V4, LIST_OFFSET_RESPONSE_V5};
+            LIST_OFFSET_RESPONSE_V3, LIST_OFFSET_RESPONSE_V4, LIST_OFFSET_RESPONSE_V5, LIST_OFFSET_RESPONSE_V6};
     }
 
     public static final class PartitionData {

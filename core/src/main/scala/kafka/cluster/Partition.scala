@@ -1031,6 +1031,7 @@ class Partition(val topicPartition: TopicPartition,
   def fetchOffsetForTimestamp(timestamp: Long,
                               isolationLevel: Option[IsolationLevel],
                               currentLeaderEpoch: Optional[Integer],
+                              limitTimeStamp: Long,
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
@@ -1060,17 +1061,51 @@ class Partition(val topicPartition: TopicPartition,
       logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
     }
 
-    // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
-    // or for a timestamp lookup that is beyond the last fetchable offset.
-    timestamp match {
-      case ListOffsetRequest.LATEST_TIMESTAMP =>
-        maybeOffsetsError.map(e => throw e)
-          .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
-        getOffsetByTimestamp
+    def getOffsetByTimestampOnly(searchTimeStamp: Long): Option[TimestampAndOffset] = {
+      // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
+      // or for a timestamp lookup that is beyond the last fetchable offset.
+      searchTimeStamp match {
+        case ListOffsetRequest.LATEST_TIMESTAMP =>
+          maybeOffsetsError.map(e => throw e)
+            .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
+        case ListOffsetRequest.EARLIEST_TIMESTAMP =>
+          getOffsetByTimestamp
+        case _ =>
+          getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
+            .orElse(maybeOffsetsError.map(e => throw e))
+      }
+    }
+
+    def getLogStartTime: Option[Long] = {
+      val log = logManager.getLog(topicPartition)
+      log match {
+        case Some(log) =>
+          if (log.logSegments.isEmpty) {
+            None
+          } else {
+            Option(log.logSegments.head.time.milliseconds())
+          }
+        case None =>
+          None
+      }
+    }
+
+    limitTimeStamp match {
+      case ListOffsetRequest.UNLIMITED_TIMESTAMP =>
+        getOffsetByTimestampOnly(timestamp)
       case _ =>
-        getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
-          .orElse(maybeOffsetsError.map(e => throw e))
+        // Only handle new add partitions normally
+        if (getLogStartTime == None) {
+          warn(s"Get the first segment start time failed for partition: ${topicPartition.toString}.")
+          getOffsetByTimestampOnly(timestamp)
+        } else {
+          val logStartTime = getLogStartTime.get
+          if (limitTimeStamp <= logStartTime) {
+            getOffsetByTimestampOnly(ListOffsetRequest.EARLIEST_TIMESTAMP)
+          } else {
+            getOffsetByTimestampOnly(ListOffsetRequest.LATEST_TIMESTAMP)
+          }
+        }
     }
   }
 

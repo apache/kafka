@@ -14,8 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.common.errors;
 
-public enum OffsetResetStrategy {
-    LATEST, EARLIEST, NONE, NEAREST, LATEST_ON_START, EARLIEST_ON_START
+public class InvalidOffsetResetStrategyException extends ApiException {
+    private static final long serialVersionUID = 1L;
+
+    public InvalidOffsetResetStrategyException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public InvalidOffsetResetStrategyException(String message) {
+        super(message);
+    }
 }

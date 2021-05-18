@@ -979,11 +979,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             Some(offsetRequest.isolationLevel)
           else
             None
+          val limitTimeStamp = offsetRequest.limitTimeStamp
 
           val foundOpt = replicaManager.fetchOffsetForTimestamp(topicPartition,
             partitionData.timestamp,
             isolationLevelOpt,
             partitionData.currentLeaderEpoch,
+            limitTimeStamp,
             fetchOnlyFromLeader)
 
           val response = foundOpt match {

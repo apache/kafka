@@ -389,6 +389,7 @@ class PartitionTest extends AbstractPartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
+          System.currentTimeMillis(),
           fetchOnlyFromLeader = true)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
@@ -416,6 +417,7 @@ class PartitionTest extends AbstractPartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
+          System.currentTimeMillis(),
           fetchOnlyFromLeader = fetchOnlyLeader)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
@@ -444,6 +446,7 @@ class PartitionTest extends AbstractPartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
+      System.currentTimeMillis(),
       fetchOnlyFromLeader = true)
 
     assertTrue(timestampAndOffsetOpt.isDefined)
@@ -512,6 +515,7 @@ class PartitionTest extends AbstractPartitionTest {
           timestamp = timestamp,
           isolationLevel = isolation,
           currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+          System.currentTimeMillis(),
           fetchOnlyFromLeader = true
         ))
       } catch {
@@ -751,6 +755,7 @@ class PartitionTest extends AbstractPartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
+        System.currentTimeMillis(),
         fetchOnlyFromLeader = true)
       assertTrue(res.isDefined)
       res.get
@@ -760,6 +765,7 @@ class PartitionTest extends AbstractPartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
+        ListOffsetRequest.UNLIMITED_TIMESTAMP,
         fetchOnlyFromLeader = true)
       assertTrue(res.isDefined)
       res.get

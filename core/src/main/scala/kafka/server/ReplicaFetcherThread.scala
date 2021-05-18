@@ -232,6 +232,7 @@ class ReplicaFetcherThread(name: String,
     val requestPartitions = Map(topicPartition -> requestPartitionData)
     val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
       .setTargetTimes(requestPartitions.asJava)
+      .setLimitTimeStamp(ListOffsetRequest.UNLIMITED_TIMESTAMP)
 
     val clientResponse = leaderEndpoint.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
