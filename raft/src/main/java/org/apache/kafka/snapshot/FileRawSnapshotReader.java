@@ -63,7 +63,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
                 String.format(
                     "Unable to close snapshot reader %s at %s",
                     snapshotId,
-                    fileRecords.file
+                    fileRecords
                 ),
                 e
             );
