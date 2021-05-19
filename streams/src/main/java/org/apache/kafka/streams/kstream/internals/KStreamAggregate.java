@@ -71,7 +71,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics());
-            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
                 context,
