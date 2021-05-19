@@ -331,9 +331,9 @@ public final class Stores {
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
+        Objects.requireNonNull(name, "name cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
-        Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
