@@ -329,15 +329,15 @@ public final class Stores {
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
-     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
-                                                                    final Duration retentionPeriod) {
-         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-         long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
-         Objects.requireNonNull(name, "name cannot be null");
-         if (retentionPeriodMs < 0) {
-             throw new IllegalArgumentException("retentionPeriod cannot be negative");
-         }
-         return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final Duration retentionPeriod) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriodMs < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
     }
 
     /**
