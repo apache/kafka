@@ -676,6 +676,14 @@ public class MockLog implements ReplicatedLog {
 
         @Override
         public void close() {}
+
+        @Override
+        public String toString() {
+            return "MockRawSnapshotWriter(" +
+                    "snapshotId=" + snapshotId +
+                    ", frozen=" + frozen +
+                    ')';
+        }
     }
 
     final static class MockRawSnapshotReader implements RawSnapshotReader {

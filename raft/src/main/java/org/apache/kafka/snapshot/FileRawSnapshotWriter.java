@@ -167,4 +167,13 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             throw new RuntimeException(e);
         }
     }
+
+    @Override
+    public String toString() {
+        return "FileRawSnapshotWriter(" +
+                "tempSnapshotPath=" + tempSnapshotPath +
+                ", snapshotId=" + snapshotId +
+                ", frozen=" + frozen +
+                ')';
+    }
 }
