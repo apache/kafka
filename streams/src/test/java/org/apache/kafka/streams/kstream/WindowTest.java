@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation")
 public class WindowTest {
 
     static class TestWindow extends Window {

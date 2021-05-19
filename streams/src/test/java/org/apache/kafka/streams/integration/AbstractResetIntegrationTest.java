@@ -67,6 +67,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public abstract class AbstractResetIntegrationTest {
     static EmbeddedKafkaCluster cluster;
 

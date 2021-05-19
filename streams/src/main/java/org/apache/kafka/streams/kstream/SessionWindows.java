@@ -69,6 +69,7 @@ import static org.apache.kafka.streams.kstream.Windows.DEFAULT_GRACE_PERIOD_MS;
  * @see KGroupedStream#windowedBy(SessionWindows)
  * @see TimestampExtractor
  */
+@SuppressWarnings("deprecation")
 public final class SessionWindows {
 
     private final long gapMs;

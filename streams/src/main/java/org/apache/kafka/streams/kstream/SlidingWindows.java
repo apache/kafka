@@ -67,7 +67,7 @@ import static org.apache.kafka.streams.kstream.Windows.DEFAULT_GRACE_PERIOD_MS;
  * @see CogroupedKStream#windowedBy(SlidingWindows)
  * @see TimestampExtractor
  */
-
+@SuppressWarnings("deprecation")
 public final class SlidingWindows {
 
     /** The size of the windows in milliseconds, defined by the max time difference between records. */

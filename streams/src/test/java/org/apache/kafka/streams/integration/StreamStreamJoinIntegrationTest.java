@@ -41,6 +41,7 @@ import static java.time.Duration.ofSeconds;
  */
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
+@SuppressWarnings("deprecation")
 public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;

@@ -47,6 +47,7 @@ import java.util.Properties;
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KStreamImplValueJoinerWithKeyTest {
 
     private KStream<String, Integer> leftStream;

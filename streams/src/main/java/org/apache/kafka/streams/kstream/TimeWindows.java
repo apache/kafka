@@ -53,6 +53,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
+@SuppressWarnings("deprecation")
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */
@@ -193,7 +194,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @since 3.0
      */
     public static TimeWindows ofSizeAndGrace(final Duration size, final Duration afterWindowEnd)
-            throws IllegalArgumentException{
+            throws IllegalArgumentException {
 
         final String sizeMsgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = validateMillisecondDuration(size, sizeMsgPrefix);

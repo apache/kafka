@@ -73,6 +73,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class StreamsBuilderTest {
 
     private static final String STREAM_TOPIC = "stream-topic";

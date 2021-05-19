@@ -36,6 +36,7 @@ import java.util.Map;
  * @see SessionWindows
  * @see TimestampExtractor
  */
+@SuppressWarnings("deprecation")
 public abstract class Windows<W extends Window> {
 
     // By default, there is no longer any grace period since Kafka 3.0

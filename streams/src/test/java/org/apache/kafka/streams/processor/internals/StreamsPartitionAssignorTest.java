@@ -135,6 +135,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 @RunWith(value = Parameterized.class)
 public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";

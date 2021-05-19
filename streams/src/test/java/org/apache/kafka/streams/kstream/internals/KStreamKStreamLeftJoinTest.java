@@ -45,6 +45,7 @@ import java.util.Set;
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KStreamKStreamLeftJoinTest {
     private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 

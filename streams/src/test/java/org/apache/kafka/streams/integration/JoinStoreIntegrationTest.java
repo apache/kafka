@@ -50,6 +50,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThrows;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class JoinStoreIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);

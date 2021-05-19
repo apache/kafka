@@ -66,6 +66,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class MetricsIntegrationTest {
 
     private static final int NUM_BROKERS = 1;

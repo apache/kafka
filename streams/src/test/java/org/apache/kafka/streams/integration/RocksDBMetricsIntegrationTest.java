@@ -69,6 +69,7 @@ import static org.hamcrest.Matchers.notNullValue;
 
 @Category({IntegrationTest.class})
 @RunWith(Parameterized.class)
+@SuppressWarnings("deprecation")
 public class RocksDBMetricsIntegrationTest {
 
     private static final int NUM_BROKERS = 3;

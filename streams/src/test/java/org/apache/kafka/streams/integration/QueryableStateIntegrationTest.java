@@ -119,6 +119,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 

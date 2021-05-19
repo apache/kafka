@@ -24,6 +24,7 @@ import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation")
 public class SlidingWindowsTest {
 
     private static final long ANY_SIZE = 123L;
