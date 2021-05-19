@@ -101,7 +101,12 @@ public class TestPlugins {
          * Resource dir and class name of plugins which reads a version string from resource.
          */
         READ_VERSION_FROM_RESOURCE_V1("read-version-from-resource-v1", "test.plugins.ReadVersionFromResource"),
-        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2", "test.plugins.ReadVersionFromResource"),
+        // The behavior of DelegatingClassLoader when two jars providing the same plugin are both
+        // on the plugin path is undeterministic. So, hide the v2 jar from the plugin path. This jar
+        // is only used in certain testcases that verify resources are read correctly when provided
+        // in both the PluginClassLoader and its parent class loader.
+        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2",
+                "test.plugins.ReadVersionFromResource", true),
 
         /**
          * Resource dir and class names of plugins that are included in a single jar.
@@ -111,10 +116,16 @@ public class TestPlugins {
 
         private final String resourceDir;
         private final String className;
+        private final boolean hideFromPluginPath;
 
         TestPlugin(String resourceDir, String className) {
+            this(resourceDir, className, false);
+        }
+
+        TestPlugin(String resourceDir, String className, boolean hideFromPluginPath) {
             this.resourceDir = resourceDir;
             this.className = className;
+            this.hideFromPluginPath = hideFromPluginPath;
         }
 
         public String getResourceDir() {
@@ -123,6 +134,10 @@ public class TestPlugins {
 
         public String getClassName() {
             return className;
+        }
+
+        public boolean hideFromPluginPath() {
+            return hideFromPluginPath;
         }
     }
 
@@ -164,10 +179,10 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      */
     public static List<String> pluginPath() {
-        return PLUGIN_JARS.values()
+        return PLUGIN_JARS.entrySet()
             .stream()
-            .map(File::getPath)
-            .distinct()
+            .filter(e -> !e.getKey().hideFromPluginPath())
+            .map(e -> e.getValue().getPath())
             .collect(Collectors.toList());
     }
 
