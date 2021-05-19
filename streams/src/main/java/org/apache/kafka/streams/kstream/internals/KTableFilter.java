@@ -90,12 +90,11 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                store = context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
