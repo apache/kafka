@@ -46,6 +46,7 @@ public interface Records extends TransferableRecords {
     int OFFSET_LENGTH = 8;
     int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
     int SIZE_LENGTH = 4;
+    // If the log overhead increases, please consider increasing TopicConfig.MAX_MESSAGE_BYTES_DEFAULT.
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
     // the magic offset is at the same offset for all current message formats, but the 4 bytes

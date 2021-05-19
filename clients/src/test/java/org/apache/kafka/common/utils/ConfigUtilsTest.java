@@ -21,10 +21,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConfigUtilsTest {
 
@@ -139,5 +141,19 @@ public class ConfigUtilsTest {
         assertEquals("derp", newConfig.get("foo.bar"));
         assertNull(newConfig.get("foo.bar.deprecated"));
         assertNull(newConfig.get("foo.bar.even.more.deprecated"));
+    }
+
+    @Test
+    public void testMillisecondsToHours() {
+        assertEquals(5, ConfigUtils.millisecondsToHours(5 * 60 * 60 * 1000));
+        assertEquals("Invalid number of milliseconds -1. The number of milliseconds " +
+            "must be non-negative.", assertThrows(RuntimeException.class,
+                () -> ConfigUtils.millisecondsToHours(-1)).getMessage());
+        assertEquals("The given number of milliseconds 18000001 does not divide cleanly into " +
+            "a number of hours.", assertThrows(RuntimeException.class,
+                () -> ConfigUtils.millisecondsToHours(1 + 5 * 60 * 60 * 1000)).getMessage());
+        assertEquals("Invalid number of hours 2147483648. The number of hours must be " +
+            "representable in an integer.", assertThrows(RuntimeException.class,
+                () -> ConfigUtils.millisecondsToHours(7730941132800000L)).getMessage());
     }
 }

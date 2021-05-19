@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.util.{Collections, Locale, Properties}
+import java.util.{Locale, Properties}
 
 import scala.jdk.CollectionConverters._
 import kafka.api.{ApiVersion, ApiVersionValidator}
@@ -33,33 +33,32 @@ import scala.collection.{Map, mutable}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 
 object Defaults {
-  val SegmentSize = kafka.server.Defaults.LogSegmentBytes
-  val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
-  val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
-  val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
-  val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
-  val RetentionSize = kafka.server.Defaults.LogRetentionBytes
-  val RetentionMs = kafka.server.Defaults.LogRetentionHours * 60 * 60 * 1000L
-  val MaxMessageSize = kafka.server.Defaults.MessageMaxBytes
-  val MaxIndexSize = kafka.server.Defaults.LogIndexSizeMaxBytes
-  val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
-  val FileDeleteDelayMs = kafka.server.Defaults.LogDeleteDelayMs
-  val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
-  val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
-  val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
-  val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
-  val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
-  val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
-  val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
-  val CompressionType = kafka.server.Defaults.CompressionType
-  val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
+  val SegmentSize = TopicConfig.SEGMENT_BYTES_DEFAULT
+  val SegmentMs = TopicConfig.SEGMENT_MS_DEFAULT
+  val SegmentJitterMs = TopicConfig.SEGMENT_JITTER_MS_DEFAULT
+  val FlushInterval = TopicConfig.FLUSH_MESSAGES_INTERVAL_DEFAULT
+  val FlushMs = TopicConfig.FLUSH_MESSAGES_INTERVAL_DEFAULT
+  val RetentionSize = TopicConfig.RETENTION_BYTES_DEFAULT
+  val RetentionMs = TopicConfig.RETENTION_MS_DEFAULT
+  val MaxMessageSize = TopicConfig.MAX_MESSAGE_BYTES_DEFAULT
+  val MaxIndexSize = TopicConfig.SEGMENT_INDEX_BYTES_DEFAULT
+  val IndexInterval = TopicConfig.INDEX_INTERVAL_BYTES_DEFAULT
+  val FileDeleteDelayMs = TopicConfig.FILE_DELETE_DELAY_MS_DEFAULT
+  val DeleteRetentionMs = TopicConfig.DELETE_RETENTION_MS_DEFAULT
+  val MinCompactionLagMs = TopicConfig.MIN_COMPACTION_LAG_MS_DEFAULT
+  val MaxCompactionLagMs = TopicConfig.MAX_COMPACTION_LAG_MS_DEFAULT
+  val MinCleanableDirtyRatio = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DEFAULT
+  val CleanupPolicy = TopicConfig.CLEANUP_POLICY_DEFAULT
+  val UncleanLeaderElectionEnable = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT
+  val MinInSyncReplicas = TopicConfig.MIN_IN_SYNC_REPLICAS_DEFAULT
+  val CompressionType = TopicConfig.COMPRESSION_TYPE_DEFAULT
+  val PreAllocateEnable = TopicConfig.PREALLOCATE_DEFAULT
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
-  val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
-  val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
-  val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
-  val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
-  val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
-  val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
+  val MessageTimestampType = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DEFAULT
+  val MessageTimestampDifferenceMaxMs = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT
+  val LeaderReplicationThrottledReplicas = TopicConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT
+  val FollowerReplicationThrottledReplicas = TopicConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT
+  val MessageDownConversionEnable = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
@@ -158,7 +157,7 @@ object LogConfig {
   val RetentionSizeDoc = TopicConfig.RETENTION_BYTES_DOC
   val RetentionMsDoc = TopicConfig.RETENTION_MS_DOC
   val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
-  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
+  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOC
   val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
   val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
   val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC

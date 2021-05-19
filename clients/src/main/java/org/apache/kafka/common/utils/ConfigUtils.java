@@ -28,6 +28,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.concurrent.TimeUnit.HOURS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 public class ConfigUtils {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigUtils.class);
@@ -112,5 +115,28 @@ public class ConfigUtils {
         });
 
         return newConfigs;
+    }
+
+    /**
+     * Convert a 64-bit number of milliseconds into a 32-bit number of hours.
+     *
+     * @param milliseconds  The number of milliseconds. There must not be any remainder
+     *                      when converting this into hours.
+     * @return              The number of hours as an integer.
+     */
+    public static int millisecondsToHours(long milliseconds) {
+        if (milliseconds < 0) {
+            throw new RuntimeException("Invalid number of milliseconds " + milliseconds +
+                ". The number of milliseconds must be non-negative.");
+        }
+        long hours = MILLISECONDS.toHours(milliseconds);
+        if (milliseconds != HOURS.toMillis(hours)) {
+            throw new RuntimeException("The given number of milliseconds " + milliseconds +
+                " does not divide cleanly into a number of hours.");
+        } else if (hours > Integer.MAX_VALUE) {
+            throw new RuntimeException("Invalid number of hours " + hours + ". The " +
+                "number of hours must be representable in an integer.");
+        }
+        return (int) hours;
     }
 }

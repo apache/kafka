@@ -38,9 +38,9 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
+import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
@@ -64,7 +64,7 @@ object Defaults {
   val BrokerIdGenerationEnable = true
   val MaxReservedBrokerId = 1000
   val BrokerId = -1
-  val MessageMaxBytes = 1024 * 1024 + Records.LOG_OVERHEAD
+  val MessageMaxBytes = TopicConfig.MAX_MESSAGE_BYTES_DEFAULT
   val NumNetworkThreads = 3
   val NumIoThreads = 8
   val BackgroundThreads = 10
@@ -104,43 +104,43 @@ object Defaults {
   /** ********* Log Configuration ***********/
   val NumPartitions = 1
   val LogDir = "/tmp/kafka-logs"
-  val LogSegmentBytes = 1 * 1024 * 1024 * 1024
-  val LogRollHours = 24 * 7
-  val LogRollJitterHours = 0
-  val LogRetentionHours = 24 * 7
+  val LogSegmentBytes = TopicConfig.SEGMENT_BYTES_DEFAULT
+  val LogRollHours = ConfigUtils.millisecondsToHours(TopicConfig.SEGMENT_MS_DEFAULT)
+  val LogRollJitterHours = ConfigUtils.millisecondsToHours(TopicConfig.SEGMENT_JITTER_MS_DEFAULT)
+  val LogRetentionHours = ConfigUtils.millisecondsToHours(TopicConfig.RETENTION_MS_DEFAULT)
 
-  val LogRetentionBytes = -1L
+  val LogRetentionBytes = TopicConfig.RETENTION_BYTES_DEFAULT
   val LogCleanupIntervalMs = 5 * 60 * 1000L
-  val Delete = "delete"
-  val Compact = "compact"
-  val LogCleanupPolicy = Delete
+  val Delete = TopicConfig.CLEANUP_POLICY_DELETE
+  val Compact = TopicConfig.CLEANUP_POLICY_COMPACT
+  val LogCleanupPolicy = TopicConfig.CLEANUP_POLICY_DEFAULT
   val LogCleanerThreads = 1
   val LogCleanerIoMaxBytesPerSecond = Double.MaxValue
   val LogCleanerDedupeBufferSize = 128 * 1024 * 1024L
   val LogCleanerIoBufferSize = 512 * 1024
   val LogCleanerDedupeBufferLoadFactor = 0.9d
   val LogCleanerBackoffMs = 15 * 1000
-  val LogCleanerMinCleanRatio = 0.5d
+  val LogCleanerMinCleanRatio = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DEFAULT
   val LogCleanerEnable = true
-  val LogCleanerDeleteRetentionMs = 24 * 60 * 60 * 1000L
-  val LogCleanerMinCompactionLagMs = 0L
-  val LogCleanerMaxCompactionLagMs = Long.MaxValue
-  val LogIndexSizeMaxBytes = 10 * 1024 * 1024
-  val LogIndexIntervalBytes = 4096
-  val LogFlushIntervalMessages = Long.MaxValue
-  val LogDeleteDelayMs = 60000
-  val LogFlushSchedulerIntervalMs = Long.MaxValue
+  val LogCleanerDeleteRetentionMs = TopicConfig.DELETE_RETENTION_MS_DEFAULT
+  val LogCleanerMinCompactionLagMs = TopicConfig.MIN_COMPACTION_LAG_MS_DEFAULT
+  val LogCleanerMaxCompactionLagMs = TopicConfig.MAX_COMPACTION_LAG_MS_DEFAULT
+  val LogIndexSizeMaxBytes = TopicConfig.SEGMENT_INDEX_BYTES_DEFAULT
+  val LogIndexIntervalBytes = TopicConfig.INDEX_INTERVAL_BYTES_DEFAULT
+  val LogFlushIntervalMessages = TopicConfig.FLUSH_MESSAGES_INTERVAL_DEFAULT
+  val LogDeleteDelayMs = TopicConfig.FILE_DELETE_DELAY_MS_DEFAULT
+  val LogFlushSchedulerIntervalMs = TopicConfig.FLUSH_MESSAGES_INTERVAL_DEFAULT
   val LogFlushOffsetCheckpointIntervalMs = 60000
   val LogFlushStartOffsetCheckpointIntervalMs = 60000
-  val LogPreAllocateEnable = false
+  val LogPreAllocateEnable = TopicConfig.PREALLOCATE_DEFAULT
   // lazy val as `InterBrokerProtocolVersion` is defined later
   lazy val LogMessageFormatVersion = InterBrokerProtocolVersion
-  val LogMessageTimestampType = "CreateTime"
-  val LogMessageTimestampDifferenceMaxMs = Long.MaxValue
+  val LogMessageTimestampType = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DEFAULT
+  val LogMessageTimestampDifferenceMaxMs = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
-  val MinInSyncReplicas = 1
-  val MessageDownConversionEnable = true
+  val MinInSyncReplicas = TopicConfig.MIN_IN_SYNC_REPLICAS_DEFAULT
+  val MessageDownConversionEnable = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -162,7 +162,7 @@ object Defaults {
   val AutoLeaderRebalanceEnable = true
   val LeaderImbalancePerBrokerPercentage = 10
   val LeaderImbalanceCheckIntervalSeconds = 300
-  val UncleanLeaderElectionEnable = false
+  val UncleanLeaderElectionEnable = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
   val InterBrokerProtocolVersion = ApiVersion.latestVersion.toString
 
@@ -219,7 +219,7 @@ object Defaults {
 
   val DeleteTopicEnable = true
 
-  val CompressionType = "producer"
+  val CompressionType = TopicConfig.COMPRESSION_TYPE_DEFAULT
 
   val MaxIdMapSnapshots = 2
   /** ********* Kafka Metrics Configuration ***********/
