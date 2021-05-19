@@ -456,6 +456,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
         final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
 
         punctuators.add(capturedPunctuator);
