@@ -874,7 +874,10 @@ public class EosIntegrationTest {
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
-        final long commitIntervalMs = 600_000L;
+        // Set commit interval to a larger value to avoid affection of controlled stream commit,
+        // but not too large as we need to have a relatively low transaction timeout such
+        // that it should help trigger the timed out transaction in time.
+        final long commitIntervalMs = 20_000L;
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
