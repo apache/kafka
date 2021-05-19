@@ -612,11 +612,21 @@ public class KafkaConsumerTest {
             ListOffsetsPartition expectedTp0 = new ListOffsetsPartition()
                     .setPartitionIndex(tp0.partition())
                     .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP);
+            return partitions.contains(expectedTp0);
+        }, listOffsetsResponse(Collections.singletonMap(tp0, 50L)));
+        client.prepareResponse(body -> {
+            ListOffsetsRequest request = (ListOffsetsRequest) body;
+            List<ListOffsetsPartition> partitions = request.topics().stream().flatMap(t -> {
+                if (t.name().equals(topic))
+                    return Stream.of(t.partitions());
+                else
+                    return Stream.empty();
+            }).flatMap(List::stream).collect(Collectors.toList());
             ListOffsetsPartition expectedTp1 = new ListOffsetsPartition()
                     .setPartitionIndex(tp1.partition())
                     .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP);
-            return partitions.contains(expectedTp0) && partitions.contains(expectedTp1);
-        }, listOffsetsResponse(Collections.singletonMap(tp0, 50L), Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
+            return partitions.contains(expectedTp1);
+        }, listOffsetsResponse(new HashMap<TopicPartition, Long>(), Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
@@ -2342,6 +2352,8 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
+        boolean nearestOffsetReset = false;
+        long createTimestamp = System.currentTimeMillis();
 
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
@@ -2396,6 +2408,8 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
+                nearestOffsetReset,
+                createTimestamp,
                 new ApiVersions());
 
         return new KafkaConsumer<>(

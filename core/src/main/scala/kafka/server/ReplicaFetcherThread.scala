@@ -94,7 +94,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val listOffsetRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV1) 7
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
@@ -246,6 +247,7 @@ class ReplicaFetcherThread(name: String,
             .setTimestamp(earliestOrLatest)))
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
       .setTargetTimes(Collections.singletonList(topic))
+      .setLimitTimeStamp(ListOffsetsRequest.UNLIMITED_TIMESTAMP)
 
     val clientResponse = leaderEndpoint.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
