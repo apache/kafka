@@ -146,10 +146,10 @@ public class ConfigUtilsTest {
     }
 
     private static final ConfigDef CONFIG = new ConfigDef().
-        define("foo", Type.PASSWORD, Importance.HIGH, "").
-        define("bar", Type.STRING, Importance.HIGH, "").
-        define("quux", Type.INT, Importance.HIGH, "").
-        define("blah", Type.STRING, Importance.HIGH, "");
+        define("myPassword", Type.PASSWORD, Importance.HIGH, "").
+        define("myString", Type.STRING, Importance.HIGH, "").
+        define("myInt", Type.INT, Importance.HIGH, "").
+        define("myString2", Type.STRING, Importance.HIGH, "");
 
     @Test
     public void testConfigMapToRedactedStringForEmptyMap() {
@@ -160,12 +160,12 @@ public class ConfigUtilsTest {
     @Test
     public void testConfigMapToRedactedStringWithSecrets() {
         Map<String, Object> testMap1 = new HashMap<>();
-        testMap1.put("bar", "whatever");
-        testMap1.put("quux", Integer.valueOf(123));
-        testMap1.put("foo", "foosecret");
-        testMap1.put("blah", null);
-        testMap1.put("quuux", Integer.valueOf(456));
-        assertEquals("{bar=\"whatever\", blah=null, foo=(redacted), quuux=(redacted), quux=123}",
+        testMap1.put("myString", "whatever");
+        testMap1.put("myInt", Integer.valueOf(123));
+        testMap1.put("myPassword", "foosecret");
+        testMap1.put("myString2", null);
+        testMap1.put("myUnknown", Integer.valueOf(456));
+        assertEquals("{myInt=123, myPassword=(redacted), myString=\"whatever\", myString2=null, myUnknown=(redacted)}",
             ConfigUtils.configMapToRedactedString(testMap1, CONFIG));
     }
 }
