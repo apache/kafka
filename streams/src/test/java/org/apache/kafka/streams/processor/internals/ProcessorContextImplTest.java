@@ -455,16 +455,6 @@ public class ProcessorContextImplTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnScheduleWithInterval() {
-        context = getStandbyContext();
-        assertThrows(
-            UnsupportedOperationException.class,
-            () -> context.schedule(100L, PunctuationType.STREAM_TIME, t -> { })
-        );
-    }
-
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnSchedule() {
         context = getStandbyContext();
