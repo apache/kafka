@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-
 import java.util.Iterator;
 import java.util.OptionalLong;
 

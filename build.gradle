@@ -1078,6 +1078,7 @@ project(':metadata') {
     testImplementation libs.hamcrest
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
   }
 
   task processMessages(type:JavaExec) {

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
@@ -44,7 +45,7 @@ public class LocalLogManagerTest {
     @Test
     public void testCreateAndClose() throws Exception {
         try (LocalLogManagerTestEnv env =
-                 LocalLogManagerTestEnv.createWithMockListeners(1)) {
+                 LocalLogManagerTestEnv.createWithMockListeners(1, Optional.empty())) {
             env.close();
             assertEquals(null, env.firstError.get());
         }
@@ -56,7 +57,7 @@ public class LocalLogManagerTest {
     @Test
     public void testClaimsLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
-                 LocalLogManagerTestEnv.createWithMockListeners(1)) {
+                 LocalLogManagerTestEnv.createWithMockListeners(1, Optional.empty())) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
             assertEquals(null, env.firstError.get());
@@ -69,7 +70,7 @@ public class LocalLogManagerTest {
     @Test
     public void testPassLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
-                 LocalLogManagerTestEnv.createWithMockListeners(3)) {
+                 LocalLogManagerTestEnv.createWithMockListeners(3, Optional.empty())) {
             LeaderAndEpoch first = env.waitForLeader();
             LeaderAndEpoch cur = first;
             do {
@@ -123,7 +124,7 @@ public class LocalLogManagerTest {
     @Test
     public void testCommits() throws Exception {
         try (LocalLogManagerTestEnv env =
-                 LocalLogManagerTestEnv.createWithMockListeners(3)) {
+                 LocalLogManagerTestEnv.createWithMockListeners(3, Optional.empty())) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
             int leaderId = leaderInfo.leaderId().orElseThrow(() ->
                 new AssertionError("Current leader is undefined")

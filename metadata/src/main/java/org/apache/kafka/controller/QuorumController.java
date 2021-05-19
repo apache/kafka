@@ -70,6 +70,7 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -570,7 +571,7 @@ public final class QuorumController implements Controller {
                 writeOffset = offset;
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
                 for (ApiMessageAndVersion message : result.records()) {
-                    replay(message.message(), -1, offset);
+                    replay(message.message(), Optional.empty(), offset);
                 }
                 snapshotRegistry.createSnapshot(offset);
                 log.debug("Read-write operation {} will be completed when the log " +
@@ -657,7 +658,7 @@ public final class QuorumController implements Controller {
                                 }
                             }
                             for (ApiMessageAndVersion messageAndVersion : messages) {
-                                replay(messageAndVersion.message(), -1, offset);
+                                replay(messageAndVersion.message(), Optional.empty(), offset);
                             }
                         }
                         lastCommittedOffset = offset;
@@ -670,9 +671,64 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            // This should not happen since we are not generating snapshots
-            reader.close();
-            throw new UnsupportedOperationException(String.format("Loading snapshot (%s) is not supported", reader.snapshotId()));
+            appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+                try {
+                    boolean isActiveController = curClaimEpoch != -1;
+                    if (isActiveController) {
+                        throw new IllegalStateException(
+                            String.format(
+                                "Asked to load snasphot (%s) when it is the active controller (%s)",
+                                reader.snapshotId(),
+                                curClaimEpoch
+                            )
+                        );
+                    }
+                    if (lastCommittedOffset != -1) {
+                        throw new IllegalStateException(
+                            String.format(
+                                "Asked to re-load snapshot (%s) after processing records up to %s",
+                                reader.snapshotId(),
+                                lastCommittedOffset
+                            )
+                        );
+                    }
+
+                    while (reader.hasNext()) {
+                        Batch<ApiMessageAndVersion> batch = reader.next();
+                        long offset = batch.lastOffset();
+                        List<ApiMessageAndVersion> messages = batch.records();
+
+                        if (log.isDebugEnabled()) {
+                            if (log.isTraceEnabled()) {
+                                log.trace(
+                                    "Replaying snapshot ({}) batch with last offset of {}: {}",
+                                    reader.snapshotId(),
+                                    offset,
+                                    messages
+                                      .stream()
+                                      .map(ApiMessageAndVersion::toString)
+                                      .collect(Collectors.joining(", "))
+                                );
+                            } else {
+                                log.debug(
+                                    "Replaying snapshot ({}) batch with last offset of {}",
+                                    reader.snapshotId(),
+                                    offset
+                                );
+                            }
+                        }
+
+                        for (ApiMessageAndVersion messageAndVersion : messages) {
+                            replay(messageAndVersion.message(), Optional.of(reader.snapshotId()), offset);
+                        }
+                    }
+
+                    lastCommittedOffset = reader.snapshotId().offset - 1;
+                    snapshotRegistry.createSnapshot(lastCommittedOffset);
+                } finally {
+                    reader.close();
+                }
+            });
         }
 
         @Override
@@ -762,7 +818,7 @@ public final class QuorumController implements Controller {
     }
 
     @SuppressWarnings("unchecked")
-    private void replay(ApiMessage message, long snapshotEpoch, long offset) {
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             switch (type) {
@@ -803,12 +859,12 @@ public final class QuorumController implements Controller {
                     throw new RuntimeException("Unhandled record type " + type);
             }
         } catch (Exception e) {
-            if (snapshotEpoch < 0) {
-                log.error("Error replaying record {} at offset {}.",
-                    message.toString(), offset, e);
+            if (snapshotId.isPresent()) {
+                log.error("Error replaying record {} from snapshot {} at last offset {}.",
+                    message.toString(), snapshotId.get(), offset, e);
             } else {
-                log.error("Error replaying record {} from snapshot {} at index {}.",
-                    message.toString(), snapshotEpoch, offset, e);
+                log.error("Error replaying record {} at last offset {}.",
+                    message.toString(), offset, e);
             }
         }
     }

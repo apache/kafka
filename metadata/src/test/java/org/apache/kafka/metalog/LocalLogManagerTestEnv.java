@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
@@ -56,8 +58,11 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      */
     private final List<LocalLogManager> logManagers;
 
-    public static LocalLogManagerTestEnv createWithMockListeners(int numManagers) throws Exception {
-        LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
+    public static LocalLogManagerTestEnv createWithMockListeners(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot
+    ) throws Exception {
+        LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers, snapshot);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
                 logManager.register(new MockMetaLogManagerListener(logManager.nodeId().getAsInt()));
@@ -69,9 +74,9 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return testEnv;
     }
 
-    public LocalLogManagerTestEnv(int numManagers) throws Exception {
+    public LocalLogManagerTestEnv(int numManagers, Optional<RawSnapshotReader> snapshot) throws Exception {
         dir = TestUtils.tempDirectory();
-        shared = new SharedLogData();
+        shared = new SharedLogData(snapshot);
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {

@@ -217,6 +217,7 @@
     <allow pkg="org.apache.kafka.common.network" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
+    <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />

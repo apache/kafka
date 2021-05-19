@@ -17,9 +17,10 @@
 
 package org.apache.kafka.metalog;
 
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
@@ -27,7 +28,10 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +43,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -141,7 +146,18 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          * The start offset of the last batch that was created, or -1 if no batches have
          * been created.
          */
-        private long prevOffset = -1;
+        private long prevOffset;
+
+        private final Optional<RawSnapshotReader> snapshot;
+
+        public SharedLogData(Optional<RawSnapshotReader> snapshot) {
+            this.snapshot = snapshot;
+            if (snapshot.isPresent()) {
+                prevOffset = snapshot.get().snapshotId().offset - 1;
+            } else {
+                prevOffset = -1;
+            }
+        }
 
         synchronized void registerLogManager(LocalLogManager logManager) {
             if (logManagers.put(logManager.nodeId, logManager) != null) {
@@ -210,6 +226,19 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 return null;
             }
             return new SimpleImmutableEntry<>(entry.getKey(), entry.getValue());
+        }
+
+        /**
+         * Optionally return a snapshot reader if the offset if less than the first batch.
+         */
+        Optional<RawSnapshotReader> maybeNextSnapshot(long offset) {
+            return snapshot.flatMap(reader ->  {
+                if (offset < reader.snapshotId().offset) {
+                    return Optional.of(reader);
+                }
+
+                return Optional.empty();
+            });
         }
     }
 
@@ -283,6 +312,21 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 int numEntriesFound = 0;
                 for (MetaLogListenerData listenerData : listeners) {
                     while (true) {
+                        // Load the snapshot if needed
+                        Optional<RawSnapshotReader> snapshot = shared.maybeNextSnapshot(listenerData.offset);
+                        if (snapshot.isPresent()) {
+                            log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
+                            listenerData.listener.handleSnapshot(
+                                SnapshotReader.of(
+                                    snapshot.get(),
+                                    new  MetadataRecordSerde(),
+                                    BufferSupplier.create(),
+                                    Integer.MAX_VALUE
+                                )
+                            );
+                            listenerData.offset = snapshot.get().snapshotId().offset - 1;
+                        }
+
                         Entry<Long, LocalBatch> entry = shared.nextBatch(listenerData.offset);
                         if (entry == null) {
                             log.trace("Node {}: reached the end of the log after finding " +
