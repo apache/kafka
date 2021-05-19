@@ -1286,6 +1286,66 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testAlterIsrLeaderAndIsrRace(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val remoteBrokerId = brokerId + 1
+    val replicas = List(brokerId, remoteBrokerId)
+    val isr = List[Integer](brokerId, remoteBrokerId).asJava
+
+    val initializeTimeMs = time.milliseconds()
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    assertTrue(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr)
+        .setZkVersion(1)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(true),
+      offsetCheckpoints, None), "Expected become leader transition to succeed")
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    val remoteReplica = partition.getReplica(remoteBrokerId).get
+    assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
+    assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
+
+    // Shrink the ISR
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
+    partition.maybeShrinkIsr()
+    assertTrue(partition.isrState.isInflight)
+
+    // Become leader again, reset the ISR state
+    assertFalse(partition.makeLeader(
+      new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr)
+        .setZkVersion(2)
+        .setReplicas(replicas.map(Int.box).asJava)
+        .setIsNew(false),
+      offsetCheckpoints, None))
+    assertFalse(partition.isrState.isInflight, "ISR should be committed and not inflight")
+
+    // Try the shrink again, should not submit until AlterIsr response arrives
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
+    partition.maybeShrinkIsr()
+    assertFalse(partition.isrState.isInflight, "ISR should still be committed and not inflight")
+
+    // Complete the AlterIsr update and now we can make modifications again
+    alterIsrManager.completeIsrUpdate(10)
+    partition.maybeShrinkIsr()
+    assertTrue(partition.isrState.isInflight, "ISR should be pending a shrink")
+  }
+
+  @Test
   def testShouldNotShrinkIsrIfPreviousFetchIsCaughtUp(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
