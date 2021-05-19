@@ -399,12 +399,14 @@ public class StreamsConfigTest {
         assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSAlpha() {
         assertThrows(IllegalArgumentException.class,
             () -> testTransactionTimeoutSmallerThanCommitInterval(EXACTLY_ONCE));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSBeta() {
         assertThrows(IllegalArgumentException.class,
