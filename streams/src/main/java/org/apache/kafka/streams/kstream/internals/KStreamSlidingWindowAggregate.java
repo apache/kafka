@@ -78,19 +78,16 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KStreamSlidingWindowAggregateProcessor extends AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private Boolean reverseIteratorPossible = null;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
-            metrics = internalProcessorContext.metrics();
+            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+            final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
                 threadId,
@@ -98,8 +95,12 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 internalProcessorContext.currentNode().name(),
                 metrics
             );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+                threadId,
+                context.taskId().toString(),
+                metrics
+            );
+            windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
@@ -472,7 +473,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     ValueAndTimestamp.make(newAgg, newTimestamp),
                     windowStart);
                 tupleForwarder.maybeForward(
-                    new Windowed<K>(key, window),
+                    new Windowed<>(key, window),
                     newAgg,
                     sendOldValues ? oldAgg : null,
                     newTimestamp);
@@ -519,13 +520,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
         private TimestampedWindowStore<K, Agg> windowStore;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
+            windowStore = context.getStateStore(storeName);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public ValueAndTimestamp<Agg> get(final Windowed<K> windowedKey) {
             final K key = windowedKey.key();

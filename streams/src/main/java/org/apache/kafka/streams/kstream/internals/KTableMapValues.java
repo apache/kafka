@@ -108,16 +108,15 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         private TimestampedKeyValueStore<K, V1> store;
         private TimestampedTupleForwarder<K, V1> tupleForwarder;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V1>) context.getStateStore(queryableName);
+                store = context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedCacheFlushListener<K, V1>(context),
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
