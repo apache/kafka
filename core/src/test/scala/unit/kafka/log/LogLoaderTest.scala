@@ -1345,7 +1345,7 @@ class LogLoaderTest {
 
   @Test
   def testFullTransactionIndexRecovery(): Unit = {
-    val logConfig = LogTest.createLogConfig(segmentBytes = 128 * 5)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 128 * 5)
     val log = createLog(logDir, logConfig)
     val epoch = 0.toShort
 
@@ -1388,7 +1388,7 @@ class LogLoaderTest {
 
     log.close()
 
-    val reloadedLogConfig = LogTest.createLogConfig(segmentBytes = 1024 * 5)
+    val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
@@ -1396,7 +1396,7 @@ class LogLoaderTest {
 
   @Test
   def testRecoverOnlyLastSegment(): Unit = {
-    val logConfig = LogTest.createLogConfig(segmentBytes = 128 * 5)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 128 * 5)
     val log = createLog(logDir, logConfig)
     val epoch = 0.toShort
 
@@ -1439,7 +1439,7 @@ class LogLoaderTest {
 
     log.close()
 
-    val reloadedLogConfig = LogTest.createLogConfig(segmentBytes = 1024 * 5)
+    val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
@@ -1447,7 +1447,7 @@ class LogLoaderTest {
 
   @Test
   def testRecoverLastSegmentWithNoSnapshots(): Unit = {
-    val logConfig = LogTest.createLogConfig(segmentBytes = 128 * 5)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 128 * 5)
     val log = createLog(logDir, logConfig)
     val epoch = 0.toShort
 
@@ -1493,7 +1493,7 @@ class LogLoaderTest {
 
     log.close()
 
-    val reloadedLogConfig = LogTest.createLogConfig(segmentBytes = 1024 * 5)
+    val reloadedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = LogTestUtils.allAbortedTransactions(reloadedLog)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
