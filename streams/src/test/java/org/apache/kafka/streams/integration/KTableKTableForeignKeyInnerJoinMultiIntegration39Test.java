@@ -214,9 +214,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration39Test {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        // increase the heartbeat interval and corresponding session timeout value, to avoid unnecessary rebalance
-        streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+        // increase the session timeout value, to avoid unnecessary rebalance
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 20000);
         return streamsConfig;
     }
 
@@ -264,7 +263,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration39Test {
         }
 
         final Function<Float, String> tableOneKeyExtractor = value -> {
-            System.err.println("tableOneKeyExtractor:" + value);
+            System.err.println("tableOneKeyExtractor:" + Integer.toString((int) value.floatValue()));
             return Integer.toString((int) value.floatValue());
         };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
@@ -276,8 +275,14 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegration39Test {
                 return 0;
         };
 
-        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
-        final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
+        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
+            System.err.println("value1 " + value1 + "," + value2);
+            return "value1=" + value1 + ",value2=" + value2;
+        };
+        final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
+            System.err.println("joiner2: value1 " + value1 + "," + value2);
+            return value1 + ",value3=" + value2;
+        };
 
         table1.join(table2, tableOneKeyExtractor, joiner, materialized)
             .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)

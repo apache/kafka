@@ -644,7 +644,7 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
       zkVersion = partitionState.zkVersion
-      
+
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
       } else {
