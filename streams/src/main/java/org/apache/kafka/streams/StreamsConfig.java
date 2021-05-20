@@ -1181,23 +1181,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Get the configs to the {@link KafkaConsumer consumer}.
-     * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
-     * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
-     * version as we only support reading/writing from/to the same Kafka Cluster.
-     *
-     * @param groupId      consumer groupId
-     * @param clientId     clientId
-     * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
-    }
-
-    /**
      * Get the configs to the {@link KafkaConsumer main consumer}.
      * Properties using the prefix {@link #MAIN_CONSUMER_PREFIX} will be used in favor over
      * the properties prefixed with {@link #CONSUMER_PREFIX} and the non-prefixed versions
