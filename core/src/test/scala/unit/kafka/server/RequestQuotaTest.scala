@@ -454,8 +454,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "test-txn-group",
             2,
             0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava,
-            false)
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -612,8 +612,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "client-id",
             0
           )
-          val embedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader,
-            new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build())
+          val embedRequestData = new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build()
+            .serializeWithHeader(requestHeader)
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 

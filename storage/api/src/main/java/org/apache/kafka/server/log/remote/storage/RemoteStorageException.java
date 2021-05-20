@@ -17,8 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 /**
- * Exception thrown when there is a remote storage error.
- * This can be used as the base exception by implementors of
+ * Exception thrown when there is a remote storage error. This can be used as the base exception by implementors of
  * {@link RemoteStorageManager} or {@link RemoteLogMetadataManager} to create extended exceptions.
  */
 public class RemoteStorageException extends Exception {
@@ -28,9 +27,11 @@ public class RemoteStorageException extends Exception {
         super(message);
     }
 
-    public RemoteStorageException(final String message,
-                                  final Throwable cause) {
+    public RemoteStorageException(final String message, final Throwable cause) {
         super(message, cause);
     }
 
+    public RemoteStorageException(Throwable cause) {
+        super(cause);
+    }
 }

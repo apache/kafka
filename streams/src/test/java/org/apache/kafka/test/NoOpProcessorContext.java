@@ -71,14 +71,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
-        return null;
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {

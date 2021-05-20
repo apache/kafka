@@ -82,7 +82,7 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
 
     @Override
     public DescribeProducersRequest.Builder buildRequest(
-        Integer brokerId,
+        int brokerId,
         Set<TopicPartition> topicPartitions
     ) {
         DescribeProducersRequestData request = new DescribeProducersRequestData();
@@ -154,7 +154,7 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
 
     @Override
     public ApiResult<TopicPartition, PartitionProducerState> handleResponse(
-        Integer brokerId,
+        int brokerId,
         Set<TopicPartition> keys,
         AbstractResponse abstractResponse
     ) {

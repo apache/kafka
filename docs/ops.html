@@ -74,7 +74,7 @@
 
   Whenever a broker stops or crashes, leadership for that broker's partitions transfers to other replicas. When the broker is restarted it will only be a follower for all its partitions, meaning it will not be used for client reads and writes.
   <p>
-  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. By default the Kafka cluster will try to restore leadership to the restored replicas.  This behaviour is configured with:
+  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. By default the Kafka cluster will try to restore leadership to the preferred replicas. This behaviour is configured with:
 
   <pre class="line-numbers"><code class="language-text">      auto.leader.rebalance.enable=true</code></pre>
     You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
@@ -464,7 +464,7 @@
 
   <pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</code></pre>
 
-  <p>The lag should constantly decrease during replication.  If the metric does not decrease the administrator should
+  <p>The lag should constantly decrease during replication. If the metric does not decrease the administrator should
       increase the
       throttle throughput as described above. </p>
 
@@ -1317,7 +1317,7 @@ $ bin/kafka-acls.sh \
   <p>
   It is unlikely to require much OS-level tuning, but there are three potentially important OS-level configurations:
   <ul>
-      <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections.  If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes. We recommend at least 100000 allowed file descriptors for the broker processes as a starting point. Note: The mmap() function adds an extra reference to the file associated with the file descriptor fildes which is not removed by a subsequent close() on that file descriptor. This reference is removed when there are no more mappings to the file.
+      <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections. If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes. We recommend at least 100000 allowed file descriptors for the broker processes as a starting point. Note: The mmap() function adds an extra reference to the file associated with the file descriptor fildes which is not removed by a subsequent close() on that file descriptor. This reference is removed when there are no more mappings to the file.
       <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
       <li>Maximum number of memory map areas a process may have (aka vm.max_map_count). <a href="http://kernel.org/doc/Documentation/sysctl/vm.txt">See the Linux kernel documentation</a>. You should keep an eye at this OS-level property when considering the maximum number of partitions a broker may have. By default, on a number of Linux systems, the value of vm.max_map_count is somewhere around 65535. Each log segment, allocated per partition, requires a pair of index/timeindex files, and each of these files consumes 1 map area. In other words, each log segment uses 2 map areas. Thus, each partition requires minimum 2 map areas, as long as it hosts a single log segment. That is to say, creating 50000 partitions on a broker will result allocation of 100000 map areas and likely cause broker crash with OutOfMemoryError (Map failed) on a system with default vm.max_map_count. Keep in mind that the number of log segments per partition varies depending on the segment size, load intensity, retention policy and, generally, tends to be more than one.
   </ul>
@@ -1519,29 +1519,9 @@ $ bin/kafka-acls.sh \
         <td></td>
       </tr>
       <tr>
-        <td># of under replicated partitions (the number of non-reassigning replicas - the number of ISR &gt 0)</td>
-        <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
-        <td>0</td>
-      </tr>
-      <tr>
-        <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
-        <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
-        <td>0</td>
-      </tr>
-      <tr>
-        <td># of at minIsr partitions (|ISR| = min.insync.replicas)</td>
-        <td>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</td>
-        <td>0</td>
-      </tr>
-      <tr>
         <td># of offline log directories</td>
         <td>kafka.log:type=LogManager,name=OfflineLogDirectoryCount</td>
         <td>0</td>
-      </tr>
-      <tr>
-        <td>Is controller active on broker</td>
-        <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
-        <td>only one broker in the cluster should have 1</td>
       </tr>
       <tr>
         <td>Leader election rate</td>
@@ -1552,6 +1532,11 @@ $ bin/kafka-acls.sh \
         <td>Unclean leader election rate</td>
         <td>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</td>
         <td>0</td>
+      </tr>
+      <tr>
+        <td>Is controller active on broker</td>
+        <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
+        <td>only one broker in the cluster should have 1</td>
       </tr>
       <tr>
         <td>Pending topic deletes</td>
@@ -1574,6 +1559,21 @@ $ bin/kafka-acls.sh \
         <td></td>
       </tr>
       <tr>
+        <td># of under replicated partitions (|ISR| &lt |all replicas|)</td>
+        <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of at minIsr partitions (|ISR| = min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
         <td>mostly even across brokers</td>
@@ -1594,7 +1594,7 @@ $ bin/kafka-acls.sh \
         <td>If a broker goes down, ISR for some of the partitions will
     shrink. When that broker is up again, ISR will be expanded
     once the replicas are fully caught up. Other than that, the
-    expected value for both ISR shrink rate and expansion rate is 0. </td>
+    expected value for both ISR shrink rate and expansion rate is 0.</td>
       </tr>
       <tr>
         <td>ISR expansion rate</td>
@@ -1786,7 +1786,7 @@ $ bin/kafka-acls.sh \
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
 
-  The following metrics are available on producer/consumer/connector/streams instances.  For specific metrics, please see following sections.
+  The following metrics are available on producer/consumer/connector/streams instances. For specific metrics, please see following sections.
 
   <table class="data-table">
     <tbody>
@@ -1962,7 +1962,7 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>successful-authentication-no-reauth-total</td>
-        <td>Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication.  May only be non-zero </td>
+        <td>Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication. May only be non-zero.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -1970,7 +1970,7 @@ $ bin/kafka-acls.sh \
 
   <h4><a id="common_node_monitoring" href="#common_node_monitoring">Common Per-broker metrics for producer/consumer/connect/streams</a></h4>
 
-  The following metrics are available on producer/consumer/connector/streams instances.  For specific metrics, please see following sections.
+  The following metrics are available on producer/consumer/connector/streams instances. For specific metrics, please see following sections.
 
   <table class="data-table">
     <tbody>
@@ -2509,7 +2509,7 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       </tr>
       <tr>
         <td>commit-total</td>
-        <td>The total number of commit calls. </td>
+        <td>The total number of commit calls.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -2627,92 +2627,92 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>put-latency-avg</td>
-        <td>The average put execution time in ns. </td>
+        <td>The average put execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-latency-max</td>
-        <td>The maximum put execution time in ns. </td>
+        <td>The maximum put execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-if-absent-latency-avg</td>
-        <td>The average put-if-absent execution time in ns. </td>
+        <td>The average put-if-absent execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-if-absent-latency-max</td>
-        <td>The maximum put-if-absent execution time in ns. </td>
+        <td>The maximum put-if-absent execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>get-latency-avg</td>
-        <td>The average get execution time in ns. </td>
+        <td>The average get execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>get-latency-max</td>
-        <td>The maximum get execution time in ns. </td>
+        <td>The maximum get execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>delete-latency-avg</td>
-        <td>The average delete execution time in ns. </td>
+        <td>The average delete execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>delete-latency-max</td>
-        <td>The maximum delete execution time in ns. </td>
+        <td>The maximum delete execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-all-latency-avg</td>
-        <td>The average put-all execution time in ns. </td>
+        <td>The average put-all execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>put-all-latency-max</td>
-        <td>The maximum put-all execution time in ns. </td>
+        <td>The maximum put-all execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>all-latency-avg</td>
-        <td>The average all operation execution time in ns. </td>
+        <td>The average all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>all-latency-max</td>
-        <td>The maximum all operation execution time in ns. </td>
+        <td>The maximum all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>range-latency-avg</td>
-        <td>The average range execution time in ns. </td>
+        <td>The average range execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>range-latency-max</td>
-        <td>The maximum range execution time in ns. </td>
+        <td>The maximum range execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
         <td>flush-latency-avg</td>
-        <td>The average flush execution time in ns. </td>
+        <td>The average flush execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>flush-latency-max</td>
-        <td>The maximum flush execution time in ns. </td>
+        <td>The maximum flush execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>restore-latency-avg</td>
-        <td>The average restore execution time in ns. </td>
+        <td>The average restore execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>restore-latency-max</td>
-        <td>The maximum restore execution time in ns. </td>
+        <td>The maximum restore execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>

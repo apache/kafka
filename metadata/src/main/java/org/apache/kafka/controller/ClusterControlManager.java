@@ -33,7 +33,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
@@ -103,9 +103,9 @@ public class ClusterControlManager {
     private final long sessionTimeoutNs;
 
     /**
-     * The replica placement policy to use.
+     * The replica placer to use.
      */
-    private final ReplicaPlacementPolicy placementPolicy;
+    private final ReplicaPlacer replicaPlacer;
 
     /**
      * Maps broker IDs to broker registrations.
@@ -127,12 +127,12 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacementPolicy placementPolicy) {
+                          ReplicaPlacer replicaPlacer) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
-        this.placementPolicy = placementPolicy;
+        this.replicaPlacer = replicaPlacer;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -310,12 +310,14 @@ public class ClusterControlManager {
         }
     }
 
-    public List<List<Integer>> placeReplicas(int numPartitions, short numReplicas) {
+    public List<List<Integer>> placeReplicas(int startPartition,
+                                             int numPartitions,
+                                             short numReplicas) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
-        return heartbeatManager.placeReplicas(numPartitions, numReplicas,
-            id -> brokerRegistrations.get(id).rack(), placementPolicy);
+        return heartbeatManager.placeReplicas(startPartition, numPartitions, numReplicas,
+            id -> brokerRegistrations.get(id).rack(), replicaPlacer);
     }
 
     public boolean unfenced(int brokerId) {

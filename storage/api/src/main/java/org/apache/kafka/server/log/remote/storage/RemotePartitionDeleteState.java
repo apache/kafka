@@ -21,25 +21,27 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * It indicates the deletion state of the remote topic partition. This will be based on the action executed on this
+ * This enum indicates the deletion state of the remote topic partition. This will be based on the action executed on this
  * partition by the remote log service implementation.
- * State transitions are mentioned below.
+ * State transitions are mentioned below. Self transition is treated as valid. This allows updating with the
+ * same state in case of retries and failover.
  * <p>
  * <PRE>
  * +-------------------------+
  * |DELETE_PARTITION_MARKED  |
  * +-----------+-------------+
- * |
- * |
+ *             |
+ *             |
  * +-----------v--------------+
  * |DELETE_PARTITION_STARTED  |
  * +-----------+--------------+
- * |
- * |
+ *             |
+ *             |
  * +-----------v--------------+
  * |DELETE_PARTITION_FINISHED |
  * +--------------------------+
@@ -83,4 +85,25 @@ public enum RemotePartitionDeleteState {
         return STATE_TYPES.get(id);
     }
 
+    public static boolean isValidTransition(RemotePartitionDeleteState srcState,
+                                            RemotePartitionDeleteState targetState) {
+        Objects.requireNonNull(targetState, "targetState can not be null");
+
+        if (srcState == null) {
+            // If the source state is null, check the target state as the initial state viz DELETE_PARTITION_MARKED.
+            // This ensures simplicity here as we don't have to define one more type to represent the state 'null' like
+            // DELETE_PARTITION_NOT_MARKED, have the null check by the caller and pass that state.
+            return targetState == DELETE_PARTITION_MARKED;
+        } else if (srcState == targetState) {
+            // Self transition is treated as valid. This is to maintain the idempotency for the state in case of retries
+            // or failover.
+            return true;
+        } else if (srcState == DELETE_PARTITION_MARKED) {
+            return targetState == DELETE_PARTITION_STARTED;
+        } else if (srcState == DELETE_PARTITION_STARTED) {
+            return targetState == DELETE_PARTITION_FINISHED;
+        } else {
+            return false;
+        }
+    }
 }
