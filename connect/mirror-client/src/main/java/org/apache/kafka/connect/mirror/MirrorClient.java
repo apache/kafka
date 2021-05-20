@@ -231,8 +231,7 @@ public class MirrorClient implements AutoCloseable {
         Set<String> sources = new HashSet<>();
         String source = replicationPolicy.topicSource(topic);
         while (source != null && !sources.contains(source)) {
-            // The extra Set.contains above is for LegacyReplicationPolicy (and any other dumb impls) which
-            // cannot prevent cycles. In impls that do prevent cycles, we shouldn't see the same source twice.
+            // The extra Set.contains above is for ReplicationPolicies that cannot prevent cycles.
             sources.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
             source = replicationPolicy.topicSource(topic);
