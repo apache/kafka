@@ -27,12 +27,11 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
-import org.apache.kafka.common.record.UnalignedRecords;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.MockRawSnapshotReader;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -407,7 +406,9 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
-        return new MockRawSnapshotWriter(snapshotId);
+        return new MockRawSnapshotWriter(snapshotId, buffer -> {
+            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
+        });
     }
 
     @Override
@@ -613,101 +614,6 @@ public class MockLog implements ReplicatedLog {
         private EpochStartOffset(int epoch, long startOffset) {
             this.epoch = epoch;
             this.startOffset = startOffset;
-        }
-    }
-
-    final class MockRawSnapshotWriter implements RawSnapshotWriter {
-        private final OffsetAndEpoch snapshotId;
-        private ByteBufferOutputStream data;
-        private boolean frozen;
-
-        public MockRawSnapshotWriter(OffsetAndEpoch snapshotId) {
-            this.snapshotId = snapshotId;
-            this.data = new ByteBufferOutputStream(0);
-            this.frozen = false;
-        }
-
-        @Override
-        public OffsetAndEpoch snapshotId() {
-            return snapshotId;
-        }
-
-        @Override
-        public long sizeInBytes() {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-            return data.position();
-        }
-
-        @Override
-        public void append(UnalignedMemoryRecords records) {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-            data.write(records.buffer());
-        }
-
-        @Override
-        public void append(MemoryRecords records) {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-            data.write(records.buffer());
-        }
-
-        @Override
-        public boolean isFrozen() {
-            return frozen;
-        }
-
-        @Override
-        public void freeze() {
-            if (frozen) {
-                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
-            }
-
-            frozen = true;
-            ByteBuffer buffer = data.buffer();
-            buffer.flip();
-
-            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
-        }
-
-        @Override
-        public void close() {}
-    }
-
-    final static class MockRawSnapshotReader implements RawSnapshotReader {
-        private final OffsetAndEpoch snapshotId;
-        private final MemoryRecords data;
-
-        MockRawSnapshotReader(OffsetAndEpoch snapshotId, ByteBuffer data) {
-            this.snapshotId = snapshotId;
-            this.data = MemoryRecords.readableRecords(data);
-        }
-
-        @Override
-        public OffsetAndEpoch snapshotId() {
-            return snapshotId;
-        }
-
-        @Override
-        public long sizeInBytes() {
-            return data.sizeInBytes();
-        }
-
-        @Override
-        public UnalignedRecords slice(long position, int size) {
-            ByteBuffer buffer = data.buffer();
-            buffer.position(Math.toIntExact(position));
-            buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
-            return new UnalignedMemoryRecords(buffer.slice());
-        }
-
-        @Override
-        public Records records() {
-            return data;
         }
     }
 }

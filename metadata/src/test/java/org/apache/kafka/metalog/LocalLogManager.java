@@ -17,22 +17,34 @@
 
 package org.apache.kafka.metalog;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.raft.internals.MemoryBatchReader;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -43,15 +55,15 @@ import java.util.stream.Collectors;
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
  */
-public final class LocalLogManager implements MetaLogManager, AutoCloseable {
+public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
         int size();
     }
 
     static class LeaderChangeBatch implements LocalBatch {
-        private final MetaLogLeader newLeader;
+        private final LeaderAndEpoch newLeader;
 
-        LeaderChangeBatch(MetaLogLeader newLeader) {
+        LeaderChangeBatch(LeaderAndEpoch newLeader) {
             this.newLeader = newLeader;
         }
 
@@ -80,9 +92,11 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
     }
 
     static class LocalRecordBatch implements LocalBatch {
-        private final List<ApiMessage> records;
+        private final long leaderEpoch;
+        private final List<ApiMessageAndVersion> records;
 
-        LocalRecordBatch(List<ApiMessage> records) {
+        LocalRecordBatch(long leaderEpoch, List<ApiMessageAndVersion> records) {
+            this.leaderEpoch = leaderEpoch;
             this.records = records;
         }
 
@@ -126,16 +140,27 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
         /**
          * The current leader.
          */
-        private MetaLogLeader leader = new MetaLogLeader(-1, -1);
+        private LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
         /**
          * The start offset of the last batch that was created, or -1 if no batches have
          * been created.
          */
-        private long prevOffset = -1;
+        private long prevOffset;
+
+        private final Optional<RawSnapshotReader> snapshot;
+
+        public SharedLogData(Optional<RawSnapshotReader> snapshot) {
+            this.snapshot = snapshot;
+            if (snapshot.isPresent()) {
+                prevOffset = snapshot.get().snapshotId().offset - 1;
+            } else {
+                prevOffset = -1;
+            }
+        }
 
         synchronized void registerLogManager(LocalLogManager logManager) {
-            if (logManagers.put(logManager.nodeId(), logManager) != null) {
+            if (logManagers.put(logManager.nodeId, logManager) != null) {
                 throw new RuntimeException("Can't have multiple LocalLogManagers " +
                     "with id " + logManager.nodeId());
             }
@@ -143,7 +168,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
         }
 
         synchronized void unregisterLogManager(LocalLogManager logManager) {
-            if (!logManagers.remove(logManager.nodeId(), logManager)) {
+            if (!logManagers.remove(logManager.nodeId, logManager)) {
                 throw new RuntimeException("Log manager " + logManager.nodeId() +
                     " was not found.");
             }
@@ -155,9 +180,9 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                     "match the current leader epoch of {}.", nodeId, epoch, leader.epoch());
                 return Long.MAX_VALUE;
             }
-            if (nodeId != leader.nodeId()) {
+            if (!leader.isLeader(nodeId)) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the given node id does not " +
-                    "match the current leader id of {}.", nodeId, epoch, leader.nodeId());
+                    "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
                 return Long.MAX_VALUE;
             }
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
@@ -181,7 +206,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
         }
 
         synchronized void electLeaderIfNeeded() {
-            if (leader.nodeId() != -1 || logManagers.isEmpty()) {
+            if (leader.leaderId().isPresent() || logManagers.isEmpty()) {
                 return;
             }
             int nextLeaderIndex = ThreadLocalRandom.current().nextInt(logManagers.size());
@@ -190,7 +215,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             for (int i = 0; i <= nextLeaderIndex; i++) {
                 nextLeaderNode = iter.next();
             }
-            MetaLogLeader newLeader = new MetaLogLeader(nextLeaderNode, leader.epoch() + 1);
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(nextLeaderNode), leader.epoch() + 1);
             log.info("Elected new leader: {}.", newLeader);
             append(new LeaderChangeBatch(newLeader));
         }
@@ -202,13 +227,26 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             }
             return new SimpleImmutableEntry<>(entry.getKey(), entry.getValue());
         }
+
+        /**
+         * Optionally return a snapshot reader if the offset if less than the first batch.
+         */
+        Optional<RawSnapshotReader> maybeNextSnapshot(long offset) {
+            return snapshot.flatMap(reader ->  {
+                if (offset < reader.snapshotId().offset) {
+                    return Optional.of(reader);
+                }
+
+                return Optional.empty();
+            });
+        }
     }
 
     private static class MetaLogListenerData {
         private long offset = -1;
-        private final MetaLogListener listener;
+        private final RaftClient.Listener<ApiMessageAndVersion> listener;
 
-        MetaLogListenerData(MetaLogListener listener) {
+        MetaLogListenerData(RaftClient.Listener<ApiMessageAndVersion> listener) {
             this.listener = listener;
         }
     }
@@ -254,7 +292,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
     /**
      * The current leader, as seen by this log manager.
      */
-    private volatile MetaLogLeader leader = new MetaLogLeader(-1, -1);
+    private volatile LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
     public LocalLogManager(LogContext logContext,
                            int nodeId,
@@ -274,6 +312,21 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                 int numEntriesFound = 0;
                 for (MetaLogListenerData listenerData : listeners) {
                     while (true) {
+                        // Load the snapshot if needed
+                        Optional<RawSnapshotReader> snapshot = shared.maybeNextSnapshot(listenerData.offset);
+                        if (snapshot.isPresent()) {
+                            log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
+                            listenerData.listener.handleSnapshot(
+                                SnapshotReader.of(
+                                    snapshot.get(),
+                                    new  MetadataRecordSerde(),
+                                    BufferSupplier.create(),
+                                    Integer.MAX_VALUE
+                                )
+                            );
+                            listenerData.offset = snapshot.get().snapshotId().offset - 1;
+                        }
+
                         Entry<Long, LocalBatch> entry = shared.nextBatch(listenerData.offset);
                         if (entry == null) {
                             log.trace("Node {}: reached the end of the log after finding " +
@@ -291,7 +344,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                             LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
-                            listenerData.listener.handleNewLeader(batch.newLeader);
+                            listenerData.listener.handleLeaderChange(batch.newLeader);
                             if (batch.newLeader.epoch() > leader.epoch()) {
                                 leader = batch.newLeader;
                             }
@@ -299,7 +352,18 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
                             log.trace("Node {}: handling LocalRecordBatch with offset {}.",
                                 nodeId, entryOffset);
-                            listenerData.listener.handleCommits(entryOffset, batch.records);
+                            listenerData.listener.handleCommit(
+                                new MemoryBatchReader<>(
+                                    Collections.singletonList(
+                                        Batch.of(
+                                            entryOffset - batch.records.size() + 1,
+                                            Math.toIntExact(batch.leaderEpoch),
+                                            batch.records
+                                        )
+                                    ),
+                                    reader -> { }
+                                )
+                            );
                         }
                         numEntriesFound++;
                         listenerData.offset = entryOffset;
@@ -317,7 +381,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             try {
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
-                    renounce(leader.epoch());
+                    resign(leader.epoch());
                     for (MetaLogListenerData listenerData : listeners) {
                         listenerData.listener.beginShutdown();
                     }
@@ -331,14 +395,38 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
     }
 
     @Override
-    public void close() throws InterruptedException {
+    public void close() {
         log.debug("Node {}: closing.", nodeId);
         beginShutdown();
-        eventQueue.close();
+
+        try {
+            eventQueue.close();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Shutdown the log manager.
+     *
+     * Even though the API suggests a non-blocking shutdown, this method always returns a completed
+     * future. This means that shutdown is a blocking operation.
+     */
+    @Override
+    public CompletableFuture<Void> shutdown(int timeoutMs) {
+        CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
+        try {
+            close();
+            shutdownFuture.complete(null);
+        } catch (Throwable t) {
+            shutdownFuture.completeExceptionally(t);
+        }
+        return shutdownFuture;
     }
 
     @Override
-    public void initialize() throws Exception {
+    public void initialize() {
         eventQueue.append(() -> {
             log.debug("initialized local log manager for node " + nodeId);
             initialized = true;
@@ -346,7 +434,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
     }
 
     @Override
-    public void register(MetaLogListener listener) throws Exception {
+    public void register(RaftClient.Listener<ApiMessageAndVersion> listener) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             if (shutdown) {
@@ -366,47 +454,54 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                     "LocalLogManager was not initialized."));
             }
         });
-        future.get();
+        try {
+            future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
-    public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
-        return scheduleAtomicWrite(epoch, batch);
+    public Long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
+        return scheduleAtomicAppend(epoch, batch);
     }
 
     @Override
-    public long scheduleAtomicWrite(long epoch, List<ApiMessageAndVersion> batch) {
+    public Long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
         return shared.tryAppend(
             nodeId,
             leader.epoch(),
-            new LocalRecordBatch(
-                batch
-                    .stream()
-                    .map(ApiMessageAndVersion::message)
-                    .collect(Collectors.toList())
-            )
+            new LocalRecordBatch(leader.epoch(), batch)
         );
     }
 
     @Override
-    public void renounce(long epoch) {
-        MetaLogLeader curLeader = leader;
-        MetaLogLeader nextLeader = new MetaLogLeader(-1, curLeader.epoch() + 1);
+    public void resign(int epoch) {
+        LeaderAndEpoch curLeader = leader;
+        LeaderAndEpoch nextLeader = new LeaderAndEpoch(OptionalInt.empty(), curLeader.epoch() + 1);
         shared.tryAppend(nodeId, curLeader.epoch(), new LeaderChangeBatch(nextLeader));
     }
 
     @Override
-    public MetaLogLeader leader() {
+    public SnapshotWriter<ApiMessageAndVersion> createSnapshot(OffsetAndEpoch snapshotId) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
         return leader;
     }
 
     @Override
-    public int nodeId() {
-        return nodeId;
+    public OptionalInt nodeId() {
+        return OptionalInt.of(nodeId);
     }
 
-    public List<MetaLogListener> listeners() {
-        final CompletableFuture<List<MetaLogListener>> future = new CompletableFuture<>();
+    public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
+        final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             future.complete(listeners.stream().map(l -> l.listener).collect(Collectors.toList()));
         });
