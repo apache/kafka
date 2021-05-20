@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public final class KafkaEventQueue implements EventQueue {
     /**
@@ -70,10 +71,16 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private String tag;
 
-        EventContext(Event event, EventInsertionType insertionType, String tag) {
+        /**
+         * When the event context is created and enqueued.
+         */
+        private long eventEnquedNs;
+
+        EventContext(Event event, EventInsertionType insertionType, String tag, long eventEnquedNs) {
             this.event = event;
             this.insertionType = insertionType;
             this.tag = tag;
+            this.eventEnquedNs = eventEnquedNs;
         }
 
         /**
@@ -116,9 +123,14 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * Run the event associated with this EventContext.
          */
-        void run(Logger log) throws InterruptedException {
+        void run(Logger log, Time time, EventQueueMetrics metrics) throws InterruptedException {
             try {
+                long now = time.nanoseconds();
+                metrics.updateEventQueueTime(NANOSECONDS.toMillis(now - this.eventEnquedNs));
                 event.run();
+                long deltaNs = time.nanoseconds() - now;
+                log.debug("Processed {} in {} us", this.event.toString(), deltaNs);
+                metrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
             } catch (InterruptedException e) {
                 throw e;
             } catch (Exception e) {
@@ -155,7 +167,12 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * The head of the event queue.
          */
-        private final EventContext head = new EventContext(null, null, null);
+        private final EventContext head = new EventContext(null, null, null, 0);
+
+        /**
+         * The size of the event queue.
+         */
+        private int queueSize = 0;
 
         /**
          * An ordered map of times in monotonic nanoseconds to events to time out.
@@ -166,6 +183,15 @@ public final class KafkaEventQueue implements EventQueue {
          * A condition variable for waking up the event handler thread.
          */
         private final Condition cond = lock.newCondition();
+
+        /**
+         * A reference to the EventQueue's metrics registry.
+         */
+        private final EventQueueMetrics eventQueueMetrics;
+
+        public EventHandler(EventQueueMetrics metrics) {
+            this.eventQueueMetrics = metrics;
+        }
 
         @Override
         public void run() {
@@ -196,10 +222,13 @@ public final class KafkaEventQueue implements EventQueue {
                 if (toTimeout != null) {
                     toTimeout.completeWithTimeout();
                     toTimeout = null;
+                    this.queueSize--;
                 } else if (toRun != null) {
-                    toRun.run(log);
+                    toRun.run(log, time, eventQueueMetrics);
                     toRun = null;
+                    this.queueSize--;
                 }
+                eventQueueMetrics.setEventQueueSize(queueSize);
                 lock.lock();
                 try {
                     long awaitNs = Long.MAX_VALUE;
@@ -277,6 +306,8 @@ public final class KafkaEventQueue implements EventQueue {
                 OptionalLong deadlineNs = deadlineNsCalculator.apply(existingDeadlineNs);
                 boolean queueWasEmpty = head.isSingleton();
                 boolean shouldSignal = false;
+                queueSize++;
+                eventQueueMetrics.setEventQueueSize(queueSize);
                 switch (eventContext.insertionType) {
                     case APPEND:
                         head.insertBefore(eventContext);
@@ -326,6 +357,8 @@ public final class KafkaEventQueue implements EventQueue {
                 EventContext eventContext = tagToEventContext.get(tag);
                 if (eventContext != null) {
                     remove(eventContext);
+                    queueSize--;
+                    eventQueueMetrics.setEventQueueSize(queueSize);
                 }
             } finally {
                 lock.unlock();
@@ -362,7 +395,22 @@ public final class KafkaEventQueue implements EventQueue {
         this.time = time;
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
-        this.eventHandler = new EventHandler();
+        this.eventHandler = new EventHandler(new MockEventQueueMetrics());
+        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
+            this.eventHandler, false);
+        this.closingTimeNs = Long.MAX_VALUE;
+        this.cleanupEvent = null;
+        this.eventHandlerThread.start();
+    }
+
+    public KafkaEventQueue(Time time,
+                           LogContext logContext,
+                           String threadNamePrefix,
+                           EventQueueMetrics eventQueueMetrics) {
+        this.time = time;
+        this.lock = new ReentrantLock();
+        this.log = logContext.logger(KafkaEventQueue.class);
+        this.eventHandler = new EventHandler(eventQueueMetrics);
         this.eventHandlerThread = new KafkaThread(threadNamePrefix + "EventHandler",
             this.eventHandler, false);
         this.closingTimeNs = Long.MAX_VALUE;
@@ -375,7 +423,7 @@ public final class KafkaEventQueue implements EventQueue {
                         String tag,
                         Function<OptionalLong, OptionalLong> deadlineNsCalculator,
                         Event event) {
-        EventContext eventContext = new EventContext(event, insertionType, tag);
+        EventContext eventContext = new EventContext(event, insertionType, tag, time.nanoseconds());
         Exception e = eventHandler.enqueue(eventContext, deadlineNsCalculator);
         if (e != null) {
             eventContext.completeWithException(e);

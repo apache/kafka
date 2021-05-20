@@ -15,46 +15,32 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.queue;
 
-public final class MockControllerMetrics implements ControllerMetrics {
-    private volatile boolean active;
-    private volatile int topics;
-    private volatile int partitions;
+public final class MockEventQueueMetrics implements EventQueueMetrics {
+    private volatile int queueSize;
 
-    public MockControllerMetrics() {
-        this.active = false;
-        this.topics = 0;
-        this.partitions = 0;
+    public MockEventQueueMetrics() {
+        this.queueSize = 0;
     }
 
     @Override
-    public void setActive(boolean active) {
-        this.active = active;
+    public void updateEventQueueTime(long durationMs) {
+        // TODO Auto-generated method stub
     }
 
     @Override
-    public boolean active() {
-        return this.active;
+    public void updateEventQueueProcessingTime(long durationMs) {
+        // TODO Auto-generated method stub
     }
 
     @Override
-    public void setGlobalTopicsCount(int topicCount) {
-        this.topics = topicCount;
+    public int eventQueueSize() {
+        return this.queueSize;
     }
 
     @Override
-    public int globalTopicsCount() {
-        return this.topics;
-    }
-
-    @Override
-    public void setGlobalPartitionCount(int partitionCount) {
-        this.partitions = partitionCount;
-    }
-
-    @Override
-    public int globalPartitionCount() {
-        return this.partitions;
+    public void setEventQueueSize(int queueSize) {
+        this.queueSize = queueSize;
     }
 }

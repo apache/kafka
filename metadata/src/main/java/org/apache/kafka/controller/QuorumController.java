@@ -86,6 +86,7 @@ import org.apache.kafka.metalog.MetaLogManager;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.queue.EventQueueMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -129,6 +130,7 @@ public final class QuorumController implements Controller {
         private SnapshotReader snapshotReader;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
+        private EventQueueMetrics eventQueueMetrics = null;
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -194,8 +196,9 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMetrics(ControllerMetrics controllerMetrics) {
-            this.controllerMetrics = controllerMetrics;
+        public Builder setMetrics(QuorumControllerMetrics metrics) {
+            this.controllerMetrics = metrics;
+            this.eventQueueMetrics = metrics;
             return this;
         }
 
@@ -210,9 +213,11 @@ public final class QuorumController implements Controller {
             if (logContext == null) {
                 logContext = new LogContext(String.format("[Controller %d] ", nodeId));
             }
-            if (controllerMetrics == null) {
+            if (controllerMetrics == null && eventQueueMetrics == null) {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
+                eventQueueMetrics = (EventQueueMetrics) Class.forName(
+                    "org.apache.kafka.queue.MockEventQueueMetrics").getConstructor().newInstance();
             }
             if (snapshotWriterBuilder == null) {
                 snapshotWriterBuilder = new NoOpSnapshotWriterBuilder();
@@ -222,7 +227,7 @@ public final class QuorumController implements Controller {
             }
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix, eventQueueMetrics); 
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     logManager, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotWriterBuilder,
@@ -256,14 +261,6 @@ public final class QuorumController implements Controller {
         } else {
             return -1;
         }
-    }
-
-    private void handleEventEnd(String name, long startProcessingTimeNs) {
-        long endProcessingTime = time.nanoseconds();
-        long deltaNs = endProcessingTime - startProcessingTimeNs;
-        log.debug("Processed {} in {} us", name,
-            MICROSECONDS.convert(deltaNs, NANOSECONDS));
-        controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
     }
 
     private Throwable handleEventException(String name,
@@ -300,7 +297,6 @@ public final class QuorumController implements Controller {
     class ControlEvent implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
-        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControlEvent(String name, Runnable handler) {
@@ -311,11 +307,9 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             startProcessingTimeNs = Optional.of(now);
             log.debug("Executing {}.", this);
             handler.run();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
         }
 
         @Override
@@ -429,7 +423,6 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
-        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
@@ -445,10 +438,8 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             startProcessingTimeNs = Optional.of(now);
             T value = handler.get();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
             future.complete(value);
         }
 
@@ -517,7 +508,6 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
-        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
@@ -535,7 +525,6 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             long controllerEpoch = curClaimEpoch;
             if (controllerEpoch == -1) {
                 throw newNotControllerException();
@@ -594,7 +583,6 @@ public final class QuorumController implements Controller {
         @Override
         public void complete(Throwable exception) {
             if (exception == null) {
-                handleEventEnd(this.toString(), startProcessingTimeNs.get());
                 future.complete(resultAndOffset.response());
             } else {
                 future.completeExceptionally(

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -44,15 +45,24 @@ public class KafkaEventQueueTest {
     private static class FutureEvent<T> implements EventQueue.Event {
         private final CompletableFuture<T> future;
         private final Supplier<T> supplier;
+        private final CountDownLatch latch;
 
         FutureEvent(CompletableFuture<T> future, Supplier<T> supplier) {
             this.future = future;
             this.supplier = supplier;
+            this.latch = new CountDownLatch(0);
+        }
+
+        FutureEvent(CompletableFuture<T> future, CountDownLatch latch, Supplier<T> supplier) {
+            this.future = future;
+            this.supplier = supplier;
+            this.latch = latch;
         }
 
         @Override
         public void run() throws Exception {
             T value = supplier.get();
+            latch.await();
             future.complete(value);
         }
 
@@ -66,6 +76,55 @@ public class KafkaEventQueueTest {
     public void testCreateAndClose() throws Exception {
         KafkaEventQueue queue =
             new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testCreateAndClose");
+        queue.close();
+    }
+
+    @Test
+    public void testQueueSize() throws Exception {
+        MockEventQueueMetrics metrics = new MockEventQueueMetrics();
+        KafkaEventQueue queue =
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testQueueSize", metrics);
+
+        CountDownLatch latch = new CountDownLatch(4);
+
+        CompletableFuture<Integer> future1 = new CompletableFuture<>();
+        queue.prepend(new FutureEvent<>(future1, latch, () -> {
+            return 1;
+        }));
+        CompletableFuture<Integer> future2 = new CompletableFuture<>();
+        queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60),
+            new FutureEvent<>(future2, latch, () -> {
+                return 2;
+            }));
+        CompletableFuture<Integer> future3 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future3, latch, () -> {
+            return 3;
+        }));
+        CompletableFuture<Integer> future4 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future4, latch, () -> {
+            return 4;
+        }));
+        CompletableFuture<Integer> future5 = new CompletableFuture<>();
+        String defferedTag = "tag";
+        queue.scheduleDeferred(defferedTag,
+            __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + 1000000),
+                new FutureEvent<>(future5, latch, () -> 5));
+
+        assertEquals(5, metrics.eventQueueSize());
+
+        queue.cancelDeferred(defferedTag);
+
+        assertEquals(4, metrics.eventQueueSize());
+
+        latch.countDown();
+        latch.countDown();
+        latch.countDown();
+        latch.countDown();
+
+        Thread.sleep(1000);
+        assertEquals(0, metrics.eventQueueSize());
+
+        queue.beginShutdown("testQueueSize");
         queue.close();
     }
 

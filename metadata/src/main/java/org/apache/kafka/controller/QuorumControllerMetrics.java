@@ -17,19 +17,21 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.queue.EventQueueMetrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-
-public final class QuorumControllerMetrics implements ControllerMetrics {
+public final class QuorumControllerMetrics implements ControllerMetrics, EventQueueMetrics {
     private final static MetricName ACTIVE_CONTROLLER_COUNT = new MetricName(
         "kafka.controller", "KafkaController", "ActiveControllerCount", null);
     private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
+    private final static MetricName EVENT_QUEUE_SIZE = new MetricName(
+        "kafka.controller", "ControllerEventManager", "EventQueueSize", null);
     private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
         "kafka.controller", "KafkaController", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
@@ -38,9 +40,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
+    private volatile int eventQueueSize;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
+    private final Gauge<Integer> eventQueueSizeGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
@@ -48,6 +52,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.active = false;
         this.globalTopicCount = 0;
         this.globalPartitionCount = 0;
+        this.eventQueueSize = 0;
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -56,6 +61,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
+        this.eventQueueSizeGauge = registry.newGauge(EVENT_QUEUE_SIZE, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return eventQueueSize;
+            }
+        });
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -87,7 +98,17 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
-        eventQueueTime.update(durationMs);
+        eventQueueProcessingTime.update(durationMs);
+    }
+
+    @Override
+    public void setEventQueueSize(int eventQueueSize) {
+        this.eventQueueSize = eventQueueSize;
+    }
+
+    @Override
+    public int eventQueueSize() {
+        return this.eventQueueSize;
     }
 
     @Override
