@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
@@ -388,7 +389,7 @@ public class StateDirectory {
     private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
         for (final File taskDir : listNonEmptyTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
+            final TaskId id = parseTaskDirectoryName(dirName, null);
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
@@ -421,7 +422,7 @@ public class StateDirectory {
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
+            final TaskId id = parseTaskDirectoryName(dirName, null);
             try {
                 log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
                          logPrefix(), dirName, id);
