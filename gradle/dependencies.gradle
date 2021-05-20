@@ -74,7 +74,7 @@ versions += [
   jline: "3.12.1",
   jmh: "1.27",
   hamcrest: "2.2",
-  log4j: "1.2.17",
+  log4j: "1.2.17-cp2",
   scalaLogging: "3.9.2",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
@@ -97,7 +97,7 @@ versions += [
   kafka_26: "2.6.2",
   kafka_27: "2.7.1",
   lz4: "1.7.1",
-  mavenArtifact: "3.6.3",
+  mavenArtifact: "3.8.1",
   metrics: "2.2.0",
   mockito: "3.9.0",
   netty: "4.1.62.Final",
@@ -169,7 +169,7 @@ libs += [
   kafkaStreams_25: "org.apache.kafka:kafka-streams:$versions.kafka_25",
   kafkaStreams_26: "org.apache.kafka:kafka-streams:$versions.kafka_26",
   kafkaStreams_27: "org.apache.kafka:kafka-streams:$versions.kafka_27",
-  log4j: "log4j:log4j:$versions.log4j",
+  log4j: "io.confluent:confluent-log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   mockitoCore: "org.mockito:mockito-core:$versions.mockito",
@@ -192,5 +192,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
