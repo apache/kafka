@@ -1074,7 +1074,7 @@ Map<String, KStream<String, Long>> branches =
                                 <p>You must provide an initializer (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>), &#8220;adder&#8221; aggregator (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>),
                                     and a window.  When windowing based on sessions, you must additionally provide a &#8220;session merger&#8221; aggregator
                                     (e.g.,  <code class="docutils literal"><span class="pre">mergedAggValue</span> <span class="pre">=</span> <span class="pre">leftAggValue</span> <span class="pre">+</span> <span class="pre">rightAggValue</span></code>).</p>
-                                <p>The windowed <code class="docutils literal"><span class="pre">aggregate</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or <code class="docutils literal"><span class="pre">SessionWindowdKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
+                                <p>The windowed <code class="docutils literal"><span class="pre">aggregate</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">aggregate</span></code> exist, see Javadocs for details.</p>
                                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
@@ -2232,8 +2232,8 @@ Map<String, KStream<String, Long>> branches =
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Right-tombstones trigger the join,
+                                                        but left-tombstones don't: when an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2280,8 +2280,8 @@ Map<String, KStream<String, Long>> branches =
                                             <blockquote>
                                                 <div><ul class="simple">
                                                     <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key are ignored and do not trigger the join.</li>
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table.  Tombstones do not
-                                                        trigger the join.  When an input tombstone is received, then an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are interpreted as <em>tombstones</em> for the corresponding key, which indicate the deletion of the key from the table. Tombstones may trigger joins,
+                                                        depending on the content in the left and right tables. When an input tombstone is received, an output tombstone is forwarded directly to the join result KTable if required (i.e. only if the corresponding
                                                         key actually exists already in the join result KTable).</li>
                                                 </ul>
                                                 </div></blockquote>
@@ -2515,7 +2515,8 @@ Map<String, KStream<String, Long>> branches =
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
+                                          deletion of the key from the table. Tombstones do not
+                                          trigger the join.  When an input
                                           tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
@@ -2574,8 +2575,9 @@ Map<String, KStream<String, Long>> branches =
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. When an input
-                                          tombstone is received, then an output
+                                          deletion of the key from the table. Right-tombstones
+                                          trigger the join, but left-tombstones don't:
+                                          when an input tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
                                           corresponding key actually exists already in
@@ -3658,15 +3660,10 @@ groupedTable
                         <p>Another variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to dynamically choose which topic to send to for each record via a <code class="docutils literal"><span class="pre">TopicNameExtractor</span></code>
                             instance.</p>
                         <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
-
 
 <span class="c1">// Write the stream to the output topic, using the configured default key</span>
 <span class="c1">// and value serdes.</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">);</span>
-
-<span class="c1">// Same for table</span>
-<span class="n">table</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-table-output-topic&quot;</span><span class="o">);</span>
 
 <span class="c1">// Write the stream to the output topic, using explicit key and value serdes,</span>
 <span class="c1">// (thus overriding the defaults in the config properties).</span>

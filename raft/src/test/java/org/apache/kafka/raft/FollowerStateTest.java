@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -30,21 +34,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FollowerStateTest {
     private final MockTime time = new MockTime();
+    private final LogContext logContext = new LogContext();
+    private final int epoch = 5;
+    private final int fetchTimeoutMs = 15000;
+    int leaderId = 3;
 
-    @Test
-    public void testFetchTimeoutExpiration() {
-        int epoch = 5;
-        int leaderId = 3;
-        int fetchTimeoutMs = 15000;
-
-        FollowerState state = new FollowerState(
+    private FollowerState newFollowerState(
+        Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark
+    ) {
+        return new FollowerState(
             time,
             epoch,
             leaderId,
-            Utils.mkSet(1, 2, 3),
-            Optional.empty(),
-            fetchTimeoutMs
+            voters,
+            highWatermark,
+            fetchTimeoutMs,
+            logContext
         );
+    }
+
+    @Test
+    public void testFetchTimeoutExpiration() {
+        FollowerState state = newFollowerState(Utils.mkSet(1, 2, 3), Optional.empty());
 
         assertFalse(state.hasFetchTimeoutExpired(time.milliseconds()));
         assertEquals(fetchTimeoutMs, state.remainingFetchTimeMs(time.milliseconds()));
@@ -60,18 +72,7 @@ public class FollowerStateTest {
 
     @Test
     public void testMonotonicHighWatermark() {
-        int epoch = 5;
-        int leaderId = 3;
-        int fetchTimeoutMs = 15000;
-
-        FollowerState state = new FollowerState(
-            time,
-            epoch,
-            leaderId,
-            Utils.mkSet(1, 2, 3),
-            Optional.empty(),
-            fetchTimeoutMs
-        );
+        FollowerState state = newFollowerState(Utils.mkSet(1, 2, 3), Optional.empty());
 
         OptionalLong highWatermark = OptionalLong.of(15L);
         state.updateHighWatermark(highWatermark);
@@ -79,6 +80,19 @@ public class FollowerStateTest {
         assertThrows(IllegalArgumentException.class, () -> state.updateHighWatermark(OptionalLong.of(14L)));
         state.updateHighWatermark(highWatermark);
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGrantVote(boolean isLogUpToDate) {
+        FollowerState state = newFollowerState(
+            Utils.mkSet(1, 2, 3),
+            Optional.empty()
+        );
+
+        assertFalse(state.canGrantVote(1, isLogUpToDate));
+        assertFalse(state.canGrantVote(2, isLogUpToDate));
+        assertFalse(state.canGrantVote(3, isLogUpToDate));
     }
 
 }

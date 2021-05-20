@@ -44,21 +44,16 @@ case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, t
 
 /**
  * Configuration settings for quota management
- * @param quotaDefault The default allocated to any client-id if
- *        dynamic defaults or user quotas are not set
  * @param numQuotaSamples The number of samples to retain in memory
  * @param quotaWindowSizeSeconds The time span of each sample
  *
  */
-case class ClientQuotaManagerConfig(quotaDefault: Long =
-                                        ClientQuotaManagerConfig.QuotaDefault,
-                                    numQuotaSamples: Int =
+case class ClientQuotaManagerConfig(numQuotaSamples: Int =
                                         ClientQuotaManagerConfig.DefaultNumQuotaSamples,
                                     quotaWindowSizeSeconds: Int =
                                         ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
 
 object ClientQuotaManagerConfig {
-  val QuotaDefault = Long.MaxValue
   // Always have 10 whole windows + 1 current window
   val DefaultNumQuotaSamples = 11
   val DefaultQuotaWindowSizeSeconds = 1
@@ -195,15 +190,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
   private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
-  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaDefault.toDouble)
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)
 
   @volatile
   private var quotaTypesEnabled = clientQuotaCallback match {
     case Some(_) => QuotaTypes.CustomQuotas
-    case None =>
-      if (config.quotaDefault == Long.MaxValue) QuotaTypes.NoQuotas
-      else QuotaTypes.ClientIdQuotaEnabled
+    case None => QuotaTypes.NoQuotas
   }
 
   private val delayQueueSensor = metrics.sensor(quotaType.toString + "-delayQueue")
@@ -620,8 +612,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/clients/<default>
             quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
           }
-          if (quota == null)
-            quota = staticConfigClientIdQuota
         }
       }
       if (quota == null) null else quota.bound

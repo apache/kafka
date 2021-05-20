@@ -27,7 +27,11 @@ import java.util.Base64;
  */
 public class Uuid implements Comparable<Uuid> {
 
-    private static final java.util.UUID SENTINEL_ID_INTERNAL = new java.util.UUID(0L, 1L);
+    /**
+     * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
+     */
+    public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
+    private static final java.util.UUID METADATA_TOPIC_ID_INTERNAL = new java.util.UUID(0L, 1L);
 
     /**
      * A UUID that represents a null or empty UUID. Will never be returned by the randomUuid method.
@@ -39,7 +43,7 @@ public class Uuid implements Comparable<Uuid> {
     private final long leastSignificantBits;
 
     /**
-     * Constructs a 128-bit type 4 UUID where the first long represents the the most significant 64 bits
+     * Constructs a 128-bit type 4 UUID where the first long represents the most significant 64 bits
      * and the second long represents the least significant 64 bits.
      */
     public Uuid(long mostSigBits, long leastSigBits) {
@@ -52,7 +56,7 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid randomUuid() {
         java.util.UUID uuid = java.util.UUID.randomUUID();
-        while (uuid.equals(SENTINEL_ID_INTERNAL) || uuid.equals(ZERO_ID_INTERNAL)) {
+        while (uuid.equals(METADATA_TOPIC_ID_INTERNAL) || uuid.equals(ZERO_ID_INTERNAL)) {
             uuid = java.util.UUID.randomUUID();
         }
         return new Uuid(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());

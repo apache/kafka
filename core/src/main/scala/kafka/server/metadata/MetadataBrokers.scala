@@ -59,6 +59,11 @@ case class MetadataBroker(id: Int,
       case Some(node) => new BrokerEndPoint(node.id, node.host, node.port)
     }
   }
+
+  def node(listenerName: ListenerName): Node = {
+    endpoints.getOrElse(listenerName.value, throw new BrokerEndPointNotAvailableException(
+      s"End point with listener name ${listenerName.value} not found for broker $id"))
+  }
 }
 
 class MetadataBrokersBuilder(log: Logger, prevBrokers: MetadataBrokers) {

@@ -76,6 +76,7 @@ public class ThreadCache {
         final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
         maxCacheSizeBytes = newCacheSizeBytes;
         if (shrink) {
+            log.debug("Cache size was shrunk to {}", newCacheSizeBytes);
             if (caches.values().isEmpty()) {
                 return;
             }
@@ -85,6 +86,8 @@ public class ThreadCache {
                 cache.evict();
                 numEvicts++;
             }
+        } else {
+            log.debug("Cache size was expanded to {}", newCacheSizeBytes);
         }
     }
 

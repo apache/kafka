@@ -33,6 +33,8 @@ import org.slf4j.Logger;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
+    public final static long LATEST_EPOCH = Long.MAX_VALUE;
+
     /**
      * Iterate through the list of snapshots in order of creation, such that older
      * snapshots come first.
@@ -149,6 +151,10 @@ public class SnapshotRegistry {
             result.add(iterator.next().epoch());
         }
         return result;
+    }
+
+    public boolean hasSnapshot(long epoch) {
+        return snapshots.containsKey(epoch);
     }
 
     /**

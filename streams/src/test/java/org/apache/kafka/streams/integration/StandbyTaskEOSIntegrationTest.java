@@ -41,8 +41,9 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -51,6 +52,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -77,11 +79,12 @@ public class StandbyTaskEOSIntegrationTest {
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -99,9 +102,17 @@ public class StandbyTaskEOSIntegrationTest {
     private KafkaStreams streamInstanceTwo;
     private KafkaStreams streamInstanceOneRecovery;
 
+    private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -159,8 +170,8 @@ public class StandbyTaskEOSIntegrationTest {
         // Wait for the record to be processed
         assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-        streamInstanceOne.close(Duration.ZERO);
-        streamInstanceTwo.close(Duration.ZERO);
+        streamInstanceOne.close();
+        streamInstanceTwo.close();
 
         streamInstanceOne.cleanUp();
         streamInstanceTwo.cleanUp();
@@ -177,10 +188,10 @@ public class StandbyTaskEOSIntegrationTest {
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true);
 
-        new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ".checkpoint"))
+        new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
 
-        assertTrue(new File(stateDirectory.directoryForTask(taskId),
+        assertTrue(new File(stateDirectory.getOrCreateDirectoryForTask(taskId),
                             "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
 
         builder.stream(inputTopic,

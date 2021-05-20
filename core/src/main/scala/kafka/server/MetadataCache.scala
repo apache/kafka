@@ -77,7 +77,7 @@ trait MetadataCache {
   /**
    * Get a partition leader's endpoint
    *
-   * @return  If the leader is known, and the listener name is available, return Some(node). If the the leader is known,
+   * @return  If the leader is known, and the listener name is available, return Some(node). If the leader is known,
    *          but the listener is unavailable, return Some(Node.NO_NODE). Otherwise, if the leader is not known,
    *          return None
    */

@@ -18,29 +18,28 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-
 import kafka.common.{InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
 
 /**
- * This class implements the KIP-500 server which relies on a self-managed
- * Raft quorum for maintaining cluster metadata. It is responsible for
+ * This class implements the KRaft (Kafka Raft) mode server which relies
+ * on a KRaft quorum for maintaining cluster metadata. It is responsible for
  * constructing the controller and/or broker based on the `process.roles`
  * configuration and for managing their basic lifecycle (startup and shutdown).
  *
- * Note that this server is a work in progress and relies on stubbed
- * implementations of the controller [[ControllerServer]] and broker
- * [[BrokerServer]].
+ * Note that this server is a work in progress and we are releasing it as
+ * early access in 2.8.0.
  */
 class KafkaRaftServer(
   config: KafkaConfig,
@@ -59,16 +58,19 @@ class KafkaRaftServer(
     metaProps.clusterId.toString
   )
 
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(config.quorumVoters)
+  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
+    RaftConfig.parseVoterConnections(config.quorumVoters))
 
   private val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
     metaProps,
     config,
     new MetadataRecordSerde,
     KafkaRaftServer.MetadataPartition,
+    KafkaRaftServer.MetadataTopicId,
     time,
     metrics,
-    threadNamePrefix
+    threadNamePrefix,
+    controllerQuorumVotersFuture
   )
 
   private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
@@ -131,6 +133,7 @@ class KafkaRaftServer(
 object KafkaRaftServer {
   val MetadataTopic = "@metadata"
   val MetadataPartition = new TopicPartition(MetadataTopic, 0)
+  val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole

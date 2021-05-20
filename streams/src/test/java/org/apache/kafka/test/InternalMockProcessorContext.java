@@ -280,12 +280,6 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
@@ -320,18 +314,6 @@ public class InternalMockProcessorContext
     @Override
     public void forward(final Object key, final Object value) {
         forward(key, value, To.all());
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final int childIndex) {
-        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final String childName) {
-        forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")

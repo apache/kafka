@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -241,12 +242,16 @@ public class RaftConfig {
     }
 
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
-        return parseVoterConnections(voters).entrySet().stream()
+        return voterConnectionsToNodes(parseVoterConnections(voters));
+    }
+
+    public static List<Node> voterConnectionsToNodes(Map<Integer, RaftConfig.AddressSpec> voterConnections) {
+        return voterConnections.entrySet().stream()
+            .filter(Objects::nonNull)
             .filter(connection -> connection.getValue() instanceof InetAddressSpec)
             .map(connection -> {
-                InetAddressSpec inetAddressSpec = InetAddressSpec.class.cast(connection.getValue());
-                return new Node(connection.getKey(), inetAddressSpec.address.getHostName(),
-                    inetAddressSpec.address.getPort());
+                InetAddressSpec spec = (InetAddressSpec) connection.getValue();
+                return new Node(connection.getKey(), spec.address.getHostName(), spec.address.getPort());
             })
             .collect(Collectors.toList());
     }

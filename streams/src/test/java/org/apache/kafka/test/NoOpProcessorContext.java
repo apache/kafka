@@ -71,14 +71,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
-        return null;
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
@@ -102,18 +94,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
     }
 

@@ -122,13 +122,6 @@ public class TimestampedWindowStoreBuilder<K, V>
             wrapped.init(context, root);
         }
 
-        @Deprecated
-        @Override
-        public void put(final Bytes key,
-                        final byte[] value) {
-            wrapped.put(key, value);
-        }
-
         @Override
         public void put(final Bytes key,
                         final byte[] value,

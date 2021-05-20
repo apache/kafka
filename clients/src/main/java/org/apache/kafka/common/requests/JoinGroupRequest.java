@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -59,38 +60,14 @@ public class JoinGroupRequest extends AbstractRequest {
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_PROTOCOL_NAME = "";
 
-    private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
-
     /**
      * Ported from class Topic in {@link org.apache.kafka.common.internals} to restrict the charset for
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
-        if (id.equals(""))
-            throw new InvalidConfigurationException("Group instance id must be non-empty string");
-        if (id.equals(".") || id.equals(".."))
-            throw new InvalidConfigurationException("Group instance id cannot be \".\" or \"..\"");
-        if (id.length() > MAX_GROUP_INSTANCE_ID_LENGTH)
-            throw new InvalidConfigurationException("Group instance id can't be longer than " + MAX_GROUP_INSTANCE_ID_LENGTH +
-                    " characters: " + id);
-        if (!containsValidPattern(id))
-            throw new InvalidConfigurationException("Group instance id \"" + id + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
-    }
-
-    /**
-     * Valid characters for Consumer group.instance.id are the ASCII alphanumerics, '.', '_', and '-'
-     */
-    static boolean containsValidPattern(String topic) {
-        for (int i = 0; i < topic.length(); ++i) {
-            char c = topic.charAt(i);
-
-            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
-                    c == '_' || c == '-';
-            if (!validChar)
-                return false;
-        }
-        return true;
+        Topic.validate(id, "Group instance id", message -> {
+            throw new InvalidConfigurationException(message);
+        });
     }
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {

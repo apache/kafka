@@ -20,7 +20,7 @@ package org.apache.kafka.metalog;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.slf4j.Logger;
@@ -157,7 +157,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             }
             if (nodeId != leader.nodeId()) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the given node id does not " +
-                    "match the current leader id of {}.", nodeId, leader.nodeId());
+                    "match the current leader id of {}.", nodeId, epoch, leader.nodeId());
                 return Long.MAX_VALUE;
             }
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);

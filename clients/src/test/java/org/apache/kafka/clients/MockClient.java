@@ -38,7 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -84,6 +86,8 @@ public class MockClient implements KafkaClient {
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
     private volatile boolean active = true;
+    private volatile CompletableFuture<String> disconnectFuture;
+    private volatile Consumer<Node> readyCallback;
 
     public MockClient(Time time) {
         this(time, new NoOpMetadataUpdater());
@@ -118,6 +122,9 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
+        if (readyCallback != null) {
+            readyCallback.accept(node);
+        }
         return connectionState(node.idString()).ready(now);
     }
 
@@ -169,6 +176,14 @@ public class MockClient implements KafkaClient {
         return authenticationErrors.get(node);
     }
 
+    public void setReadyCallback(Consumer<Node> onReadyCall) {
+        this.readyCallback = onReadyCall;
+    }
+
+    public void setDisconnectFuture(CompletableFuture<String> disconnectFuture) {
+        this.disconnectFuture = disconnectFuture;
+    }
+
     @Override
     public void disconnect(String node) {
         long now = time.milliseconds();
@@ -181,6 +196,10 @@ public class MockClient implements KafkaClient {
                         request.createdTimeMs(), now, true, null, null, null));
                 iter.remove();
             }
+        }
+        CompletableFuture<String> curDisconnectFuture = disconnectFuture;
+        if (curDisconnectFuture != null) {
+            curDisconnectFuture.complete(node);
         }
         connectionState(node).disconnect();
     }
@@ -309,7 +328,7 @@ public class MockClient implements KafkaClient {
 
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
-        while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) > request.requestTimeoutMs()) {
+        while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) >= request.requestTimeoutMs()) {
             disconnect(request.destination());
             requests.poll();
             request = requests.peek();
@@ -401,6 +420,10 @@ public class MockClient implements KafkaClient {
 
     public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node) {
         prepareResponseFrom(matcher, response, node, false, false);
+    }
+
+    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
+        prepareResponseFrom(matcher, response, node, disconnected, false);
     }
 
     public void prepareResponse(AbstractResponse response, boolean disconnected) {

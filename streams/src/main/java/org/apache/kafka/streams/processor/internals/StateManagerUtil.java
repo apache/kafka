@@ -61,7 +61,7 @@ final class StateManagerUtil {
         if (enforceCheckpoint)
             return true;
 
-        // we can checkpoint if the the difference between the current and the previous snapshot is large enough
+        // we can checkpoint if the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
         for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
             totalOffsetDelta += entry.getValue() - oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L);
@@ -86,15 +86,8 @@ final class StateManagerUtil {
         }
 
         final TaskId id = stateMgr.taskId();
-        try {
-            if (!stateDirectory.lock(id)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
-            }
-        } catch (final IOException e) {
-            throw new StreamsException(
-                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
-                e
-            );
+        if (!stateDirectory.lock(id)) {
+            throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
         }
         log.debug("Acquired state directory lock");
 
