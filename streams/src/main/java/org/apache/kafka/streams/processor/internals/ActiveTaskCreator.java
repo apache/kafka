@@ -194,7 +194,7 @@ class ActiveTaskCreator {
             inputPartitions,
             consumer,
             logContext,
-            builder.buildSubtopology(standbyTask.id.topicGroupId),
+            builder.buildSubtopology(standbyTask.id.subtopology()),
             stateManager,
             context
         );

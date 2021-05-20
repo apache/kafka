@@ -425,7 +425,7 @@ public class InternalMockProcessorContext
             key,
             value,
             null,
-            taskId().partition,
+            taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);
