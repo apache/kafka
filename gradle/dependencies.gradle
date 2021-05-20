@@ -97,7 +97,7 @@ versions += [
   kafka_26: "2.6.2",
   kafka_27: "2.7.1",
   lz4: "1.7.1",
-  mavenArtifact: "3.6.3",
+  mavenArtifact: "3.8.1",
   metrics: "2.2.0",
   mockito: "3.9.0",
   netty: "4.1.62.Final",
