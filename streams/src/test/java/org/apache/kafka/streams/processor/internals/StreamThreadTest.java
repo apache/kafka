@@ -1682,7 +1682,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1, Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(metadata.standbyTasks().isEmpty());
 
         assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
@@ -1735,7 +1735,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
+        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1, Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(threadMetadata.activeTasks().isEmpty());
 
         thread.taskManager().shutdown(true);
