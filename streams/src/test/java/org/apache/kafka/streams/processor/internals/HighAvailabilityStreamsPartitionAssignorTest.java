@@ -47,6 +47,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -230,7 +231,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks = newConsumerUserData.activeTasks();
 
         // The tasks were returned to their prior owner
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         // There is a rebalance scheduled
@@ -281,7 +284,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks =
             AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
 
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         assertThat(referenceContainer.assignmentErrorCode.get(), equalTo(AssignorError.NONE.code()));

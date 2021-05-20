@@ -54,6 +54,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockClientSupplier;
+
+import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -93,7 +95,7 @@ public class RecordCollectorTest {
     private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE)
+        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
     ));
 
     private final String topic = "topic";
@@ -111,6 +113,7 @@ public class RecordCollectorTest {
 
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
+    private final UUID processId = UUID.randomUUID();
 
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
@@ -126,10 +129,10 @@ public class RecordCollectorTest {
         clientSupplier.setCluster(cluster);
         streamsProducer = new StreamsProducer(
             config,
-            "threadId",
+            processId + "-StreamThread-1",
             clientSupplier,
             null,
-        null,
+            processId,
             logContext
         );
         mockProducer = clientSupplier.producers.get(0);
@@ -775,7 +778,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 eosConfig,
-                "threadId",
+                "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -788,7 +791,7 @@ public class RecordCollectorTest {
                     }
                 },
                 taskId,
-                null,
+                processId,
                 logContext
             ),
             productionExceptionHandler,
@@ -806,7 +809,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 config,
-                "threadId",
+                processId + "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -845,7 +848,7 @@ public class RecordCollectorTest {
             taskId,
             new StreamsProducer(
                 eosConfig,
-                "threadId",
+                processId + "-StreamThread-1",
                 new MockClientSupplier() {
                     @Override
                     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -853,7 +856,7 @@ public class RecordCollectorTest {
                     }
                 },
                 taskId,
-                null,
+                processId,
                 logContext
             ),
             productionExceptionHandler,
@@ -877,7 +880,7 @@ public class RecordCollectorTest {
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {
         return new StreamsProducer(
             config,
-            "threadId",
+            processId + "-StreamThread-1",
             new MockClientSupplier() {
                 @Override
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
@@ -899,7 +902,7 @@ public class RecordCollectorTest {
     private StreamsProducer getExceptionalStreamProducerOnPartitionsFor(final RuntimeException exception) {
         return new StreamsProducer(
             config,
-            "threadId",
+            processId + "-StreamThread-1",
             new MockClientSupplier() {
                 @Override
                 public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {

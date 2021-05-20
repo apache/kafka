@@ -63,7 +63,6 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         private Sensor droppedRecordsSensor;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
@@ -71,7 +70,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics());
-            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            store =  context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
                 context,
@@ -127,14 +126,12 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         };
     }
 
-
     private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
         private TimestampedKeyValueStore<K, T> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

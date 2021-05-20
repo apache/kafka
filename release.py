@@ -346,7 +346,7 @@ https://kafka.apache.org/downloads#%(release_version)s
 Apache Kafka is a distributed streaming platform with four core APIs:
 
 
-** The Producer API allows an application to publish a stream records to
+** The Producer API allows an application to publish a stream of records to
 one or more Kafka topics.
 
 ** The Consumer API allows an application to subscribe to one or more

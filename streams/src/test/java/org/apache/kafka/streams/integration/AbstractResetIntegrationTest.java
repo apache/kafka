@@ -60,6 +60,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
@@ -77,7 +78,7 @@ public abstract class AbstractResetIntegrationTest {
     abstract Map<String, Object> getClientSslConfig();
 
     @Rule
-    public final TestName testName = new TestName(); 
+    public final TestName testName = new TestName();
 
     @AfterClass
     public static void afterClassCleanup() {
@@ -203,6 +204,34 @@ public abstract class AbstractResetIntegrationTest {
             mockTime.sleep(10);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
+    }
+
+    @Test
+    public void testResetWhenInternalTopicsAreSpecified() throws Exception {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+
+        // RUN
+        streams = new KafkaStreams(setupTopologyWithIntermediateTopic(true, OUTPUT_TOPIC_2), streamsConfig);
+        streams.start();
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close();
+        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
+
+        // RESET
+        streams.cleanUp();
+
+        final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
+                .filter(topic -> StreamsResetter.matchesInternalTopicFormat(topic))
+                .collect(Collectors.toList());
+        cleanGlobal(false,
+                "--internal-topics",
+                String.join(",", internalTopics.subList(1, internalTopics.size())),
+                appID);
+        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
+
+        assertInternalTopicsGotDeleted(internalTopics.get(0));
     }
 
     @Test
@@ -358,7 +387,6 @@ public abstract class AbstractResetIntegrationTest {
                                    final String resetScenario,
                                    final String resetScenarioArg,
                                    final String appID) throws Exception {
-        // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
                     "--bootstrap-servers", cluster.bootstrapServers(),
@@ -405,11 +433,11 @@ public abstract class AbstractResetIntegrationTest {
         Assert.assertTrue(cleanResult);
     }
 
-    protected void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
+    protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
         // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
-        if (intermediateUserTopic != null) {
+        if (additionalExistingTopic != null) {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
-                    Topic.GROUP_METADATA_TOPIC_NAME, intermediateUserTopic);
+                    Topic.GROUP_METADATA_TOPIC_NAME, additionalExistingTopic);
         } else {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
                     Topic.GROUP_METADATA_TOPIC_NAME);

@@ -67,11 +67,12 @@ import static org.junit.Assert.assertFalse;
 @Category(IntegrationTest.class)
 public class EOSUncleanShutdownIntegrationTest {
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 

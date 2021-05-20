@@ -104,7 +104,7 @@ public class BrokerCompatibilityTest {
         System.out.println("start Kafka Streams");
         streams.start();
 
-        final boolean eosEnabled = processingMode.startsWith(StreamsConfig.EXACTLY_ONCE);
+        final boolean eosEnabled = processingMode.startsWith("exactly_once");
 
         System.out.println("send data");
         final Properties producerProperties = new Properties();
