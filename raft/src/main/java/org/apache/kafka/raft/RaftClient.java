@@ -61,8 +61,8 @@ public interface RaftClient<T> extends AutoCloseable {
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
-         * the implementaiton of this interface has caughup to the high-watermark through calls to
-         * {@link #handleCommit(BatchReader)}.
+         * the implementation of this interface has caughup to the high-watermark through calls to
+         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.
@@ -70,7 +70,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * Subsequent calls to this method will expose a monotonically increasing epoch. For a
          * given epoch the leader may be unknown, {@code leader.leaderId} is {@code OptionalInt#empty},
          * or known {@code leader.leaderId} is {@code OptionalInt#of}. Once a leader is known for
-         * a given epoch it will remain the leader for that epoch.
+         * a given epoch it will remain the leader for that epoch. In other words, the implementation of
+         * method should expect this method will be called at most twice for each epoch. Once if the
+         * epoch changed but the leader is not known and once when the leader is known for the current
+         * epoch.
          *
          * @param leader the current leader and epoch
          */
