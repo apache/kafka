@@ -131,7 +131,6 @@ class LogCleanerTest {
                       scheduler = time.scheduler,
                       brokerTopicStats = new BrokerTopicStats,
                       time,
-                      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
                       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
                       topicPartition = topicPartition,
                       leaderEpochCache = leaderEpochCache,

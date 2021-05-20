@@ -240,7 +240,6 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param scheduler The thread pool scheduler used for background actions
  * @param brokerTopicStats Container for Broker Topic Yammer Metrics
  * @param time The time instance used for checking the clock
- * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  * @param topicPartition The topic partition associated with this Log instance
  * @param leaderEpochCache The LeaderEpochFileCache instance (if any) containing state associated
@@ -268,7 +267,6 @@ class Log(@volatile private var _dir: File,
           scheduler: Scheduler,
           brokerTopicStats: BrokerTopicStats,
           val time: Time,
-          val maxProducerIdExpirationMs: Int,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
@@ -2024,8 +2022,8 @@ object Log extends Logging {
       leaderEpochCache,
       producerStateManager))
     new Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint, offsets.nextOffsetMetadata, scheduler,
-      brokerTopicStats, time, maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, topicPartition,
-      leaderEpochCache, producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
+      brokerTopicStats, time, producerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
+      producerStateManager, logDirFailureChannel, topicId, keepPartitionMetadataFile)
   }
 
   /**

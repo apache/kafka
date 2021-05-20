@@ -101,7 +101,7 @@ class LogLoaderTest {
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
           val offsets = LogLoader.load(loadLogParams)
           new Log(logDir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
-            offsets.nextOffsetMetadata, time.scheduler, brokerTopicStats, time, maxPidExpirationMs,
+            offsets.nextOffsetMetadata, time.scheduler, brokerTopicStats, time,
             LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
             producerStateManager, logDirFailureChannel, None, true)
         }
@@ -283,9 +283,8 @@ class LogLoaderTest {
       val offsets = LogLoader.load(loadLogParams)
       new Log(logDir, logConfig, interceptedLogSegments, offsets.logStartOffset, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, mockTime.scheduler, brokerTopicStats, mockTime,
-        maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition,
-        leaderEpochCache, producerStateManager, logDirFailureChannel, topicId = None,
-        keepPartitionMetadataFile = true)
+        LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
+        producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true)
     }
 
     // Retain snapshots for the last 2 segments
@@ -362,7 +361,6 @@ class LogLoaderTest {
       scheduler = mockTime.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = mockTime,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
@@ -431,7 +429,8 @@ class LogLoaderTest {
       firstAppendTimestamp, coordinatorEpoch = coordinatorEpoch)
     assertEquals(firstAppendTimestamp, log.producerStateManager.lastEntry(producerId).get.lastTimestamp)
 
-    mockTime.sleep(log.maxProducerIdExpirationMs)
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    mockTime.sleep(maxProducerIdExpirationMs)
     assertEquals(None, log.producerStateManager.lastEntry(producerId))
 
     val secondAppendTimestamp = mockTime.milliseconds()
@@ -496,7 +495,6 @@ class LogLoaderTest {
       scheduler = mockTime.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = mockTime,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
@@ -558,7 +556,6 @@ class LogLoaderTest {
       scheduler = mockTime.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = mockTime,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
@@ -622,7 +619,6 @@ class LogLoaderTest {
       scheduler = mockTime.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = mockTime,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
