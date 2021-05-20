@@ -89,8 +89,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private def waitForRebalancingCompleted(consumer: Consumer[Array[Byte], Array[Byte]],
                                           expectedAssignment: Set[TopicPartition]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
-      s"Timed out while waiting expected assignment $expectedAssignment. " +
-        s"The current assignment is ${consumer.assignment()}", waitTimeMs = rebalanceTimeout)
+      s"Timed out while waiting expected assignment $expectedAssignment. The current assignment is ${consumer.assignment()}",
+      waitTimeMs = rebalanceTimeout)
   }
 
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
