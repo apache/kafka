@@ -58,6 +58,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.parseType;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -1086,8 +1087,11 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
-        final long commitInterval = (long) originals().getOrDefault(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
-        final int transactionTimeout = (int) originals().getOrDefault(PRODUCER_PREFIX + ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
+        final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
+        final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
+            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
                 "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
