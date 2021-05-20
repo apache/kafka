@@ -264,14 +264,13 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public void rollingBrokerRestart() {
-            if (started.get()) {
-                for (int i = 0; i < clusterReference.get().brokerCount(); i++) {
-                    clusterReference.get().killBroker(i);
-                }
-                clusterReference.get().restartDeadBrokers(true);
-            } else {
+            if (!started.get()) {
                 throw new IllegalStateException("Tried to restart brokers but the cluster has not been started!");
             }
+            for (int i = 0; i < clusterReference.get().brokerCount(); i++) {
+                clusterReference.get().killBroker(i);
+            }
+            clusterReference.get().restartDeadBrokers(true);
         }
     }
 }

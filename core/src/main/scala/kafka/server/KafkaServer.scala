@@ -334,14 +334,14 @@ class KafkaServer(
 
         /* create producer ids manager */
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
-          ProducerIdGenerator(
+          ProducerIdGenerator.rpc(
             config.brokerId,
             brokerEpochSupplier = () => kafkaController.brokerEpoch,
             clientToControllerChannelManager,
             config.requestTimeoutMs
           )
         } else {
-          ProducerIdGenerator(config.brokerId, zkClient)
+          ProducerIdGenerator.zk(config.brokerId, zkClient)
         }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
