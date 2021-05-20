@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
-import kafka.log.{Log, LogConfig, LogManager, LogTest}
+import kafka.log.{Log, LogConfig, LogManager, LogTestUtils}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
@@ -181,8 +181,8 @@ class DumpLogSegmentsTest {
   @Test
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
-    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = LogTest.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
 
     val metadataRecords = Seq(
       new ApiMessageAndVersion(
