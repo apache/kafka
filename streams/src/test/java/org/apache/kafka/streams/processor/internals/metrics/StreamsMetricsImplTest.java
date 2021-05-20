@@ -769,7 +769,6 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testLatencyMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -789,7 +788,6 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testThroughputMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
