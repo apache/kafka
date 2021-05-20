@@ -262,18 +262,11 @@ public class ReplicationControlManagerTest {
             unfenceBroker(i, ctx);
         }
 
-        CreatableTopicResult foo = ctx.createTestTopic("foo", 
-            new int[][] {
-                new int[] {0, 2},
-                new int[] {0, 1}
-            });
+        CreatableTopicResult foo = ctx.createTestTopic("foo", new int[][] {
+                new int[] {0, 2}, new int[] {0, 1}});
 
-        CreatableTopicResult zar = ctx.createTestTopic("zar", 
-            new int[][] {
-                new int[] {0, 1, 2}, 
-                new int[] {1, 2, 3},
-                new int[] {1, 2, 0}
-            });
+        CreatableTopicResult zar = ctx.createTestTopic("zar", new int[][] {
+                new int[] {0, 1, 2}, new int[] {1, 2, 3}, new int[] {1, 2, 0}});
 
         ControllerResult<Void> result = replicationControl.unregisterBroker(0);
         ctx.replay(result.records());

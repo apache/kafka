@@ -227,6 +227,10 @@ public class ReplicationControlManager {
             return leader != NO_LEADER;
         }
 
+        boolean hasPreferredLeader() {
+            return leader == preferredReplica();
+        }
+
         int preferredReplica() {
             return replicas.length == 0 ? NO_LEADER : replicas[0];
         }
@@ -398,8 +402,7 @@ public class ReplicationControlManager {
         String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
             record.topicId();
         newPartitionInfo.maybeLogPartitionChange(log, topicPart, prevPartitionInfo);
-        if ((newPartitionInfo.leader != newPartitionInfo.preferredReplica()) && 
-                (prevPartitionInfo.leader == prevPartitionInfo.preferredReplica())) {
+        if (!newPartitionInfo.hasPreferredLeader() && prevPartitionInfo.hasPreferredLeader()) {
             preferredReplicaImbalanceCount.increment();
         }
         controllerMetrics.setOfflinePartitionCount(brokersToIsrs.offlinePartitionCount());
