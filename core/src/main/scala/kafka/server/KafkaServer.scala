@@ -26,7 +26,7 @@ import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.{ProducerIdGenerator, TransactionCoordinator}
+import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
@@ -334,14 +334,14 @@ class KafkaServer(
 
         /* create producer ids manager */
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
-          ProducerIdGenerator.rpc(
+          ProducerIdManager.rpc(
             config.brokerId,
             brokerEpochSupplier = () => kafkaController.brokerEpoch,
             clientToControllerChannelManager,
             config.requestTimeoutMs
           )
         } else {
-          ProducerIdGenerator.zk(config.brokerId, zkClient)
+          ProducerIdManager.zk(config.brokerId, zkClient)
         }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue

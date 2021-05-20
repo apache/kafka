@@ -38,7 +38,7 @@ import scala.util.{Failure, Success, Try}
  * a unique block.
  */
 
-object ProducerIdGenerator {
+object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
   val PidPrefetchThreshold = 0.90
 
@@ -56,7 +56,7 @@ object ProducerIdGenerator {
   }
 }
 
-trait ProducerIdGenerator {
+trait ProducerIdManager {
   def generateProducerId(): Long
   def shutdown() : Unit = {}
 }
@@ -104,7 +104,7 @@ object ZkProducerIdManager {
 }
 
 class ZkProducerIdManager(brokerId: Int,
-                          zkClient: KafkaZkClient) extends ProducerIdGenerator with Logging {
+                          zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
   this.logIdent = "[ZK ProducerId Manager " + brokerId + "]: "
 
@@ -139,7 +139,7 @@ class ZkProducerIdManager(brokerId: Int,
 class RPCProducerIdManager(brokerId: Int,
                            brokerEpochSupplier: () => Long,
                            controllerChannel: BrokerToControllerChannelManager,
-                           maxWaitMs: Int) extends ProducerIdGenerator with Logging {
+                           maxWaitMs: Int) extends ProducerIdManager with Logging {
 
   this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
 
@@ -158,7 +158,7 @@ class RPCProducerIdManager(brokerId: Int,
         nextProducerId += 1
 
         // Check if we need to fetch the next block
-        if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdGenerator.PidPrefetchThreshold)) {
+        if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdManager.PidPrefetchThreshold)) {
           maybeRequestNextBlock()
         }
       }

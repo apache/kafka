@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util.stream.IntStream
 
-class RPCProducerIdManagerTest {
+class ProducerIdManagerTest {
 
   var brokerToController: BrokerToControllerChannelManager = EasyMock.niceMock(classOf[BrokerToControllerChannelManager])
   val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
