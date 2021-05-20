@@ -65,7 +65,7 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     public int partition() {
-        return partition();
+        return partition;
     }
 
     /**
