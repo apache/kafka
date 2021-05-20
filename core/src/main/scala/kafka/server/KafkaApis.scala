@@ -2927,8 +2927,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Sending create token response for correlation id ${request.header.correlationId} " +
         s"to client ${request.header.clientId}.")
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, request.context.principal, createResult.issueTimestamp,
-          createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
+        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, createResult.owner, createResult.tokenRequester,
+          createResult.issueTimestamp, createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
     }
 
     if (!allowTokenRequests(request))
@@ -2944,6 +2944,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       else {
         tokenManager.createToken(
+          new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), createTokenRequest.data().ownerPrincipalName()),
           request.context.principal,
           renewerList,
           createTokenRequest.data.maxLifetimeMs,

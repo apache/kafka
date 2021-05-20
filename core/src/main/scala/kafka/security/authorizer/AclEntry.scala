@@ -19,7 +19,7 @@ package kafka.security.authorizer
 
 import kafka.utils.Json
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
-import org.apache.kafka.common.acl.AclOperation.{READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS, CLUSTER_ACTION, IDEMPOTENT_WRITE}
+import org.apache.kafka.common.acl.AclOperation.{READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS, CLUSTER_ACTION, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -100,9 +100,10 @@ object AclEntry {
     resourceType match {
       case ResourceType.TOPIC => Set(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS)
       case ResourceType.GROUP => Set(READ, DESCRIBE, DELETE)
-      case ResourceType.CLUSTER => Set(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE)
+      case ResourceType.CLUSTER => Set(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE, CREATE_TOKENS, DESCRIBE_TOKENS)
       case ResourceType.TRANSACTIONAL_ID => Set(DESCRIBE, WRITE)
       case ResourceType.DELEGATION_TOKEN => Set(DESCRIBE)
+      case ResourceType.USER => Set(CREATE_TOKENS, DESCRIBE_TOKENS)
       case _ => throw new IllegalArgumentException("Not a concrete resource type")
     }
   }
@@ -114,6 +115,7 @@ object AclEntry {
       case ResourceType.CLUSTER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case ResourceType.TRANSACTIONAL_ID => Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
       case ResourceType.DELEGATION_TOKEN => Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED
+      case ResourceType.USER => Errors.USER_AUTHORIATION_FAILED
       case _ => throw new IllegalArgumentException("Authorization error type not known")
     }
   }

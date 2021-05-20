@@ -42,6 +42,7 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     public static CreateDelegationTokenResponse prepareResponse(int throttleTimeMs,
             Errors error,
             KafkaPrincipal owner,
+            KafkaPrincipal tokenRequester,
             long issueTimestamp,
             long expiryTimestamp,
             long maxTimestamp,
@@ -52,6 +53,8 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
                 .setErrorCode(error.code())
                 .setPrincipalType(owner.getPrincipalType())
                 .setPrincipalName(owner.getName())
+                .setTokenRequesterPrincipalType(tokenRequester.getPrincipalType())
+                .setTokenRequesterPrincipalName(tokenRequester.getName())
                 .setIssueTimestampMs(issueTimestamp)
                 .setExpiryTimestampMs(expiryTimestamp)
                 .setMaxTimestampMs(maxTimestamp)
@@ -61,7 +64,7 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int throttleTimeMs, Errors error, KafkaPrincipal owner) {
-        return prepareResponse(throttleTimeMs, error, owner, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
+        return prepareResponse(throttleTimeMs, error, owner, owner, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
     }
 
     @Override

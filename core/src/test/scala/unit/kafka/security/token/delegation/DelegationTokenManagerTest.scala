@@ -84,7 +84,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
 
-    tokenManager.createToken(owner, renewer, -1, createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, -1, createTokenResultCallBack)
     assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, createTokenResult.error)
     assert(Array[Byte]() sameElements createTokenResult.hmac)
 
@@ -101,11 +101,11 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
     tokenManager.startup()
 
-    tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
-    assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
+    assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     val token = tokenManager.getToken(tokenId)
     assertFalse(token.isEmpty )
@@ -118,12 +118,12 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
     tokenManager.startup()
 
-    tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val maxLifeTime = issueTime + maxLifeTimeMsDefault
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
-    assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  maxLifeTime, tokenId, password, Errors.NONE), createTokenResult)
+    assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  maxLifeTime, tokenId, password, Errors.NONE), createTokenResult)
 
     //try renewing non-existing token
     tokenManager.renewToken(owner, ByteBuffer.wrap("test".getBytes), -1 , renewResponseCallback)
@@ -166,11 +166,11 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
     tokenManager.startup()
 
-    tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
-    assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
+    assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     //try expire non-existing token
     tokenManager.expireToken(owner, ByteBuffer.wrap("test".getBytes), -1 , renewResponseCallback)
@@ -201,11 +201,11 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
     tokenManager.startup()
 
-    tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
-    assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
+    assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     // expire the token immediately
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
@@ -243,15 +243,15 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     tokenManager.startup()
 
     //create tokens
-    tokenManager.createToken(owner1, List(renewer1, renewer2), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner1, owner1, List(renewer1, renewer2), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
 
-    tokenManager.createToken(owner2, List(renewer3), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner2, owner2, List(renewer3), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
     val tokenId2 = createTokenResult.tokenId
 
-    tokenManager.createToken(owner3, List(renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner3, owner3, List(renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
     val tokenId3 = createTokenResult.tokenId
 
-    tokenManager.createToken(owner4, List(owner1, renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner4, owner4, List(owner1, renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
 
     assert(tokenManager.getAllTokenInformation.size == 4 )
 
@@ -333,10 +333,10 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     tokenManager.startup()
 
     //create tokens
-    tokenManager.createToken(owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
-    tokenManager.createToken(owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
-    tokenManager.createToken(owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
-    tokenManager.createToken(owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
+    tokenManager.createToken(owner, owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
     assert(tokenManager.getAllTokenInformation.size == 4 )
 
     time.sleep(2 * 60 * 60 * 1000L)

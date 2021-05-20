@@ -99,6 +99,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
             .map(ddt -> new DelegationToken(new TokenInformation(
                 ddt.tokenId(),
                 new KafkaPrincipal(ddt.principalType(), ddt.principalName()),
+                new KafkaPrincipal(ddt.tokenRequesterPrincipalType(), ddt.tokenRequesterPrincipalName()),
                 ddt.renewers()
                     .stream()
                     .map(ddtr -> new KafkaPrincipal(ddtr.principalType(), ddtr.principalName()))
