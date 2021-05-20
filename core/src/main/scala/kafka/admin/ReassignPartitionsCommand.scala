@@ -193,16 +193,15 @@ object ReassignPartitionsCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
     var failed = true
-
-    val props = if (opts.options.has(opts.commandConfigOpt))
-      Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
-    else
-      new util.Properties()
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-    props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
     var adminClient: Admin = null
 
     try {
+      val props = if (opts.options.has(opts.commandConfigOpt))
+        Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+      else
+        new util.Properties()
+      props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "reassign-partitions-tool")
       adminClient = Admin.create(props)
       handleAction(adminClient, opts)
       failed = false
