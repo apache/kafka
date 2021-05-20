@@ -1512,7 +1512,6 @@ class ReplicaManagerTest {
       scheduler = mockScheduler,
       brokerTopicStats = mockBrokerTopicStats,
       time = time,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = tp,
       leaderEpochCache = leaderEpochCache,

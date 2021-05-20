@@ -54,7 +54,4 @@ public final class MockRawSnapshotReader implements RawSnapshotReader {
     public Records records() {
         return data;
     }
-
-    @Override
-    public void close() {}
 }

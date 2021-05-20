@@ -551,32 +551,31 @@ final public class KafkaRaftClientSnapshotTest {
             snapshot.freeze();
         }
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    0
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                0
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            FetchSnapshotResponseData.PartitionSnapshot response = context
-                .assertSentFetchSnapshotResponse(context.metadataPartition)
-                .get();
+        FetchSnapshotResponseData.PartitionSnapshot response = context
+            .assertSentFetchSnapshotResponse(context.metadataPartition)
+            .get();
 
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes(), response.unalignedRecords().sizeInBytes());
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(0, response.position());
+        assertEquals(snapshot.sizeInBytes(), response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
+        UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
 
-            assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
-        }
+        assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
     }
 
     @Test
@@ -594,62 +593,61 @@ final public class KafkaRaftClientSnapshotTest {
             snapshot.freeze();
         }
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            // Fetch half of the snapshot
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Math.toIntExact(snapshot.sizeInBytes() / 2),
-                    0
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        // Fetch half of the snapshot
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Math.toIntExact(snapshot.sizeInBytes() / 2),
+                0
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            FetchSnapshotResponseData.PartitionSnapshot response = context
-                .assertSentFetchSnapshotResponse(context.metadataPartition)
-                .get();
+        FetchSnapshotResponseData.PartitionSnapshot response = context
+            .assertSentFetchSnapshotResponse(context.metadataPartition)
+            .get();
 
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes() / 2, response.unalignedRecords().sizeInBytes());
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(0, response.position());
+        assertEquals(snapshot.sizeInBytes() / 2, response.unalignedRecords().sizeInBytes());
 
-            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
-            ByteBuffer snapshotBuffer = memoryRecords.buffer();
+        UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
+        ByteBuffer snapshotBuffer = memoryRecords.buffer();
 
-            ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
+        ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
+        responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
 
-            ByteBuffer expectedBytes = snapshotBuffer.duplicate();
-            expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
+        ByteBuffer expectedBytes = snapshotBuffer.duplicate();
+        expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
 
-            assertEquals(expectedBytes, responseBuffer.duplicate().flip());
+        assertEquals(expectedBytes, responseBuffer.duplicate().flip());
 
-            // Fetch the remainder of the snapshot
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    responseBuffer.position()
-                )
-            );
+        // Fetch the remainder of the snapshot
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                responseBuffer.position()
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
-            assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-            assertEquals(snapshot.sizeInBytes(), response.size());
-            assertEquals(responseBuffer.position(), response.position());
-            assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.unalignedRecords().sizeInBytes());
+        response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+        assertEquals(snapshot.sizeInBytes(), response.size());
+        assertEquals(responseBuffer.position(), response.position());
+        assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.unalignedRecords().sizeInBytes());
 
-            responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
-            assertEquals(snapshotBuffer, responseBuffer.flip());
-        }
+        responseBuffer.put(((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
+        assertEquals(snapshotBuffer, responseBuffer.flip());
     }
 
     @Test
@@ -714,24 +712,23 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(epoch, response.currentLeader().leaderEpoch());
         assertEquals(localId, response.currentLeader().leaderId());
 
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            context.deliverRequest(
-                fetchSnapshotRequest(
-                    context.metadataPartition,
-                    epoch,
-                    snapshotId,
-                    Integer.MAX_VALUE,
-                    snapshot.sizeInBytes()
-                )
-            );
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                snapshot.sizeInBytes()
+            )
+        );
 
-            context.client.poll();
+        context.client.poll();
 
-            response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
-            assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
-            assertEquals(epoch, response.currentLeader().leaderEpoch());
-            assertEquals(localId, response.currentLeader().leaderId());
-        }
+        response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
+        assertEquals(epoch, response.currentLeader().leaderEpoch());
+        assertEquals(localId, response.currentLeader().leaderId());
     }
 
     @Test
@@ -909,15 +906,14 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset, snapshotId.epoch);
 
         // Check that the snapshot was written to the log
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
-        }
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
+        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
-            assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+        try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, reader.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
         }
     }
 
@@ -1013,15 +1009,14 @@ final public class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, snapshotId.offset, snapshotId.epoch);
 
         // Check that the snapshot was written to the log
-        try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
-            assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
-        }
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
+        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
-        try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
-            assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+        try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
+            assertEquals(snapshotId, reader.snapshotId());
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
         }
     }
 

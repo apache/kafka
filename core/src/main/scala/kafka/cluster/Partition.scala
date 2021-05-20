@@ -549,9 +549,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       zkVersion = partitionState.zkVersion
 
-      // Clear any pending AlterIsr requests and check replica state
-      alterIsrManager.clearPending(topicPartition)
-
       // In the case of successive leader elections in a short time period, a follower may have
       // entries in its log from a later epoch than any entry in the new leader's log. In order
       // to ensure that these followers can truncate to the right offset, we must cache the new
@@ -629,9 +626,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
       zkVersion = partitionState.zkVersion
-
-      // Since we might have been a leader previously, still clear any pending AlterIsr requests
-      alterIsrManager.clearPending(topicPartition)
 
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
@@ -1341,13 +1335,15 @@ class Partition(val topicPartition: TopicPartition,
     isrState = proposedIsrState
 
     if (!alterIsrManager.submit(alterIsrItem)) {
-      // If the ISR manager did not accept our update, we need to revert back to previous state
+      // If the ISR manager did not accept our update, we need to revert the proposed state.
+      // This can happen if the ISR state was updated by the controller (via LeaderAndIsr in ZK-mode or
+      // ChangePartitionRecord in KRaft mode) but we have an AlterIsr request still in-flight.
       isrState = oldState
       isrChangeListener.markFailed()
-      throw new IllegalStateException(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
+      warn(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
+    } else {
+      debug(s"Enqueued ISR change to state $newLeaderAndIsr after transition to $proposedIsrState")
     }
-
-    debug(s"Enqueued ISR change to state $newLeaderAndIsr after transition to $proposedIsrState")
   }
 
   /**

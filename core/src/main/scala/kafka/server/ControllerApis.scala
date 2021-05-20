@@ -74,6 +74,7 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {
@@ -100,6 +101,9 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
+        case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
+        case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {

@@ -66,7 +66,6 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
     private class KTableKTableLeftJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
-        private StreamsMetricsImpl metrics;
         private Sensor droppedRecordsSensor;
 
         KTableKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
@@ -76,8 +75,11 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                (StreamsMetricsImpl) context.metrics()
+            );
             valueGetter.init(context);
         }
 
