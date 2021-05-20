@@ -69,7 +69,6 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   private var topicService: TopicService = _
   private var adminClient: Admin = _
   private var testTopicName: String = _
-  private var brokerOptions: Array[String] = _
 
   private[this] def createAndWaitTopic(opts: TopicCommandOptions): Unit = {
     topicService.createTopic(opts)
@@ -85,7 +84,6 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    brokerOptions = Array("--bootstrap-server", brokerList)
     adminClient = Admin.create(props)
     topicService = TopicService(adminClient)
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
@@ -101,15 +99,14 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testCreate(): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "2", "--replication-factor", "1", "--topic", testTopicName)))
+      Array("--partitions", "2", "--replication-factor", "1", "--topic", testTopicName)))
 
     adminClient.listTopics().names().get().contains(testTopicName)
   }
 
   @Test
   def testCreateWithDefaults(): Unit = {
-    createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName)))
+    createAndWaitTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
@@ -124,7 +121,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testCreateWithDefaultReplication(): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--partitions", "2")))
+      Array("--topic", testTopicName, "--partitions", "2")))
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
@@ -139,7 +136,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testCreateWithDefaultPartitions(): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--replication-factor", "2")))
+      Array("--topic", testTopicName, "--replication-factor", "2")))
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
@@ -156,7 +153,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   def testCreateWithConfigs(): Unit = {
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", "delete.retention.ms=1000")))
+      Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", "delete.retention.ms=1000")))
 
     val configs = adminClient
       .describeConfigs(Collections.singleton(configResource))
@@ -170,7 +167,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     // create the topic
     val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName))
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName))
     createAndWaitTopic(createOpts)
 
     // try to re-create the topic
@@ -179,8 +176,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
   @Test
   def testCreateWhenAlreadyExistsWithIfNotExists(): Unit = {
-    val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--if-not-exists"))
+    val createOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-not-exists"))
     createAndWaitTopic(createOpts)
     topicService.createTopic(createOpts)
   }
@@ -189,7 +185,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   def testCreateWithReplicaAssignment(): Unit = {
     // create the topic
     val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName))
+      Array("--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName))
     createAndWaitTopic(createOpts)
 
     val partitions = adminClient
@@ -208,27 +204,27 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   def testCreateWithInvalidReplicationFactor(): Unit = {
     assertThrows(classOf[IllegalArgumentException],
       () => topicService.createTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName))))
+        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName))))
   }
 
   @Test
   def testCreateWithNegativeReplicationFactor(): Unit = {
     assertThrows(classOf[IllegalArgumentException],
       () => topicService.createTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName))))
+        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName))))
   }
 
   @Test
   def testCreateWithNegativePartitionCount(): Unit = {
     assertThrows(classOf[IllegalArgumentException],
       () => topicService.createTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName))))
+        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName))))
   }
 
   @Test
   def testInvalidTopicLevelConfig(): Unit = {
     val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.timestamp.type=boom"))
     assertThrows(classOf[ConfigException], () => topicService.createTopic(createOpts))
   }
@@ -236,10 +232,10 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testListTopics(): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.listTopics(new TopicCommandOptions(brokerOptions)))
+      topicService.listTopics(new TopicCommandOptions(Array())))
 
     assertTrue(output.contains(testTopicName))
   }
@@ -259,8 +255,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(topic3)
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.listTopics(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", "kafka.*"))))
+      topicService.listTopics(new TopicCommandOptions(Array("--topic", "kafka.*"))))
 
     assertTrue(output.contains(topic1))
     assertTrue(output.contains(topic2))
@@ -277,7 +272,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(topic1)
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.listTopics(new TopicCommandOptions(brokerOptions ++ Array("--exclude-internal"))))
+      topicService.listTopics(new TopicCommandOptions(Array("--exclude-internal"))))
 
     assertTrue(output.contains(topic1))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
@@ -290,7 +285,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--partitions", "3")))
+      Array("--topic", testTopicName, "--partitions", "3")))
 
     val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
@@ -303,7 +298,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
+      Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
 
     val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
@@ -318,7 +313,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     assertThrows(classOf[ExecutionException],
       () => topicService.alterTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3"))))
+        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3"))))
   }
 
   @Test
@@ -329,24 +324,23 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     assertThrows(classOf[ExecutionException],
       () => topicService.alterTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6"))))
+        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6"))))
   }
 
   @Test
   def testAlterWithInvalidPartitionCount(): Unit = {
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     assertThrows(classOf[ExecutionException],
       () => topicService.alterTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "-1", "--topic", testTopicName))))
+        Array("--partitions", "-1", "--topic", testTopicName))))
   }
 
   @Test
   def testAlterWhenTopicDoesntExist(): Unit = {
     // alter a topic that does not exist without --if-exists
-    val alterOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--partitions", "1"))
+    val alterOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1"))
     val topicService = TopicService(adminClient)
     assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
   }
@@ -354,7 +348,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testAlterWhenTopicDoesntExistWithIfExists(): Unit = {
     topicService.alterTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
+      Array("--topic", testTopicName, "--partitions", "1", "--if-exists")))
   }
 
   @Test
@@ -363,7 +357,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val numPartitions = 18
     val replicationFactor = 3
-    val createOpts = new TopicCommandOptions(brokerOptions ++ Array(
+    val createOpts = new TopicCommandOptions(Array(
       "--partitions", numPartitions.toString,
       "--replication-factor", replicationFactor.toString,
       "--topic", testTopicName))
@@ -376,7 +370,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val alteredNumPartitions = 36
     // verify that adding partitions will also be rack aware
-    val alterOpts = new TopicCommandOptions(brokerOptions ++ Array(
+    val alterOpts = new TopicCommandOptions(Array(
       "--partitions", alteredNumPartitions.toString,
       "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
@@ -393,8 +387,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     val cleanupVal = "compact"
 
     // create the topic
-    val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", numPartitionsOriginal.toString,
+    val createOpts = new TopicCommandOptions(Array(
+      "--partitions", numPartitionsOriginal.toString,
       "--replication-factor", "1",
       "--config", cleanupKey + "=" + cleanupVal,
       "--topic", testTopicName))
@@ -409,7 +403,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     // modify the topic to add new partitions
     val numPartitionsModified = 3
     val alterOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", numPartitionsModified.toString, "--topic", testTopicName))
+      Array("--partitions", numPartitionsModified.toString, "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
     val newProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
     assertTrue(newProps.containsKey(cleanupKey), "Updated properties do not contain " + cleanupKey)
@@ -419,14 +413,13 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testTopicDeletion(): Unit = {
     // create the NormalTopic
-    val createOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "1",
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
       "--replication-factor", "1",
       "--topic", testTopicName))
     createAndWaitTopic(createOpts)
 
     // delete the NormalTopic
-    val deleteOpts = new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))
+    val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
 
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse(zkClient.pathExists(deletePath), "Delete path for topic shouldn't exist before deletion.")
@@ -437,7 +430,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testDeleteInternalTopic(): Unit = {
     // create the offset topic
-    val createOffsetTopicOpts = new TopicCommandOptions(brokerOptions ++ Array("--partitions", "1",
+    val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", "1",
       "--replication-factor", "1",
       "--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     createAndWaitTopic(createOffsetTopicOpts)
@@ -446,7 +439,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
     // If deleting internal topics is not desired, ACLS should be used to control it.
     val deleteOffsetTopicOpts = new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
+      Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse(zkClient.pathExists(deleteOffsetTopicPath), "Delete path for topic shouldn't exist before deletion.")
     topicService.deleteTopic(deleteOffsetTopicOpts)
@@ -456,14 +449,13 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testDeleteWhenTopicDoesntExist(): Unit = {
     // delete a topic that does not exist
-    val deleteOpts = new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))
+    val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
     assertThrows(classOf[IllegalArgumentException], () => topicService.deleteTopic(deleteOpts))
   }
 
   @Test
   def testDeleteWhenTopicDoesntExistWithIfExists(): Unit = {
-    topicService.deleteTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--if-exists")))
+    topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
@@ -473,8 +465,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(testTopicName)
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", testTopicName))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(3, rows.size)
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
@@ -483,14 +474,12 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   @Test
   def testDescribeWhenTopicDoesntExist(): Unit = {
     assertThrows(classOf[IllegalArgumentException],
-      () => topicService.describeTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", testTopicName))))
+      () => topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
   }
 
   @Test
   def testDescribeWhenTopicDoesntExistWithIfExists(): Unit = {
-    topicService.describeTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--topic", testTopicName, "--if-exists")))
+    topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists")))
   }
 
   @Test
@@ -527,7 +516,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       // grab the console output and assert
       val output = TestUtils.grabConsoleOutput(
           topicService.describeTopic(new TopicCommandOptions(
-            brokerOptions ++ Array("--topic", testTopicName, "--unavailable-partitions"))))
+            Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
       assertTrue(rows(0).contains("Leader: none\tReplicas: 0\tIsr:"))
@@ -547,7 +536,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
       TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--under-replicated-partitions"))))
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
     } finally {
@@ -569,7 +558,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
       TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--under-min-isr-partitions"))))
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
     } finally {
@@ -614,13 +603,13 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     // describe the topic and test if it's under-replicated
     val simpleDescribeOutput = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val simpleDescribeOutputRows = simpleDescribeOutput.split("\n")
     assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"))
     assertEquals(2, simpleDescribeOutputRows.size)
 
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--under-replicated-partitions"))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
     assertEquals("", underReplicatedOutput, s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'")
 
     // Verify reassignment is still ongoing.
@@ -644,7 +633,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       killBroker(0)
       killBroker(1)
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--at-min-isr-partitions"))))
+        topicService.describeTopic(new TopicCommandOptions(Array("--at-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
       assertEquals(1, rows.length)
@@ -689,7 +678,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
       TestUtils.waitForPartitionMetadata(aliveServers, underMinIsrTopic, 0)
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--under-min-isr-partitions"))))
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
       assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
@@ -703,31 +692,28 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   def testDescribeReportOverriddenConfigs(): Unit = {
     val config = "file.delete.delay.ms=1000"
     createAndWaitTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", config)))
+      Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", config)))
     val output = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(brokerOptions)))
+      topicService.describeTopic(new TopicCommandOptions(Array())))
     assertTrue(output.contains(config), s"Describe output should have contained $config")
   }
 
   @Test
   def testDescribeAndListTopicsWithoutInternalTopics(): Unit = {
     createAndWaitTopic(
-      new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
     // create a internal topic
     createAndWaitTopic(
-      new TopicCommandOptions(
-        brokerOptions ++ Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
 
     // test describe
     var output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(
-      brokerOptions ++ Array("--describe", "--exclude-internal"))))
+      Array("--describe", "--exclude-internal"))))
     assertTrue(output.contains(testTopicName), s"Output should have contained $testTopicName")
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
 
     // test list
-    output = TestUtils.grabConsoleOutput(topicService.listTopics(new TopicCommandOptions(
-      brokerOptions ++ Array("--list", "--exclude-internal"))))
+    output = TestUtils.grabConsoleOutput(topicService.listTopics(new TopicCommandOptions(Array("--list", "--exclude-internal"))))
     assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
@@ -752,7 +738,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     waitForTopicCreated(testTopicName)
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(2, rows.size)
     assertTrue(rows(0).startsWith(s"Topic: $testTopicName"))
@@ -767,7 +753,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     when(adminClient.createTopics(any(), any())).thenReturn(result)
 
     assertThrows(classOf[ThrottlingQuotaExceededException],
-      () => topicService.createTopic(new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))))
+      () => topicService.createTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
 
     val expectedNewTopic = new NewTopic(testTopicName, Optional.empty[Integer](), Optional.empty[java.lang.Short]())
       .configs(Map.empty[String, String].asJava)
@@ -790,7 +776,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     when(adminClient.deleteTopics(any(), any())).thenReturn(result)
 
     val exception = assertThrows(classOf[ExecutionException],
-      () => topicService.deleteTopic(new TopicCommandOptions(brokerOptions ++ Array("--topic", testTopicName))))
+      () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
     verify(adminClient, times(1)).deleteTopics(
@@ -817,8 +803,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     when(adminClient.createPartitions(any(), any())).thenReturn(result)
 
     val exception = assertThrows(classOf[ExecutionException],
-      () => topicService.alterTopic(new TopicCommandOptions(
-        brokerOptions ++ Array("--topic", testTopicName, "--partitions", "3"))))
+      () => topicService.alterTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "3"))))
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
     verify(adminClient, times(1)).createPartitions(
