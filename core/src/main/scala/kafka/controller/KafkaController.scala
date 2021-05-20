@@ -1341,7 +1341,7 @@ class KafkaController(val config: KafkaConfig,
       })
 
       // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
-      debug(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
+      info(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
       remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
     }
 
