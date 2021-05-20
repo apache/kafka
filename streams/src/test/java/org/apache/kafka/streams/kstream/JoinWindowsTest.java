@@ -168,8 +168,8 @@ public class JoinWindowsTest {
         );
 
         verifyInEquality(
-                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(9)).before(ofMillis(1)).after(ofMillis(2)),
-                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)).before(ofMillis(1)).after(ofMillis(2))
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(9)),
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(3), ofMillis(3))
         );
     }
 }
