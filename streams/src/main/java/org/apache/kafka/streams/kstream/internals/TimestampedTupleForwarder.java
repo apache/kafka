@@ -58,7 +58,7 @@ class TimestampedTupleForwarder<K, V> {
 
     public void maybeForward(final Record<K, Change<V>> record) {
         if (!cachingEnabled) {
-            if(sendOldValues) {
+            if (sendOldValues) {
                 context.forward(record);
             } else {
                 context.forward(record.withValue(new Change<>(record.value().newValue, null)));

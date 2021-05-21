@@ -55,7 +55,7 @@ class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Window
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(record);
+            context.forward(record.withTimestamp(record.key().window().end()));
         } finally {
             context.setCurrentNode(prev);
         }
