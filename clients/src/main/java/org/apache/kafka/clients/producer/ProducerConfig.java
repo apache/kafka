@@ -246,10 +246,10 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5 (with message ordering preserved for any allowable vlaue), "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
-                                                        + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
-                                                        + "a <code>ConfigException</code> will be thrown.";
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5 "
+                                                        + "(with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
+                                                        + ACKS_CONFIG + "</code> must be 'all'. If these values are not explicitly set by the user, suitable values will be chosen. If incompatible "
+                                                        + "values are set, a <code>ConfigException</code> will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
