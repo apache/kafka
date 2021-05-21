@@ -134,7 +134,7 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
-  var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -257,19 +257,19 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        clientToControllerChannelManager = BrokerToControllerChannelManager(
+          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          time = time,
+          metrics = metrics,
+          config = config,
+          channelName = "forwarding",
+          threadNamePrefix = threadNamePrefix,
+          retryTimeoutMs = config.requestTimeoutMs.longValue)
+        clientToControllerChannelManager.start()
+
         /* start forwarding manager */
         if (enableForwarding) {
-          val brokerToControllerManager = BrokerToControllerChannelManager(
-            controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
-            time = time,
-            metrics = metrics,
-            config = config,
-            channelName = "forwarding",
-            threadNamePrefix = threadNamePrefix,
-            retryTimeoutMs = config.requestTimeoutMs.longValue)
-          brokerToControllerManager.start()
-          this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
-          clientToControllerChannelManager = Some(brokerToControllerManager)
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
         }
 
         val apiVersionManager = ApiVersionManager(
@@ -337,14 +337,13 @@ class KafkaServer(
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 
+        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
+
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
           config,
-          metadataCache,
-          threadNamePrefix,
           clientToControllerChannelManager,
-          Some(adminManager),
-          Some(kafkaController),
+          zkSupport,
           groupCoordinator,
           transactionCoordinator
         )
@@ -368,7 +367,6 @@ class KafkaServer(
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         /* start processing requests */
-        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
           autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
@@ -680,7 +678,8 @@ class KafkaServer(
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-        CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
+        if (clientToControllerChannelManager != null)
+          CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
