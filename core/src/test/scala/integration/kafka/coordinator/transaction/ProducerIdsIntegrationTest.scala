@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -47,7 +47,7 @@ class ProducerIdsIntegrationTest {
     new ClusterTest(clusterType = Type.ZK, brokers = 3, ibp = "3.0-IV0")
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
-    verifyNonOverlappingAndUniqueIds(clusterInstance)
+    verifyUniqueIds(clusterInstance)
   }
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
@@ -55,23 +55,17 @@ class ProducerIdsIntegrationTest {
     clusterInstance.config().serverProperties().put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
     clusterInstance.config().brokerServerProperties(0).put(KafkaConfig.InterBrokerProtocolVersionProp, "3.0-IV0")
     clusterInstance.start()
-    verifyNonOverlappingAndUniqueIds(clusterInstance)
+    verifyUniqueIds(clusterInstance)
     clusterInstance.stop()
   }
 
-  private def verifyNonOverlappingAndUniqueIds(clusterInstance: ClusterInstance): Unit = {
+  private def verifyUniqueIds(clusterInstance: ClusterInstance): Unit = {
     // Request enough PIDs from each broker to ensure each broker generates two PID blocks
     val ids = clusterInstance.brokerSocketServers().stream().flatMap( broker => {
       IntStream.range(0, 1001).parallel().mapToObj( _ => nextProducerId(broker, clusterInstance.clientListener()))
     }).collect(Collectors.toList[Long]).asScala.toSeq
 
-    assertEquals(3003, ids.size, "Expected 3003 IDs")
-
-    val expectedIds = Set(0L, 1000L, 2000L, 3000L, 4000L, 5000L)
-    val idsAsString = ids.mkString(", ")
-    expectedIds.foreach { id =>
-      assertTrue(ids.contains(id), s"Expected to see $id in $idsAsString")
-    }
+    assertEquals(3003, ids.size, "Expected exactly 3003 IDs")
     assertEquals(ids.size, ids.distinct.size, "Found duplicate producer IDs")
   }
 
