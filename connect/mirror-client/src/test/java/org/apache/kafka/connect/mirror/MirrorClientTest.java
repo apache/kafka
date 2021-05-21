@@ -136,16 +136,20 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void legacyUpstreamClustersTest() throws InterruptedException {
-        // When configured with a specific source, LegacyReplicationPolicy should just return the provided source.
-        MirrorClient client = new FakeMirrorClient(new LegacyReplicationPolicy("", "source"), Arrays.asList("topic1",
+    public void testIdentityReplicationUpstreamClusters() throws InterruptedException {
+        // IdentityReplicationPolicy treats heartbeats as a special case, so these should work as usual.
+        MirrorClient client = new FakeMirrorClient(new IdentityReplicationPolicy("source"), Arrays.asList("topic1",
             "topic2", "heartbeats", "source1.heartbeats", "source1.source2.heartbeats",
             "source3.source4.source5.heartbeats"));
         Set<String> sources = client.upstreamClusters();
-        assertTrue(sources.contains("source"));
+        assertTrue(sources.contains("source1"));
+        assertTrue(sources.contains("source2"));
+        assertTrue(sources.contains("source3"));
+        assertTrue(sources.contains("source4"));
+        assertTrue(sources.contains("source5"));
         assertFalse(sources.contains(""));
         assertFalse(sources.contains(null));
-        assertEquals(1, sources.size());
+        assertEquals(5, sources.size());
     }
 
     @Test
@@ -161,11 +165,10 @@ public class MirrorClientTest {
         assertTrue(remoteTopics.contains("source3.source4.source5.topic6"));
     }
 
-
     @Test
-    public void legacyRemoteTopicsTest() throws InterruptedException {
-        // By default, LegacyReplicationPolicy should consider any topic to be remote.
-        MirrorClient client = new FakeMirrorClient(new LegacyReplicationPolicy("", "source"), Arrays.asList(
+    public void testIdentityReplicationRemoteTopics() throws InterruptedException {
+        // IdentityReplicationPolicy should consider any topic to be remote.
+        MirrorClient client = new FakeMirrorClient(new IdentityReplicationPolicy("source"), Arrays.asList(
             "topic1", "topic2", "topic3"));
         Set<String> remoteTopics = client.remoteTopics();
         assertTrue(remoteTopics.contains("topic1"));
@@ -188,20 +191,9 @@ public class MirrorClientTest {
         assertTrue(remoteTopics.contains("source3__source4__source5__topic6"));
     }
 
-    @Test
-    public void testLegacyRemoteTopicWithSuffix() {
+    public void testIdentityReplicationTopicSource() {
         MirrorClient client = new FakeMirrorClient(
-            new LegacyReplicationPolicy(".replica", "primary"), Arrays.asList());
-        assertEquals("topic1.replica", client.replicationPolicy()
-            .formatRemoteTopic("primary", "topic1"));
-        assertEquals("primary", client.replicationPolicy()
-            .topicSource("topic1.replica"));
-    }
-
-    @Test
-    public void testLegacyRemoteTopicWithoutSuffix() {
-        MirrorClient client = new FakeMirrorClient(
-            new LegacyReplicationPolicy("", "primary"), Arrays.asList());
+            new IdentityReplicationPolicy("primary"), Arrays.asList());
         assertEquals("topic1", client.replicationPolicy()
             .formatRemoteTopic("primary", "topic1"));
         assertEquals("primary", client.replicationPolicy()

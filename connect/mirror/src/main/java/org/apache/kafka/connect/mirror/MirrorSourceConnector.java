@@ -494,7 +494,7 @@ public class MirrorSourceConnector extends SourceConnector {
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);
             if (upstreamTopic.equals(topic)) {
-                // Extra check for LegacyReplicationPolicy
+                // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
                 return false;
             }
             return isCycle(upstreamTopic);

@@ -35,6 +35,15 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
 
     private String sourceClusterAlias = null;
 
+    public IdentityReplicationPolicy() {
+        //nop
+    }
+
+    // Visible for testing
+    IdentityReplicationPolicy(String sourceClusterAlias) {
+        this.sourceClusterAlias = sourceClusterAlias;
+    }
+
     @Override
     public void configure(Map<String, ?> props) {
         super.configure(props);
@@ -62,7 +71,7 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
       * a remote topic based on its name alone. If `source.cluster.alias` is provided,
       * `topicSource` will return that.
       *
-      * In the special case of heartbeast, we defer to DefaultReplicationPolicy.
+      * In the special case of heartbeats, we defer to DefaultReplicationPolicy.
       */
     @Override
     public String topicSource(String topic) {
@@ -75,7 +84,7 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
 
     /** Since any topic may be a "remote topic", this just returns `topic`.
       *
-      * In the special case of heartbeast, we defer to DefaultReplicationPolicy.
+      * In the special case of heartbeats, we defer to DefaultReplicationPolicy.
       */
     @Override
     public String upstreamTopic(String topic) {
