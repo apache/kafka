@@ -301,9 +301,9 @@ context.resetForwards();
 assertEquals(context.forwarded().size(), 0);</code></pre>
             If your processor forwards to specific child processors, you can query the context for captured data by
             child name:
-            <pre class="line-numbers"><code class="language-text">final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");</code></pre>
+            <pre class="line-numbers"><code class="language-java">final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");</code></pre>
             The mock also captures whether your processor has called <code>commit()</code> on the context:
-            <pre class="line-numbers"><code class="language-text">assertTrue(context.committed());
+            <pre class="line-numbers"><code class="language-java">assertTrue(context.committed());
 
 // commit captures can also be reset.
 context.resetCommit();
