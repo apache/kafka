@@ -182,6 +182,7 @@ class BrokerMetadataListener(
       case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)
       case rec: ConfigRecord => handleConfigRecord(rec)
       case rec: QuotaRecord => handleQuotaRecord(imageBuilder, rec)
+      case rec: ProducerIdsRecord => handleProducerIdRecord(rec)
       case _ => throw new RuntimeException(s"Unhandled record $record with type $recordType")
     }
   }
@@ -259,7 +260,11 @@ class BrokerMetadataListener(
     clientQuotaManager.handleQuotaRecord(record)
   }
 
-  class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)
+  def handleProducerIdRecord(record: ProducerIdsRecord): Unit = {
+    // no-op
+  }
+
+  class HandleNewLeaderEvent(leader: MetaLogLeader)
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       val imageBuilder =
