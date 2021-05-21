@@ -166,7 +166,7 @@ $ export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so”
       <p> As of 2.3.0 the memory usage across all instances can be bounded, limiting the total off-heap memory of your Kafka Streams application. To do so you must configure RocksDB to cache the index and filter blocks in the block cache, limit the memtable memory through a shared <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Write-Buffer-Manager">WriteBufferManager</a> and count its memory against the block cache, and then pass the same Cache object to each instance. See <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB">RocksDB Memory Usage</a> for details. An example RocksDBConfigSetter implementing this is shown below:</p>
       <pre class="line-numbers"><code class="language-java">public static class BoundedMemoryRocksDBConfig implements RocksDBConfigSetter {
 
-   private static org.rocksdb.Cache cache = new org.rocksdb.LRUCache(TOTAL_OFF_HEAP_MEMORY, -1, false, INDEX_FILTER_BLOCK_RATIO);1
+   private static org.rocksdb.Cache cache = new org.rocksdb.LRUCache(TOTAL_OFF_HEAP_MEMORY, -1, false, INDEX_FILTER_BLOCK_RATIO);</code><a href="#fn1" id="ref1"><sup>1</sup></a><code>
    private static org.rocksdb.WriteBufferManager writeBufferManager = new org.rocksdb.WriteBufferManager(TOTAL_MEMTABLE_MEMORY, cache);
 
    @Override
@@ -180,9 +180,9 @@ $ export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so”
      options.setWriteBufferManager(writeBufferManager);
 
       // These options are recommended to be set when bounding the total memory
-     tableConfig.setCacheIndexAndFilterBlocksWithHighPriority(true);2
+     tableConfig.setCacheIndexAndFilterBlocksWithHighPriority(true);</code><a href="#fn2" id="ref2"><sup>2</sup></a><code>
      tableConfig.setPinTopLevelIndexAndFilter(true);
-     tableConfig.setBlockSize(BLOCK_SIZE);3
+     tableConfig.setBlockSize(BLOCK_SIZE);</code><a href="#fn3" id="ref3"><sup>3</sup></a><code>
      options.setMaxWriteBufferNumber(N_MEMTABLES);
      options.setWriteBufferSize(MEMTABLE_SIZE);
 
