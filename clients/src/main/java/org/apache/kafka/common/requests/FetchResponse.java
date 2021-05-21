@@ -100,6 +100,10 @@ public class FetchResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    public int waitTimeMs() {
+        return data.waitTimeMs();
+    }
+
     public int sessionId() {
         return data.sessionId();
     }
@@ -130,7 +134,7 @@ public class FetchResponse extends AbstractResponse {
                              Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator);
+        FetchResponseData data = toMessage(Errors.NONE, 0, 0, INVALID_SESSION_ID, partIterator);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -191,13 +195,15 @@ public class FetchResponse extends AbstractResponse {
 
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
+                                   int waitTimeMs,
                                    int sessionId,
                                    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData) {
-        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
+        return new FetchResponse(toMessage(error, throttleTimeMs, waitTimeMs, sessionId, responseData.entrySet().iterator()));
     }
 
     private static FetchResponseData toMessage(Errors error,
                                                int throttleTimeMs,
+                                               int waitTimeMs,
                                                int sessionId,
                                                Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
@@ -222,6 +228,7 @@ public class FetchResponse extends AbstractResponse {
 
         return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)
+            .setWaitTimeMs(waitTimeMs)
             .setErrorCode(error.code())
             .setSessionId(sessionId)
             .setResponses(topicResponseList);

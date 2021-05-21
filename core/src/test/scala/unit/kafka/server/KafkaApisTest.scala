@@ -3262,7 +3262,7 @@ class KafkaApisTest {
             .setLogStartOffset(0)
             .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
       }.toMap.asJava)
-      FetchResponse.of(Errors.NONE, 100, 100, responseData)
+      FetchResponse.of(Errors.NONE, 100, 0, 100, responseData)
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)

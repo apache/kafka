@@ -77,6 +77,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
@@ -821,8 +822,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           convertedData.put(tp, maybeConvertFetchedData(tp, unconvertedPartitionData))
         }
 
+        val timeMs = time.milliseconds()
+        val waitTimeMs = if (request.apiLocalCompleteTimeNanos > 0) {
+          timeMs - request.apiLocalCompleteTimeNanos / TimeUnit.NANOSECONDS.toMillis(1)
+        } else 0
         // Prepare fetch response from converted data
-        val response = FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData)
+        val response = FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, waitTimeMs.toInt, unconvertedFetchResponse.sessionId, convertedData)
         // record the bytes out metrics only when the response is being sent
         response.responseData.forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower,

@@ -301,7 +301,7 @@ trait FetchContext extends Logging {
     * Return an empty throttled response due to quota violation.
     */
   def getThrottledResponse(throttleTimeMs: Int): FetchResponse =
-    FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+    FetchResponse.of(Errors.NONE, throttleTimeMs, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
 }
 
 /**
@@ -320,7 +320,7 @@ class SessionErrorContext(val error: Errors,
   // Because of the fetch session error, we don't know what partitions were supposed to be in this request.
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
     debug(s"Session error fetch context returning $error")
-    FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+    FetchResponse.of(error, 0, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
   }
 }
 
@@ -343,7 +343,7 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchReque
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates)
+    FetchResponse.of(Errors.NONE, 0, 0, INVALID_SESSION_ID, updates)
   }
 }
 
@@ -385,7 +385,7 @@ class FullFetchContext(private val time: Time,
         updates.size, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
+    FetchResponse.of(Errors.NONE, 0, 0, responseSessionId, updates)
   }
 }
 
@@ -471,7 +471,7 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, 0, session.id, new FetchSession.RESP_MAP)
       } else {
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
@@ -480,7 +480,7 @@ class IncrementalFetchContext(private val time: Time,
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet)}")
-        FetchResponse.of(Errors.NONE, 0, session.id, updates)
+        FetchResponse.of(Errors.NONE, 0, 0, session.id, updates)
       }
     }
   }
@@ -493,9 +493,9 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, 0, session.id, new FetchSession.RESP_MAP)
       } else {
-        FetchResponse.of(Errors.NONE, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.NONE, throttleTimeMs, 0, session.id, new FetchSession.RESP_MAP)
       }
     }
   }

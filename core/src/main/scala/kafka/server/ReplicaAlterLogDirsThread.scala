@@ -20,7 +20,7 @@ package kafka.server
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions, ResultWithWaitTime}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
+import org.apache.kafka.common.utils.Time
 
 import java.util
 import java.util.Optional
@@ -49,6 +50,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
+                                time = Time.SYSTEM,
                                 brokerTopicStats) {
 
   private val replicaId = brokerConfig.brokerId
@@ -72,7 +74,7 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
-  def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+  def fetchFromLeader(fetchRequest: FetchRequest.Builder): ResultWithWaitTime = {
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
@@ -106,7 +108,7 @@ class ReplicaAlterLogDirsThread(name: String,
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
 
-    partitionData.toMap
+    ResultWithWaitTime(partitionData.toMap, 0)
   }
 
   // process fetched data

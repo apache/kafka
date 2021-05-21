@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.common.ClientIdAndBroker
 import kafka.log.LogAppendInfo
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions,ResultWithWaitTime}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 
+import org.apache.kafka.common.utils.Time
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
@@ -55,6 +56,7 @@ abstract class AbstractFetcherThread(name: String,
                                      failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
+                                     time: Time = Time.SYSTEM,
                                      val brokerTopicStats: BrokerTopicStats) //BrokerTopicStats's lifecycle managed by ReplicaManager
   extends ShutdownableThread(name, isInterruptible) {
 
@@ -92,7 +94,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
-  protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
+  protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): ResultWithWaitTime
 
   protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
@@ -309,8 +311,13 @@ abstract class AbstractFetcherThread(name: String,
     var responseData: Map[TopicPartition, FetchData] = Map.empty
 
     try {
+      val startTimeMs = time.milliseconds
       trace(s"Sending fetch request $fetchRequest")
-      responseData = fetchFromLeader(fetchRequest)
+      val res = fetchFromLeader(fetchRequest)
+      responseData = res.result
+      val endTimeMs = time.milliseconds
+      val duration = endTimeMs - startTimeMs - res.waitTime
+      fetcherStats.requestRealLatency.update(Math.round(duration.toFloat))
     } catch {
       case t: Throwable =>
         if (isRunning) {
@@ -744,13 +751,14 @@ object AbstractFetcherThread {
 
   case class ReplicaFetch(partitionData: util.Map[TopicPartition, FetchRequest.PartitionData], fetchRequest: FetchRequest.Builder)
   case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
-
+  case class ResultWithWaitTime(result: Map[TopicPartition, FetchResponseData.PartitionData], waitTime: Int)
 }
 
 object FetcherMetrics {
   val ConsumerLag = "ConsumerLag"
   val RequestsPerSec = "RequestsPerSec"
   val BytesPerSec = "BytesPerSec"
+  var FetchLatency = "FetchLatency"
 }
 
 class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGroup {
@@ -800,12 +808,13 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
     "brokerPort" -> metricId.brokerPort.toString)
 
   val requestRate = newMeter(FetcherMetrics.RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-
+  val requestRealLatency =  newHistogram(FetcherMetrics.FetchLatency, biased = true, tags)
   val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
   def unregister(): Unit = {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)
     removeMetric(FetcherMetrics.BytesPerSec, tags)
+    removeMetric(FetcherMetrics.FetchLatency, tags)
   }
 
 }
