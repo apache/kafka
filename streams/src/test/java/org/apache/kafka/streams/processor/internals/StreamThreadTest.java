@@ -1388,7 +1388,7 @@ public class StreamThreadTest {
         consumer.assign(new HashSet<>(assignedPartitions));
 
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 0, new byte[0], new byte[0]));
-        mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1);
+        mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         thread.runOnce();
         assertThat(producer.history().size(), equalTo(1));
 
