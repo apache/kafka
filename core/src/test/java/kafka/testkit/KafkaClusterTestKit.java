@@ -216,6 +216,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // Just like above, we set a placeholder voter list here until we
                     // find out what ports the controllers picked.
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+                    props.putAll(node.propertyOverrides());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());

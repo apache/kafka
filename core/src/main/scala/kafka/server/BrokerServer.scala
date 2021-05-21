@@ -25,7 +25,7 @@ import java.net.InetAddress
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.{ProducerIdGenerator, TransactionCoordinator}
+import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
@@ -376,7 +376,7 @@ class BrokerServer(
     }
   }
 
-  class TemporaryProducerIdManager() extends ProducerIdGenerator {
+  class TemporaryProducerIdManager() extends ProducerIdManager {
     val maxProducerIdsPerBrokerEpoch = 1000000
     var currentOffset = -1
     override def generateProducerId(): Long = {
@@ -390,7 +390,7 @@ class BrokerServer(
     }
   }
 
-  def createTemporaryProducerIdManager(): ProducerIdGenerator = {
+  def createTemporaryProducerIdManager(): ProducerIdManager = {
     new TemporaryProducerIdManager()
   }
 
