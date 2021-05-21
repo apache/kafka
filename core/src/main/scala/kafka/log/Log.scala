@@ -2005,7 +2005,12 @@ object Log extends Logging {
     Files.createDirectories(dir.toPath)
     val topicPartition = Log.parseTopicPartitionName(dir)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, this.logIdent)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(
+      dir,
+      topicPartition,
+      logDirFailureChannel,
+      config.messageFormatVersion.recordVersion,
+      s"[Log partition=$topicPartition, dir=${dir.getParent}] )")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
@@ -2226,7 +2231,7 @@ object Log extends Logging {
    * @param topicPartition The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param recordVersion The record version
-   * @param logPrefix Logging prefix
+   * @param logPrefix The logging prefix
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
   def maybeCreateLeaderEpochCache(dir: File,
@@ -2295,7 +2300,7 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
-   * @param logPrefix Logging prefix
+   * @param logPrefix The logging prefix
    */
     private[log] def replaceSegments(existingSegments: LogSegments,
                                      newSegments: Seq[LogSegment],
@@ -2364,7 +2369,7 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
-   * @param logPrefix Logging prefix
+   * @param logPrefix The logging prefix
    * @throws IOException if the file can't be renamed and still exists
    */
   private[log] def deleteSegmentFiles(segmentsToDelete: Iterable[LogSegment],
@@ -2435,6 +2440,7 @@ object Log extends Logging {
    * @param time The time instance used for checking the clock
    * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown,
    *                                false otherwise.
+   * @param logPrefix The logging prefix
    */
   private[log] def rebuildProducerState(producerStateManager: ProducerStateManager,
                                         segments: LogSegments,
@@ -2542,7 +2548,7 @@ object Log extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param producerStateManager The ProducerStateManager instance (if any) containing state associated
    *                             with the existingSegments
-   * @param logPrefix Logging prefix
+   * @param logPrefix The logging prefix
    * @return List of new segments that replace the input segment
    */
   private[log] def splitOverflowedSegment(segment: LogSegment,
