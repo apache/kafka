@@ -203,7 +203,7 @@ public class MirrorClient implements AutoCloseable {
                 return hops;
             }
             if (visited.contains(source)) {
-                // Extra check for LegacyReplicationPolicy (and any other dumb impls) that cannot prevent cycles.
+                // Extra check for IdentityReplicationPolicy and similar impls that cannot prevent cycles.
                 // We assume we're stuck in a cycle and will never find sourceClusterAlias.
                 return -1;
             }

@@ -51,7 +51,7 @@ import org.junit.jupiter.api.BeforeEach;
  * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
 @Tag("integration")
-public class MirrorConnectorsIdentityReplicationPolicyIntegrationTest extends MirrorConnectorsIntegrationTest {
+public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationTest {
     @BeforeEach
     public void startClusters() throws Exception {
         super.startClusters(new HashMap<String, String>() {{
@@ -169,7 +169,7 @@ public class MirrorConnectorsIdentityReplicationPolicyIntegrationTest extends Mi
         // sleep few seconds to have MM2 finish replication so that "end" consumer will consume some record
         Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-        // note that with LegacyReplicationPolicy, topics on the backup are NOT renamed to PRIMARY_CLUSTER_ALIAS + "." + topic
+        // note that with IdentityReplicationPolicy, topics on the backup are NOT renamed to PRIMARY_CLUSTER_ALIAS + "." + topic
         String backupTopic = topic;
 
         // consume all records from backup cluster
