@@ -2225,7 +2225,7 @@ object Log extends Logging {
    * @param dir The directory in which the log will reside
    * @param topicPartition The topic partition
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
-   * @param recordVersion The record
+   * @param recordVersion The record version
    * @param logPrefix Logging prefix
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
