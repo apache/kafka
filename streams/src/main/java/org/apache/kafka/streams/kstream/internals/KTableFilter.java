@@ -105,7 +105,7 @@ class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn
         }
 
         @Override
-        public void process(Record<KIn, Change<VIn>> record) {
+        public void process(final Record<KIn, Change<VIn>> record) {
             final KIn key = record.key();
             final Change<VIn> change = record.value();
 
@@ -166,7 +166,7 @@ class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn
         }
 
         @Override
-        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             parentGetter.init(context);
         }
 

@@ -177,7 +177,7 @@ public class MeteredKeyValueStore<K, V>
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 new CacheFlushListener<byte[], byte[]>() {
                     @Override
-                    public void apply(byte[] rawKey, byte[] rawNewValue, byte[] rawOldValue, long timestamp) {
+                    public void apply(final byte[] rawKey, final byte[] rawNewValue, final byte[] rawOldValue, final long timestamp) {
                         listener.apply(
                             serdes.keyFrom(rawKey),
                             rawNewValue != null ? serdes.valueFrom(rawNewValue) : null,
@@ -187,7 +187,7 @@ public class MeteredKeyValueStore<K, V>
                     }
 
                     @Override
-                    public void apply(Record<byte[], Change<byte[]>> record) {
+                    public void apply(final Record<byte[], Change<byte[]>> record) {
                         listener.apply(
                             record.withKey(serdes.keyFrom(record.key()))
                             .withValue(new Change<>(

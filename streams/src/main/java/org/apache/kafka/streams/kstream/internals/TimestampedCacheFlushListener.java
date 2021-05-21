@@ -24,7 +24,9 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, VOut> {
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
+class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, ValueAndTimestamp<VOut>> {
     private final InternalProcessorContext<KOut, Change<VOut>> context;
 
     @SuppressWarnings("rawtypes")
@@ -42,22 +44,35 @@ class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KO
     }
 
     @Override
-    public void apply(Record<KOut, Change<VOut>> record) {
-        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
+    public void apply(final KOut key,
+                      final ValueAndTimestamp<VOut> newValue,
+                      final ValueAndTimestamp<VOut> oldValue,
+                      final long timestamp) {
+        final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(record);
+            context.forward(
+                key,
+                new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
+                To.all().withTimestamp(newValue != null ? newValue.timestamp() : timestamp));
         } finally {
             context.setCurrentNode(prev);
         }
     }
 
     @Override
-    public void apply(KOut key, VOut newValue, VOut oldValue, long timestamp) {
+    public void apply(final Record<KOut, Change<ValueAndTimestamp<VOut>>> record) {
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
+            context.forward(
+                record.withValue(
+                    new Change<>(
+                        getValueOrNull(record.value().newValue),
+                        getValueOrNull(record.value().oldValue)
+                    )
+                )
+            );
         } finally {
             context.setCurrentNode(prev);
         }

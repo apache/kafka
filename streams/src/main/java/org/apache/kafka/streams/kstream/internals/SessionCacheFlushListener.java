@@ -51,7 +51,7 @@ class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Window
     }
 
     @Override
-    public void apply(Record<Windowed<KOut>, Change<VOut>> record) {
+    public void apply(final Record<Windowed<KOut>, Change<VOut>> record) {
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {

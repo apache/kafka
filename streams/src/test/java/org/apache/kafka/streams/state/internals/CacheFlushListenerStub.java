@@ -49,7 +49,7 @@ public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], 
     }
 
     @Override
-    public void apply(Record<byte[], Change<byte[]>> record) {
+    public void apply(final Record<byte[], Change<byte[]>> record) {
         forwarded.put(
             keyDeserializer.deserialize(null, record.key()),
             new Change<>(

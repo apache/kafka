@@ -755,7 +755,7 @@ public class CachingInMemorySessionStoreTest {
         }
 
         @Override
-        public void apply(Record<byte[], Change<byte[]>> record) {
+        public void apply(final Record<byte[], Change<byte[]>> record) {
             forwarded.add(
                 new KeyValueTimestamp<>(
                     keyDeserializer.deserialize(null, record.key()),

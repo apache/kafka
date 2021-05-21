@@ -152,7 +152,7 @@ public class MeteredWindowStore<K, V>
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 new CacheFlushListener<byte[], byte[]>() {
                     @Override
-                    public void apply(byte[] key, byte[] newValue, byte[] oldValue, long timestamp) {
+                    public void apply(final byte[] key, final byte[] newValue, final byte[] oldValue, final long timestamp) {
                         listener.apply(
                             WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
                             newValue != null ? serdes.valueFrom(newValue) : null,
@@ -162,7 +162,7 @@ public class MeteredWindowStore<K, V>
                     }
 
                     @Override
-                    public void apply(Record<byte[], Change<byte[]>> record) {
+                    public void apply(final Record<byte[], Change<byte[]>> record) {
                         listener.apply(
                             record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
                                   .withValue(new Change<>(

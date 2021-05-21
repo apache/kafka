@@ -832,6 +832,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
             return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
+        } else if (processorSupplier instanceof KTableNewProcessorSupplier){
+            return ((KTableNewProcessorSupplier<?, ?, K, V>) processorSupplier).view();
         } else {
             return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
         }
@@ -848,6 +850,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
+            } else if (processorSupplier instanceof KTableNewProcessorSupplier) {
+                final KTableNewProcessorSupplier<?, ?, ?, ?> tableProcessorSupplier =
+                    (KTableNewProcessorSupplier<?, ?, ?, ?>) processorSupplier;
+                if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
+                    return false;
+                }
             } else {
                 final KTableProcessorSupplier<K, S, V> tableProcessorSupplier = (KTableProcessorSupplier<K, S, V>) processorSupplier;
                 if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
