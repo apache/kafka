@@ -2010,7 +2010,7 @@ object Log extends Logging {
       topicPartition,
       logDirFailureChannel,
       config.messageFormatVersion.recordVersion,
-      s"[Log partition=$topicPartition, dir=${dir.getParent}] )")
+      s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
