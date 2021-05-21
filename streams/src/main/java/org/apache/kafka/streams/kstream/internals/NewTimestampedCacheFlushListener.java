@@ -16,28 +16,26 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, VOut> {
+class NewTimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, VOut> {
     private final InternalProcessorContext<KOut, Change<VOut>> context;
 
     @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    TimestampedCacheFlushListener(final ProcessorContext<KOut, Change<VOut>> context) {
+    NewTimestampedCacheFlushListener(final ProcessorContext<KOut, Change<VOut>> context) {
         this.context = (InternalProcessorContext<KOut, Change<VOut>>) context;
         myNode = this.context.currentNode();
     }
 
-    @SuppressWarnings("unchecked")
-    TimestampedCacheFlushListener(final org.apache.kafka.streams.processor.ProcessorContext context) {
-        this.context = (InternalProcessorContext<KOut, Change<VOut>>) context;
-        myNode = this.context.currentNode();
+    @Override
+    public void apply(KOut key, VOut newValue, VOut oldValue, long timestamp) {
+        throw new RuntimeException("ASDFASDF");
     }
 
     @Override
@@ -46,17 +44,6 @@ class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KO
         context.setCurrentNode(myNode);
         try {
             context.forward(record);
-        } finally {
-            context.setCurrentNode(prev);
-        }
-    }
-
-    @Override
-    public void apply(KOut key, VOut newValue, VOut oldValue, long timestamp) {
-        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
-        context.setCurrentNode(myNode);
-        try {
-            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
         } finally {
             context.setCurrentNode(prev);
         }

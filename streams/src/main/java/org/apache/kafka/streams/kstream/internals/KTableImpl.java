@@ -125,6 +125,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String SINK_NAME = "KTABLE-SINK-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
+    private final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> newProcessorSupplier;
 
     private final String queryableStoreName;
 
@@ -140,6 +141,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.processorSupplier = processorSupplier;
+        this.newProcessorSupplier = null;
+        this.queryableStoreName = queryableStoreName;
+    }
+
+    public KTableImpl(final String name,
+                      final Serde<K> keySerde,
+                      final Serde<V> valueSerde,
+                      final Set<String> subTopologySourceNodes,
+                      final String queryableStoreName,
+                      final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> newProcessorSupplier,
+                      final GraphNode graphNode,
+                      final InternalStreamsBuilder builder) {
+        super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
+        this.processorSupplier = null;
+        this.newProcessorSupplier = newProcessorSupplier;
         this.queryableStoreName = queryableStoreName;
     }
 
@@ -179,7 +195,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
 
-        final KTableProcessorSupplier<K, V, V> processorSupplier =
+        final KTableNewProcessorSupplier<K, V, K, V> processorSupplier =
             new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
@@ -194,7 +210,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.graphNode, tableNode);
 
-        return new KTableImpl<>(
+        return new KTableImpl<K, V, V>(
             name,
             keySerde,
             valueSerde,

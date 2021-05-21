@@ -105,8 +105,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         childByName.put(child.name, child);
     }
 
-    @SuppressWarnings("unchecked")
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KOut, VOut> context) {
         if (!closed)
             throw new IllegalStateException("The processor is not closed");
 
@@ -116,7 +115,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init((ProcessorContext<KOut, VOut>) context);
+                        processor.init(context);
                     }
                 },
                 time,

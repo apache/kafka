@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public abstract class AbstractProcessorContext implements InternalProcessorContext {
+public abstract class AbstractProcessorContext implements InternalProcessorContext<Object, Object> {
 
     private final TaskId taskId;
     private final String applicationId;

@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -30,34 +32,42 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V> the type of the value
  */
 class TimestampedTupleForwarder<K, V> {
-    private final ProcessorContext context;
-    private final boolean sendOldValues;
+    private final InternalProcessorContext<K, Change<V>> context;
     private final boolean cachingEnabled;
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     TimestampedTupleForwarder(final StateStore store,
-                              final ProcessorContext context,
+                              final ProcessorContext<K, Change<V>> context,
                               final TimestampedCacheFlushListener<K, V> flushListener,
                               final boolean sendOldValues) {
-        this.context = context;
-        this.sendOldValues = sendOldValues;
+        this.context = (InternalProcessorContext<K, Change<V>>) context;
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    public void maybeForward(final K key,
-                             final V newValue,
-                             final V oldValue) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    TimestampedTupleForwarder(final StateStore store,
+                              final org.apache.kafka.streams.processor.ProcessorContext context,
+                              final TimestampedCacheFlushListener<K, V> flushListener,
+                              final boolean sendOldValues) {
+        this.context = (InternalProcessorContext) context;
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
+    }
+
+    public void maybeForward(final Record<K, Change<V>> record) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
+            context.forward(record);
         }
     }
 
-    public void maybeForward(final K key,
-                             final V newValue,
-                             final V oldValue,
-                             final long timestamp) {
+    public void maybeForward(K key, V value, V oldValue) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(timestamp));
+            context.forward(key, new Change<>(value, oldValue));
+        }
+    }
+
+    public void maybeForward(K key, V value, V oldValue, long newTimestamp) {
+        if (!cachingEnabled) {
+            context.forward(key, new Change<>(value, oldValue), To.all().withTimestamp(newTimestamp));
         }
     }
 }
