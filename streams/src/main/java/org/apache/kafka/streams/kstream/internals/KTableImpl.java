@@ -124,8 +124,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String TOPIC_SUFFIX = "-topic";
     private static final String SINK_NAME = "KTABLE-SINK-";
 
-    private final ProcessorSupplier<?, ?> processorSupplier;
-    private final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> newProcessorSupplier;
+    // Temporarily setting the processorSupplier to type Object so that we can transition from the
+    // old ProcessorSupplier to the new api.ProcessorSupplier. This works because all accesses to
+    // this field are guarded by typechecks anyway.
+    private final Object processorSupplier;
 
     private final String queryableStoreName;
 
@@ -141,7 +143,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.processorSupplier = processorSupplier;
-        this.newProcessorSupplier = null;
         this.queryableStoreName = queryableStoreName;
     }
 
@@ -154,8 +155,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final GraphNode graphNode,
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
-        this.processorSupplier = null;
-        this.newProcessorSupplier = newProcessorSupplier;
+        this.processorSupplier = newProcessorSupplier;
         this.queryableStoreName = queryableStoreName;
     }
 
