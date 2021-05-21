@@ -86,7 +86,7 @@ public interface ValueTransformerWithKey<K, V, VR> {
      * <p>
      * Note that if a {@code ValueTransformerWithKey} is used in a {@link KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
      * (or any other overload of {@code KTable#transformValues(...)}) operation,
-     * that the provided {@link ProcessorContext} from {@link #init(ProcessorContext)}
+     * then the provided {@link ProcessorContext} from {@link #init(ProcessorContext)}
      * does not guarantee that all context information will be available when {@code transform()}
      * is executed.
      *
