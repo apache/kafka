@@ -132,7 +132,7 @@ public class MeteredWindowStoreTest {
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),

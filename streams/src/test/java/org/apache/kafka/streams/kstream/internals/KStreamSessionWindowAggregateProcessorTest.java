@@ -98,7 +98,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private void setup(final String builtInMetricsVersion, final boolean enableCache) {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<Object, Object>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),

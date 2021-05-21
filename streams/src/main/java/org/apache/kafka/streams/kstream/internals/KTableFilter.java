@@ -166,7 +166,7 @@ class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn
         }
 
         @Override
-        public void init(final ProcessorContext<Void, Void> context) {
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
             parentGetter.init(context);
         }
 

@@ -491,6 +491,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         );
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRestore() throws Exception {
         final long startTime = SEGMENT_INTERVAL * 2;
