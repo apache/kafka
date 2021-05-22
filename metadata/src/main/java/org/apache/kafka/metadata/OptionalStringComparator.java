@@ -14,16 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.metadata;
 
-import org.apache.kafka.common.metadata.MetadataRecordType;
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
+package org.apache.kafka.metadata;
 
-public class MetadataRecordSerde extends AbstractApiMessageSerde {
+import java.util.Comparator;
+import java.util.Optional;
+
+
+public class OptionalStringComparator implements Comparator<Optional<String>> {
+    public static final OptionalStringComparator INSTANCE = new OptionalStringComparator();
 
     @Override
-    public ApiMessage apiMessageFor(short apiKey) {
-        return MetadataRecordType.fromId(apiKey).newMetadataRecord();
+    public int compare(Optional<String> a, Optional<String> b) {
+        if (!a.isPresent()) {
+            if (!b.isPresent()) {
+                return 0;
+            } else {
+                return -1;
+            }
+        } else if (!b.isPresent()) {
+            return 1;
+        }
+        return a.get().compareTo(b.get());
     }
 }

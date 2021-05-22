@@ -17,13 +17,20 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.MockRawSnapshotReader;
+import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.atomic.AtomicReference;
+import java.nio.ByteBuffer;
 
 class MockSnapshotWriter implements SnapshotWriter {
     private final long epoch;
@@ -80,15 +87,24 @@ class MockSnapshotWriter implements SnapshotWriter {
         return batches;
     }
 
-    public MockSnapshotReader toReader() {
-        List<List<ApiMessage>> readerBatches = new ArrayList<>();
-        for (List<ApiMessageAndVersion> batch : batches) {
-            List<ApiMessage> readerBatch = new ArrayList<>();
-            for (ApiMessageAndVersion messageAndVersion : batch) {
-                readerBatch.add(messageAndVersion.message());
-            }
-            readerBatches.add(readerBatch);
+    public MockRawSnapshotReader toReader() {
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(epoch, 0);
+        AtomicReference<ByteBuffer> buffer = new AtomicReference<>();
+        int maxBufferSize = 1024;
+        try (org.apache.kafka.snapshot.SnapshotWriter<ApiMessageAndVersion> snapshotWriter =
+                new org.apache.kafka.snapshot.SnapshotWriter<>(
+                    new MockRawSnapshotWriter(snapshotId, buffer::set),
+                    maxBufferSize,
+                    MemoryPool.NONE,
+                    new MockTime(),
+                    CompressionType.NONE,
+                    new MetadataRecordSerde()
+                )
+        ) {
+            batches.forEach(snapshotWriter::append);
+            snapshotWriter.freeze();
         }
-        return new MockSnapshotReader(epoch, readerBatches.iterator());
+
+        return new MockRawSnapshotReader(snapshotId, buffer.get());
     }
 }

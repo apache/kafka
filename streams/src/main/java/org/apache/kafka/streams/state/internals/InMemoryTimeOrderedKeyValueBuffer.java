@@ -232,7 +232,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         updateBufferMetrics();
         open = true;
-        partition = context.taskId().partition;
+        partition = context.taskId().partition();
     }
 
     @Override

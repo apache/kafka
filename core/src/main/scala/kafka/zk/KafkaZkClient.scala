@@ -1943,7 +1943,23 @@ object KafkaZkClient {
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
             name: Option[String] = None,
-            zkClientConfig: Option[ZKClientConfig] = None) = {
+            zkClientConfig: Option[ZKClientConfig] = None,
+            createChrootIfNecessary: Boolean = false
+  ): KafkaZkClient = {
+    if (createChrootIfNecessary) {
+      val chrootIndex = connectString.indexOf("/")
+      if (chrootIndex > 0) {
+        val zkConnWithoutChrootForChrootCreation = connectString.substring(0, chrootIndex)
+        val zkClientForChrootCreation = KafkaZkClient(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
+          connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, name, zkClientConfig)
+        try {
+          val chroot = connectString.substring(chrootIndex)
+          zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
+        } finally {
+          zkClientForChrootCreation.close()
+        }
+      }
+    }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
       time, metricGroup, metricType, name, zkClientConfig)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
