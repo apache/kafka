@@ -131,6 +131,9 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
   commitId = project.hasProperty('commitId') ? commitId : null
+
+  // See README.md for this build option details and example of usage
+  checkstyleVersion = project.hasProperty('checkstyleVersion') ? checkstyleVersion : versions.checkstyle
 }
 
 apply from: file('wrapper.gradle')
@@ -588,7 +591,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = versions.checkstyle
+    toolVersion = checkstyleVersion
   }
 
   configure(checkstyleMain) {
