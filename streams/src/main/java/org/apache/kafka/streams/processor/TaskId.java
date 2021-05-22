@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.streams.errors.TaskIdFormatException;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -26,21 +24,25 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.MIN_NAMED_TOPOLOGY_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.readTaskIdFrom;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.writeTaskIdTo;
 
 /**
- * The task ID representation composed as topic group ID plus the assigned partition ID.
+ * The task ID representation composed as subtopology (aka topicGroupId) plus the assigned partition ID.
  */
 public class TaskId implements Comparable<TaskId> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);
 
-    /** The ID of the topic group. */
+    /** The ID of the subtopology, aka topicGroupId. */
+    @Deprecated
     public final int topicGroupId;
     /** The ID of the partition. */
+    @Deprecated
     public final int partition;
+
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
-    protected final String namedTopology;
+    private final String namedTopology;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
@@ -58,112 +60,58 @@ public class TaskId implements Comparable<TaskId> {
         }
     }
 
+    public int subtopology() {
+        return topicGroupId;
+    }
+
+    public int partition() {
+        return partition;
+    }
+
+    /**
+     * Experimental feature -- will return null
+     */
+    public String namedTopology() {
+        return namedTopology;
+    }
+
     @Override
     public String toString() {
         return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
-    public String toTaskDirString() {
-        return topicGroupId + "_" + partition;
-    }
-
-    /**
-     *  Parse the task directory name (of the form topicGroupId_partition) and construct the TaskId with the
-     *  optional namedTopology (may be null)
-     *
-     *  @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
-     */
-    public static TaskId parseTaskDirectoryName(final String taskIdStr, final String namedTopology) {
-        final int index = taskIdStr.indexOf('_');
-        if (index <= 0 || index + 1 >= taskIdStr.length()) {
-            throw new TaskIdFormatException(taskIdStr);
-        }
-
-        try {
-            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
-            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
-
-            return new TaskId(topicGroupId, partition, namedTopology);
-        } catch (final Exception e) {
-            throw new TaskIdFormatException(taskIdStr);
-        }
-    }
-
     /**
      * @throws IOException if cannot write to output stream
+     * @deprecated since 3.0, for internal use, will be removed
      */
+    @Deprecated
     public void writeTo(final DataOutputStream out, final int version) throws IOException {
-        out.writeInt(topicGroupId);
-        out.writeInt(partition);
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (namedTopology != null) {
-                out.writeInt(namedTopology.length());
-                out.writeChars(namedTopology);
-            } else {
-                out.writeInt(0);
-            }
-        }
+        writeTaskIdTo(this, out, version);
     }
 
     /**
      * @throws IOException if cannot read from input stream
+     * @deprecated since 3.0, for internal use, will be removed
      */
+    @Deprecated
     public static TaskId readFrom(final DataInputStream in, final int version) throws IOException {
-        final int topicGroupId = in.readInt();
-        final int partition = in.readInt();
-        final String namedTopology;
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            final int numNamedTopologyChars = in.readInt();
-            final StringBuilder namedTopologyBuilder = new StringBuilder();
-            for (int i = 0; i < numNamedTopologyChars; ++i) {
-                namedTopologyBuilder.append(in.readChar());
-            }
-            namedTopology = namedTopologyBuilder.toString();
-        } else {
-            namedTopology = null;
-        }
-        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
-    }
-
-    public void writeTo(final ByteBuffer buf, final int version) {
-        buf.putInt(topicGroupId);
-        buf.putInt(partition);
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (namedTopology != null) {
-                buf.putInt(namedTopology.length());
-                for (final char c : namedTopology.toCharArray()) {
-                    buf.putChar(c);
-                }
-            } else {
-                buf.putInt(0);
-            }
-        }
-    }
-
-    public static TaskId readFrom(final ByteBuffer buf, final int version) {
-        final int topicGroupId = buf.getInt();
-        final int partition = buf.getInt();
-        final String namedTopology;
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            final int numNamedTopologyChars = buf.getInt();
-            final StringBuilder namedTopologyBuilder = new StringBuilder();
-            for (int i = 0; i < numNamedTopologyChars; ++i) {
-                namedTopologyBuilder.append(buf.getChar());
-            }
-            namedTopology = namedTopologyBuilder.toString();
-        } else {
-            namedTopology = null;
-        }
-        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
+        return readTaskIdFrom(in, version);
     }
 
     /**
-     * @return the namedTopology name, or null if the passed in namedTopology is null or the empty string
+     * @deprecated since 3.0, for internal use, will be removed
      */
-    private static String getNamedTopologyOrElseNull(final String namedTopology) {
-        return (namedTopology == null || namedTopology.length() == 0) ?
-            null :
-            namedTopology;
+    @Deprecated
+    public void writeTo(final ByteBuffer buf, final int version) {
+        writeTaskIdTo(this, buf, version);
+    }
+
+    /**
+     * @deprecated since 3.0, for internal use, will be removed
+     */
+    @Deprecated
+    public static TaskId readFrom(final ByteBuffer buf, final int version) {
+        return readTaskIdFrom(buf, version);
     }
 
     @Override

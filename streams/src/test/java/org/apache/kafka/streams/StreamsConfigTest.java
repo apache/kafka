@@ -47,6 +47,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
@@ -396,6 +397,32 @@ public class StreamsConfigTest {
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
         assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSAlpha() {
+        assertThrows(IllegalArgumentException.class,
+            () -> testTransactionTimeoutSmallerThanCommitInterval(EXACTLY_ONCE));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowIfTransactionTimeoutSmallerThanCommitIntervalForEOSBeta() {
+        assertThrows(IllegalArgumentException.class,
+            () -> testTransactionTimeoutSmallerThanCommitInterval(EXACTLY_ONCE_BETA));
+    }
+
+    @Test
+    public void shouldNotThrowIfTransactionTimeoutSmallerThanCommitIntervalForAtLeastOnce() {
+        testTransactionTimeoutSmallerThanCommitInterval(AT_LEAST_ONCE);
+    }
+
+    private void testTransactionTimeoutSmallerThanCommitInterval(final String processingGuarantee) {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10000L);
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), 3000);
+        new StreamsConfig(props);
     }
 
     @Test

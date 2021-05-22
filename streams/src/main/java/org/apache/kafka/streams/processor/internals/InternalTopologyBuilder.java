@@ -1589,12 +1589,6 @@ public class InternalTopologyBuilder {
             this.topicPattern = pattern;
         }
 
-        @Deprecated
-        @Override
-        public String topics() {
-            return topics.toString();
-        }
-
         @Override
         public Set<String> topicSet() {
             return topics;

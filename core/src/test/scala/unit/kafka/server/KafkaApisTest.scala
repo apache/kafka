@@ -139,6 +139,7 @@ class KafkaApisTest {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
+    val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)
       Some(this.forwardingManager)
@@ -176,7 +177,7 @@ class KafkaApisTest {
       txnCoordinator,
       autoTopicCreationManager,
       brokerId,
-      new KafkaConfig(properties),
+      config,
       configRepository,
       metadataCache,
       metrics,
