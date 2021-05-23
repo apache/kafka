@@ -90,14 +90,19 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
-            if (oldPair != null && oldPair.key != null && oldPair.value != null) {
-                context().forward(oldPair.key, new Change<>(null, oldPair.value));
-            }
+            final boolean oldPairNotNull = oldPair != null && oldPair.key != null && oldPair.value != null;
+            final boolean newPairNotNull = newPair != null && newPair.key != null && newPair.value != null;
+            if (oldPairNotNull && newPairNotNull && oldPair.key == newPair.key) {
+                context().forward(oldPair.key, new Change<>(newPair.value, oldPair.value));
+            } else {
+                if (oldPairNotNull) {
+                    context().forward(oldPair.key, new Change<>(null, oldPair.value));
+                }
 
-            if (newPair != null && newPair.key != null && newPair.value != null) {
-                context().forward(newPair.key, new Change<>(newPair.value, null));
+                if (newPairNotNull) {
+                    context().forward(newPair.key, new Change<>(newPair.value, null));
+                }
             }
-
         }
     }
 

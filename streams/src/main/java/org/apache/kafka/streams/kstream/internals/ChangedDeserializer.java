@@ -18,13 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
-    private static final int NEWFLAG_SIZE = 1;
+    private static final int NEW_DATA_LENGTH_BYTES_SIZE = Integer.BYTES;
 
     private Deserializer<T> inner;
 
@@ -45,16 +46,17 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
 
     @Override
     public Change<T> deserialize(final String topic, final Headers headers, final byte[] data) {
+        final ByteBuffer buffer = Serdes.ByteBuffer().deserializer().deserialize(topic, data);
+        final int newDataLength = buffer.getInt();
+        final int oldDataLength = data.length - newDataLength - NEW_DATA_LENGTH_BYTES_SIZE;
+        final byte[] newData = new byte[newDataLength];
+        final byte[] oldData = new byte[oldDataLength];
+        buffer.get(newData);
+        buffer.get(oldData);
 
-        final byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
-
-        System.arraycopy(data, 0, bytes, 0, bytes.length);
-
-        if (ByteBuffer.wrap(data).get(data.length - NEWFLAG_SIZE) != 0) {
-            return new Change<>(inner.deserialize(topic, headers, bytes), null);
-        } else {
-            return new Change<>(null, inner.deserialize(topic, headers, bytes));
-        }
+        return new Change<>(
+                newDataLength > 0 ? inner.deserialize(topic, headers, newData) : null,
+                oldDataLength > 0 ? inner.deserialize(topic, headers, oldData) : null);
     }
 
     @Override

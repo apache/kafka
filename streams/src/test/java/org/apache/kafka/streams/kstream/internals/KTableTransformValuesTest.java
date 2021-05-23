@@ -447,9 +447,7 @@ public class KTableTransformValuesTest {
         inputTopic.pipeInput("A", "aaa", 10);
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
-                 new KeyValueTimestamp<>("A", "0", 15),
                  new KeyValueTimestamp<>("A", "2", 15),
-                 new KeyValueTimestamp<>("A", "0", 15),
                  new KeyValueTimestamp<>("A", "3", 15)));
     }
 
