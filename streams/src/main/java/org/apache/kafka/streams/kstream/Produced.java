@@ -28,9 +28,6 @@ import java.util.Objects;
  * This class is used to provide the optional parameters when producing to new topics
  * using {@link KStream#to(String, Produced)}.
  *
- * <p>
- * Note: {@link KStream#through(String, Produced)} is deprecated, please use {@link KStream#repartition(Repartitioned)} instead
- *
  * @param <K> key type
  * @param <V> value type
  */
