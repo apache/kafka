@@ -19,12 +19,15 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -38,10 +41,13 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
+
+import java.util.ArrayList;
 import java.util.Properties;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -95,15 +101,11 @@ public class KTableAggregateTest {
                 asList(
                     new KeyValueTimestamp<>("A", "0+1", 10L),
                     new KeyValueTimestamp<>("B", "0+2", 15L),
-                    new KeyValueTimestamp<>("A", "0+1-1", 20L),
                     new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
-                    new KeyValueTimestamp<>("B", "0+2-2", 18L),
                     new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
                     new KeyValueTimestamp<>("C", "0+5", 5L),
                     new KeyValueTimestamp<>("D", "0+6", 25L),
-                    new KeyValueTimestamp<>("B", "0+2-2+4-4", 18L),
                     new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
-                    new KeyValueTimestamp<>("C", "0+5-5", 10L),
                     new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
                 supplier.theCapturedProcessor().processed());
         }
@@ -264,11 +266,59 @@ public class KTableAggregateTest {
                     new KeyValueTimestamp<>("1", "1", 10),
                     new KeyValueTimestamp<>("1", "12", 10),
                     new KeyValueTimestamp<>("1", "2", 12),
-                    new KeyValueTimestamp<>("1", "", 12),
                     new KeyValueTimestamp<>("1", "2", 12L)
                 ),
                 proc.processed()
             );
         }
+    }
+
+    private void assertOutputTopicContains(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "input-topic";
+        final String output = "output-topic";
+        final Serde<String> stringSerde = Serdes.String();
+
+        builder
+                .table(input, Consumed.with(stringSerde, stringSerde))
+                // key is not changed
+                .groupBy(KeyValue::pair, Grouped.with(stringSerde, stringSerde))
+                .count()
+                .toStream()
+                .to(output);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestOutputTopic<String, Long> outputTopic =
+                    driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
+
+            inputTopic.pipeInput("1", "", 8L);
+            inputTopic.pipeInput("1", "", 9L);
+
+            final List<KeyValueTimestamp<String, Long>> actual = new ArrayList<>();
+            outputTopic.readRecordsToList().forEach(tr -> actual.add(new KeyValueTimestamp<>(tr.key(), tr.value(), tr.timestamp())));
+
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    public void testContinuesToSendIntermediateStateDuringUpgrade() {
+        // upgrading
+        final Properties upgradingConfig = new Properties();
+        upgradingConfig.putAll(CONFIG);
+        upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
+        assertOutputTopicContains(upgradingConfig, asList(
+                new KeyValueTimestamp<>("1", 1L, 8),
+                new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
+                new KeyValueTimestamp<>("1", 1L, 9)
+        ));
+
+        // not upgrading
+        assertOutputTopicContains(CONFIG, asList(
+                new KeyValueTimestamp<>("1", 1L, 8),
+                new KeyValueTimestamp<>("1", 1L, 9)
+        ));
     }
 }
