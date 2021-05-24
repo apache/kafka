@@ -945,9 +945,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeWithCorruptedStore() throws IOException {
-        QuorumStateStore stateStore = Mockito.mock(QuorumStateStore.class);
-        Mockito.doThrow(IOException.class).when(stateStore).readElectionState();
+    public void testInitializeWithCorruptedStore() {
         QuorumState state = buildQuorumState(Utils.mkSet(localId));
 
         int epoch = 2;
