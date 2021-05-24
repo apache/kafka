@@ -123,14 +123,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
     val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "batman")
-    val user4 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "segment")
-
     val host1 = InetAddress.getByName("192.168.1.1")
     val host2 = InetAddress.getByName("192.168.1.2")
-    val host3 = InetAddress.getByName("192.168.0.1")
-
-    val hostSegment1 = "192.168.0.0/24"
-    val hostSegment2 = "192.168.1.0/24"
 
     //user1 has READ access from host1 and host2.
     val acl1 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
@@ -151,20 +145,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     //user3 has WRITE access from all hosts.
     val acl7 = new AccessControlEntry(user3.toString, WildcardHost, WRITE, ALLOW)
 
-    //user4 has WRITE access from 192.168.0.0/24.
-    val acl8 = new AccessControlEntry(user4.toString, hostSegment1, WRITE, ALLOW)
-
-    //user4 does not have WRITE access from 192.168.1.0/24.
-    val acl9 = new AccessControlEntry(user4.toString, hostSegment2, WRITE, DENY)
-
-    val acls = Set(acl1, acl2, acl3, acl4, acl5, acl6, acl7, acl8, acl9)
+    val acls = Set(acl1, acl2, acl3, acl4, acl5, acl6, acl7)
 
     changeAclAndVerify(Set.empty, acls, Set.empty)
 
     val host1Context = newRequestContext(user1, host1)
     val host2Context = newRequestContext(user1, host2)
-    val host3Context = newRequestContext(user4, host1)
-    val host4Context = newRequestContext(user4, host3)
 
     assertTrue(authorize(aclAuthorizer, host2Context, READ, resource), "User1 should have READ access from host2")
     assertFalse(authorize(aclAuthorizer, host1Context, READ, resource), "User1 should not have READ access from host1 due to denyAcl")
@@ -174,8 +160,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     assertTrue(authorize(aclAuthorizer, host2Context, DESCRIBE, resource), "User1 should have DESCRIBE access from host2")
     assertFalse(authorize(aclAuthorizer, host1Context, ALTER, resource), "User1 should not have edit access from host1")
     assertFalse(authorize(aclAuthorizer, host2Context, ALTER, resource), "User1 should not have edit access from host2")
-    assertFalse(authorize(aclAuthorizer, host3Context, WRITE, resource), "User4 should not have edit access from host1")
-    assertTrue(authorize(aclAuthorizer, host4Context, WRITE, resource), "User4 should have WRITE access from host3")
 
     //test if user has READ and write access they also get describe access
     val user2Context = newRequestContext(user2, host1)
