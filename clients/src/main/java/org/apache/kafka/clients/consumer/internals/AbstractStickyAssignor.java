@@ -77,7 +77,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             partitionsTransferringOwnership = new HashMap<>();
             return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
         } else {
-            log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
+            log.debug("Detected that not all consumers were subscribed to same set of topics, falling back to the "
                           + "general case assignment algorithm");
             partitionsTransferringOwnership = null;
             return generalAssign(partitionsPerTopic, subscriptions, consumerToOwnedPartitions);
@@ -449,7 +449,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * @param sortedAllPartitions:          sorted all partitions
      * @param sortedAssignedPartitions:     sorted partitions, all are included in the sortedPartitions
      * @param topic2AllPotentialConsumers:  topics mapped to all consumers that subscribed to it
-     * @return                              the partitions don't assign to any current consumers
+     * @return                              partitions that aren't assigned to any current consumer
      */
     private List<TopicPartition> getUnassignedPartitions(List<TopicPartition> sortedAllPartitions,
                                                          List<TopicPartition> sortedAssignedPartitions,
