@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -33,8 +31,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -940,6 +940,27 @@ public class ConfigDef {
 
         public String toString() {
             return validString.toString();
+        }
+    }
+
+    public static class ListSize implements Validator {
+        final int maxSize;
+
+        private ListSize(final int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public static ListSize ofMax(final int maxSize) {
+            return new ListSize(maxSize);
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
+            List<String> values = (List<String>) value;
+            if (values.size() > maxSize) {
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "]");
+            }
         }
     }
 

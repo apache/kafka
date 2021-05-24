@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -125,7 +126,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         clientStates.get(UUID_4).assignActive(TASK_0_1);
         clientStates.get(UUID_7).assignActive(TASK_0_2);
 
-        final AssignorConfiguration.AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(-1L, 0, 2, 0L, "zone,cluster");
+        final AssignorConfiguration.AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(0L, 1, 2, 60000L, Arrays.asList("zone", "cluster"));
 
         new ClientTagAwareStandbyTaskAssignor(configs).assignStandbyTasks(
             allTaskIds,

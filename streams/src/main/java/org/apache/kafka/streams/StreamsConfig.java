@@ -49,6 +49,7 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -148,9 +149,11 @@ public class StreamsConfig extends AbstractConfig {
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
+    private static final short DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH = 40;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+    public static final int MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE = 5;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -443,6 +446,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
+    /** {@code max.client.tag.length} */
+    public static final String MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG = "max.client.tag.key.value.length";
+    private static final String MAX_CLIENT_TAG_KEY_VALUE_LENGTH_DOC = "The maximum length of key-value pairs set via " + CLIENT_TAG_PREFIX + " configuration prefix.";
+
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
     private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
@@ -622,6 +629,7 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
 
+
     static {
         CONFIG = new ConfigDef()
 
@@ -738,8 +746,9 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     REPLICATION_FACTOR_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                    Type.STRING,
-                    null,
+                    Type.LIST,
+                    Collections.emptyList(),
+                    ConfigDef.ListSize.ofMax(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -792,6 +801,12 @@ public class StreamsConfig extends AbstractConfig {
                     9 * 60 * 1000L,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+            .define(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG,
+                    Type.SHORT,
+                    DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH,
+                    atLeast(1),
+                    Importance.LOW,
+                    MAX_CLIENT_TAG_KEY_VALUE_LENGTH_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,
@@ -1146,6 +1161,33 @@ public class StreamsConfig extends AbstractConfig {
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
+        // validate rack awareness related configuration
+        final short maxClientTagKeyValueLength = getShort(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG);
+        final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        final Map<String, String> clientTags = getClientTags();
+
+        for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            if (!clientTags.containsKey(rackAwareAssignmentTag)) {
+                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                                          rackAwareAssignmentTags,
+                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
+                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+            }
+        }
+
+        clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.length() > maxClientTagKeyValueLength) {
+                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
+                                          tagValue,
+                                          "Key exceeds maximum length of " + maxClientTagKeyValueLength + ".");
+            }
+            if (tagValue.length() > maxClientTagKeyValueLength) {
+                throw new ConfigException(CLIENT_TAG_PREFIX + tagKey,
+                                          tagValue,
+                                          "Value exceeds max length of " + maxClientTagKeyValueLength + ".");
+            }
+        });
+
         return configUpdates;
     }
 
@@ -1277,7 +1319,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
-        consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getString(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+        consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
         consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
         consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
         consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));

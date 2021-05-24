@@ -1134,14 +1134,29 @@ public class StreamsConfigTest {
     @Test
     public void shouldDefaultToNullIfRackAwareAssignmentTagsIsNotSet() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertNull(config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+        assertTrue(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).isEmpty());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenRackAwareAssignmentTagsExceedsMaxListSize() {
+        props.put(StreamsConfig.clientTagPrefix("t1"), "a");
+        props.put(StreamsConfig.clientTagPrefix("t2"), "b");
+        props.put(StreamsConfig.clientTagPrefix("t3"), "c");
+        props.put(StreamsConfig.clientTagPrefix("t4"), "d");
+        props.put(StreamsConfig.clientTagPrefix("t5"), "e");
+        props.put(StreamsConfig.clientTagPrefix("t6"), "f");
+
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "t1,t2,t3,t4,t5,t6");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
     public void shouldSetRackAwareAssignmentTags() {
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster,zone");
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG), "cluster,zone");
+        assertEquals(config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG), Arrays.asList("cluster", "zone"));
     }
 
     @Test
@@ -1159,6 +1174,36 @@ public class StreamsConfigTest {
     public void shouldGetClientTagsMapWhenSet() {
         final StreamsConfig config = new StreamsConfig(props);
         assertTrue(config.getClientTags().isEmpty());
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
+
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagKeyExceedMaxLimit() {
+        final short maxClientTagKeyValueLength = 1;
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, maxClientTagKeyValueLength);
+        props.put(StreamsConfig.clientTagPrefix("zone"), "x");
+
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagValueExceedMaxLimit() {
+        final short maxClientTagKeyValueLength = 1;
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, maxClientTagKeyValueLength);
+        props.put(StreamsConfig.clientTagPrefix("x"), "eu-central-1a");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenMaxClientTagKeyValueLengthConfigHasInvalidValue() {
+        props.put(StreamsConfig.MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG, 0);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

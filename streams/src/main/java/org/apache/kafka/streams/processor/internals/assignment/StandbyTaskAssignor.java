@@ -33,19 +33,7 @@ abstract class StandbyTaskAssignor {
     abstract void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
                                      final TreeMap<UUID, ClientState> clientStates);
 
-    boolean canTaskBeMoved(final StandbyTaskMovement standbyTaskMovement) {
+    boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
         return true;
-    }
-
-    static class StandbyTaskMovement {
-        public final TaskId taskId;
-        public final ClientState previousClient;
-        public final ClientState destinationClient;
-
-        StandbyTaskMovement(final TaskId taskId, final ClientState previousClient, final ClientState destinationClient) {
-            this.taskId = taskId;
-            this.previousClient = previousClient;
-            this.destinationClient = destinationClient;
-        }
     }
 }

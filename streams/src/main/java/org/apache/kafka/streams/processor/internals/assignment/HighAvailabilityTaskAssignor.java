@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
-import org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignor.StandbyTaskMovement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,8 +33,6 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.function.BiPredicate;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -130,7 +127,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             (uuid, taskId) -> {
                 clientStates.get(uuid).assignActive(taskId);
                 taskAndClients.put(taskId, uuid);
-            }
+            },
+            taskMovementAttempt -> true
         );
 
         return taskAndClients;
@@ -143,13 +141,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         standbyTaskAssignor.assignStandbyTasks(statefulTasks, clientStates);
 
-        standbyTaskAssignor.canTaskBeMoved()
-
         balanceTasksOverThreads(
             clientStates,
             ClientState::standbyTasks,
             ClientState::unassignStandby,
-            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId)
+            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId),
+            standbyTaskAssignor::isValidTaskMovement
         );
     }
 
@@ -157,7 +154,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
                                                 final BiConsumer<UUID, TaskId> taskAssignor,
-                                                final Predicate<StandbyTaskMovement> standbyTask) {
+                                                final Predicate<TaskMovementAttempt> taskMovementAttemptPredicate) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -177,8 +174,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove);
-                        //TODO: additional check to make sure that movement doesn't break standby task distribution?
-                        if (canMove) {
+                        if (canMove && taskMovementAttemptPredicate.test(new TaskMovementAttempt(taskToMove, sourceClientState, destinationClientState))) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClient, taskToMove);
                             keepBalancing = true;

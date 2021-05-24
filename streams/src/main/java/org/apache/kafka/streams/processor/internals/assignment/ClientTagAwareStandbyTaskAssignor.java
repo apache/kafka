@@ -47,6 +47,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
                                    final TreeMap<UUID, ClientState> clientStates) {
         final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final int numStandbyReplicas = configs.numStandbyReplicas;
+        final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTasks.stream()
                                                                            .collect(
@@ -90,25 +91,25 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         for (final TaskId task : statefulTasks) {
-            final List<List<String>> tagsToBeFiltered = new ArrayList<>();
+            final List<List<String>> clientTagValues = new ArrayList<>();
 
             int numRemainingStandbys = tasksToRemainingStandbys.get(task);
 
             final ClientState activeTaskClient = clientStates.get(statefulTasksWithClients.get(task));
 
-            tagsToBeFiltered.add(new ArrayList<>(activeTaskClient.clientTags().values()));
+            clientTagValues.add(new ArrayList<>(activeTaskClient.clientTags().values()));
 
             while (numRemainingStandbys > 0) {
-                final Set<UUID> toBeFilteredClients = findClientsViolatingRackAwareness(clientStates,
+                final Set<UUID> toBeFilteredClients = findClientsViolatingRackAwareness(rackAwareAssignmentTags,
+                                                                                        clientStates,
                                                                                         tagKeyToTagValuesMapping,
                                                                                         tagValueTagKeyMapping,
                                                                                         clientsPerTagValue,
-                                                                                        tagsToBeFiltered);
+                                                                                        clientTagValues);
 
                 final UUID polledClient = standbyTaskClientsByTaskLoad.poll(task, uuid -> !toBeFilteredClients.contains(uuid));
 
                 if (polledClient == null) {
-                    // should we?
                     break;
                 }
 
@@ -116,7 +117,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
 
                 standbyTaskClient.assignStandby(task);
 
-                tagsToBeFiltered.add(new ArrayList<>(standbyTaskClient.clientTags().values()));
+                clientTagValues.add(new ArrayList<>(standbyTaskClient.clientTags().values()));
 
                 numRemainingStandbys--;
             }
@@ -131,27 +132,43 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
         }
     }
 
-    private static Set<UUID> allClientsNotIn(final Set<UUID> allClients, final Set<UUID> toBeFilteredClients) {
-        final Set<UUID> clients = new HashSet<>(allClients);
-        clients.removeAll(toBeFilteredClients);
-        return clients;
+    @Override
+    public boolean isValidTaskMovement(final TaskMovementAttempt taskMovementAttempt) {
+        final Map<String, String> sourceClientTags = taskMovementAttempt.sourceClient().clientTags();
+        final Map<String, String> destinationClientTags = taskMovementAttempt.destinationClient().clientTags();
+
+        for (final Entry<String, String> sourceClientTagEntry : sourceClientTags.entrySet()) {
+            if (!sourceClientTagEntry.getValue().equals(destinationClientTags.get(sourceClientTagEntry.getKey()))) {
+                return false;
+            }
+        }
+
+        log.info("Movement of task [{}] is valid", taskMovementAttempt.taskId());
+
+        return true;
     }
 
-    private static Set<UUID> findClientsViolatingRackAwareness(final TreeMap<UUID, ClientState> clientStates,
+    private static Set<UUID> findClientsViolatingRackAwareness(final Set<String> rackAwareAssignmentTags,
+                                                               final TreeMap<UUID, ClientState> clientStates,
                                                                final Map<String, Set<String>> allTags,
                                                                final Map<String, String> tagValueTagKeyMapping,
                                                                final Map<String, Set<UUID>> clientsPerTagValue,
-                                                               final List<List<String>> tagsToBeFiltered) {
+                                                               final List<List<String>> clientTagValues) {
         final Set<UUID> allClients = clientStates.keySet();
         final Set<UUID> filteredClients = new HashSet<>();
 
-        for (final List<String> tags : tagsToBeFiltered) {
-            for (final String tag : tags) {
-                final String tagKey = tagValueTagKeyMapping.get(tag);
-                final Set<String> allTagValues = allTags.get(tagKey);
-                final Set<UUID> clientsToBeFiltered = clientsPerTagValue.get(tag);
+        for (final List<String> tagValues : clientTagValues) {
+            for (final String tagValue : tagValues) {
+                final String tagKey = tagValueTagKeyMapping.get(tagValue);
 
-                if (allTagValues.size() <= tagsToBeFiltered.size()) {
+                if (!rackAwareAssignmentTags.contains(tagKey)) {
+                    continue;
+                }
+
+                final Set<String> allTagValues = allTags.get(tagKey);
+                final Set<UUID> clientsToBeFiltered = clientsPerTagValue.get(tagValue);
+
+                if (allTagValues.size() <= clientTagValues.size()) {
                     continue;
                 }
 
@@ -168,12 +185,20 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
                                                                   final Set<UUID> filteredClients,
                                                                   final Set<UUID> clientsToBeFiltered,
                                                                   final TreeMap<UUID, ClientState> clientStates) {
-        final Collection<UUID> validClients = allClientsNotIn(allClientsNotIn(allClients, filteredClients), clientsToBeFiltered);
+        final Collection<UUID> validClients = allClientsNotIn(
+            allClientsNotIn(
+                allClients,
+                filteredClients
+            ),
+            clientsToBeFiltered
+        );
+
         return validClients.stream().anyMatch(it -> !clientStates.get(it).reachedCapacity());
     }
 
-    @Override
-    public boolean canTaskBeMoved(final StandbyTaskMovement standbyTaskMovement) {
-        return false;
+    private static Set<UUID> allClientsNotIn(final Set<UUID> allClients, final Set<UUID> toBeFilteredClients) {
+        final Set<UUID> clients = new HashSet<>(allClients);
+        clients.removeAll(toBeFilteredClients);
+        return clients;
     }
 }
