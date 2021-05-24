@@ -251,7 +251,7 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *                this field will be populated by reading the topic ID value from partition.metadata if it exists.
  * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
  *                                  log directory. A partition.metadata file is only created when the raft controller is used
- *                                  or the ZK controller's inter-broker protocol version is at least 2.8.
+ *                                  or the ZK controller and this broker's inter-broker protocol version is at least 2.8.
  *                                  This file will persist the topic ID on the broker. If inter-broker protocol for a ZK controller
  *                                  is downgraded below 2.8, a topic ID may be lost and a new ID generated upon re-upgrade.
  *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
@@ -335,6 +335,9 @@ class Log(@volatile private var _dir: File,
         }
     } else if (keepPartitionMetadataFile) {
       topicId.foreach(partitionMetadataFile.write)
+    } else {
+      // We want to keep the file and the in-memory topic ID in sync.
+      topicId = None
     }
   }
 
@@ -552,8 +555,10 @@ class Log(@volatile private var _dir: File,
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
-    partitionMetadataFile.write(topicId)
-    this.topicId = Some(topicId)
+    if (keepPartitionMetadataFile) {
+      partitionMetadataFile.write(topicId)
+      this.topicId = Some(topicId)
+    }
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
