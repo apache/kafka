@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
@@ -403,11 +404,26 @@ public class ConfigDef {
      * @param name              The name of the config parameter
      * @param type              The type of the config
      * @param defaultValue      The default value to use if this config isn't present
-     * @param importance
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
         return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+    }
+
+    /**
+     * Define a new internal configuration. Internal configuration won't show up in the docs and aren't
+     * intended for general use.
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param validator         The validator to use in checking the correctness of the config
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
+     * @param documentation     The documentation string for the config
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
     }
 
     /**
@@ -786,7 +802,11 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD;
+
+        public boolean isSensitive() {
+            return this == PASSWORD;
+        }
     }
 
     /**
@@ -1041,7 +1061,7 @@ public class ConfigDef {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
-                desc.append(String.valueOf(v));
+                desc.append(v);
             }
             return desc.toString();
         }
@@ -1489,7 +1509,16 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Collections.<String, String>emptyMap());
+        return toHtml(Collections.emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator) {
+        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
     }
 
     /**
@@ -1497,9 +1526,23 @@ public class ConfigDef {
      * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
      * will be included in the config details with the value of the update mode. Default
      * mode is "read-only".
-     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
      */
     public String toHtml(Map<String, String> dynamicUpdateModes) {
+        return toHtml(4, Function.identity(), dynamicUpdateModes);
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator,
+                         Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
@@ -1509,9 +1552,9 @@ public class ConfigDef {
                 continue;
             }
             b.append("<li>\n");
-            b.append(String.format("<h4>" +
-                    "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
-                    "</h4>%n", key.name));
+            b.append(String.format("<h%1$d>" +
+                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));
             b.append("</p>\n");

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
@@ -33,7 +34,15 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StateManagerStub;
+import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
@@ -41,7 +50,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map<Object, Object> forwardedValues = new HashMap<>();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
+        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null);
     }
 
     private static StreamsConfig streamsConfig() {
@@ -52,15 +61,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public StateStore getStateStore(final String name) {
-        return null;
+    protected StateManager stateManager() {
+        return new StateManagerStub();
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
+    public <S extends StateStore> S getStateStore(final String name) {
         return null;
     }
 
@@ -72,29 +78,37 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record.key(), record.value());
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        forward(record.key(), record.value());
+    }
+
+    @Override
     public <K, V> void forward(final K key, final V value) {
         forwardedValues.put(key, value);
     }
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        forwardedValues.put(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value);
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
     }
 
     @Override
     public void commit() {}
+
+    @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
 
     @Override
     public void initialize() {
@@ -116,5 +130,23 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
                           final Bytes key,
                           final byte[] value,
                           final long timestamp) {
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
     }
 }

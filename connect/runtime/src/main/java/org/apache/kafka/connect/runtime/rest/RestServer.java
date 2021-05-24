@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -46,6 +47,7 @@ import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
+import org.eclipse.jetty.servlets.HeaderFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
@@ -132,7 +134,7 @@ public class RestServer {
             }
         }
 
-        jettyServer.setConnectors(connectors.toArray(new Connector[connectors.size()]));
+        jettyServer.setConnectors(connectors.toArray(new Connector[0]));
 
         if (adminListeners != null && !adminListeners.isEmpty()) {
             for (String adminListener : adminListeners) {
@@ -274,15 +276,20 @@ public class RestServer {
         }
 
         String allowedOrigins = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG);
-        if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
+        if (!Utils.isBlank(allowedOrigins)) {
             FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
             filterHolder.setName("cross-origin");
             filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
             String allowedMethods = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG);
-            if (allowedMethods != null && !allowedOrigins.trim().isEmpty()) {
+            if (!Utils.isBlank(allowedMethods)) {
                 filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
             }
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+        }
+
+        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+        if (!Utils.isBlank(headerConfig)) {
+            configureHttpResponsHeaderFilter(context);
         }
 
         RequestLogHandler requestLogHandler = new RequestLogHandler();
@@ -294,7 +301,7 @@ public class RestServer {
         contextHandlers.add(new DefaultHandler());
         contextHandlers.add(requestLogHandler);
 
-        handlers.setHandlers(contextHandlers.toArray(new Handler[]{}));
+        handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
             context.start();
         } catch (Exception e) {
@@ -472,4 +479,14 @@ public class RestServer {
             return base + path;
     }
 
+    /**
+     * Register header filter to ServletContextHandler.
+     * @param context The serverlet context handler
+     */
+    protected void configureHttpResponsHeaderFilter(ServletContextHandler context) {
+        String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
+        FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
+        headerFilterHolder.setInitParameter("headerConfig", headerConfig);
+        context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+    }
 }

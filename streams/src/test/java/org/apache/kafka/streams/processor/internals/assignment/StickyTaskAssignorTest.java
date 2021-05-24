@@ -166,12 +166,18 @@ public class StickyTaskAssignorTest {
 
         assertThat(assign(TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5), is(false));
 
-        final Set<TaskId> expectedClientITasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5));
-        final Set<TaskId> expectedClientIITasks = new HashSet<>(asList(TASK_0_2, TASK_0_3, TASK_0_4));
+        final Set<TaskId> allTasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5, TASK_0_2, TASK_0_3, TASK_0_4));
+        final Set<TaskId> client1Tasks = clients.get(UUID_1).activeTasks();
+        final Set<TaskId> client2Tasks = clients.get(UUID_2).activeTasks();
 
-
-        assertThat(clients.get(UUID_1).activeTasks(), equalTo(expectedClientITasks));
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(expectedClientIITasks));
+        // one client should get 3 tasks and the other should have 4
+        assertThat(
+            (client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
+                (client1Tasks.size() == 4 && client2Tasks.size() == 3),
+            is(true));
+        allTasks.removeAll(client1Tasks);
+        // client2 should have all the remaining tasks not assigned to client 1
+        assertThat(client2Tasks, equalTo(allTasks));
     }
 
     @Test
@@ -646,14 +652,16 @@ public class StickyTaskAssignorTest {
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
         assertThat(probingRebalanceNeeded, is(false));
+
+        // it's possible for either client 1 or 2 to get three tasks since they both had three previously assigned
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
         assertThat(c1.activeTasks(), not(hasItem(TASK_0_5)));
-        assertThat(c1.activeTaskCount(), equalTo(3));
+        assertThat(c1.activeTaskCount(), greaterThanOrEqualTo(2));
         assertThat(c2.activeTasks(), not(hasItems(TASK_0_0)));
         assertThat(c2.activeTasks(), not(hasItems(TASK_0_1)));
         assertThat(c2.activeTasks(), not(hasItems(TASK_0_2)));
-        assertThat(c2.activeTaskCount(), equalTo(2));
+        assertThat(c2.activeTaskCount(), greaterThanOrEqualTo(2));
         assertThat(newClient.activeTaskCount(), equalTo(2));
     }
 
@@ -668,7 +676,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 0, 0, 0L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 1, 0, 60_000L)
         );
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -687,7 +695,7 @@ public class StickyTaskAssignorTest {
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
-            new AssignorConfiguration.AssignmentConfigs(0L, 0, numStandbys, 0L)
+            new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbys, 60_000L)
         );
     }
 
@@ -725,7 +733,7 @@ public class StickyTaskAssignorTest {
             final List<Integer> topicGroupIds = new ArrayList<>();
             final Set<TaskId> activeTasks = clientStateEntry.getValue().activeTasks();
             for (final TaskId activeTask : activeTasks) {
-                topicGroupIds.add(activeTask.topicGroupId);
+                topicGroupIds.add(activeTask.subtopology());
             }
             Collections.sort(topicGroupIds);
             assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));

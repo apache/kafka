@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.metrics
 
 import java.nio.file.{Files, Paths}
 

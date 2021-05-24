@@ -22,17 +22,21 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 /**
  * For internal use so we can update the {@link RecordContext} and current
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext extends ProcessorContext {
+public interface InternalProcessorContext
+    extends ProcessorContext, org.apache.kafka.streams.processor.api.ProcessorContext<Object, Object>, StateStoreContext {
+
     BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
     ByteArraySerializer BYTEARRAY_VALUE_SERIALIZER = new ByteArraySerializer();
 
@@ -43,11 +47,6 @@ public interface InternalProcessorContext extends ProcessorContext {
      * @param timeMs current wall-clock system timestamp in milliseconds
      */
     void setSystemTimeMs(long timeMs);
-
-    /**
-     * @retun the current wall-clock system timestamp in milliseconds
-     */
-    long currentSystemTimeMs();
 
     /**
      * Returns the current {@link RecordContext}
@@ -63,12 +62,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode<?, ?> currentNode);
+    void setCurrentNode(ProcessorNode<?, ?, ?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode<?, ?> currentNode();
+    ProcessorNode<?, ?, ?, ?> currentNode();
 
     /**
      * Get the thread-global cache
@@ -91,6 +90,21 @@ public interface InternalProcessorContext extends ProcessorContext {
     TaskType taskType();
 
     /**
+     * Transition to active task and register a new task and cache to this processor context
+     */
+    void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache);
+
+    /**
+     * Transition to standby task and register a dummy cache to this processor context
+     */
+    void transitionToStandby(final ThreadCache newCache);
+
+    /**
+     * Register a dirty entry flush listener for a particular namespace
+     */
+    void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener);
+
+    /**
      * Get a correctly typed state store, given a handle on the original builder.
      */
     @SuppressWarnings("unchecked")
@@ -103,4 +117,5 @@ public interface InternalProcessorContext extends ProcessorContext {
                    final byte[] value,
                    final long timestamp);
 
+    String changelogFor(final String storeName);
 }

@@ -21,15 +21,16 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
@@ -41,7 +42,7 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
     private ConnectorContext ctx;
     private Map<String, String> sourceProperties;
 
-    @Before
+    @BeforeEach
     public void setup() {
         connector = new FileStreamSourceConnector();
         ctx = createMock(ConnectorContext.class);
@@ -57,7 +58,7 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         replayAll();
         List<ConfigValue> configValues = connector.config().validate(sourceProperties);
         for (ConfigValue val : configValues) {
-            assertEquals("Config property errors: " + val.errorMessages(), 0, val.errorMessages().size());
+            assertEquals(0, val.errorMessages().size(), "Config property errors: " + val.errorMessages());
         }
         verifyAll();
     }
@@ -98,10 +99,10 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMultipleSourcesInvalid() {
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
     @Test
@@ -114,22 +115,22 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingTopic() {
         sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testBlankTopic() {
         // Because of trimming this tests is same as testing for empty string.
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 }

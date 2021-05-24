@@ -28,12 +28,26 @@ import scala.collection._
   */
 case class CreatePartitionsMetadata(topic: String, partitions: Set[Int], error: ApiError)
 
+object CreatePartitionsMetadata {
+  def apply(topic: String, partitions: Set[Int]): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, partitions, ApiError.NONE)
+  }
+
+  def apply(topic: String, error: Errors): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, Set.empty, new ApiError(error, null))
+  }
+
+  def apply(topic: String, throwable: Throwable): CreatePartitionsMetadata = {
+    CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(throwable))
+  }
+}
+
 /**
   * A delayed create topic or create partitions operation that is stored in the topic purgatory.
   */
 class DelayedCreatePartitions(delayMs: Long,
                               createMetadata: Seq[CreatePartitionsMetadata],
-                              adminManager: AdminManager,
+                              adminManager: ZkAdminManager,
                               responseCallback: Map[String, ApiError] => Unit)
   extends DelayedOperation(delayMs) {
 

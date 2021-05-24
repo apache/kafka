@@ -37,12 +37,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static java.util.Collections.singleton;
 
 
 /**
@@ -65,6 +67,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private KafkaException pollException;
     private KafkaException offsetsException;
     private AtomicBoolean wakeup;
+    private Duration lastPollTimeout;
     private boolean closed;
     private boolean shouldRebalance;
 
@@ -157,12 +160,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public synchronized ConsumerRecords<K, V> poll(long timeout) {
-        return poll(Duration.ZERO);
+        return poll(Duration.ofMillis(timeout));
     }
 
     @Override
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         ensureNotClosed();
+
+        lastPollTimeout = timeout;
 
         // Synchronize around the entire execution so new tasks to be triggered on subsequent poll calls can be added in
         // the callback
@@ -300,7 +305,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
-        return committed(Collections.singleton(partition)).get(partition);
+        return committed(singleton(partition)).get(partition);
     }
 
     @Deprecated
@@ -441,13 +446,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void close() {
-        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    }
-
-    @Deprecated
-    @Override
-    public synchronized void close(long timeout, TimeUnit unit) {
+    public final synchronized void close() {
         this.closed = true;
     }
 
@@ -539,6 +538,16 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public OptionalLong currentLag(TopicPartition topicPartition) {
+        if (endOffsets.containsKey(topicPartition)) {
+            return OptionalLong.of(endOffsets.get(topicPartition) - position(topicPartition));
+        } else {
+            // if the test doesn't bother to set an end offset, we assume it wants to model being caught up.
+            return OptionalLong.of(0L);
+        }
+    }
+
+    @Override
     public ConsumerGroupMetadata groupMetadata() {
         return new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty());
     }
@@ -554,6 +563,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public void resetShouldRebalance() {
         shouldRebalance = false;
+    }
+
+    public Duration lastPollTimeout() {
+        return lastPollTimeout;
     }
 
     @Override

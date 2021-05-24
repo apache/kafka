@@ -16,7 +16,10 @@
  */
 package kafka.coordinator.transaction
 
+import java.util
 import java.util.Arrays.asList
+import java.util.Collections
+import java.util.concurrent.{Callable, Executors, Future}
 
 import kafka.common.RequestAndCompletionHandler
 import kafka.metrics.KafkaYammerMetrics
@@ -29,16 +32,17 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.util.Try
 
 class TransactionMarkerChannelManagerTest {
   private val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val networkClient: NetworkClient = EasyMock.createNiceMock(classOf[NetworkClient])
-  private val txnStateManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
+  private val txnStateManager: TransactionStateManager = EasyMock.mock(classOf[TransactionStateManager])
 
   private val partition1 = new TopicPartition("topic1", 0)
   private val partition2 = new TopicPartition("topic1", 1)
@@ -87,6 +91,70 @@ class TransactionMarkerChannelManagerTest {
   }
 
   @Test
+  def shouldOnlyWriteTxnCompletionOnce(): Unit = {
+    mockCache()
+
+    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
+
+    EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
+      EasyMock.eq(partition1.topic),
+      EasyMock.eq(partition1.partition),
+      EasyMock.anyObject())
+    ).andReturn(Some(broker1)).anyTimes()
+
+    EasyMock.expect(txnStateManager.appendTransactionToLog(
+      EasyMock.eq(transactionalId2),
+      EasyMock.eq(coordinatorEpoch),
+      EasyMock.eq(expectedTransition),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
+      .andAnswer(() => {
+        txnMetadata2.completeTransitionTo(expectedTransition)
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      }).once()
+
+    EasyMock.replay(txnStateManager, metadataCache)
+
+    var addMarkerFuture: Future[Try[Unit]] = null
+    val executor = Executors.newFixedThreadPool(1)
+    txnMetadata2.lock.lock()
+    try {
+      addMarkerFuture = executor.submit((() => {
+        Try(channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
+            txnMetadata2, expectedTransition))
+      }): Callable[Try[Unit]])
+
+      val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
+      val response = new WriteTxnMarkersResponse(
+        Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+      val clientResponse = new ClientResponse(header, null, null,
+        time.milliseconds(), time.milliseconds(), false, null, null,
+        response)
+
+      TestUtils.waitUntilTrue(() => {
+        val requests = channelManager.generateRequests()
+        if (requests.nonEmpty) {
+          assertEquals(1, requests.size)
+          val request = requests.head
+          request.handler.onComplete(clientResponse)
+          true
+        } else {
+          false
+        }
+      }, "Timed out waiting for expected WriteTxnMarkers request")
+    } finally {
+      txnMetadata2.lock.unlock()
+      executor.shutdown()
+    }
+
+    assertNotNull(addMarkerFuture)
+    assertTrue(addMarkerFuture.get().isSuccess,
+      "Add marker task failed with exception " + addMarkerFuture.get().get)
+
+    EasyMock.verify(txnStateManager)
+  }
+
+  @Test
   def shouldGenerateEmptyMapWhenNoRequestsOutstanding(): Unit = {
     assertTrue(channelManager.generateRequests().isEmpty)
   }
@@ -120,10 +188,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
@@ -153,7 +221,6 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.replay(metadataCache)
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
     assertEquals(1, channelManager.numTxnsWithPendingMarkers)
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers)
@@ -197,10 +264,10 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
         new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
@@ -291,7 +358,7 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1),
         null, null, 0, 0, false, null, null, response))
     }
 
@@ -338,7 +405,7 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1),
         null, null, 0, 0, false, null, null, response))
     }
 
@@ -387,7 +454,7 @@ class TransactionMarkerChannelManagerTest {
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
-      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+      requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1),
         null, null, 0, 0, false, null, null, response))
     }
 
@@ -402,7 +469,7 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(CompleteCommit, txnMetadata2.state)
   }
 
-  private def createPidErrorMap(errors: Errors) = {
+  private def createPidErrorMap(errors: Errors): util.HashMap[java.lang.Long, util.Map[TopicPartition, Errors]] = {
     val pidMap = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
     val errorsMap = new java.util.HashMap[TopicPartition, Errors]()
     errorsMap.put(partition1, errors)
@@ -414,11 +481,11 @@ class TransactionMarkerChannelManagerTest {
   def shouldCreateMetricsOnStarting(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
 
-    assertEquals(1, metrics.filter { case (k, _) =>
+    assertEquals(1, metrics.count { case (k, _) =>
       k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize"
-    }.size)
-    assertEquals(1, metrics.filter { case (k, _) =>
+    })
+    assertEquals(1, metrics.count { case (k, _) =>
       k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize"
-    }.size)
+    })
   }
 }

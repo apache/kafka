@@ -227,7 +227,7 @@ public class TaskMetrics {
                                                                              final String storeName,
                                                                              final StreamsMetricsImpl streamsMetrics) {
         if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskId, storeType, storeName, streamsMetrics);
+            return StateStoreMetrics.expiredWindowRecordDropSensor(taskId, storeType, storeName, streamsMetrics);
         }
         return droppedRecordsSensor(threadId, taskId, streamsMetrics);
     }

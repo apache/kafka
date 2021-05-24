@@ -25,5 +25,5 @@ public interface KTableValueGetter<K, V> {
 
     ValueAndTimestamp<V> get(K key);
 
-    void close();
+    default void close() {}
 }

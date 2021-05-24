@@ -18,8 +18,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import java.util.Properties
@@ -55,7 +55,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     val incorrectCompressionCodecs = logSegments
       .flatMap(_.log.batches.asScala.map(_.compressionType))
       .filter(_ != offsetsTopicCompressionCodec)
-    assertEquals("Incorrect compression codecs should be empty", Seq.empty, incorrectCompressionCodecs)
+    assertEquals(Seq.empty, incorrectCompressionCodecs, "Incorrect compression codecs should be empty")
 
     consumer.close()
   }

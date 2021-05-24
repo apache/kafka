@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMa
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerResult;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -37,7 +37,7 @@ import java.util.Map;
  *   - {@link Errors#CORRUPT_MESSAGE}
  *   - {@link Errors#INVALID_PRODUCER_EPOCH}
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
- *   - {@link Errors#NOT_LEADER_FOR_PARTITION}
+ *   - {@link Errors#NOT_LEADER_OR_FOLLOWER}
  *   - {@link Errors#MESSAGE_TOO_LARGE}
  *   - {@link Errors#RECORD_LIST_TOO_LARGE}
  *   - {@link Errors#NOT_ENOUGH_REPLICAS}
@@ -49,10 +49,10 @@ import java.util.Map;
  */
 public class WriteTxnMarkersResponse extends AbstractResponse {
 
-    private final Map<Long, Map<TopicPartition, Errors>> errors;
-    public final WriteTxnMarkersResponseData data;
+    private final WriteTxnMarkersResponseData data;
 
     public WriteTxnMarkersResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
+        super(ApiKeys.WRITE_TXN_MARKERS);
         List<WritableTxnMarkerResult> markers = new ArrayList<>();
         for (Map.Entry<Long, Map<TopicPartition, Errors>> markerEntry : errors.entrySet()) {
             Map<String, WritableTxnMarkerTopicResult> responseTopicDataMap = new HashMap<>();
@@ -74,48 +74,53 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
                             .setTopics(new ArrayList<>(responseTopicDataMap.values()))
             );
         }
-
-        this.errors = errors;
         this.data = new WriteTxnMarkersResponseData()
                         .setMarkers(markers);
     }
 
-    public WriteTxnMarkersResponse(Struct struct, short version) {
-        this.data = new WriteTxnMarkersResponseData(struct, version);
-        this.errors = new HashMap<>();
+    public WriteTxnMarkersResponse(WriteTxnMarkersResponseData data) {
+        super(ApiKeys.WRITE_TXN_MARKERS);
+        this.data = data;
+    }
+
+    @Override
+    public WriteTxnMarkersResponseData data() {
+        return data;
+    }
+
+    public Map<Long, Map<TopicPartition, Errors>> errorsByProducerId() {
+        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
         for (WritableTxnMarkerResult marker : data.markers()) {
             Map<TopicPartition, Errors> topicPartitionErrorsMap = new HashMap<>();
-            for (WritableTxnMarkerTopicResult topic: marker.topics()) {
-                for (WritableTxnMarkerPartitionResult partitionResult: topic.partitions()) {
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions()) {
                     topicPartitionErrorsMap.put(new TopicPartition(topic.name(), partitionResult.partitionIndex()),
-                                                Errors.forCode(partitionResult.errorCode()));
+                            Errors.forCode(partitionResult.errorCode()));
                 }
             }
             errors.put(marker.producerId(), topicPartitionErrorsMap);
         }
+        return errors;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    public Map<TopicPartition, Errors> errors(long producerId) {
-        return errors.get(producerId);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        errors.values().forEach(allErrors ->
-            allErrors.values().forEach(error ->
-                updateErrorCounts(errorCounts, error)
-            )
-        );
+        for (WritableTxnMarkerResult marker : data.markers()) {
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions())
+                    updateErrorCounts(errorCounts, Errors.forCode(partitionResult.errorCode()));
+            }
+        }
         return errorCounts;
     }
 
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer), version);
+        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

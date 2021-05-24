@@ -379,9 +379,19 @@ public class EosTestDriver extends SmokeTestUtil {
         final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
             final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-            final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecords.get(inputTopicPartition).iterator();
+            final List<ConsumerRecord<byte[], byte[]>> receivedRecordsForPartition = partitionRecords.getValue();
+            final List<ConsumerRecord<byte[], byte[]>> expectedRecordsForPartition = expectedRecords.get(inputTopicPartition);
 
-            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
+            System.out.println(partitionRecords.getKey() + " with " + receivedRecordsForPartition.size() + ", " +
+                    inputTopicPartition + " with " + expectedRecordsForPartition.size());
+
+            final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecordsForPartition.iterator();
+            RuntimeException exception = null;
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : receivedRecordsForPartition) {
+                if (!expectedRecord.hasNext()) {
+                    exception = new RuntimeException("Result verification failed for " + receivedRecord + " since there's no more expected record");
+                }
+
                 final ConsumerRecord<byte[], byte[]> expected = expectedRecord.next();
 
                 final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
@@ -390,8 +400,12 @@ public class EosTestDriver extends SmokeTestUtil {
                 final int expectedValue = integerDeserializer.deserialize(expected.topic(), expected.value());
 
                 if (!receivedKey.equals(expectedKey) || receivedValue != expectedValue) {
-                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
+                    exception = new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
+            }
+
+            if (exception != null) {
+                throw exception;
             }
         }
     }
@@ -581,35 +595,32 @@ public class EosTestDriver extends SmokeTestUtil {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
-        final Map<TopicPartition, Long> topicEndOffsets;
-
-        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
-            topicEndOffsets = consumerUncommitted.endOffsets(partitions);
-        }
 
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-        while (!topicEndOffsets.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
-            consumer.seekToEnd(partitions);
+        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
+            while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
+                consumer.seekToEnd(partitions);
+                final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
 
-            final Iterator<TopicPartition> iterator = partitions.iterator();
-            while (iterator.hasNext()) {
-                final TopicPartition topicPartition = iterator.next();
-                final long position = consumer.position(topicPartition);
+                final Iterator<TopicPartition> iterator = partitions.iterator();
+                while (iterator.hasNext()) {
+                    final TopicPartition topicPartition = iterator.next();
+                    final long position = consumer.position(topicPartition);
 
-                if (position == topicEndOffsets.get(topicPartition)) {
-                    iterator.remove();
-                    topicEndOffsets.remove(topicPartition);
-                    System.out.println("Removing " + topicPartition + " at position " + position);
-                } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
-                    throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
-                } else {
-                    System.out.println("Retry " + topicPartition + " at position " + position);
+                    if (position == topicEndOffsets.get(topicPartition)) {
+                        iterator.remove();
+                        System.out.println("Removing " + topicPartition + " at position " + position);
+                    } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
+                        throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                    } else {
+                        System.out.println("Retry " + topicPartition + " at position " + position);
+                    }
                 }
+                sleep(1000L);
             }
-            sleep(1000L);
         }
 
-        if (!topicEndOffsets.isEmpty()) {
+        if (!partitions.isEmpty()) {
             throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
         }
     }

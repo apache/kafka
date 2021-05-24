@@ -32,7 +32,7 @@ import java.util.Map;
 public class DeleteTopicsResult {
     final Map<String, KafkaFuture<Void>> futures;
 
-    DeleteTopicsResult(Map<String, KafkaFuture<Void>> futures) {
+    protected DeleteTopicsResult(Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

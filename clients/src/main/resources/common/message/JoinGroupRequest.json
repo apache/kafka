@@ -16,6 +16,7 @@
 {
   "apiKey": 11,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "JoinGroupRequest",
   // Version 1 adds RebalanceTimeoutMs.
   //

@@ -39,7 +39,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private boolean sendOldValues = false;
 
-    KStreamAggregate(final String storeName, final Initializer<T> initializer, final Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamAggregate(final String storeName,
+                     final Initializer<T> initializer,
+                     final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -61,7 +63,6 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         private Sensor droppedRecordsSensor;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
@@ -69,7 +70,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics());
-            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            store =  context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
                 context,
@@ -125,22 +126,17 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         };
     }
 
-
     private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
         private TimestampedKeyValueStore<K, T> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override
         public ValueAndTimestamp<T> get(final K key) {
             return store.get(key);
         }
-
-        @Override
-        public void close() {}
     }
 }

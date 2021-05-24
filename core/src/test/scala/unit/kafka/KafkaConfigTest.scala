@@ -24,18 +24,18 @@ import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
 import scala.jdk.CollectionConverters._
 
 class KafkaTest {
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
 
-  @After
+  @AfterEach
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
@@ -61,22 +61,22 @@ class KafkaTest {
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheEnd(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2"))))
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsOnly(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2"))))
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))))
   }
 
   @Test
@@ -84,14 +84,23 @@ class KafkaTest {
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
                                                                                     "--override", "ssl.key.password=key_password",
-                                                                                    "--override", "ssl.truststore.password=truststore_password")))
+                                                                                    "--override", "ssl.truststore.password=truststore_password",
+                                                                                    "--override", "ssl.keystore.certificate.chain=certificate_chain",
+                                                                                    "--override", "ssl.keystore.key=private_key",
+                                                                                    "--override", "ssl.truststore.certificates=truststore_certificates")))
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreKeyProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).toString)
 
     assertEquals("key_password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
     assertEquals("keystore_password", config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
     assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+    assertEquals("private_key", config.getPassword(KafkaConfig.SslKeystoreKeyProp).value)
+    assertEquals("certificate_chain", config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).value)
+    assertEquals("truststore_certificates", config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).value)
   }
 
   @Test

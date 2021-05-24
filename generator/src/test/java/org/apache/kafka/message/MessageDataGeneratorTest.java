@@ -17,19 +17,17 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public class MessageDataGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullDefaults() throws Exception {
@@ -52,8 +50,8 @@ public class MessageDataGeneratorTest {
     }
 
     private void assertStringContains(String substring, String value) {
-        assertTrue("Expected string to contain '" + substring + "', but it was " + value,
-            value.contains(substring));
+        assertTrue(value.contains(substring),
+                   "Expected string to contain '" + substring + "', but it was " + value);
     }
 
     @Test

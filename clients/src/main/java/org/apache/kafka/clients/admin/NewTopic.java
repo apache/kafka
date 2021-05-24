@@ -21,6 +21,7 @@ import java.util.Optional;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -33,9 +34,6 @@ import java.util.Map.Entry;
  * A new topic to be created via {@link Admin#createTopics(Collection)}.
  */
 public class NewTopic {
-
-    private static final int NO_PARTITIONS = -1;
-    private static final short NO_REPLICATION_FACTOR = -1;
 
     private final String name;
     private final Optional<Integer> numPartitions;
@@ -87,14 +85,14 @@ public class NewTopic {
      * The number of partitions for the new topic or -1 if a replica assignment has been specified.
      */
     public int numPartitions() {
-        return numPartitions.orElse(NO_PARTITIONS);
+        return numPartitions.orElse(CreateTopicsRequest.NO_NUM_PARTITIONS);
     }
 
     /**
      * The replication factor for the new topic or -1 if a replica assignment has been specified.
      */
     public short replicationFactor() {
-        return replicationFactor.orElse(NO_REPLICATION_FACTOR);
+        return replicationFactor.orElse(CreateTopicsRequest.NO_REPLICATION_FACTOR);
     }
 
     /**
@@ -126,8 +124,8 @@ public class NewTopic {
     CreatableTopic convertToCreatableTopic() {
         CreatableTopic creatableTopic = new CreatableTopic().
             setName(name).
-            setNumPartitions(numPartitions.orElse(NO_PARTITIONS)).
-            setReplicationFactor(replicationFactor.orElse(NO_REPLICATION_FACTOR));
+            setNumPartitions(numPartitions.orElse(CreateTopicsRequest.NO_NUM_PARTITIONS)).
+            setReplicationFactor(replicationFactor.orElse(CreateTopicsRequest.NO_REPLICATION_FACTOR));
         if (replicasAssignments != null) {
             for (Entry<Integer, List<Integer>> entry : replicasAssignments.entrySet()) {
                 creatableTopic.assignments().add(

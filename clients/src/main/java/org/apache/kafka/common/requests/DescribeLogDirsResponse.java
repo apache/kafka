@@ -19,12 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
-import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsPartition;
-import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsResult;
-import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -37,21 +34,14 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
     private final DescribeLogDirsResponseData data;
 
-    public DescribeLogDirsResponse(Struct struct, short version) {
-        this.data = new DescribeLogDirsResponseData(struct, version);
-    }
-
     public DescribeLogDirsResponse(DescribeLogDirsResponseData data) {
+        super(ApiKeys.DESCRIBE_LOG_DIRS);
         this.data = data;
     }
 
+    @Override
     public DescribeLogDirsResponseData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
@@ -68,24 +58,8 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public Map<String, LogDirInfo> logDirInfos() {
-        HashMap<String, LogDirInfo> result = new HashMap<>(data.results().size());
-        for (DescribeLogDirsResult logDirResult : data.results()) {
-            Map<TopicPartition, ReplicaInfo> replicaInfoMap = new HashMap<>();
-            for (DescribeLogDirsTopic t : logDirResult.topics()) {
-                for (DescribeLogDirsPartition p : t.partitions()) {
-                    replicaInfoMap.put(
-                            new TopicPartition(t.name(), p.partitionIndex()),
-                            new ReplicaInfo(p.partitionSize(), p.offsetLag(), p.isFutureKey()));
-                }
-            }
-            result.put(logDirResult.logDir(), new LogDirInfo(Errors.forCode(logDirResult.errorCode()), replicaInfoMap));
-        }
-        return result;
-    }
-
     public static DescribeLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeLogDirsResponse(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version).read(buffer), version);
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     // Note this class is part of the public API, reachable from Admin.describeLogDirs()
@@ -94,7 +68,13 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      *
      * KAFKA_STORAGE_ERROR (56)
      * UNKNOWN (-1)
+     *
+     * @deprecated Deprecated Since Kafka 2.7.
+     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
+     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
+     * class {@link org.apache.kafka.clients.admin.LogDirDescription}.
      */
+    @Deprecated
     static public class LogDirInfo {
         public final Errors error;
         public final Map<TopicPartition, ReplicaInfo> replicaInfos;
@@ -117,6 +97,14 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     }
 
     // Note this class is part of the public API, reachable from Admin.describeLogDirs()
+
+    /**
+     * @deprecated Deprecated Since Kafka 2.7.
+     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
+     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
+     * class {@link org.apache.kafka.clients.admin.ReplicaInfo}.
+     */
+    @Deprecated
     static public class ReplicaInfo {
 
         public final long size;

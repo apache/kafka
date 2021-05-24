@@ -80,6 +80,15 @@ public abstract class Connector implements Versioned {
     }
 
     /**
+     * Returns the context object used to interact with the Kafka Connect runtime.
+     *
+     * @return the context for this Connector.
+     */
+    protected ConnectorContext context() {
+        return context;
+    }
+
+    /**
      * Start this Connector. This method will only be called on a clean Connector, i.e. it has
      * either just been instantiated and initialized or {@link #stop()} has been invoked.
      *

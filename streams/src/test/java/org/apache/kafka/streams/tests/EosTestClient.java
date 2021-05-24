@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -71,12 +72,13 @@ public class EosTestClient extends SmokeTestUtil {
                 uncaughtException = false;
 
                 streams = createKafkaStreams(properties);
-                streams.setUncaughtExceptionHandler((t, e) -> {
+                streams.setUncaughtExceptionHandler(e -> {
                     System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-EXCEPTION");
                     e.printStackTrace();
                     System.out.flush();
                     uncaughtException = true;
+                    return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
                 });
                 streams.setStateListener((newState, oldState) -> {
                     // don't remove this -- it's required test output
@@ -103,7 +105,7 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000); // increase commit interval to make sure a client is killed having an open transaction
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000L); // increase commit interval to make sure a client is killed having an open transaction
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
@@ -132,7 +134,8 @@ public class EosTestClient extends SmokeTestUtil {
             .to("sum", Produced.with(stringSerde, longSerde));
 
         if (withRepartitioning) {
-            final KStream<String, Integer> repartitionedData = data.through("repartition");
+            data.to("repartition");
+            final KStream<String, Integer> repartitionedData = builder.stream("repartition");
 
             repartitionedData.process(SmokeTestUtil.printProcessorSupplier("repartition"));
 

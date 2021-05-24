@@ -174,7 +174,7 @@ public final class RecordAccumulator {
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
-     *                        running the the partitioner's onNewBatch method before trying to append again
+     *                        running the partitioner's onNewBatch method before trying to append again
      * @param nowMs The current time, in milliseconds
      */
     public RecordAppendResult append(TopicPartition tp,
@@ -210,7 +210,7 @@ public final class RecordAccumulator {
 
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
-            log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+            log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, tp.topic(), tp.partition(), maxTimeToBlock);
             buffer = free.allocate(size, maxTimeToBlock);
 
             // Update the current time in case the buffer allocation blocked above.
@@ -508,15 +508,11 @@ public final class RecordAccumulator {
                 return true;
 
             if (!first.hasSequence()) {
-                if (transactionManager.hasInflightBatches(tp)) {
+                if (transactionManager.hasInflightBatches(tp) && transactionManager.hasStaleProducerIdAndEpoch(tp)) {
                     // Don't drain any new batches while the partition has in-flight batches with a different epoch
                     // and/or producer ID. Otherwise, a batch with a new epoch and sequence number
                     // 0 could be written before earlier batches complete, which would cause out of sequence errors
-                    ProducerBatch firstInFlightBatch = transactionManager.nextBatchBySequence(tp);
-
-                    if (firstInFlightBatch != null && transactionManager.producerIdOrEpochNotMatch(firstInFlightBatch)) {
-                        return true;
-                    }
+                    return true;
                 }
 
                 if (transactionManager.hasUnresolvedSequence(first.topicPartition))
@@ -582,6 +578,12 @@ public final class RecordAccumulator {
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();
                     if (producerIdAndEpoch != null && !batch.hasSequence()) {
+                        // If the producer id/epoch of the partition do not match the latest one
+                        // of the producer, we update it and reset the sequence. This should be
+                        // only done when all its in-flight batches have completed. This is guarantee
+                        // in `shouldStopDrainBatchesForPartition`.
+                        transactionManager.maybeUpdateProducerIdAndEpoch(batch.topicPartition);
+
                         // If the batch already has an assigned sequence, then we should not change the producer id and
                         // sequence number, since this may introduce duplicates. In particular, the previous attempt
                         // may actually have been accepted, and if we change the producer id and sequence here, this
@@ -708,8 +710,12 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
-                batch.produceFuture.await();
+            // Obtain a copy of all of the incomplete ProduceRequestResult(s) at the time of the flush.
+            // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
+            // collection can occur on the contents.
+            // The sender will remove ProducerBatch(s) from the original incomplete collection.
+            for (ProduceRequestResult result : this.incomplete.requestResults())
+                result.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

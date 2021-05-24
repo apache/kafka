@@ -100,7 +100,7 @@ object DecodeJson {
   private def decodeIterator[S, T, C](it: Iterator[S])(f: S => Either[String, T])(implicit factory: Factory[T, C]): Either[String, C] = {
     val result = factory.newBuilder
     while (it.hasNext) {
-      f(it.next) match {
+      f(it.next()) match {
         case Right(x) => result += x
         case Left(x) => return Left(x)
       }

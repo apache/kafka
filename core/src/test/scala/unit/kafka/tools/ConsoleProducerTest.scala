@@ -17,13 +17,13 @@
 
 package kafka.tools
 
-import java.util
-
-import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.{Assert, Test}
-import Assert.assertEquals
+import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
+
+import java.util
 
 class ConsoleProducerTest {
 
@@ -59,6 +59,14 @@ class ConsoleProducerTest {
     "--topic",
     "t3",
   )
+  val clientIdOverride: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--topic",
+    "t3",
+    "--producer-property",
+    "client.id=producer-1"
+  )
 
   @Test
   def testValidConfigsBrokerList(): Unit = {
@@ -76,14 +84,11 @@ class ConsoleProducerTest {
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testInvalidConfigs(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
-    try {
-      new ConsoleProducer.ProducerConfig(invalidArgs)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleProducer.ProducerConfig(invalidArgs))
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -101,5 +106,13 @@ class ConsoleProducerTest {
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1002"),
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(clientIdOverride)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals("producer-1",
+      producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
   }
 }

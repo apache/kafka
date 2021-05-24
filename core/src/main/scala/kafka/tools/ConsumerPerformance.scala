@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
+import joptsimple.OptionException
 import kafka.utils.{CommandLineUtils, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -105,7 +106,7 @@ object ConsumerPerformance extends LazyLogging {
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var joinStart = 0L
+    var joinStart = System.currentTimeMillis
     var joinTimeMsInSingleRound = 0L
 
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
@@ -232,12 +233,12 @@ object ConsumerPerformance extends LazyLogging {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2 * 1024 * 1024)
-    val numThreadsOpt = parser.accepts("threads", "Number of processing threads.")
+    val numThreadsOpt = parser.accepts("threads", "DEPRECATED AND IGNORED: Number of processing threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10)
-    val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
+    val numFetchersOpt = parser.accepts("num-fetch-threads", "DEPRECATED AND IGNORED: Number of fetcher threads.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
@@ -255,7 +256,16 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[Long])
       .defaultsTo(10000)
 
-    options = parser.parse(args: _*)
+    try
+      options = parser.parse(args: _*)
+    catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+    }
+
+    if(options.has(numThreadsOpt) || options.has(numFetchersOpt))
+      println("WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test")
+
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)

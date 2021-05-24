@@ -69,7 +69,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
-    private Map<MetricName, Metric> mockMetrics;
+    private final Map<MetricName, Metric> mockMetrics;
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;
@@ -179,10 +179,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.sentOffsets = false;
     }
 
+    @Deprecated
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         Objects.requireNonNull(consumerGroupId);
+        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
+    }
+
+    @Override
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(groupMetadata);
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
@@ -195,16 +203,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
             return;
         }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets =
-            this.uncommittedConsumerGroupOffsets.computeIfAbsent(consumerGroupId, k -> new HashMap<>());
+            this.uncommittedConsumerGroupOffsets.computeIfAbsent(groupMetadata.groupId(), k -> new HashMap<>());
         uncommittedOffsets.putAll(offsets);
         this.sentOffsets = true;
-    }
-
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
-        Objects.requireNonNull(groupMetadata);
-        sendOffsetsToTransaction(offsets, groupMetadata.groupId());
     }
 
     @Override
@@ -302,13 +303,21 @@ public class MockProducer<K, V> implements Producer<K, V> {
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
+        else {
+            //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
+            keySerializer.serialize(record.topic(), record.key());
+            valueSerializer.serialize(record.topic(), record.value());
+        }
+            
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
-                0L, 0, 0, Time.SYSTEM);
+                0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0), result, callback);
+        long baseOffset = Math.max(0, offset - Integer.MAX_VALUE);
+        int batchIndex = (int) Math.min(Integer.MAX_VALUE, offset);
+        Completion completion = new Completion(offset, new RecordMetadata(topicPartition, baseOffset, batchIndex,
+                RecordBatch.NO_TIMESTAMP, 0, 0), result, callback, topicPartition);
 
         if (!this.transactionInFlight)
             this.sent.add(record);
@@ -506,24 +515,32 @@ public class MockProducer<K, V> implements Producer<K, V> {
         private final RecordMetadata metadata;
         private final ProduceRequestResult result;
         private final Callback callback;
+        private final TopicPartition tp;
 
         public Completion(long offset,
                           RecordMetadata metadata,
                           ProduceRequestResult result,
-                          Callback callback) {
+                          Callback callback,
+                          TopicPartition tp) {
             this.metadata = metadata;
             this.offset = offset;
             this.result = result;
             this.callback = callback;
+            this.tp = tp;
         }
 
         public void complete(RuntimeException e) {
-            result.set(e == null ? offset : -1L, RecordBatch.NO_TIMESTAMP, e);
+            if (e == null) {
+                result.set(offset, RecordBatch.NO_TIMESTAMP, null);
+            } else {
+                result.set(-1, RecordBatch.NO_TIMESTAMP, index -> e);
+            }
+
             if (callback != null) {
                 if (e == null)
                     callback.onCompletion(metadata, null);
                 else
-                    callback.onCompletion(null, e);
+                    callback.onCompletion(new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1), e);
             }
             result.done();
         }

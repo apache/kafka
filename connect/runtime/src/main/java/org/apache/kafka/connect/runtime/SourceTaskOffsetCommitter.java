@@ -63,7 +63,7 @@ class SourceTaskOffsetCommitter {
     public SourceTaskOffsetCommitter(WorkerConfig config) {
         this(config, Executors.newSingleThreadScheduledExecutor(ThreadUtils.createThreadFactory(
                 SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)),
-                new ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>>());
+                new ConcurrentHashMap<>());
     }
 
     public void close(long timeoutMs) {
@@ -79,12 +79,9 @@ class SourceTaskOffsetCommitter {
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
         long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
-            @Override
-            public void run() {
-                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
-                    commit(workerTask);
-                }
+        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(() -> {
+            try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+                commit(workerTask);
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);

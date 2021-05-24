@@ -18,15 +18,17 @@
 package org.apache.kafka.common.protocol;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Iterator;
-import java.util.UUID;
+import java.util.List;
+
 
 public final class MessageUtil {
-    public static final UUID ZERO_UUID = new UUID(0L, 0L);
-
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's
      * position or mark.
@@ -81,6 +83,15 @@ public final class MessageUtil {
                 " does not fit in a 16-bit signed integer.");
         }
         return (short) value;
+    }
+
+    public static int jsonNodeToUnsignedShort(JsonNode node, String about) {
+        int value = jsonNodeToInt(node, about);
+        if (value < 0 || value > 65535) {
+            throw new RuntimeException(about + ": value " + value +
+                " does not fit in a 16-bit unsigned integer.");
+        }
+        return value;
     }
 
     public static int jsonNodeToInt(JsonNode node, String about) {
@@ -156,11 +167,52 @@ public final class MessageUtil {
     }
 
     public static byte[] duplicate(byte[] array) {
-        if (array == null) {
+        if (array == null)
             return null;
+        return Arrays.copyOf(array, array.length);
+    }
+
+    /**
+     * Compare two RawTaggedFields lists.
+     * A null list is equivalent to an empty one in this context.
+     */
+    public static boolean compareRawTaggedFields(List<RawTaggedField> first,
+                                                 List<RawTaggedField> second) {
+        if (first == null) {
+            return second == null || second.isEmpty();
+        } else if (second == null) {
+            return first.isEmpty();
+        } else {
+            return first.equals(second);
         }
-        byte[] newArray = new byte[array.length];
-        System.arraycopy(array, 0, newArray, 0, array.length);
-        return newArray;
+    }
+
+    public static ByteBuffer toByteBuffer(final Message message, final short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int messageSize = message.size(cache, version);
+        ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
+        message.write(bytes, cache, version);
+        bytes.flip();
+        return bytes.buffer();
+    }
+
+    public static ByteBuffer toVersionPrefixedByteBuffer(final short version, final Message message) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int messageSize = message.size(cache, version);
+        ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize + 2));
+        bytes.writeShort(version);
+        message.write(bytes, cache, version);
+        bytes.flip();
+        return bytes.buffer();
+    }
+
+    public static byte[] toVersionPrefixedBytes(final short version, final Message message) {
+        ByteBuffer buffer = toVersionPrefixedByteBuffer(version, message);
+        // take the inner array directly if it is full with data
+        if (buffer.hasArray() &&
+                buffer.arrayOffset() == 0 &&
+                buffer.position() == 0 &&
+                buffer.limit() == buffer.array().length) return buffer.array();
+        else return Utils.toArray(buffer);
     }
 }

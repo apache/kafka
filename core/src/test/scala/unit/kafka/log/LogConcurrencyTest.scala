@@ -24,8 +24,8 @@ import kafka.server.{BrokerTopicStats, FetchHighWatermark, LogDirFailureChannel}
 import kafka.utils.{KafkaScheduler, TestUtils}
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
@@ -37,12 +37,12 @@ class LogConcurrencyTest {
   private val tmpDir = TestUtils.tempDir()
   private val logDir = TestUtils.randomPartitionLogDir(tmpDir)
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     scheduler.startup()
   }
 
-  @After
+  @AfterEach
   def shutdown(): Unit = {
     scheduler.shutdown()
     Utils.delete(tmpDir)
@@ -150,7 +150,9 @@ class LogConcurrencyTest {
       time = Time.SYSTEM,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
   }
 
   private def validateConsumedData(log: Log, consumedBatches: Iterable[FetchedBatch]): Unit = {
@@ -160,10 +162,10 @@ class LogConcurrencyTest {
         if (iter.hasNext) {
           val consumedBatch = iter.next()
           try {
-            assertEquals("Consumed batch with unexpected leader epoch",
-              batch.partitionLeaderEpoch, consumedBatch.epoch)
-            assertEquals("Consumed batch with unexpected base offset",
-              batch.baseOffset, consumedBatch.baseOffset)
+            assertEquals(batch.partitionLeaderEpoch,
+              consumedBatch.epoch, "Consumed batch with unexpected leader epoch")
+            assertEquals(batch.baseOffset,
+              consumedBatch.baseOffset, "Consumed batch with unexpected base offset")
           } catch {
             case t: Throwable =>
               throw new AssertionError(s"Consumed batch $consumedBatch " +

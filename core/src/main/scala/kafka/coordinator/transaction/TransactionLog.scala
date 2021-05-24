@@ -20,14 +20,14 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import kafka.common.MessageFormatter
+import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types._
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{CompressionType, Record, RecordBatch}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 /**
  * Messages stored for the transaction topic represent the producer id and transactional status of the corresponding
@@ -54,91 +54,14 @@ object TransactionLog {
   val EnforcedCompressionType: CompressionType = CompressionType.NONE
   val EnforcedRequiredAcks: Short = (-1).toShort
 
-  // log message formats
-
-  private object KeySchema {
-    private val TXN_ID_KEY = "transactional_id"
-
-    private val V0 = new Schema(new Field(TXN_ID_KEY, STRING))
-    private val SCHEMAS = Map(0 -> V0)
-
-    val CURRENT_VERSION = 0.toShort
-    val CURRENT = schemaForKey(CURRENT_VERSION)
-
-    val TXN_ID_FIELD = V0.get(TXN_ID_KEY)
-
-    def ofVersion(version: Int): Option[Schema] = SCHEMAS.get(version)
-  }
-
-  private object ValueSchema {
-    private val ProducerIdKey = "producer_id"
-    private val ProducerEpochKey = "producer_epoch"
-    private val TxnTimeoutKey = "transaction_timeout"
-    private val TxnStatusKey = "transaction_status"
-    private val TxnPartitionsKey = "transaction_partitions"
-    private val TxnEntryTimestampKey = "transaction_entry_timestamp"
-    private val TxnStartTimestampKey = "transaction_start_timestamp"
-
-    private val PartitionIdsKey = "partition_ids"
-    private val TopicKey = "topic"
-    private val PartitionsSchema = new Schema(new Field(TopicKey, STRING),
-      new Field(PartitionIdsKey, new ArrayOf(INT32)))
-
-    private val V0 = new Schema(new Field(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
-      new Field(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
-      new Field(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
-      new Field(TxnStatusKey, INT8,
-        "TransactionState the transaction is in"),
-      new Field(TxnPartitionsKey, ArrayOf.nullable(PartitionsSchema),
-        "Set of partitions involved in the transaction"),
-      new Field(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
-      new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
-
-    private val Schemas = Map(0 -> V0)
-
-    val CurrentVersion = 0.toShort
-    val Current = schemaForValue(CurrentVersion)
-
-    val ProducerIdField = V0.get(ProducerIdKey)
-    val ProducerEpochField = V0.get(ProducerEpochKey)
-    val TxnTimeoutField = V0.get(TxnTimeoutKey)
-    val TxnStatusField = V0.get(TxnStatusKey)
-    val TxnPartitionsField = V0.get(TxnPartitionsKey)
-    val TxnEntryTimestampField = V0.get(TxnEntryTimestampKey)
-    val TxnStartTimestampField = V0.get(TxnStartTimestampKey)
-
-    val PartitionsTopicField = PartitionsSchema.get(TopicKey)
-    val PartitionIdsField = PartitionsSchema.get(PartitionIdsKey)
-
-    def ofVersion(version: Int): Option[Schema] = Schemas.get(version)
-  }
-
-  private def schemaForKey(version: Int) = {
-    KeySchema.ofVersion(version).getOrElse {
-      throw new KafkaException(s"Unknown transaction log message key schema version $version")
-    }
-  }
-
-  private def schemaForValue(version: Int) = {
-    ValueSchema.ofVersion(version).getOrElse {
-      throw new KafkaException(s"Unknown transaction log message value schema version $version")
-    }
-  }
-
   /**
     * Generates the bytes for transaction log message key
     *
     * @return key bytes
     */
   private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
-    import KeySchema._
-    val key = new Struct(CURRENT)
-    key.set(TXN_ID_FIELD, transactionalId)
-
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + key.sizeOf)
-    byteBuffer.putShort(CURRENT_VERSION)
-    key.writeTo(byteBuffer)
-    byteBuffer.array()
+    MessageUtil.toVersionPrefixedBytes(TransactionLogKey.HIGHEST_SUPPORTED_VERSION,
+      new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
   /**
@@ -147,38 +70,27 @@ object TransactionLog {
     * @return value payload bytes
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
-    import ValueSchema._
-    val value = new Struct(Current)
-    value.set(ProducerIdField, txnMetadata.producerId)
-    value.set(ProducerEpochField, txnMetadata.producerEpoch)
-    value.set(TxnTimeoutField, txnMetadata.txnTimeoutMs)
-    value.set(TxnStatusField, txnMetadata.txnState.byte)
-    value.set(TxnEntryTimestampField, txnMetadata.txnLastUpdateTimestamp)
-    value.set(TxnStartTimestampField, txnMetadata.txnStartTimestamp)
-
-    if (txnMetadata.txnState == Empty) {
-      if (txnMetadata.topicPartitions.nonEmpty)
+    if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      value.set(TxnPartitionsField, null)
-    } else {
-      // first group the topic partitions by their topic names
-      val topicAndPartitions = txnMetadata.topicPartitions.groupBy(_.topic())
+      val transactionPartitions = if (txnMetadata.txnState == Empty) null
+      else txnMetadata.topicPartitions
+        .groupBy(_.topic)
+        .map { case (topic, partitions) =>
+          new TransactionLogValue.PartitionsSchema()
+            .setTopic(topic)
+            .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
+        }.toList.asJava
 
-      val partitionArray = topicAndPartitions.map { case(topic, partitions) =>
-        val topicPartitionsStruct = value.instance(TxnPartitionsField)
-        val partitionIds: Array[Integer] = partitions.map(topicPartition => Integer.valueOf(topicPartition.partition())).toArray
-        topicPartitionsStruct.set(PartitionsTopicField, topic)
-        topicPartitionsStruct.set(PartitionIdsField, partitionIds)
-        topicPartitionsStruct
-      }
-      value.set(TxnPartitionsField, partitionArray.toArray)
-    }
-
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CurrentVersion)
-    value.writeTo(byteBuffer)
-    byteBuffer.array()
+    MessageUtil.toVersionPrefixedBytes(TransactionLogValue.HIGHEST_SUPPORTED_VERSION,
+      new TransactionLogValue()
+        .setProducerId(txnMetadata.producerId)
+        .setProducerEpoch(txnMetadata.producerEpoch)
+        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
+        .setTransactionStatus(txnMetadata.txnState.id)
+        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
+        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
+        .setTransactionPartitions(transactionPartitions))
   }
 
   /**
@@ -188,15 +100,13 @@ object TransactionLog {
     */
   def readTxnRecordKey(buffer: ByteBuffer): TxnKey = {
     val version = buffer.getShort
-    val keySchema = schemaForKey(version)
-    val key = keySchema.read(buffer)
-
-    if (version == KeySchema.CURRENT_VERSION) {
-      val transactionalId = key.getString(KeySchema.TXN_ID_FIELD)
-      TxnKey(version, transactionalId)
-    } else {
-      throw new IllegalStateException(s"Unknown version $version from the transaction log message")
-    }
+    if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
+      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
+      TxnKey(
+        version = version,
+        transactionalId = value.transactionalId
+      )
+    } else throw new IllegalStateException(s"Unknown version $version from the transaction log message")
   }
 
   /**
@@ -205,48 +115,33 @@ object TransactionLog {
     * @return a transaction metadata object from the message
     */
   def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): Option[TransactionMetadata] = {
-    if (buffer == null) { // tombstone
-      None
-    } else {
-      import ValueSchema._
+    // tombstone
+    if (buffer == null) None
+    else {
       val version = buffer.getShort
-      val valueSchema = schemaForValue(version)
-      val value = valueSchema.read(buffer)
+      if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
+        val value = new TransactionLogValue(new ByteBufferAccessor(buffer), version)
+        val transactionMetadata = new TransactionMetadata(
+          transactionalId = transactionalId,
+          producerId = value.producerId,
+          lastProducerId = RecordBatch.NO_PRODUCER_ID,
+          producerEpoch = value.producerEpoch,
+          lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+          txnTimeoutMs = value.transactionTimeoutMs,
+          state = TransactionState.fromId(value.transactionStatus),
+          topicPartitions = mutable.Set.empty[TopicPartition],
+          txnStartTimestamp = value.transactionStartTimestampMs,
+          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs)
 
-      if (version == CurrentVersion) {
-        val producerId = value.getLong(ProducerIdField)
-        val epoch = value.getShort(ProducerEpochField)
-        val timeout = value.getInt(TxnTimeoutField)
-
-        val stateByte = value.getByte(TxnStatusField)
-        val state = TransactionMetadata.byteToState(stateByte)
-        val entryTimestamp = value.getLong(TxnEntryTimestampField)
-        val startTimestamp = value.getLong(TxnStartTimestampField)
-
-        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID,
-          epoch, RecordBatch.NO_PRODUCER_EPOCH, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
-
-        if (!state.equals(Empty)) {
-          val topicPartitionArray = value.getArray(TxnPartitionsField)
-
-          topicPartitionArray.foreach { memberMetadataObj =>
-            val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
-            val topic = memberMetadata.getString(PartitionsTopicField)
-            val partitionIdArray = memberMetadata.getArray(PartitionIdsField)
-
-            val topicPartitions = partitionIdArray.map { partitionIdObj =>
-              val partitionId = partitionIdObj.asInstanceOf[Integer]
-              new TopicPartition(topic, partitionId)
-            }
-
-            transactionMetadata.addPartitions(topicPartitions.toSet)
-          }
-        }
-
+        if (!transactionMetadata.state.equals(Empty))
+          value.transactionPartitions.forEach(partitionsSchema =>
+            transactionMetadata.addPartitions(partitionsSchema.partitionIds
+              .asScala
+              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId))
+              .toSet)
+          )
         Some(transactionMetadata)
-      } else {
-        throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
-      }
+      } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }
 
@@ -292,5 +187,5 @@ object TransactionLog {
 }
 
 case class TxnKey(version: Short, transactionalId: String) {
-  override def toString: String = transactionalId.toString
+  override def toString: String = transactionalId
 }

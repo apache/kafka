@@ -18,6 +18,11 @@ Define Kafka configuration property names here.
 """
 
 BROKER_ID = "broker.id"
+NODE_ID = "node.id"
+FIRST_BROKER_PORT = 9092
+FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
+FIRST_CONTROLLER_ID = 3001
+CLUSTER_ID = "I2eXt9rvSnyhct8BYmW6-w"
 PORT = "port"
 ADVERTISED_HOSTNAME = "advertised.host.name"
 
@@ -42,6 +47,7 @@ ZOOKEEPER_CONNECT = "zookeeper.connect"
 ZOOKEEPER_SSL_CLIENT_ENABLE = "zookeeper.ssl.client.enable"
 ZOOKEEPER_CLIENT_CNXN_SOCKET = "zookeeper.clientCnxnSocket"
 ZOOKEEPER_CONNECTION_TIMEOUT_MS = "zookeeper.connection.timeout.ms"
+ZOOKEEPER_SESSION_TIMEOUT_MS = "zookeeper.session.timeout.ms"
 INTER_BROKER_PROTOCOL_VERSION = "inter.broker.protocol.version"
 MESSAGE_FORMAT_VERSION = "log.message.format.version"
 MESSAGE_TIMESTAMP_TYPE = "message.timestamp.type"
@@ -54,7 +60,7 @@ OFFSETS_TOPIC_NUM_PARTITIONS = "offsets.topic.num.partitions"
 
 DELEGATION_TOKEN_MAX_LIFETIME_MS="delegation.token.max.lifetime.ms"
 DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
-DELEGATION_TOKEN_MASTER_KEY="delegation.token.master.key"
+DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 

@@ -57,9 +57,14 @@ public interface RecordCollector {
     void flush();
 
     /**
-     * Close the internal {@link Producer}.
+     * Clean close the internal {@link Producer}.
      */
-    void close();
+    void closeClean();
+
+    /**
+     * Dirty close the internal {@link Producer}.
+     */
+    void closeDirty();
 
     /**
      * The last acked offsets from the internal {@link Producer}.

@@ -25,7 +25,48 @@ import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{immutable, mutable}
 
-private[transaction] sealed trait TransactionState { def byte: Byte }
+
+object TransactionState {
+  val AllStates = Set(
+    Empty,
+    Ongoing,
+    PrepareCommit,
+    PrepareAbort,
+    CompleteCommit,
+    CompleteAbort,
+    Dead,
+    PrepareEpochFence
+  )
+
+  def fromName(name: String): Option[TransactionState] = {
+    AllStates.find(_.name == name)
+  }
+
+  def fromId(id: Byte): TransactionState = {
+    id match {
+      case 0 => Empty
+      case 1 => Ongoing
+      case 2 => PrepareCommit
+      case 3 => PrepareAbort
+      case 4 => CompleteCommit
+      case 5 => CompleteAbort
+      case 6 => Dead
+      case 7 => PrepareEpochFence
+      case _ => throw new IllegalStateException(s"Unknown transaction state id $id from the transaction status message")
+    }
+  }
+}
+
+private[transaction] sealed trait TransactionState {
+  def id: Byte
+
+  /**
+   * Get the name of this state. This is exposed through the `DescribeTransactions` API.
+   */
+  def name: String
+
+  def validPreviousStates: Set[TransactionState]
+}
 
 /**
  * Transaction has not existed yet
@@ -33,7 +74,11 @@ private[transaction] sealed trait TransactionState { def byte: Byte }
  * transition: received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[transaction] case object Empty extends TransactionState { val byte: Byte = 0 }
+private[transaction] case object Empty extends TransactionState {
+  val id: Byte = 0
+  val name: String = "Empty"
+  val validPreviousStates: Set[TransactionState] = Set(Empty, CompleteCommit, CompleteAbort)
+}
 
 /**
  * Transaction has started and ongoing
@@ -43,46 +88,74 @@ private[transaction] case object Empty extends TransactionState { val byte: Byte
  *             received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[transaction] case object Ongoing extends TransactionState { val byte: Byte = 1 }
+private[transaction] case object Ongoing extends TransactionState {
+  val id: Byte = 1
+  val name: String = "Ongoing"
+  val validPreviousStates: Set[TransactionState] = Set(Ongoing, Empty, CompleteCommit, CompleteAbort)
+}
 
 /**
  * Group is preparing to commit
  *
  * transition: received acks from all partitions => CompleteCommit
  */
-private[transaction] case object PrepareCommit extends TransactionState { val byte: Byte = 2}
+private[transaction] case object PrepareCommit extends TransactionState {
+  val id: Byte = 2
+  val name: String = "PrepareCommit"
+  val validPreviousStates: Set[TransactionState] = Set(Ongoing)
+}
 
 /**
  * Group is preparing to abort
  *
  * transition: received acks from all partitions => CompleteAbort
  */
-private[transaction] case object PrepareAbort extends TransactionState { val byte: Byte = 3 }
+private[transaction] case object PrepareAbort extends TransactionState {
+  val id: Byte = 3
+  val name: String = "PrepareAbort"
+  val validPreviousStates: Set[TransactionState] = Set(Ongoing, PrepareEpochFence)
+}
 
 /**
  * Group has completed commit
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteCommit extends TransactionState { val byte: Byte = 4 }
+private[transaction] case object CompleteCommit extends TransactionState {
+  val id: Byte = 4
+  val name: String = "CompleteCommit"
+  val validPreviousStates: Set[TransactionState] = Set(PrepareCommit)
+}
 
 /**
  * Group has completed abort
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
+private[transaction] case object CompleteAbort extends TransactionState {
+  val id: Byte = 5
+  val name: String = "CompleteAbort"
+  val validPreviousStates: Set[TransactionState] = Set(PrepareAbort)
+}
 
 /**
   * TransactionalId has expired and is about to be removed from the transaction cache
   */
-private[transaction] case object Dead extends TransactionState { val byte: Byte = 6 }
+private[transaction] case object Dead extends TransactionState {
+  val id: Byte = 6
+  val name: String = "Dead"
+  val validPreviousStates: Set[TransactionState] = Set(Empty, CompleteAbort, CompleteCommit)
+}
 
 /**
   * We are in the middle of bumping the epoch and fencing out older producers.
   */
 
-private[transaction] case object PrepareEpochFence extends TransactionState { val byte: Byte = 7}
+private[transaction] case object PrepareEpochFence extends TransactionState {
+  val id: Byte = 7
+  val name: String = "PrepareEpochFence"
+  val validPreviousStates: Set[TransactionState] = Set(Ongoing)
+}
 
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
@@ -98,34 +171,6 @@ private[transaction] object TransactionMetadata {
             lastProducerEpoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
     new TransactionMetadata(transactionalId, producerId, lastProducerId, producerEpoch, lastProducerEpoch,
       txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
-
-  def byteToState(byte: Byte): TransactionState = {
-    byte match {
-      case 0 => Empty
-      case 1 => Ongoing
-      case 2 => PrepareCommit
-      case 3 => PrepareAbort
-      case 4 => CompleteCommit
-      case 5 => CompleteAbort
-      case 6 => Dead
-      case 7 => PrepareEpochFence
-      case unknown => throw new IllegalStateException("Unknown transaction state byte " + unknown + " from the transaction status message")
-    }
-  }
-
-  def isValidTransition(oldState: TransactionState, newState: TransactionState): Boolean =
-    TransactionMetadata.validPreviousStates(newState).contains(oldState)
-
-  private val validPreviousStates: Map[TransactionState, Set[TransactionState]] =
-    Map(Empty -> Set(Empty, CompleteCommit, CompleteAbort),
-      Ongoing -> Set(Ongoing, Empty, CompleteCommit, CompleteAbort),
-      PrepareCommit -> Set(Ongoing),
-      PrepareAbort -> Set(Ongoing, PrepareEpochFence),
-      CompleteCommit -> Set(PrepareCommit),
-      CompleteAbort -> Set(PrepareAbort),
-      Dead -> Set(Empty, CompleteAbort, CompleteCommit),
-      PrepareEpochFence -> Set(Ongoing)
-    )
 
   def isEpochExhausted(producerEpoch: Short): Boolean = producerEpoch >= Short.MaxValue - 1
 }
@@ -183,6 +228,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   // initialized as the same as the current state
   var pendingState: Option[TransactionState] = None
 
+  // Indicates that during a previous attempt to fence a producer, the bumped epoch may not have been
+  // successfully written to the log. If this is true, we will not bump the epoch again when fencing
+  var hasFailedEpochFence: Boolean = false
+
   private[transaction] val lock = new ReentrantLock
 
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
@@ -210,7 +259,11 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     if (producerEpoch == Short.MaxValue)
       throw new IllegalStateException(s"Cannot fence producer with epoch equal to Short.MaxValue since this would overflow")
 
-    prepareTransitionTo(PrepareEpochFence, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+    // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
+    // This is safe because we never return the epoch to client if we fail to fence the epoch
+    val bumpedEpoch = if (hasFailedEpochFence) producerEpoch else (producerEpoch + 1).toShort
+
+    prepareTransitionTo(PrepareEpochFence, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
       topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
@@ -241,10 +294,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
           Right(producerEpoch, lastProducerEpoch)
         else {
-          // Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_EPOCH error
+          // Otherwise, the producer has a fenced epoch and should receive an PRODUCER_FENCED error
           info(s"Expected producer epoch $expectedEpoch does not match current " +
             s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
-          Left(Errors.INVALID_PRODUCER_EPOCH)
+          Left(Errors.PRODUCER_FENCED)
         }
     }
 
@@ -284,6 +337,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
+
+    // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
+    hasFailedEpochFence = false
     prepareTransitionTo(newState, producerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
       txnStartTimestamp, updateTimestamp)
   }
@@ -325,7 +381,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       throw new IllegalArgumentException(s"Illegal new producer epoch $newEpoch")
 
     // check that the new state transition is valid and update the pending state if necessary
-    if (TransactionMetadata.validPreviousStates(newState).contains(state)) {
+    if (newState.validPreviousStates.contains(state)) {
       val transitMetadata = TxnTransitMetadata(newProducerId, producerId, newEpoch, newLastEpoch, newTxnTimeoutMs, newState,
         newTopicPartitions, newTxnStartTimestamp, updateTimestamp)
       debug(s"TransactionalId $transactionalId prepare transition from $state to $transitMetadata")
@@ -468,6 +524,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       transactionalId == other.transactionalId &&
       producerId == other.producerId &&
       producerEpoch == other.producerEpoch &&
+      lastProducerEpoch == other.lastProducerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions) &&

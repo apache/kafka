@@ -70,11 +70,12 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.close_port(SecurityConfig.PLAINTEXT)
         self.set_authorizer_and_bounce(client_protocol, broker_protocol)
 
-    def set_authorizer_and_bounce(self, client_protocol, broker_protocol, authorizer_class_name = KafkaService.ACL_AUTHORIZER):
-        self.kafka.authorizer_class_name = authorizer_class_name
-        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
-        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
-        self.bounce()
+    def set_authorizer_and_bounce(self, client_protocol, broker_protocol):
+        self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
+        # Force use of direct ZooKeeper access due to SecurityDisabledException: No Authorizer is configured on the broker.
+        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.bounce() # enables the authorizer
 
     def open_secured_port(self, client_protocol):
         self.kafka.security_protocol = client_protocol
@@ -88,18 +89,21 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.bounce()
 
     def roll_in_sasl_mechanism(self, security_protocol, new_sasl_mechanism):
-        # Roll cluster to update inter-broker SASL mechanism. This disables the old mechanism.
+        # Roll cluster to update inter-broker SASL mechanism.
+        # We need the inter-broker SASL mechanism to still be enabled through this roll.
+        self.kafka.client_sasl_mechanism = "%s,%s" % (self.kafka.interbroker_sasl_mechanism, new_sasl_mechanism)
         self.kafka.interbroker_sasl_mechanism = new_sasl_mechanism
         self.bounce()
 
-        # Bounce again with ACLs for new mechanism. Use old SimpleAclAuthorizer here to ensure that is also tested.
-        self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.SIMPLE_AUTHORIZER)
+        # Bounce again with ACLs for new mechanism.
+        self.kafka.client_sasl_mechanism = new_sasl_mechanism  # Removes old SASL mechanism completely
+        self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):
         # Enable the new internal listener on all brokers first
         self.kafka.open_port(self.kafka.INTERBROKER_LISTENER_NAME)
         self.kafka.port_mappings[self.kafka.INTERBROKER_LISTENER_NAME].security_protocol = broker_security_protocol
-        self.kafka.client_sasl_mechanism = broker_sasl_mechanism
+        self.kafka.port_mappings[self.kafka.INTERBROKER_LISTENER_NAME].sasl_mechanism = broker_sasl_mechanism
         self.bounce()
 
         # Update inter-broker listener after all brokers have been updated to enable the new listener

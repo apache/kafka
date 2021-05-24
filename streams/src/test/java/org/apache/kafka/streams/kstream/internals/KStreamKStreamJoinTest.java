@@ -19,9 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -29,6 +31,8 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.Stores;
@@ -43,12 +47,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
+
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -75,6 +83,38 @@ public class KStreamKStreamJoinTest {
     @Test
     public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() {
         shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_LATEST);
+    }
+
+
+    @Test
+    public void shouldReuseRepartitionTopicWithGeneratedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> stream1 = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream2 = builder.stream("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream3 = builder.stream("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> newStream = stream1.map((k, v) -> new KeyValue<>(v, k));
+        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100))).to("out-one");
+        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100))).to("out-to");
+        assertEquals(expectedTopologyWithGeneratedRepartitionTopic, builder.build(props).describe().toString());
+    }
+
+    @Test
+    public void shouldCreateRepartitionTopicsWithUserProvidedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> stream1 = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream2 = builder.stream("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream3 = builder.stream("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> newStream = stream1.map((k, v) -> new KeyValue<>(v, k));
+        final StreamJoined<String, String, String> streamJoined = StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String());
+        newStream.join(stream2, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100)), streamJoined.withName("first-join")).to("out-one");
+        newStream.join(stream3, (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(100)), streamJoined.withName("second-join")).to("out-two");
+        final Topology topology =  builder.build(props);
+        System.out.println(topology.describe().toString());
+        assertEquals(expectedTopologyWithUserNamedRepartitionTopics, topology.describe().toString());
     }
 
     private void shouldLogAndMeterOnSkippedRecordsWithNullValue(final String builtInMetricsVersion) {
@@ -115,6 +155,69 @@ public class KStreamKStreamJoinTest {
                     ).metricValue()
                 );
             }
+        }
+    }
+
+    @Test
+    public void shouldDisableLoggingOnStreamJoined() {
+
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
+            .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+            .withStoreName("store")
+            .withLoggingDisabled();
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
+
+        left.join(
+            right,
+            (value1, value2) -> value1 + value2,
+            joinWindows,
+            streamJoined
+        );
+
+        final Topology topology = builder.build();
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+
+        assertThat(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled(), equalTo(false));
+        assertThat(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled(), equalTo(false));
+    }
+
+    @Test
+    public void shouldEnableLoggingWithCustomConfigOnStreamJoined() {
+
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
+        final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined
+            .with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+            .withStoreName("store")
+            .withLoggingEnabled(Collections.singletonMap("test", "property"));
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
+
+        left.join(
+            right,
+            (value1, value2) -> value1 + value2,
+            joinWindows,
+            streamJoined
+        );
+
+        final Topology topology = builder.build();
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+
+        internalTopologyBuilder.buildSubtopology(0);
+
+        assertThat(internalTopologyBuilder.stateStores().get("store-this-join-store").loggingEnabled(), equalTo(true));
+        assertThat(internalTopologyBuilder.stateStores().get("store-other-join-store").loggingEnabled(), equalTo(true));
+        assertThat(internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
+        for (final InternalTopicConfig config : internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
+            assertThat(
+                config.getProperties(Collections.emptyMap(), 0).get("test"),
+                equalTo("property")
+            );
         }
     }
 
@@ -417,7 +520,7 @@ public class KStreamKStreamJoinTest {
                     driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // push two items to the primary stream; the other window is empty; this should produce two items
+            // push two items to the primary stream; the other window is empty; this should not produce items yet
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0, 1:A1 }
@@ -425,8 +528,7 @@ public class KStreamKStreamJoinTest {
             for (int i = 0; i < 2; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
-                new KeyValueTimestamp<>(1, "A1+null", 0));
+            processor.checkAndClearProcessResult();
 
             // push two items to the other stream; this should produce two items
             // w1 = { 0:A0, 1:A1 }
@@ -439,7 +541,7 @@ public class KStreamKStreamJoinTest {
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+a0", 0),
                 new KeyValueTimestamp<>(1, "A1+a1", 0));
 
-            // push all four items to the primary stream; this should produce four items
+            // push all four items to the primary stream; this should produce two items
             // w1 = { 0:A0, 1:A1 }
             // w2 = { 0:a0, 1:a1 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 3:B3 }
@@ -448,9 +550,7 @@ public class KStreamKStreamJoinTest {
                 inputTopic1.pipeInput(expectedKey, "B" + expectedKey);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "B0+a0", 0),
-                new KeyValueTimestamp<>(1, "B1+a1", 0),
-                new KeyValueTimestamp<>(2, "B2+null", 0),
-                new KeyValueTimestamp<>(3, "B3+null", 0));
+                new KeyValueTimestamp<>(1, "B1+a1", 0));
 
             // push all items to the other stream; this should produce six items
             // w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 3:B3 }
@@ -1043,7 +1143,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.of(ofMillis(0)).after(ofMillis(100)),
+            JoinWindows.of(ofMillis(0)).after(ofMillis(100)).grace(ofMillis(0)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String()));
@@ -1556,4 +1656,122 @@ public class KStreamKStreamJoinTest {
     }
 
 
+    private final String expectedTopologyWithUserNamedRepartitionTopics = "Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+            "      --> KSTREAM-MAP-0000000003\n" +
+            "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+            "      --> second-join-left-repartition-filter, first-join-left-repartition-filter\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: first-join-left-repartition-filter (stores: [])\n" +
+            "      --> first-join-left-repartition-sink\n" +
+            "      <-- KSTREAM-MAP-0000000003\n" +
+            "    Processor: second-join-left-repartition-filter (stores: [])\n" +
+            "      --> second-join-left-repartition-sink\n" +
+            "      <-- KSTREAM-MAP-0000000003\n" +
+            "    Sink: first-join-left-repartition-sink (topic: first-join-left-repartition)\n" +
+            "      <-- first-join-left-repartition-filter\n" +
+            "    Sink: second-join-left-repartition-sink (topic: second-join-left-repartition)\n" +
+            "      <-- second-join-left-repartition-filter\n" +
+            "\n" +
+            "  Sub-topology: 1\n" +
+            "    Source: KSTREAM-SOURCE-0000000001 (topics: [topic2])\n" +
+            "      --> first-join-other-windowed\n" +
+            "    Source: first-join-left-repartition-source (topics: [first-join-left-repartition])\n" +
+            "      --> first-join-this-windowed\n" +
+            "    Processor: first-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> first-join-other-join\n" +
+            "      <-- KSTREAM-SOURCE-0000000001\n" +
+            "    Processor: first-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> first-join-this-join\n" +
+            "      <-- first-join-left-repartition-source\n" +
+            "    Processor: first-join-other-join (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> first-join-merge\n" +
+            "      <-- first-join-other-windowed\n" +
+            "    Processor: first-join-this-join (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> first-join-merge\n" +
+            "      <-- first-join-this-windowed\n" +
+            "    Processor: first-join-merge (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000012\n" +
+            "      <-- first-join-this-join, first-join-other-join\n" +
+            "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n" +
+            "      <-- first-join-merge\n" +
+            "\n" +
+            "  Sub-topology: 2\n" +
+            "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic3])\n" +
+            "      --> second-join-other-windowed\n" +
+            "    Source: second-join-left-repartition-source (topics: [second-join-left-repartition])\n" +
+            "      --> second-join-this-windowed\n" +
+            "    Processor: second-join-other-windowed (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> second-join-other-join\n" +
+            "      <-- KSTREAM-SOURCE-0000000002\n" +
+            "    Processor: second-join-this-windowed (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> second-join-this-join\n" +
+            "      <-- second-join-left-repartition-source\n" +
+            "    Processor: second-join-other-join (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> second-join-merge\n" +
+            "      <-- second-join-other-windowed\n" +
+            "    Processor: second-join-this-join (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> second-join-merge\n" +
+            "      <-- second-join-this-windowed\n" +
+            "    Processor: second-join-merge (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000021\n" +
+            "      <-- second-join-this-join, second-join-other-join\n" +
+            "    Sink: KSTREAM-SINK-0000000021 (topic: out-two)\n" +
+            "      <-- second-join-merge\n\n";
+    
+    private final String expectedTopologyWithGeneratedRepartitionTopic = "Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+            "      --> KSTREAM-MAP-0000000003\n" +
+            "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000005\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000004\n" +
+            "      <-- KSTREAM-MAP-0000000003\n" +
+            "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-MAP-0000000003-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000005\n" +
+            "\n" +
+            "  Sub-topology: 1\n" +
+            "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-MAP-0000000003-repartition])\n" +
+            "      --> KSTREAM-WINDOWED-0000000007, KSTREAM-WINDOWED-0000000016\n" +
+            "    Source: KSTREAM-SOURCE-0000000001 (topics: [topic2])\n" +
+            "      --> KSTREAM-WINDOWED-0000000008\n" +
+            "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic3])\n" +
+            "      --> KSTREAM-WINDOWED-0000000017\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000007 (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> KSTREAM-JOINTHIS-0000000009\n" +
+            "      <-- KSTREAM-SOURCE-0000000006\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000008 (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> KSTREAM-JOINOTHER-0000000010\n" +
+            "      <-- KSTREAM-SOURCE-0000000001\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000016 (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> KSTREAM-JOINTHIS-0000000018\n" +
+            "      <-- KSTREAM-SOURCE-0000000006\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000017 (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> KSTREAM-JOINOTHER-0000000019\n" +
+            "      <-- KSTREAM-SOURCE-0000000002\n" +
+            "    Processor: KSTREAM-JOINOTHER-0000000010 (stores: [KSTREAM-JOINTHIS-0000000009-store])\n" +
+            "      --> KSTREAM-MERGE-0000000011\n" +
+            "      <-- KSTREAM-WINDOWED-0000000008\n" +
+            "    Processor: KSTREAM-JOINOTHER-0000000019 (stores: [KSTREAM-JOINTHIS-0000000018-store])\n" +
+            "      --> KSTREAM-MERGE-0000000020\n" +
+            "      <-- KSTREAM-WINDOWED-0000000017\n" +
+            "    Processor: KSTREAM-JOINTHIS-0000000009 (stores: [KSTREAM-JOINOTHER-0000000010-store])\n" +
+            "      --> KSTREAM-MERGE-0000000011\n" +
+            "      <-- KSTREAM-WINDOWED-0000000007\n" +
+            "    Processor: KSTREAM-JOINTHIS-0000000018 (stores: [KSTREAM-JOINOTHER-0000000019-store])\n" +
+            "      --> KSTREAM-MERGE-0000000020\n" +
+            "      <-- KSTREAM-WINDOWED-0000000016\n" +
+            "    Processor: KSTREAM-MERGE-0000000011 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000012\n" +
+            "      <-- KSTREAM-JOINTHIS-0000000009, KSTREAM-JOINOTHER-0000000010\n" +
+            "    Processor: KSTREAM-MERGE-0000000020 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000021\n" +
+            "      <-- KSTREAM-JOINTHIS-0000000018, KSTREAM-JOINOTHER-0000000019\n" +
+            "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n" +
+            "      <-- KSTREAM-MERGE-0000000011\n" +
+            "    Sink: KSTREAM-SINK-0000000021 (topic: out-to)\n" +
+            "      <-- KSTREAM-MERGE-0000000020\n\n";
 }

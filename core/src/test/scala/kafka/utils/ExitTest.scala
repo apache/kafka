@@ -19,9 +19,8 @@ package kafka.utils
 
 import java.io.IOException
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ExitTest {
   @Test
@@ -36,11 +35,11 @@ class ExitTest {
     val statusCode = 0
     val message = Some("message")
     try {
-      intercept[IOException] {Exit.halt(statusCode)}
+      assertThrows(classOf[IOException], () => Exit.halt(statusCode))
       assertEquals(statusCode, array(0))
       assertEquals(None, array(1))
 
-      intercept[IOException] {Exit.halt(statusCode, message)}
+      assertThrows(classOf[IOException], () => Exit.halt(statusCode, message))
       assertEquals(statusCode, array(0))
       assertEquals(message, array(1))
     } finally {
@@ -60,11 +59,11 @@ class ExitTest {
     val statusCode = 0
     val message = Some("message")
     try {
-      intercept[IOException] {Exit.exit(statusCode)}
+      assertThrows(classOf[IOException], () => Exit.exit(statusCode))
       assertEquals(statusCode, array(0))
       assertEquals(None, array(1))
 
-      intercept[IOException] {Exit.exit(statusCode, message)}
+      assertThrows(classOf[IOException], () => Exit.exit(statusCode, message))
       assertEquals(statusCode, array(0))
       assertEquals(message, array(1))
     } finally {
@@ -89,7 +88,7 @@ class ExitTest {
       array(1) = array(1).asInstanceOf[Int] + 1
     }
     try {
-      Exit.addShutdownHook(name, sideEffect) // by-name parameter, only invoked due to above shutdownHookAdder
+      Exit.addShutdownHook(name, sideEffect()) // by-name parameter, only invoked due to above shutdownHookAdder
       assertEquals(1, array(1))
       assertEquals(name * array(1).asInstanceOf[Int], array(0).toString)
       Exit.addShutdownHook(name, array(1) = array(1).asInstanceOf[Int] + 1) // by-name parameter, only invoked due to above shutdownHookAdder
@@ -109,7 +108,7 @@ class ExitTest {
       // mutate the first element
       array(0) = array(0) + name
     }
-    Exit.addShutdownHook(name, sideEffect) // by-name parameter, not invoked
+    Exit.addShutdownHook(name, sideEffect()) // by-name parameter, not invoked
     // make sure the first element wasn't mutated
     assertEquals(name, array(0))
     Exit.addShutdownHook(name, sideEffect()) // by-name parameter, not invoked

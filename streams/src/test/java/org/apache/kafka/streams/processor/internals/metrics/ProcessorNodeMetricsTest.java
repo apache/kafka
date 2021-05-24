@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
@@ -86,7 +87,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -107,7 +108,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -320,7 +321,7 @@ public class ProcessorNodeMetricsTest {
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -328,7 +329,7 @@ public class ProcessorNodeMetricsTest {
         );
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
             descriptionOfAvg,
@@ -345,7 +346,7 @@ public class ProcessorNodeMetricsTest {
             .andReturn(parentTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedParentSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             parentTagMap,
             metricNamePrefix,
             descriptionOfRate,
@@ -362,7 +363,7 @@ public class ProcessorNodeMetricsTest {
         setUpThroughputSensor(metricNamePrefix, descriptionOfRate, descriptionOfCount, RecordingLevel.DEBUG, parentSensors);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
             descriptionOfAvgLatency,
@@ -386,7 +387,7 @@ public class ProcessorNodeMetricsTest {
         expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
-            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
             metricNamePrefix,
             descriptionOfRate,

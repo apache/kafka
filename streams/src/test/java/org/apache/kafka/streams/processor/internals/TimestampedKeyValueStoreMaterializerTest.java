@@ -111,6 +111,7 @@ public class TimestampedKeyValueStoreMaterializerTest {
         final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name");
         EasyMock.expect(supplier.name()).andReturn("name").anyTimes();
         EasyMock.expect(supplier.get()).andReturn(store);
+        EasyMock.expect(supplier.metricsScope()).andReturn("metricScope");
         EasyMock.replay(supplier);
 
         final MaterializedInternal<String, Integer, KeyValueStore<Bytes, byte[]>> materialized =

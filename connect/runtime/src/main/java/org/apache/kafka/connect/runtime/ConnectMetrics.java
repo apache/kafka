@@ -21,16 +21,21 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,8 +67,9 @@ public class ConnectMetrics {
      * @param workerId the worker identifier; may not be null
      * @param config   the worker configuration; may not be null
      * @param time     the time; may not be null
+     * @param clusterId the Kafka cluster ID
      */
-    public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
+    public ConnectMetrics(String workerId, WorkerConfig config, Time time, String clusterId) {
         this.workerId = workerId;
         this.time = time;
 
@@ -75,10 +81,20 @@ public class ConnectMetrics {
         MetricConfig metricConfig = new MetricConfig().samples(numSamples)
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
-        JmxReporter jmxReporter = new JmxReporter(JMX_PREFIX);
+        JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
-        this.metrics = new Metrics(metricConfig, reporters, time);
+
+        Map<String, Object> contextLabels = new HashMap<>();
+        contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
+        Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
+        if (groupId != null) {
+            contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
+        }
+        MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
+        this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
         AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics, time.milliseconds());
     }
@@ -133,7 +149,7 @@ public class ConnectMetrics {
     }
 
     protected MetricGroupId groupId(String groupName, String... tagKeyValues) {
-        Map<String, String> tags = tags(tagKeyValues);
+        Map<String, String> tags = MetricsUtils.getTags(tagKeyValues);
         return new MetricGroupId(groupName, tags);
     }
 
@@ -416,22 +432,6 @@ public class ConnectMetrics {
          * @return the literal metric value; may not be null
          */
         T metricValue(long now);
-    }
-
-    /**
-     * Create a set of tags using the supplied key and value pairs. The order of the tags will be kept.
-     *
-     * @param keyValue the key and value pairs for the tags; must be an even number
-     * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
-     */
-    static Map<String, String> tags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>();
-        for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(keyValue[i], keyValue[i + 1]);
-        }
-        return tags;
     }
 
     /**

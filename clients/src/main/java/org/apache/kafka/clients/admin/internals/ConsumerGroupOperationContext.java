@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin.internals;
 
+import java.util.Map;
 import java.util.Optional;
 
 import org.apache.kafka.clients.admin.AbstractOptions;
@@ -76,12 +77,15 @@ public final class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>
     }
 
     public static boolean hasCoordinatorMoved(AbstractResponse response) {
-        return response.errorCounts().keySet()
-                .stream()
-                .anyMatch(error -> error == Errors.NOT_COORDINATOR);
+        return hasCoordinatorMoved(response.errorCounts());
     }
 
-    public static boolean shouldRefreshCoordinator(Errors error) {
-        return error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE;
+    public static boolean hasCoordinatorMoved(Map<Errors, Integer> errorCounts) {
+        return errorCounts.containsKey(Errors.NOT_COORDINATOR);
+    }
+
+    public static boolean shouldRefreshCoordinator(Map<Errors, Integer> errorCounts) {
+        return errorCounts.containsKey(Errors.COORDINATOR_LOAD_IN_PROGRESS) ||
+                errorCounts.containsKey(Errors.COORDINATOR_NOT_AVAILABLE);
     }
 }

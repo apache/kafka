@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CompressionTypeTest {
 

@@ -22,22 +22,26 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -57,8 +61,11 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * </p>
  */
 public class ConnectorConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ConnectorConfig.class);
+
     protected static final String COMMON_GROUP = "Common";
     protected static final String TRANSFORMS_GROUP = "Transforms";
+    protected static final String PREDICATES_GROUP = "Predicates";
     protected static final String ERROR_GROUP = "Error Handling";
 
     public static final String NAME_CONFIG = "name";
@@ -97,6 +104,10 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String TRANSFORMS_CONFIG = "transforms";
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
+
+    public static final String PREDICATES_CONFIG = "predicates";
+    private static final String PREDICATES_DOC = "Aliases for the predicates used by transformations.";
+    private static final String PREDICATES_DISPLAY = "Predicates";
 
     public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
     private static final String CONFIG_RELOAD_ACTION_DOC =
@@ -147,6 +158,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX = "producer.override.";
     public static final String CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX = "consumer.override.";
     public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.override.";
+    public static final String PREDICATES_PREFIX = "predicates.";
 
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
@@ -170,21 +182,8 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
-                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void ensureValid(String name, Object value) {
-                        final List<String> transformAliases = (List<String>) value;
-                        if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
-                            throw new ConfigException(name, value, "Duplicate alias provided.");
-                        }
-                    }
-
-                    @Override
-                    public String toString() {
-                        return "unique transformation aliases";
-                    }
-                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(PREDICATES_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
                         in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
                         CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY)
@@ -201,8 +200,26 @@ public class ConnectorConfig extends AbstractConfig {
                         ERRORS_LOG_INCLUDE_MESSAGES_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY);
     }
 
+    private static ConfigDef.CompositeValidator aliasValidator(String kind) {
+        return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public void ensureValid(String name, Object value) {
+                final List<String> aliases = (List<String>) value;
+                if (aliases.size() > new HashSet<>(aliases).size()) {
+                    throw new ConfigException(name, value, "Duplicate alias provided.");
+                }
+            }
+
+            @Override
+            public String toString() {
+                return "unique " + kind + " aliases";
+            }
+        });
+    }
+
     public ConnectorConfig(Plugins plugins) {
-        this(plugins, new HashMap<String, String>());
+        this(plugins, Collections.emptyMap());
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
@@ -257,12 +274,23 @@ public class ConnectorConfig extends AbstractConfig {
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
+
             try {
                 @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = getClass(prefix + "type").asSubclass(Transformation.class)
-                        .getDeclaredConstructor().newInstance();
-                transformation.configure(originalsWithPrefix(prefix));
-                transformations.add(transformation);
+                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
+                Map<String, Object> configs = originalsWithPrefix(prefix);
+                Object predicateAlias = configs.remove(PredicatedTransformation.PREDICATE_CONFIG);
+                Object negate = configs.remove(PredicatedTransformation.NEGATE_CONFIG);
+                transformation.configure(configs);
+                if (predicateAlias != null) {
+                    String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
+                    @SuppressWarnings("unchecked")
+                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
+                    predicate.configure(originalsWithPrefix(predicatePrefix));
+                    transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                } else {
+                    transformations.add(transformation);
+                }
             } catch (Exception e) {
                 throw new ConnectException(e);
             }
@@ -276,116 +304,250 @@ public class ConnectorConfig extends AbstractConfig {
      * <p>
      * {@code requireFullConfig} specifies whether required config values that are missing should cause an exception to be thrown.
      */
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
-        Object transformAliases = ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
-        if (!(transformAliases instanceof List)) {
-            return baseConfigDef;
-        }
-
         ConfigDef newDef = new ConfigDef(baseConfigDef);
-        LinkedHashSet<?> uniqueTransformAliases = new LinkedHashSet<>((List<?>) transformAliases);
-        for (Object o : uniqueTransformAliases) {
-            if (!(o instanceof String)) {
-                throw new ConfigException("Item in " + TRANSFORMS_CONFIG + " property is not of "
-                        + "type String");
-            }
-            String alias = (String) o;
-            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
-            final String group = TRANSFORMS_GROUP + ": " + alias;
-            int orderInGroup = 0;
-
-            final String transformationTypeConfig = prefix + "type";
-            final ConfigDef.Validator typeValidator = new ConfigDef.Validator() {
-                @Override
-                public void ensureValid(String name, Object value) {
-                    getConfigDefFromTransformation(transformationTypeConfig, (Class) value);
-                }
-            };
-            newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
-                    "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
-                    Collections.<String>emptyList(), new TransformationClassRecommender(plugins));
-
-            final ConfigDef transformationConfigDef;
-            try {
-                final String className = props.get(transformationTypeConfig);
-                final Class<?> cls = (Class<?>) ConfigDef.parseType(transformationTypeConfig, className, Type.CLASS);
-                transformationConfigDef = getConfigDefFromTransformation(transformationTypeConfig, cls);
-            } catch (ConfigException e) {
-                if (requireFullConfig) {
-                    throw e;
-                } else {
-                    continue;
-                }
+        new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
+                props, requireFullConfig) {
+            @SuppressWarnings("rawtypes")
+            @Override
+            protected Set<PluginDesc<Transformation<?>>> plugins() {
+                return (Set) plugins.transformations();
             }
 
-            newDef.embed(prefix, group, orderInGroup, transformationConfigDef);
-        }
+            @Override
+            protected ConfigDef initialConfigDef() {
+                // All Transformations get these config parameters implicitly
+                return super.initialConfigDef()
+                        .define(PredicatedTransformation.PREDICATE_CONFIG, Type.STRING, "", Importance.MEDIUM,
+                                "The alias of a predicate used to determine whether to apply this transformation.")
+                        .define(PredicatedTransformation.NEGATE_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM,
+                                "Whether the configured predicate should be negated.");
+            }
 
+            @Override
+            protected Stream<Map.Entry<String, ConfigDef.ConfigKey>> configDefsForClass(String typeConfig) {
+                return super.configDefsForClass(typeConfig)
+                    .filter(entry -> {
+                        // The implicit parameters mask any from the transformer with the same name
+                        if (PredicatedTransformation.PREDICATE_CONFIG.equals(entry.getKey())
+                                || PredicatedTransformation.NEGATE_CONFIG.equals(entry.getKey())) {
+                            log.warn("Transformer config {} is masked by implicit config of that name",
+                                    entry.getKey());
+                            return false;
+                        } else {
+                            return true;
+                        }
+                    });
+            }
+
+            @Override
+            protected ConfigDef config(Transformation<?> transformation) {
+                return transformation.config();
+            }
+
+            @Override
+            protected void validateProps(String prefix) {
+                String prefixedNegate = prefix + PredicatedTransformation.NEGATE_CONFIG;
+                String prefixedPredicate = prefix + PredicatedTransformation.PREDICATE_CONFIG;
+                if (props.containsKey(prefixedNegate) &&
+                        !props.containsKey(prefixedPredicate)) {
+                    throw new ConfigException("Config '" + prefixedNegate + "' was provided " +
+                            "but there is no config '" + prefixedPredicate + "' defining a predicate to be negated.");
+                }
+            }
+        }.enrich(newDef);
+
+        new EnrichablePlugin<Predicate<?>>("Predicate", PREDICATES_CONFIG, PREDICATES_GROUP,
+                (Class) Predicate.class, props, requireFullConfig) {
+            @Override
+            protected Set<PluginDesc<Predicate<?>>> plugins() {
+                return (Set) plugins.predicates();
+            }
+
+            @Override
+            protected ConfigDef config(Predicate<?> predicate) {
+                return predicate.config();
+            }
+        }.enrich(newDef);
         return newDef;
     }
 
     /**
-     * Return {@link ConfigDef} from {@code transformationCls}, which is expected to be a non-null {@code Class<Transformation>},
-     * by instantiating it and invoking {@link Transformation#config()}.
+     * An abstraction over "enrichable plugins" ({@link Transformation}s and {@link Predicate}s) used for computing the
+     * contribution to a Connectors ConfigDef.
+     *
+     * This is not entirely elegant because
+     * although they basically use the same "alias prefix" configuration idiom there are some differences.
+     * The abstract method pattern is used to cope with this.
+     * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static ConfigDef getConfigDefFromTransformation(String key, Class<?> transformationCls) {
-        if (transformationCls == null || !Transformation.class.isAssignableFrom(transformationCls)) {
-            throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
-        }
-        if (Modifier.isAbstract(transformationCls.getModifiers())) {
-            String childClassNames = Stream.of(transformationCls.getClasses())
-                .filter(transformationCls::isAssignableFrom)
-                .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                .filter(c -> Modifier.isPublic(c.getModifiers()))
-                .map(Class::getName)
-                .collect(Collectors.joining(", "));
-            String message = childClassNames.trim().isEmpty() ?
-                "Transformation is abstract and cannot be created." :
-                "Transformation is abstract and cannot be created. Did you mean " + childClassNames + "?";
-            throw new ConfigException(key, String.valueOf(transformationCls), message);
-        }
-        Transformation transformation;
-        try {
-            transformation = transformationCls.asSubclass(Transformation.class).getConstructor().newInstance();
-        } catch (Exception e) {
-            ConfigException exception = new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
-            exception.initCause(e);
-            throw exception;
-        }
-        ConfigDef configDef = transformation.config();
-        if (null == configDef) {
-            throw new ConnectException(
-                String.format(
-                    "%s.config() must return a ConfigDef that is not null.",
-                    transformationCls.getName()
-                )
-            );
-        }
-        return configDef;
-    }
+    static abstract class EnrichablePlugin<T> {
 
-    /**
-     * Recommend bundled transformations.
-     */
-    static final class TransformationClassRecommender implements ConfigDef.Recommender {
-        private final Plugins plugins;
+        private final String aliasKind;
+        private final String aliasConfig;
+        private final String aliasGroup;
+        private final Class<T> baseClass;
+        private final Map<String, String> props;
+        private final boolean requireFullConfig;
 
-        TransformationClassRecommender(Plugins plugins) {
-            this.plugins = plugins;
+        public EnrichablePlugin(
+                String aliasKind,
+                String aliasConfig, String aliasGroup, Class<T> baseClass,
+                Map<String, String> props, boolean requireFullConfig) {
+            this.aliasKind = aliasKind;
+            this.aliasConfig = aliasConfig;
+            this.aliasGroup = aliasGroup;
+            this.baseClass = baseClass;
+            this.props = props;
+            this.requireFullConfig = requireFullConfig;
         }
 
-        @Override
-        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            List<Object> transformationPlugins = new ArrayList<>();
-            for (PluginDesc<Transformation> plugin : plugins.transformations()) {
-                transformationPlugins.add(plugin.pluginClass());
+        /** Add the configs for this alias to the given {@code ConfigDef}. */
+        void enrich(ConfigDef newDef) {
+            Object aliases = ConfigDef.parseType(aliasConfig, props.get(aliasConfig), Type.LIST);
+            if (!(aliases instanceof List)) {
+                return;
             }
-            return Collections.unmodifiableList(transformationPlugins);
+
+            LinkedHashSet<?> uniqueAliases = new LinkedHashSet<>((List<?>) aliases);
+            for (Object o : uniqueAliases) {
+                if (!(o instanceof String)) {
+                    throw new ConfigException("Item in " + aliasConfig + " property is not of "
+                            + "type String");
+                }
+                String alias = (String) o;
+                final String prefix = aliasConfig + "." + alias + ".";
+                final String group = aliasGroup + ": " + alias;
+                int orderInGroup = 0;
+
+                final String typeConfig = prefix + "type";
+                final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
+                    (String name, Object value) -> {
+                        validateProps(prefix);
+                        getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                    },
+                    () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
+                newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
+                        "Class for the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
+                        baseClass.getSimpleName() + " type for " + alias,
+                        Collections.emptyList(), new ClassRecommender());
+
+                final ConfigDef configDef = populateConfigDef(typeConfig);
+                if (configDef == null) continue;
+                newDef.embed(prefix, group, orderInGroup, configDef);
+            }
         }
 
-        @Override
-        public boolean visible(String name, Map<String, Object> parsedConfig) {
-            return true;
+        /** Subclasses can add extra validation of the {@link #props}. */
+        protected void validateProps(String prefix) { }
+
+        /**
+         * Populates the ConfigDef according to the configs returned from {@code configs()} method of class
+         * named in the {@code ...type} parameter of the {@code props}.
+         */
+        protected ConfigDef populateConfigDef(String typeConfig) {
+            final ConfigDef configDef = initialConfigDef();
+            try {
+                configDefsForClass(typeConfig)
+                        .forEach(entry -> configDef.define(entry.getValue()));
+
+            } catch (ConfigException e) {
+                if (requireFullConfig) {
+                    throw e;
+                } else {
+                    return null;
+                }
+            }
+            return configDef;
+        }
+
+        /**
+         * Return a stream of configs provided by the {@code configs()} method of class
+         * named in the {@code ...type} parameter of the {@code props}.
+         */
+        protected Stream<Map.Entry<String, ConfigDef.ConfigKey>> configDefsForClass(String typeConfig) {
+            final Class<?> cls = (Class<?>) ConfigDef.parseType(typeConfig, props.get(typeConfig), Type.CLASS);
+            return getConfigDefFromConfigProvidingClass(typeConfig, cls)
+                    .configKeys().entrySet().stream();
+        }
+
+        /** Get an initial ConfigDef */
+        protected ConfigDef initialConfigDef() {
+            return new ConfigDef();
+        }
+
+        /**
+         * Return {@link ConfigDef} from {@code cls}, which is expected to be a non-null {@code Class<T>},
+         * by instantiating it and invoking {@link #config(T)}.
+         * @param key
+         * @param cls The subclass of the baseclass.
+         */
+        ConfigDef getConfigDefFromConfigProvidingClass(String key, Class<?> cls) {
+            if (cls == null || !baseClass.isAssignableFrom(cls)) {
+                throw new ConfigException(key, String.valueOf(cls), "Not a " + baseClass.getSimpleName());
+            }
+            if (Modifier.isAbstract(cls.getModifiers())) {
+                String childClassNames = Stream.of(cls.getClasses())
+                        .filter(cls::isAssignableFrom)
+                        .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                        .filter(c -> Modifier.isPublic(c.getModifiers()))
+                        .map(Class::getName)
+                        .collect(Collectors.joining(", "));
+                String message = Utils.isBlank(childClassNames) ?
+                        aliasKind + " is abstract and cannot be created." :
+                        aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
+                throw new ConfigException(key, String.valueOf(cls), message);
+            }
+            T transformation;
+            try {
+                transformation = Utils.newInstance(cls, baseClass);
+            } catch (Exception e) {
+                throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
+            }
+            ConfigDef configDef = config(transformation);
+            if (null == configDef) {
+                throw new ConnectException(
+                    String.format(
+                        "%s.config() must return a ConfigDef that is not null.",
+                        cls.getName()
+                    )
+                );
+            }
+            return configDef;
+        }
+
+        /**
+         * Get the ConfigDef from the given entity.
+         * This is necessary because there's no abstraction across {@link Transformation#config()} and
+         * {@link Predicate#config()}.
+         */
+        protected abstract ConfigDef config(T t);
+
+        /**
+         * The transformation or predicate plugins (as appropriate for T) to be used
+         * for the {@link ClassRecommender}.
+         */
+        protected abstract Set<PluginDesc<T>> plugins();
+
+        /**
+         * Recommend bundled transformations or predicates.
+         */
+        final class ClassRecommender implements ConfigDef.Recommender {
+
+            @Override
+            public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                List<Object> result = new ArrayList<>();
+                for (PluginDesc<T> plugin : plugins()) {
+                    result.add(plugin.pluginClass());
+                }
+                return Collections.unmodifiableList(result);
+            }
+
+            @Override
+            public boolean visible(String name, Map<String, Object> parsedConfig) {
+                return true;
+            }
         }
     }
 

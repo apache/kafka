@@ -86,7 +86,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         FutureCallback<Map<String, String>> connectorConfigCallback = new FutureCallback<>();
         herder.connectorConfig(connName, connectorConfigCallback);
         try {
-            return connectorConfigCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+            return new HashMap<>(connectorConfigCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS));
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ConnectException(
                 String.format("Failed to retrieve configuration for connector '%s'", connName),

@@ -49,7 +49,6 @@ import static java.time.Duration.ofMillis;
 
 public class StreamsOptimizedTest {
 
-
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsOptimizedTest requires one argument (properties-file) but no provided: ");
@@ -130,6 +129,7 @@ public class StreamsOptimizedTest {
             }
         });
 
+        streams.cleanUp();
         streams.start();
 
         Exit.addShutdownHook("streams-shutdown-hook", () -> {

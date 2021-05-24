@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.WindowStore;
@@ -47,24 +49,41 @@ public class ChangeLoggingWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
-
     @Before
     public void setUp() {
-        store = new ChangeLoggingWindowBytesStore(inner, false);
+        store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
     }
 
     private void init() {
         EasyMock.expect(context.taskId()).andReturn(taskId);
         EasyMock.expect(context.recordCollector()).andReturn(collector);
-        inner.init(context, store);
+        inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        inner.init((ProcessorContext) context, store);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        store.init((ProcessorContext) context, store);
+        EasyMock.verify(inner);
     }
 
     @Test
-    @SuppressWarnings("deprecation")
+    public void shouldDelegateInit() {
+        inner.init((StateStoreContext) context, store);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        store.init((StateStoreContext) context, store);
+        EasyMock.verify(inner);
+    }
+
+    @Test
     public void shouldLogPuts() {
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
@@ -78,7 +97,7 @@ public class ChangeLoggingWindowBytesStoreTest {
         context.logChange(store.name(), key, value, 0L);
 
         EasyMock.replay(context);
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
 
         EasyMock.verify(inner, context);
     }
@@ -96,6 +115,18 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, 0, 10))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
+        EasyMock.verify(inner);
+    }
+
+    @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock
             .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
@@ -108,9 +139,20 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
+        EasyMock.verify(inner);
+    }
+
+    @Test
     public void shouldRetainDuplicatesWhenSet() {
-        store = new ChangeLoggingWindowBytesStore(inner, true);
+        store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
 
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
@@ -127,8 +169,8 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         EasyMock.replay(context);
 
-        store.put(bytesKey, value);
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         EasyMock.verify(inner, context);
     }

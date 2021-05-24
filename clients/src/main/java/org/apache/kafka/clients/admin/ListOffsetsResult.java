@@ -35,7 +35,7 @@ public class ListOffsetsResult {
 
     private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;
 
-    ListOffsetsResult(Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures) {
+    public ListOffsetsResult(Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures) {
         this.futures = futures;
     }
 
@@ -80,7 +80,7 @@ public class ListOffsetsResult {
         private final long timestamp;
         private final Optional<Integer> leaderEpoch;
 
-        ListOffsetsResultInfo(long offset, long timestamp, Optional<Integer> leaderEpoch) {
+        public ListOffsetsResultInfo(long offset, long timestamp, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.timestamp = timestamp;
             this.leaderEpoch = leaderEpoch;

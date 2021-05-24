@@ -25,10 +25,12 @@ import java.util.Objects;
  * The schema for a compound record definition
  */
 public class Schema extends Type {
+    private final static Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
     private final Map<String, BoundField> fieldsByName;
     private final boolean tolerateMissingFieldsWithDefaults;
+    private final Struct cachedStruct;
 
     /**
      * Construct the schema with a given list of its field values
@@ -62,6 +64,9 @@ public class Schema extends Type {
             this.fields[i] = new BoundField(def, this, i);
             this.fieldsByName.put(def.name, this.fields[i]);
         }
+        //6 schemas have no fields at the time of this writing (3 versions each of list_groups and api_versions)
+        //for such schemas there's no point in even creating a unique Struct object when deserializing.
+        this.cachedStruct = this.fields.length > 0 ? null : new Struct(this, NO_VALUES);
     }
 
     /**
@@ -90,6 +95,9 @@ public class Schema extends Type {
      */
     @Override
     public Struct read(ByteBuffer buffer) {
+        if (cachedStruct != null) {
+            return cachedStruct;
+        }
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
@@ -140,7 +148,7 @@ public class Schema extends Type {
 
     /**
      * Get a field by its slot in the record array
-     * 
+     *
      * @param slot The slot at which this field sits
      * @return The field
      */
@@ -150,7 +158,7 @@ public class Schema extends Type {
 
     /**
      * Get a field by its name
-     * 
+     *
      * @param name The name of the field
      * @return The field
      */

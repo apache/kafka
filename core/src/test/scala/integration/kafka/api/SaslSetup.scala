@@ -18,7 +18,9 @@
 package kafka.api
 
 import java.io.File
+import java.util
 import java.util.Properties
+
 import javax.security.auth.login.Configuration
 
 import scala.collection.Seq
@@ -27,13 +29,17 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.client.ZKClientConfig
+
+import scala.jdk.CollectionConverters._
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -91,7 +97,7 @@ trait SaslSetup {
     (serverKeytabFile.get, clientKeytabFile.get)
   }
 
-  protected def jaasSections(kafkaServerSaslMechanisms: Seq[String],
+  def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                              kafkaClientSaslMechanism: Option[String],
                              mode: SaslSetupMode = Both,
                              kafkaServerEntryName: String = JaasTestUtils.KafkaServerContextName): Seq[JaasSection] = {
@@ -146,6 +152,43 @@ trait SaslSetup {
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
     else
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
+
+  def jaasScramClientLoginModule(clientSaslScramMechanism: String, scramUser: String, scramPassword: String): String = {
+    JaasTestUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
+  }
+
+  def createPrivilegedAdminClient(): Admin = {
+    // create an admin client instance that is authorized to create credentials
+    throw new UnsupportedOperationException("Must implement this if a test needs to use it")
+  }
+
+  def createAdminClient(brokerList: String, securityProtocol: SecurityProtocol, trustStoreFile: Option[File],
+                        clientSaslProperties: Option[Properties], scramMechanism: String, user: String, password: String) : Admin = {
+    val config = new util.HashMap[String, Object]
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val securityProps: util.Map[Object, Object] =
+      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(scramMechanism, user, password))
+    Admin.create(config)
+  }
+
+  def createScramCredentialsViaPrivilegedAdminClient(userName: String, password: String): Unit = {
+    val privilegedAdminClient = createPrivilegedAdminClient() // must explicitly implement this method
+    try {
+      // create the SCRAM credential for the given user
+      createScramCredentials(privilegedAdminClient, userName, password)
+    } finally {
+      privilegedAdminClient.close()
+    }
+  }
+
+    def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
+    val results = adminClient.alterUserScramCredentials(PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism =>
+      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)
+        .asInstanceOf[UserScramCredentialAlteration]).toList.asJava)
+    results.all.get
   }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {

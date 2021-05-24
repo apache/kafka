@@ -16,9 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
@@ -40,7 +46,15 @@ import static org.junit.Assert.assertTrue;
 public class TimestampedSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
-        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+        new RocksDBMetricsRecorder("metrics-scope", "store-name");
+
+    @Before
+    public void setUp() {
+        metricsRecorder.init(
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new TaskId(0, 0)
+        );
+    }
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
@@ -53,7 +67,7 @@ public class TimestampedSegmentTest {
         expect(mockContext.stateDir()).andReturn(directory);
         replay(mockContext);
 
-        segment.openDB(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());
@@ -61,6 +75,8 @@ public class TimestampedSegmentTest {
         segment.destroy();
         assertFalse(new File(directoryPath + File.separator + "window", "segment").exists());
         assertTrue(new File(directoryPath, "window").exists());
+
+        segment.close();
     }
 
     @Test
@@ -76,6 +92,10 @@ public class TimestampedSegmentTest {
         assertThat(segment, not(equalTo(segmentDifferentId)));
         assertThat(segment, not(equalTo(null)));
         assertThat(segment, not(equalTo("anyName")));
+
+        segment.close();
+        segmentSameId.close();
+        segmentDifferentId.close();
     }
 
     @Test
@@ -90,6 +110,10 @@ public class TimestampedSegmentTest {
         assertTrue(set.add(segment));
         assertFalse(set.add(segmentSameId));
         assertTrue(set.add(segmentDifferentId));
+
+        segment.close();
+        segmentSameId.close();
+        segmentDifferentId.close();
     }
 
     @Test
@@ -105,5 +129,9 @@ public class TimestampedSegmentTest {
         assertThat(segment3.compareTo(segment1), equalTo(-1));
         assertThat(segment2.compareTo(segment3), equalTo(1));
         assertThat(segment3.compareTo(segment2), equalTo(-1));
+
+        segment1.close();
+        segment2.close();
+        segment3.close();
     }
 }

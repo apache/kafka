@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
@@ -88,46 +90,12 @@ public interface ProcessorContext {
      * Get the state store given the store name.
      *
      * @param name The store name
+     * @param <S> The type or interface of the store to return
      * @return The state store instance
-     */
-    StateStore getStateStore(final String name);
-
-    /**
-     * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
-     * schedule a periodic callback &mdash; called a punctuation  &mdash; to {@link Punctuator#punctuate(long)}.
-     * The type parameter controls what notion of time is used for punctuation:
-     * <ul>
-     *   <li>{@link PunctuationType#STREAM_TIME} &mdash; uses "stream time", which is advanced by the processing of messages
-     *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
-     *   The first punctuation will be triggered by the first record that is processed.
-     *   <b>NOTE:</b> Only advanced if messages arrive</li>
-     *   <li>{@link PunctuationType#WALL_CLOCK_TIME} &mdash; uses system time (the wall-clock time),
-     *   which is advanced independent of whether new messages arrive.
-     *   The first punctuation will be triggered after interval has elapsed.
-     *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
-     *   processing loop takes to complete</li>
-     * </ul>
      *
-     * <b>Skipping punctuations:</b> Punctuations will not be triggered more than once at any given timestamp.
-     * This means that "missed" punctuation will be skipped.
-     * It's possible to "miss" a punctuation if:
-     * <ul>
-     *   <li>with {@link PunctuationType#STREAM_TIME}, when stream time advances more than interval</li>
-     *   <li>with {@link PunctuationType#WALL_CLOCK_TIME}, on GC pause, too short interval, ...</li>
-     * </ul>
-     *
-     * @param intervalMs the time interval between punctuations in milliseconds
-     * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
-     * @param callback a function consuming timestamps representing the current stream or system time
-     * @return a handle allowing cancellation of the punctuation schedule established by this method
-     * @deprecated Use {@link #schedule(Duration, PunctuationType, Punctuator)} instead
+     * @throws ClassCastException if the return type isn't a type or interface of the actual returned store.
      */
-    @Deprecated
-    Cancellable schedule(final long intervalMs,
-                         final PunctuationType type,
-                         final Punctuator callback);
+    <S extends StateStore> S getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
@@ -159,10 +127,11 @@ public interface ProcessorContext {
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
      * @return a handle allowing cancellation of the punctuation schedule established by this method
+     * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Duration interval,
                          final PunctuationType type,
-                         final Punctuator callback) throws IllegalArgumentException;
+                         final Punctuator callback);
 
     /**
      * Forwards a key/value pair to all downstream processors.
@@ -182,29 +151,6 @@ public interface ProcessorContext {
      * @param to the options to use when forwarding
      */
     <K, V> void forward(final K key, final V value, final To to);
-
-    /**
-     * Forwards a key/value pair to one of the downstream processors designated by childIndex.
-     *
-     * @param key key
-     * @param value value
-     * @param childIndex index in list of children of this node
-     * @deprecated please use {@link #forward(Object, Object, To)} instead
-     */
-    // TODO when we remove this method, we can also remove `ProcessorNode#children`
-    @Deprecated
-    <K, V> void forward(final K key, final V value, final int childIndex);
-
-    /**
-     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name.
-     *
-     * @param key key
-     * @param value value
-     * @param childName name of downstream processor
-     * @deprecated please use {@link #forward(Object, Object, To)} instead
-     */
-    @Deprecated
-    <K, V> void forward(final K key, final V value, final String childName);
 
     /**
      * Requests a commit.
@@ -285,4 +231,32 @@ public interface ProcessorContext {
      */
     Map<String, Object> appConfigsWithPrefix(final String prefix);
 
+    /**
+     * Return the current system timestamp (also called wall-clock time) in milliseconds.
+     *
+     * <p>
+     * Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
+     * Thus, it may return a different value compared to {@code System.currentTimeMillis()}.
+     *
+     * @return the current system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
+
+    /**
+     * Return the current stream-time in milliseconds.
+     *
+     * <p>
+     * Stream-time is the maximum observed {@link TimestampExtractor record timestamp} so far
+     * (including the currently processed record), i.e., it can be considered a high-watermark.
+     * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
+     * <p>
+     *
+     * Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
+     * and {@link StreamsBuilder#addGlobalStore} (...),
+     * because there is no concept of stream-time for this case.
+     * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.
+     *
+     * @return the current stream-time in milliseconds
+     */
+    long currentStreamTimeMs();
 }

@@ -22,8 +22,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -49,6 +53,8 @@ public class MeteredSessionStore<K, V>
     private Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor removeSensor;
+    private Sensor e2eLatencySensor;
+    private InternalProcessorContext context;
     private final String threadId;
     private String taskId;
 
@@ -65,26 +71,70 @@ public class MeteredSessionStore<K, V>
         this.time = time;
     }
 
-    @SuppressWarnings("unchecked")
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        initStoreSerde(context);
         taskId = context.taskId().toString();
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
-        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        removeSensor = StateStoreMetrics.removeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        registerMetrics();
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        initStoreSerde(context);
+        taskId = context.taskId().toString();
+        streamsMetrics = (StreamsMetricsImpl) context.metrics();
+
+        registerMetrics();
+        final Sensor restoreSensor =
+            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+
+        // register and possibly restore the state from the logs
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    }
+
+    private void registerMetrics() {
+        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        removeSensor = StateStoreMetrics.removeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
+    }
+
+
+    private void initStoreSerde(final ProcessorContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        serdes = new StateSerdes<>(
+            changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+        );
+    }
+
+    private void initStoreSerde(final StateStoreContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        serdes = new StateSerdes<>(
+            changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -109,6 +159,9 @@ public class MeteredSessionStore<K, V>
     public void put(final Windowed<K> sessionKey,
                     final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+        Objects.requireNonNull(sessionKey.window(), "sessionKey.window() can't be null");
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -118,6 +171,7 @@ public class MeteredSessionStore<K, V>
                 time,
                 putSensor
             );
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
@@ -127,6 +181,9 @@ public class MeteredSessionStore<K, V>
     @Override
     public void remove(final Windowed<K> sessionKey) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        Objects.requireNonNull(sessionKey.key(), "sessionKey.key() can't be null");
+        Objects.requireNonNull(sessionKey.window(), "sessionKey.window() can't be null");
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -143,12 +200,16 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public V fetchSession(final K key, final long startTime, final long endTime) {
+    public V fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
         return maybeMeasureLatency(
             () -> {
                 final Bytes bytesKey = keyBytes(key);
-                final byte[] result = wrapped().fetchSession(bytesKey, startTime, endTime);
+                final byte[] result = wrapped().fetchSession(
+                    bytesKey,
+                    earliestSessionEndTime,
+                    latestSessionStartTime
+                );
                 if (result == null) {
                     return null;
                 }
@@ -171,16 +232,42 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(from), keyBytes(to)),
+            wrapped().backwardFetch(keyBytes(key)),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             streamsMetrics,
             serdes,
             time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
     }
 
     @Override
@@ -198,6 +285,25 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes,
             time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K key,
+                                                                 final long earliestSessionEndTime,
+                                                                 final long latestSessionStartTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+        final Bytes bytesKey = keyBytes(key);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFindSessions(
+                bytesKey,
+                earliestSessionEndTime,
+                latestSessionStartTime
+            ),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
     }
 
     @Override
@@ -222,6 +328,29 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K keyFrom,
+                                                                 final K keyTo,
+                                                                 final long earliestSessionEndTime,
+                                                                 final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFindSessions(
+                bytesKeyFrom,
+                bytesKeyTo,
+                earliestSessionEndTime,
+                latestSessionStartTime
+            ),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
+    }
+
+    @Override
     public void flush() {
         maybeMeasureLatency(super::flush, time, flushSensor);
     }
@@ -231,11 +360,21 @@ public class MeteredSessionStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
         }
     }
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    private void maybeRecordE2ELatency() {
+        // Context is null if the provided context isn't an implementation of InternalProcessorContext.
+        // In that case, we _can't_ get the current timestamp, so we don't record anything.
+        if (e2eLatencySensor.shouldRecord() && context != null) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 }

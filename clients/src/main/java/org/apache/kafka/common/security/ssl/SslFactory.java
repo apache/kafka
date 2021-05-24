@@ -31,6 +31,8 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import java.io.Closeable;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -79,6 +81,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
         if (sslEngineFactory != null) {
@@ -86,7 +89,8 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
         this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        Map<String, Object> nextConfigs = new HashMap<>(configs);
+        // The input map must be a mutable RecordingMap in production.
+        Map<String, Object> nextConfigs = (Map<String, Object>) configs;
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
@@ -116,6 +120,7 @@ public class SslFactory implements Reconfigurable, Closeable {
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
         SslEngineFactory newSslEngineFactory = createNewSslEngineFactory(newConfigs);
         if (newSslEngineFactory != this.sslEngineFactory) {
+            Utils.closeQuietly(this.sslEngineFactory, "close stale ssl engine factory");
             this.sslEngineFactory = newSslEngineFactory;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
                     newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
@@ -161,10 +166,8 @@ public class SslFactory implements Reconfigurable, Closeable {
                     throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
                             "which a keystore was configured.");
                 }
-                if (!CertificateEntries.create(sslEngineFactory.keystore()).equals(
-                        CertificateEntries.create(newSslEngineFactory.keystore()))) {
-                    throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
-                }
+
+                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore());
             }
             if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
                 throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
@@ -182,6 +185,14 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
     }
 
+    public SSLEngine createSslEngine(Socket socket) {
+        return createSslEngine(peerHost(socket), socket.getPort());
+    }
+
+    /**
+     * Prefer `createSslEngine(Socket)` if a `Socket` instance is available. If using this overload,
+     * avoid reverse DNS resolution in the computation of `peerHost`.
+     */
     public SSLEngine createSslEngine(String peerHost, int peerPort) {
         if (sslEngineFactory == null) {
             throw new IllegalStateException("SslFactory has not been configured.");
@@ -191,6 +202,44 @@ public class SslFactory implements Reconfigurable, Closeable {
         } else {
             return sslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
         }
+    }
+
+    /**
+     * Returns host/IP address of remote host without reverse DNS lookup to be used as the host
+     * for creating SSL engine. This is used as a hint for session reuse strategy and also for
+     * hostname verification of server hostnames.
+     * <p>
+     * Scenarios:
+     * <ul>
+     *   <li>Server-side
+     *   <ul>
+     *     <li>Server accepts connection from a client. Server knows only client IP
+     *     address. We want to avoid reverse DNS lookup of the client IP address since the server
+     *     does not verify or use client hostname. The IP address can be used directly.</li>
+     *   </ul>
+     *   </li>
+     *   <li>Client-side
+     *   <ul>
+     *     <li>Client connects to server using hostname. No lookup is necessary
+     *     and the hostname should be used to create the SSL engine. This hostname is validated
+     *     against the hostname in SubjectAltName (dns) or CommonName in the certificate if
+     *     hostname verification is enabled. Authentication fails if hostname does not match.</li>
+     *     <li>Client connects to server using IP address, but certificate contains only
+     *     SubjectAltName (dns). Use of reverse DNS lookup to determine hostname introduces
+     *     a security vulnerability since authentication would be reliant on a secure DNS.
+     *     Hence hostname verification should fail in this case.</li>
+     *     <li>Client connects to server using IP address and certificate contains
+     *     SubjectAltName (ipaddress). This could be used when Kafka is on a private network.
+     *     If reverse DNS lookup is used, authentication would succeed using IP address if lookup
+     *     fails and IP address is used, but authentication would fail if lookup succeeds and
+     *     dns name is used. For consistency and to avoid dependency on a potentially insecure
+     *     DNS, reverse DNS lookup should be avoided and the IP address specified by the client for
+     *     connection should be used to create the SSL engine.</li>
+     *   </ul></li>
+     * </ul>
+     */
+    private String peerHost(Socket socket) {
+        return new InetSocketAddress(socket.getInetAddress(), 0).getHostString();
     }
 
     public SslEngineFactory sslEngineFactory() {
@@ -237,6 +286,7 @@ public class SslFactory implements Reconfigurable, Closeable {
     }
 
     static class CertificateEntries {
+        private final String alias;
         private final Principal subjectPrincipal;
         private final Set<List<?>> subjectAltNames;
 
@@ -247,12 +297,36 @@ public class SslFactory implements Reconfigurable, Closeable {
                 String alias = aliases.nextElement();
                 Certificate cert  = keystore.getCertificate(alias);
                 if (cert instanceof X509Certificate)
-                    entries.add(new CertificateEntries((X509Certificate) cert));
+                    entries.add(new CertificateEntries(alias, (X509Certificate) cert));
             }
             return entries;
         }
 
-        CertificateEntries(X509Certificate cert) throws GeneralSecurityException {
+        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore) throws GeneralSecurityException {
+            List<CertificateEntries> newEntries = CertificateEntries.create(newKeystore);
+            List<CertificateEntries> oldEntries = CertificateEntries.create(oldKeystore);
+            if (newEntries.size() != oldEntries.size()) {
+                throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
+                    oldEntries.size(), newEntries.size()));
+            }
+            for (int i = 0; i < newEntries.size(); i++) {
+                CertificateEntries newEntry = newEntries.get(i);
+                CertificateEntries oldEntry = oldEntries.get(i);
+                if (!Objects.equals(newEntry.subjectPrincipal, oldEntry.subjectPrincipal)) {
+                    throw new ConfigException(String.format("Keystore DistinguishedName does not match: " +
+                        " existing={alias=%s, DN=%s}, new={alias=%s, DN=%s}",
+                        oldEntry.alias, oldEntry.subjectPrincipal, newEntry.alias, newEntry.subjectPrincipal));
+                }
+                if (!newEntry.subjectAltNames.containsAll(oldEntry.subjectAltNames)) {
+                    throw new ConfigException(String.format("Keystore SubjectAltNames do not match: " +
+                            " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
+                        oldEntry.alias, oldEntry.subjectAltNames, newEntry.alias, newEntry.subjectAltNames));
+                }
+            }
+        }
+
+        CertificateEntries(String alias, X509Certificate cert) throws GeneralSecurityException {
+            this.alias = alias;
             this.subjectPrincipal = cert.getSubjectX500Principal();
             Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
             // use a set for comparison

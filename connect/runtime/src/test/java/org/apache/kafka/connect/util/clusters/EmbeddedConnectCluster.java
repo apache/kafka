@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -70,8 +71,8 @@ public class EmbeddedConnectCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);
 
-    private static final int DEFAULT_NUM_BROKERS = 1;
-    private static final int DEFAULT_NUM_WORKERS = 1;
+    public static final int DEFAULT_NUM_BROKERS = 1;
+    public static final int DEFAULT_NUM_WORKERS = 1;
     private static final Properties DEFAULT_BROKER_CONFIG = new Properties();
     private static final String REST_HOST_NAME = "localhost";
 
@@ -87,6 +88,9 @@ public class EmbeddedConnectCluster {
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
     private final EmbeddedConnectClusterAssertions assertions;
+    // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
+    // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
+    private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
@@ -112,7 +116,6 @@ public class EmbeddedConnectCluster {
             log.warn(exitMessage);
             throw new UngracefulShutdownException(exitMessage);
         }
-        Exit.exit(0, message);
     };
 
     /**
@@ -124,7 +127,6 @@ public class EmbeddedConnectCluster {
             log.warn(haltMessage);
             throw new UngracefulShutdownException(haltMessage);
         }
-        Exit.halt(0, message);
     };
 
     /**
@@ -135,7 +137,7 @@ public class EmbeddedConnectCluster {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
-        kafkaCluster.before();
+        kafkaCluster.start();
         startConnect();
     }
 
@@ -148,15 +150,18 @@ public class EmbeddedConnectCluster {
     public void stop() {
         connectCluster.forEach(this::stopWorker);
         try {
-            kafkaCluster.after();
+            kafkaCluster.stop();
         } catch (UngracefulShutdownException e) {
             log.warn("Kafka did not shutdown gracefully");
         } catch (Exception e) {
             log.error("Could not stop kafka", e);
             throw new RuntimeException("Could not stop brokers", e);
         } finally {
-            Exit.resetExitProcedure();
-            Exit.resetHaltProcedure();
+            if (maskExitProcedures) {
+                Exit.resetExitProcedure();
+                Exit.resetHaltProcedure();
+            }
+            Plugins.compareAndSwapLoaders(originalClassLoader);
         }
     }
 
@@ -183,7 +188,9 @@ public class EmbeddedConnectCluster {
         WorkerHandle toRemove = null;
         for (Iterator<WorkerHandle> it = connectCluster.iterator(); it.hasNext(); toRemove = it.next()) {
         }
-        removeWorker(toRemove);
+        if (toRemove != null) {
+            removeWorker(toRemove);
+        }
     }
 
     /**
@@ -212,6 +219,24 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    /**
+     * Determine whether the Connect cluster has any workers running.
+     *
+     * @return true if any worker is running, or false otherwise
+     */
+    public boolean anyWorkersRunning() {
+        return workers().stream().anyMatch(WorkerHandle::isRunning);
+    }
+
+    /**
+     * Determine whether the Connect cluster has all workers running.
+     *
+     * @return true if all workers are running, or false otherwise
+     */
+    public boolean allWorkersRunning() {
+        return workers().stream().allMatch(WorkerHandle::isRunning);
+    }
+
     @SuppressWarnings("deprecation")
     public void startConnect() {
         log.info("Starting Connect cluster '{}' with {} workers", connectClusterName, numInitialWorkers);
@@ -234,6 +259,19 @@ public class EmbeddedConnectCluster {
         for (int i = 0; i < numInitialWorkers; i++) {
             addWorker();
         }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("EmbeddedConnectCluster(name= %s, numBrokers= %d, numInitialWorkers= %d, workerProps= %s)",
+            connectClusterName,
+            numBrokers,
+            numInitialWorkers,
+            workerProps);
+    }
+
+    public String getName() {
+        return connectClusterName;
     }
 
     /**
@@ -330,7 +368,7 @@ public class EmbeddedConnectCluster {
      * Delete an existing connector.
      *
      * @param connName name of the connector to be deleted
-     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectRestException if the REST API returns error status
      * @throws ConnectException for any other error.
      */
     public void deleteConnector(String connName) {
@@ -339,6 +377,54 @@ public class EmbeddedConnectCluster {
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(),
                     "Could not execute DELETE request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Pause an existing connector.
+     *
+     * @param connName name of the connector to be paused
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void pauseConnector(String connName) {
+        String url = endpointForResource(String.format("connectors/%s/pause", connName));
+        Response response = requestPut(url, "");
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                "Could not execute PUT request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Resume an existing connector.
+     *
+     * @param connName name of the connector to be resumed
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void resumeConnector(String connName) {
+        String url = endpointForResource(String.format("connectors/%s/resume", connName));
+        Response response = requestPut(url, "");
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                "Could not execute PUT request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Restart an existing connector.
+     *
+     * @param connName name of the connector to be restarted
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void restartConnector(String connName) {
+        String url = endpointForResource(String.format("connectors/%s/restart", connName));
+        Response response = requestPost(url, "", Collections.emptyMap());
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                "Could not execute POST request. Error response: " + responseToString(response));
         }
     }
 

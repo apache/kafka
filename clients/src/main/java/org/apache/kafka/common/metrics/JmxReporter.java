@@ -19,6 +19,7 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -38,6 +39,7 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -50,14 +52,20 @@ public class JmxReporter implements MetricsReporter {
 
     public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";
 
-    public static final String BLACKLIST_CONFIG = METRICS_CONFIG_PREFIX + "blacklist";
-    public static final String WHITELIST_CONFIG = METRICS_CONFIG_PREFIX + "whitelist";
+    public static final String EXCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "exclude";
+    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "blacklist";
 
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(WHITELIST_CONFIG,
-                                                                          BLACKLIST_CONFIG);
+    public static final String INCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "include";
+    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "whitelist";
 
-    public static final String DEFAULT_WHITELIST = ".*";
-    public static final String DEFAULT_BLACKLIST = "";
+
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(INCLUDE_CONFIG,
+                                                                         INCLUDE_CONFIG_ALIAS,
+                                                                         EXCLUDE_CONFIG,
+                                                                         EXCLUDE_CONFIG_ALIAS);
+
+    public static final String DEFAULT_INCLUDE = ".*";
+    public static final String DEFAULT_EXCLUDE = "";
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
@@ -71,9 +79,13 @@ public class JmxReporter implements MetricsReporter {
 
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
+     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
+     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
+     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
      */
+    @Deprecated
     public JmxReporter(String prefix) {
-        this.prefix = prefix;
+        this.prefix = prefix != null ? prefix : "";
     }
 
     @Override
@@ -295,27 +307,50 @@ public class JmxReporter implements MetricsReporter {
 
     }
 
-    public static Predicate<String> compilePredicate(Map<String, ?> configs) {
-        String whitelist = (String) configs.get(WHITELIST_CONFIG);
-        String blacklist = (String) configs.get(BLACKLIST_CONFIG);
+    public static Predicate<String> compilePredicate(Map<String, ?> originalConfig) {
+        Map<String, ?> configs = ConfigUtils.translateDeprecatedConfigs(
+            originalConfig, new String[][]{{INCLUDE_CONFIG, INCLUDE_CONFIG_ALIAS},
+                                           {EXCLUDE_CONFIG, EXCLUDE_CONFIG_ALIAS}});
+        String include = (String) configs.get(INCLUDE_CONFIG);
+        String exclude = (String) configs.get(EXCLUDE_CONFIG);
 
-        if (whitelist == null) {
-            whitelist = DEFAULT_WHITELIST;
+        if (include == null) {
+            include = DEFAULT_INCLUDE;
         }
 
-        if (blacklist == null) {
-            blacklist = DEFAULT_BLACKLIST;
+        if (exclude == null) {
+            exclude = DEFAULT_EXCLUDE;
         }
 
         try {
-            Pattern whitelistPattern = Pattern.compile(whitelist);
-            Pattern blacklistPattern = Pattern.compile(blacklist);
+            Pattern includePattern = Pattern.compile(include);
+            Pattern excludePattern = Pattern.compile(exclude);
 
-            return s -> whitelistPattern.matcher(s).matches()
-                        && !blacklistPattern.matcher(s).matches();
+            return s -> includePattern.matcher(s).matches()
+                        && !excludePattern.matcher(s).matches();
         } catch (PatternSyntaxException e) {
             throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
-                                      + ".(whitelist/blacklist) is not a valid regular expression");
+                                      + ".(include/exclude) is not a valid regular expression");
+        }
+    }
+
+    @Override
+    public void contextChange(MetricsContext metricsContext) {
+        String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
+        Objects.requireNonNull(namespace);
+        synchronized (LOCK) {
+            if (!mbeans.isEmpty()) {
+                throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
+            }
+
+            // prevent prefix from getting reset back to empty for backwards compatibility
+            // with the deprecated JmxReporter(String prefix) constructor, in case contextChange gets called
+            // via one of the Metrics() constructor with a default empty MetricsContext()
+            if (namespace.isEmpty()) {
+                return;
+            }
+
+            prefix = namespace;
         }
     }
 }

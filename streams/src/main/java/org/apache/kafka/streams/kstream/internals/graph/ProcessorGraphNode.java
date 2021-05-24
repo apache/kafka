@@ -19,16 +19,18 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Properties;
+
 /**
  * Used to represent any type of stateless operation:
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  */
-public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
+public class ProcessorGraphNode<K, V> extends GraphNode {
 
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<K, V, ?, ?> processorParameters;
 
-    public ProcessorGraphNode(final ProcessorParameters<K, V> processorParameters) {
+    public ProcessorGraphNode(final ProcessorParameters<K, V, ?, ?> processorParameters) {
 
         super(processorParameters.processorName());
 
@@ -36,14 +38,14 @@ public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
     }
 
     public ProcessorGraphNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters) {
+                              final ProcessorParameters<K, V, ?, ?> processorParameters) {
 
         super(nodeName);
 
         this.processorParameters = processorParameters;
     }
 
-    public ProcessorParameters<K, V> processorParameters() {
+    public ProcessorParameters<K, V, ?, ?> processorParameters() {
         return processorParameters;
     }
 
@@ -55,7 +57,7 @@ public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
 
         topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), parentNodeNames());
     }

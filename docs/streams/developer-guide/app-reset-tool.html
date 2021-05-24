@@ -56,7 +56,8 @@
         <dl class="docutils">
             <dt>Prerequisites</dt>
             <dd><ul class="first last">
-                <li><p class="first">All instances of your application must be stopped. Otherwise, the application may enter an invalid state, crash, or produce incorrect results. You can verify whether the consumer group with ID <code class="docutils literal"><span class="pre">application.id</span></code> is still active by using <code class="docutils literal"><span class="pre">bin/kafka-consumer-groups</span></code>.</p>
+                <li><p class="first">All instances of your application must be stopped. Otherwise, the application may enter an invalid state, crash, or produce incorrect results. You can verify whether the consumer group with ID <code class="docutils literal"><span class="pre">application.id</span></code> is still active by using <code class="docutils literal"><span class="pre">bin/kafka-consumer-groups</span></code>.
+                    When long session timeout has been configured, active members could take longer to get expired on the broker thus blocking the reset job to complete. Use the <code class="docutils literal"><span class="pre">--force</span></code> option could remove those left-over members immediately. Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.</p>
                 </li>
                 <li><p class="first">Use this tool with care and double-check its parameters: If you provide wrong parameter values (e.g., typos in <code class="docutils literal"><span class="pre">application.id</span></code>) or specify parameters inconsistently (e.g., specify the wrong input topics for the application), this tool might invalidate the application&#8217;s state or even impact other applications, consumer groups, or your Kafka topics.</p>
                 </li>
@@ -76,40 +77,44 @@
         <div class="section" id="step-1-run-the-application-reset-tool">
             <h2>Step 1: Run the application reset tool<a class="headerlink" href="#step-1-run-the-application-reset-tool" title="Permalink to this headline"></a></h2>
             <p>Invoke the application reset tool from the command line</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span>&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset
-</pre></div>
-            </div>
+            <p>Warning! This tool makes irreversible changes to your application. It is strongly recommended that you run this once with <code class="docutils literal"><span class="pre">--dry-run</span></code> to preview your changes before making them.</p>
+            <pre class="line-numbers"><code class="language-bash">&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset</code></pre>
             <p>The tool accepts the following parameters:</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span>Option <span class="o">(</span>* <span class="o">=</span> required<span class="o">)</span>                 Description
+            <pre class="line-numbers"><code class="language-text">Option (* = required)                 Description
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
-                                        <span class="o">(</span>application.id<span class="o">)</span>.
+                                        (application.id).
 --bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
                                         format: HOST1:PORT1,HOST2:PORT2
-                                        <span class="o">(</span>default: localhost:9092<span class="o">)</span>
---by-duration &lt;String: urls&gt;      Reset offsets to offset by duration from
-                                        current timestamp. Format: '<span>PnDTnHnMnS</span>'
+                                        (default: localhost:9092)
+--by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
+                                        current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
                                         passed to admin clients and embedded
                                         consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
---from-file &lt;String: urls&gt;        Reset offsets to values defined in CSV
+--from-file &lt;String: urls&gt;            Reset offsets to values defined in CSV
                                         file.
 --input-topics &lt;String: list&gt;         Comma-separated list of user input
                                         topics. For these topics, the tool will
                                         reset the offset to the earliest
                                         available offset.
 --intermediate-topics &lt;String: list&gt;  Comma-separated list of intermediate user
-                                        topics <span class="o">(</span>topics used in the through<span class="o">()</span>
-                                        method<span class="o">)</span>. For these topics, the tool
+                                        topics (topics used in the through()
+                                        method). For these topics, the tool
                                         will skip to the end.
---shift-by &lt;Long: number-of-offsets&gt; Reset offsets shifting current offset by
-                                        'n', where 'n' can be positive or
+--internal-topics &lt;String: list&gt;      Comma-separated list of internal topics
+                                        to delete. Must be a subset of the
+                                        internal topics marked for deletion by
+                                        the default behaviour (do a dry-run without
+                                        this option to view these topics).
+--shift-by &lt;Long: number-of-offsets&gt;  Reset offsets shifting current offset by
+                                        &#39;n&#39;, where &#39;n&#39; can be positive or
                                         negative
 --to-datetime &lt;String&gt;                Reset offsets to offset from datetime.
-                                        Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+                                        Format: &#39;YYYY-MM-DDTHH:mm:SS.sss&#39;
 --to-earliest                         Reset offsets to earliest offset.
 --to-latest                           Reset offsets to latest offset.
 --to-offset &lt;Long&gt;                    Reset offsets to a specific offset.
@@ -117,8 +122,9 @@
                                         bootstrap.servers, as the reset tool
                                         would no longer access Zookeeper
                                         directly.
-</pre></div>
-            </div>
+--force                               Force removing members of the consumer group
+                                      (intended to remove left-over members if
+                                      long session timeout was configured).</code></pre>
             <p>Consider the following as reset-offset scenarios for <code>input-topics</code>:</p>
             <ul>
                 <li> by-duration</li>
@@ -157,10 +163,10 @@
 
 <!--#include virtual="../../../includes/_header.htm" -->
 <!--#include virtual="../../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
   <!--#include virtual="../../../includes/_nav.htm" -->
   <div class="right">
-    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a></li>
       <li><a href="/documentation/streams">Kafka Streams</a></li>

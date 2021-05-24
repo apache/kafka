@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2018 Joan Goyeau.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,32 +18,32 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.ProducedInternal
 import org.apache.kafka.streams.processor.StreamPartitioner
-import org.apache.kafka.streams.scala.Serdes._
-import org.apache.kafka.streams.scala.Serdes
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatestplus.junit.JUnitRunner
+import org.apache.kafka.streams.scala.serialization.Serdes
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
-@RunWith(classOf[JUnitRunner])
-class ProducedTest extends FlatSpec with Matchers {
+class ProducedTest {
 
-  "Create a Produced" should "create a Produced with Serdes" in {
+  @Test
+  def testCreateProducedWithSerdes(): Unit = {
     val produced: Produced[String, Long] = Produced.`with`[String, Long]
 
     val internalProduced = new ProducedInternal(produced)
-    internalProduced.keySerde.getClass shouldBe Serdes.String.getClass
-    internalProduced.valueSerde.getClass shouldBe Serdes.Long.getClass
+    assertEquals(Serdes.stringSerde.getClass, internalProduced.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalProduced.valueSerde.getClass)
   }
 
-  "Create a Produced with timestampExtractor and resetPolicy" should "create a Consumed with Serdes, timestampExtractor and resetPolicy" in {
+  @Test
+  def testCreateProducedWithSerdesAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
       override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
     }
     val produced: Produced[String, Long] = Produced.`with`(partitioner)
 
-    val internalConsumed = new ProducedInternal(produced)
-    internalConsumed.keySerde.getClass shouldBe Serdes.String.getClass
-    internalConsumed.valueSerde.getClass shouldBe Serdes.Long.getClass
-    internalConsumed.streamPartitioner shouldBe partitioner
+    val internalProduced = new ProducedInternal(produced)
+    assertEquals(Serdes.stringSerde.getClass, internalProduced.keySerde.getClass)
+    assertEquals(Serdes.longSerde.getClass, internalProduced.valueSerde.getClass)
+    assertEquals(partitioner, internalProduced.streamPartitioner)
   }
 }

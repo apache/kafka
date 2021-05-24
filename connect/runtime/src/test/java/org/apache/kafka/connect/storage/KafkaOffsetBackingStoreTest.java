@@ -22,13 +22,15 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,10 +47,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -58,7 +62,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaOffsetBackingStore.class)
+@PrepareForTest({KafkaOffsetBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaOffsetBackingStoreTest {
@@ -105,7 +109,7 @@ public class KafkaOffsetBackingStoreTest {
     private Capture<String> capturedTopic = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedProducerProps = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
-    private Capture<Map<String, Object>> capturedAdminProps = EasyMock.newCapture();
+    private Capture<Supplier<TopicAdmin>> capturedAdminSupplier = EasyMock.newCapture();
     private Capture<NewTopic> capturedNewTopic = EasyMock.newCapture();
     private Capture<Callback<ConsumerRecord<byte[], byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
 
@@ -119,10 +123,14 @@ public class KafkaOffsetBackingStoreTest {
         expectConfigure();
         expectStart(Collections.emptyList());
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
+        settings.put("offset.storage.min.insync.replicas", "3");
+        settings.put("offset.storage.max.message.bytes", "1001");
+        store.configure(new DistributedConfig(settings));
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -143,12 +151,17 @@ public class KafkaOffsetBackingStoreTest {
     public void testReloadOnStart() throws Exception {
         expectConfigure();
         expectStart(Arrays.asList(
-                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY.array(), TP0_VALUE.array()),
-                new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), TP1_VALUE.array()),
-                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array()),
-                new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), TP1_VALUE_NEW.array())
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE.array(),
+                    new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), TP1_VALUE.array(),
+                    new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array(),
+                    new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), TP1_VALUE_NEW.array(),
+                    new RecordHeaders(), Optional.empty())
         ));
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -188,29 +201,32 @@ public class KafkaOffsetBackingStoreTest {
         // Second get() should get the produced data and return the new values
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
         storeLog.readToEnd(EasyMock.capture(secondGetReadToEndCallback));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY.array(), TP0_VALUE.array()));
-                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), TP1_VALUE.array()));
-                secondGetReadToEndCallback.getValue().onCompletion(null, null);
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE.array(),
+                    new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), TP1_VALUE.array(),
+                    new RecordHeaders(), Optional.empty()));
+            secondGetReadToEndCallback.getValue().onCompletion(null, null);
+            return null;
         });
 
         // Third get() should pick up data produced by someone else and return those values
         final Capture<Callback<Void>> thirdGetReadToEndCallback = EasyMock.newCapture();
         storeLog.readToEnd(EasyMock.capture(thirdGetReadToEndCallback));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array()));
-                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), TP1_VALUE_NEW.array()));
-                thirdGetReadToEndCallback.getValue().onCompletion(null, null);
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE_NEW.array(),
+                    new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), TP1_VALUE_NEW.array(),
+                    new RecordHeaders(), Optional.empty()));
+            thirdGetReadToEndCallback.getValue().onCompletion(null, null);
+            return null;
         });
 
+        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(DEFAULT_DISTRIBUTED_CONFIG);
@@ -227,12 +243,7 @@ public class KafkaOffsetBackingStoreTest {
         toSet.put(TP0_KEY, TP0_VALUE);
         toSet.put(TP1_KEY, TP1_VALUE);
         final AtomicBoolean invoked = new AtomicBoolean(false);
-        Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                invoked.set(true);
-            }
-        });
+        Future<Void> setFuture = store.set(toSet, (error, result) -> invoked.set(true));
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
@@ -274,13 +285,18 @@ public class KafkaOffsetBackingStoreTest {
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
         storeLog.readToEnd(EasyMock.capture(secondGetReadToEndCallback));
         PowerMock.expectLastCall().andAnswer(() -> {
-            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, (byte[]) null, TP0_VALUE.array()));
-            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), (byte[]) null));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, null, TP0_VALUE.array(),
+                    new RecordHeaders(), Optional.empty()));
+            capturedConsumedCallback.getValue().onCompletion(null,
+                new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), null,
+                    new RecordHeaders(), Optional.empty()));
             secondGetReadToEndCallback.getValue().onCompletion(null, null);
             return null;
         });
 
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -292,12 +308,7 @@ public class KafkaOffsetBackingStoreTest {
         toSet.put(null, TP0_VALUE);
         toSet.put(TP1_KEY, null);
         final AtomicBoolean invoked = new AtomicBoolean(false);
-        Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                invoked.set(true);
-            }
-        });
+        Future<Void> setFuture = store.set(toSet, (error, result) -> invoked.set(true));
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
         // for the store's set callback
@@ -334,6 +345,8 @@ public class KafkaOffsetBackingStoreTest {
         storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
         PowerMock.expectLastCall();
 
+        expectClusterId();
+
         PowerMock.replayAll();
 
         store.configure(DEFAULT_DISTRIBUTED_CONFIG);
@@ -346,13 +359,10 @@ public class KafkaOffsetBackingStoreTest {
         toSet.put(TP2_KEY, TP2_VALUE);
         final AtomicBoolean invoked = new AtomicBoolean(false);
         final AtomicBoolean invokedFailure = new AtomicBoolean(false);
-        Future<Void> setFuture = store.set(toSet, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                invoked.set(true);
-                if (error != null)
-                    invokedFailure.set(true);
-            }
+        Future<Void> setFuture = store.set(toSet, (error, result) -> {
+            invoked.set(true);
+            if (error != null)
+                invokedFailure.set(true);
         });
         assertFalse(setFuture.isDone());
         // Out of order callbacks shouldn't matter, should still require all to be invoked before invoking the callback
@@ -380,25 +390,27 @@ public class KafkaOffsetBackingStoreTest {
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(store, "createKafkaBasedLog", EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
                 EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback),
-                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminProps))
+                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier))
                 .andReturn(storeLog);
     }
 
     private void expectStart(final List<ConsumerRecord<byte[], byte[]>> preexistingRecords) throws Exception {
         storeLog.start();
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                for (ConsumerRecord<byte[], byte[]> rec : preexistingRecords)
-                    capturedConsumedCallback.getValue().onCompletion(null, rec);
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            for (ConsumerRecord<byte[], byte[]> rec : preexistingRecords)
+                capturedConsumedCallback.getValue().onCompletion(null, rec);
+            return null;
         });
     }
 
     private void expectStop() {
         storeLog.stop();
         PowerMock.expectLastCall();
+    }
+
+    private void expectClusterId() {
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
     }
 
     private static ByteBuffer buffer(String v) {

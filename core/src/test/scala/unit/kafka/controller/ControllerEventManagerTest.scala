@@ -28,8 +28,8 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.UpdateMetadataResponse
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertEquals, assertTrue, fail}
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -38,7 +38,7 @@ class ControllerEventManagerTest {
 
   private var controllerEventManager: ControllerEventManager = _
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (controllerEventManager != null)
       controllerEventManager.close()
@@ -136,6 +136,40 @@ class ControllerEventManagerTest {
   }
 
   @Test
+  def testEventQueueTimeResetOnTimeout(): Unit = {
+    val metricName = "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
+    val controllerStats = new ControllerStats
+    val time = new MockTime()
+    val processedEvents = new AtomicInteger()
+
+    val eventProcessor = new ControllerEventProcessor {
+      override def process(event: ControllerEvent): Unit = {
+        processedEvents.incrementAndGet()
+      }
+      override def preempt(event: ControllerEvent): Unit = {}
+    }
+
+    controllerEventManager = new ControllerEventManager(0, eventProcessor,
+      time, controllerStats.rateAndTimeMetrics, 1)
+    controllerEventManager.start()
+
+    controllerEventManager.put(TopicChange)
+    controllerEventManager.put(TopicChange)
+
+    TestUtils.waitUntilTrue(() => processedEvents.get() == 2,
+      "Timed out waiting for processing of all events")
+
+    val queueTimeHistogram = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == metricName
+    }.values.headOption.getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
+
+    TestUtils.waitUntilTrue(() => queueTimeHistogram.count == 0,
+      "Timed out on resetting queueTimeHistogram")
+    assertEquals(0, queueTimeHistogram.min, 0.1)
+    assertEquals(0, queueTimeHistogram.max, 0.1)
+  }
+
+  @Test
   def testSuccessfulEvent(): Unit = {
     check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs",
       AutoPreferredReplicaLeaderElection, () => ())
@@ -178,7 +212,7 @@ class ControllerEventManagerTest {
       "Controller state has not changed back to Idle")
     assertEquals(1, eventProcessedListenerCount.get)
 
-    assertEquals("Timer has not been updated", initialTimerCount + 1, timer(metricName).count)
+    assertEquals(initialTimerCount + 1, timer(metricName).count, "Timer has not been updated")
   }
 
   private def timer(metricName: String): Timer = {

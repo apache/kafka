@@ -32,7 +32,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -106,15 +105,18 @@ public final class ClientUtils {
                 clientSaslMechanism, time, true, logContext);
     }
 
-    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(host);
-        if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
-            return filterPreferredAddresses(addresses);
-        } else {
-            return Collections.singletonList(addresses[0]);
-        }
+    static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
+        InetAddress[] addresses = hostResolver.resolve(host);
+        return filterPreferredAddresses(addresses);
     }
 
+    /**
+     * Return a list containing the first address in `allAddresses` and subsequent addresses
+     * that are a subtype of the first address.
+     *
+     * The outcome is that all returned addresses are either IPv4 or IPv6 (InetAddress has two
+     * subclasses: Inet4Address and Inet6Address).
+     */
     static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {
         List<InetAddress> preferredAddresses = new ArrayList<>();
         Class<? extends InetAddress> clazz = null;

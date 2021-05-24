@@ -49,14 +49,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
-import static java.util.Collections.singletonMap;
-
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -90,12 +87,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @Before
     public void before() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization)
+            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
         ));
     }
 
@@ -388,16 +382,12 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
             // Deleting a non-joining record produces an unnecessary tombstone for inner joins, because
             // it's not possible to know whether a result was previously emitted.
-            // HOWEVER, when the final join result is materialized (either explicitly or
-            // implicitly by a subsequent join), we _can_ detect that the tombstone is unnecessary and drop it.
             // For the left join, the tombstone is necessary.
             left.pipeInput("lhs1", (String) null);
             {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
-                    is(leftJoin || !(materialized || rejoin)
-                           ? mkMap(mkEntry("lhs1", null))
-                           : emptyMap())
+                    is(mkMap(mkEntry("lhs1", null)))
                 );
                 if (materialized) {
                     assertThat(
@@ -474,15 +464,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             // "moving" our subscription to another non-existent FK results in an unnecessary tombstone for inner join,
             // since it impossible to know whether the prior FK existed or not (and thus whether any results have
             // previously been emitted)
-            // previously been emitted). HOWEVER, when the final join result is materialized (either explicitly or
-            // implicitly by a subsequent join), we _can_ detect that the tombstone is unnecessary and drop it.
             // The left join emits a _necessary_ update (since the lhs record has actually changed)
             left.pipeInput("lhs1", "lhsValue1|rhs2");
             assertThat(
                 outputTopic.readKeyValuesToMap(),
-                is(leftJoin
-                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs2,null)"))
-                       : (materialized || rejoin) ? emptyMap() : singletonMap("lhs1", null))
+                is(mkMap(mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs2,null)" : null)))
             );
             if (materialized) {
                 assertThat(
@@ -494,9 +480,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs1", "lhsValue1|rhs3");
             assertThat(
                 outputTopic.readKeyValuesToMap(),
-                is(leftJoin
-                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs3,null)"))
-                       : (materialized || rejoin) ? emptyMap() : singletonMap("lhs1", null))
+                is(mkMap(mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs3,null)" : null)))
             );
             if (materialized) {
                 assertThat(

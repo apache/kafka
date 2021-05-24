@@ -205,6 +205,38 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldGetPrefixScanSensor() {
+        final String metricName = "prefix-scan";
+        final String descriptionOfRate = "The average number of calls to prefix-scan per second";
+        final String descriptionOfAvg = "The average latency of calls to prefix-scan";
+        final String descriptionOfMax = "The maximum latency of calls to prefix-scan";
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.DEBUG))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        StreamsMetricsImpl.addInvocationRateToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            metricName,
+            descriptionOfRate
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            latencyMetricName(metricName),
+            descriptionOfAvg,
+            descriptionOfMax
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = StateStoreMetrics.prefixScanSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
     public void shouldGetFlushSensor() {
         final String metricName = "flush";
         final String descriptionOfRate = "The average number of calls to flush per second";
@@ -307,9 +339,9 @@ public class StateStoreMetricsTest {
         final String metricName = "expired-window-record-drop";
         final String descriptionOfRate = "The average number of dropped records due to an expired window per second";
         final String descriptionOfCount = "The total number of dropped records due to an expired window";
-        expect(streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
             .andReturn(expectedSensor);
-        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             expectedSensor,
             "stream-" + STORE_TYPE + "-metrics",
@@ -321,7 +353,39 @@ public class StateStoreMetricsTest {
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor =
-            StateStoreMetrics.expiredWindowRecordDropSensor(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+            StateStoreMetrics.expiredWindowRecordDropSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldGetRecordE2ELatencySensor() {
+        final String metricName = "record-e2e-latency";
+
+        final String e2eLatencyDescription =
+            "end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        final String descriptionOfAvg = "The average " + e2eLatencyDescription;
+        final String descriptionOfMin = "The minimum " + e2eLatencyDescription;
+        final String descriptionOfMax = "The maximum " + e2eLatencyDescription;
+
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            metricName,
+            descriptionOfAvg,
+            descriptionOfMin,
+            descriptionOfMax
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor =
+            StateStoreMetrics.e2ELatencySensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
@@ -336,7 +400,6 @@ public class StateStoreMetricsTest {
         if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
             setUpParentSensor(metricName, descriptionOfRate, descriptionOfCount, descriptionOfAvg, descriptionOfMax);
             expect(streamsMetrics.storeLevelSensor(
-                THREAD_ID,
                 TASK_ID,
                 STORE_NAME,
                 metricName,
@@ -353,7 +416,6 @@ public class StateStoreMetricsTest {
             );
         } else {
             expect(streamsMetrics.storeLevelSensor(
-                THREAD_ID,
                 TASK_ID,
                 STORE_NAME,
                 metricName,
@@ -367,7 +429,7 @@ public class StateStoreMetricsTest {
                 descriptionOfRate
             );
         }
-        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,
             storeLevelGroup,
@@ -390,7 +452,7 @@ public class StateStoreMetricsTest {
                                    final String descriptionOfMax) {
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricName, RecordingLevel.DEBUG))
             .andReturn(parentSensor);
-        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, StreamsMetricsImpl.ROLLUP_VALUE))
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, StreamsMetricsImpl.ROLLUP_VALUE))
             .andReturn(allTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             parentSensor,
@@ -422,7 +484,7 @@ public class StateStoreMetricsTest {
         final String currentMetricName = metricName + "-current";
         final String group;
         final Map<String, String> tagMap;
-        expect(streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, BUFFER_NAME, metricName, RecordingLevel.DEBUG)).andReturn(expectedSensor);
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, BUFFER_NAME, metricName, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
             group = BUFFER_LEVEL_GROUP_FROM_0100_TO_24;
             tagMap = bufferTagMap;
@@ -437,7 +499,7 @@ public class StateStoreMetricsTest {
         } else {
             group = STORE_LEVEL_GROUP;
             tagMap = storeTagMap;
-            expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, BUFFER_NAME)).andReturn(tagMap);
+            expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, BUFFER_NAME)).andReturn(tagMap);
         }
         StreamsMetricsImpl.addAvgAndMaxToSensor(
             expectedSensor,

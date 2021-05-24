@@ -62,13 +62,13 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
     private final boolean materialized;
-    private final boolean queriable;
+    private final boolean queryable;
 
     private Properties streamsConfig;
 
-    public KTableKTableForeignKeyJoinMaterializationIntegrationTest(final boolean materialized, final boolean queriable) {
+    public KTableKTableForeignKeyJoinMaterializationIntegrationTest(final boolean materialized, final boolean queryable) {
         this.materialized = materialized;
-        this.queriable = queriable;
+        this.queryable = queryable;
     }
 
     @Rule
@@ -78,14 +78,12 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     public void before() {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
 
-    @Parameterized.Parameters(name = "materialized={0}, queriable={1}")
+    @Parameterized.Parameters(name = "materialized={0}, queryable={1}")
     public static Collection<Object[]> data() {
         return Arrays.asList(
             new Object[] {false, false},
@@ -108,7 +106,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                 outputTopic.readKeyValuesToMap(),
                 is(emptyMap())
             );
-            if (materialized && queriable) {
+            if (materialized && queryable) {
                 assertThat(
                     asMap(store),
                     is(emptyMap())
@@ -119,7 +117,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
             // it's not possible to know whether a result was previously emitted.
             left.pipeInput("lhs1", (String) null);
             {
-                if (materialized && queriable) {
+                if (materialized && queryable) {
                     // in only this specific case, the record cache will actually be activated and
                     // suppress the unnecessary tombstone. This is because the cache is able to determine
                     // for sure that there has never been a previous result. (Because the "old" and "new" values
@@ -148,7 +146,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                     outputTopic.readKeyValuesToMap(),
                     is(emptyMap())
                 );
-                if (materialized && queriable) {
+                if (materialized && queryable) {
                     assertThat(
                         asMap(store),
                         is(emptyMap())
@@ -175,7 +173,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
-        if (queriable) {
+        if (queryable) {
             materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(Serdes.String());
         } else {
             materialized = Materialized.with(null, Serdes.String());

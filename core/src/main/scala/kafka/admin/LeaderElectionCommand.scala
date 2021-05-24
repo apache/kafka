@@ -23,6 +23,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.utils.CommandDefaultOptions
 import kafka.utils.CommandLineUtils
 import kafka.utils.CoreUtils
+import kafka.utils.Implicits._
 import kafka.utils.Json
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -165,13 +166,13 @@ object LeaderElectionCommand extends Logging {
     }
 
     if (noop.nonEmpty) {
-      val partitions = succeeded.mkString(", ")
+      val partitions = noop.mkString(", ")
       println(s"Valid replica already elected for partitions $partitions")
     }
 
     if (failed.nonEmpty) {
       val rootException = new AdminCommandFailedException(s"${failed.size} replica(s) could not be elected")
-      failed.foreach { case (topicPartition, exception) =>
+      failed.forKeyValue { (topicPartition, exception) =>
         println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
         rootException.addSuppressed(exception)
       }
