@@ -27,13 +27,17 @@ import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
 
-class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
+class DefaultStandbyTaskAssignor extends StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);
+
+    public DefaultStandbyTaskAssignor(final AssignorConfiguration.AssignmentConfigs configs) {
+        super(configs);
+    }
 
     @Override
     public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final TreeMap<UUID, ClientState> clientStates,
-                                   final int numStandbyReplicas, final String rackAwareAssignmentTags) {
+                                   final TreeMap<UUID, ClientState> clientStates) {
+        final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTasks.stream()
                                                                            .collect(
@@ -70,10 +74,5 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
                          numRemainingStandbys, numStandbyReplicas, task);
             }
         }
-    }
-
-    @Override
-    public boolean canTaskBeMoved(final TaskId taskId, final UUID assignedClientId, final TreeMap<UUID, ClientState> clientStates) {
-        return true;
     }
 }

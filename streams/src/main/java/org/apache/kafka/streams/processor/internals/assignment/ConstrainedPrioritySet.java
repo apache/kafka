@@ -85,14 +85,6 @@ class ConstrainedPrioritySet {
         clientsByTaskLoad.offer(client);
     }
 
-    /**
-     * resets internal state
-     */
-    void reset() {
-        clientsByTaskLoad.clear();
-        uniqueClients.clear();
-    }
-
     private UUID pollNextClient() {
         final UUID client = clientsByTaskLoad.remove();
         uniqueClients.remove(client);

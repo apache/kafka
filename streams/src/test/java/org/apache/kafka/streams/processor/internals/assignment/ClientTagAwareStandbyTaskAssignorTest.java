@@ -125,11 +125,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         clientStates.get(UUID_4).assignActive(TASK_0_1);
         clientStates.get(UUID_7).assignActive(TASK_0_2);
 
-        new ClientTagAwareStandbyTaskAssignor().assignStandbyTasks(
+        final AssignorConfiguration.AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(-1L, 0, 2, 0L, "zone,cluster");
+
+        new ClientTagAwareStandbyTaskAssignor(configs).assignStandbyTasks(
             allTaskIds,
-            new TreeMap<>(clientStates),
-            2,
-            "zone,cluster"
+            new TreeMap<>(clientStates)
         );
 
         final String a = "";

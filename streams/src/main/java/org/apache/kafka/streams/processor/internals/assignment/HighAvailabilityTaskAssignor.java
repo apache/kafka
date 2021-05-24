@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignor.StandbyTaskMovement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +34,10 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
@@ -42,10 +46,10 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
 
-    private final StandbyTaskAssignmentStrategy standbyTaskAssignmentStrategy;
+    private final StandbyTaskAssignorInitializer standbyTaskAssignorInitializer;
 
     public HighAvailabilityTaskAssignor() {
-        standbyTaskAssignmentStrategy = new StandbyTaskAssignmentStrategy();
+        standbyTaskAssignorInitializer = new StandbyTaskAssignorInitializer();
     }
 
     @Override
@@ -123,12 +127,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             clientStates,
             ClientState::activeTasks,
             ClientState::unassignActive,
-            new BiConsumer<UUID, TaskId>() {
-                @Override
-                public void accept(final UUID uuid, final TaskId taskId) {
-                    clientStates.get(uuid).assignActive(taskId);
-                    taskAndClients.put(taskId, uuid);
-                }
+            (uuid, taskId) -> {
+                clientStates.get(uuid).assignActive(taskId);
+                taskAndClients.put(taskId, uuid);
             }
         );
 
@@ -138,24 +139,25 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                            final Map<TaskId, UUID> statefulTasks,
                                            final AssignmentConfigs configs) {
-        standbyTaskAssignmentStrategy.initStandbyTaskAssignor(configs)
-                                     .assignStandbyTasks(statefulTasks,
-                                                         clientStates,
-                                                         configs.numStandbyReplicas,
-                                                         configs.rackAwareAssignmentTags);
+        final StandbyTaskAssignor standbyTaskAssignor = standbyTaskAssignorInitializer.initStandbyTaskAssignor(configs);
 
-//        balanceTasksOverThreads(
-//            clientStates,
-//            ClientState::standbyTasks,
-//            ClientState::unassignStandby,
-//            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId)
-//        );
+        standbyTaskAssignor.assignStandbyTasks(statefulTasks, clientStates);
+
+        standbyTaskAssignor.canTaskBeMoved()
+
+        balanceTasksOverThreads(
+            clientStates,
+            ClientState::standbyTasks,
+            ClientState::unassignStandby,
+            (uuid, taskId) -> clientStates.get(uuid).assignStandby(taskId)
+        );
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
-                                                final BiConsumer<UUID, TaskId> taskAssignor) {
+                                                final BiConsumer<UUID, TaskId> taskAssignor,
+                                                final Predicate<StandbyTaskMovement> standbyTask) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;

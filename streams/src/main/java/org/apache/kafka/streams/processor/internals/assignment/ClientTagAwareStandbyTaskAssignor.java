@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,15 +35,19 @@ import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
 
-class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
+class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(ClientTagAwareStandbyTaskAssignor.class);
+
+    ClientTagAwareStandbyTaskAssignor(final AssignmentConfigs configs) {
+        super(configs);
+    }
 
     @Override
     public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final TreeMap<UUID, ClientState> clientStates,
-                                   final int numStandbyReplicas,
-                                   final String rackAwareAssignmentTags) {
+                                   final TreeMap<UUID, ClientState> clientStates) {
         final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
+        final int numStandbyReplicas = configs.numStandbyReplicas;
+
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTasks.stream()
                                                                            .collect(
                                                                                toMap(
@@ -168,7 +173,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     @Override
-    public boolean canTaskBeMoved(final TaskId taskId, final UUID assignedClientId, final TreeMap<UUID, ClientState> clientStates) {
+    public boolean canTaskBeMoved(final StandbyTaskMovement standbyTaskMovement) {
         return false;
     }
 }

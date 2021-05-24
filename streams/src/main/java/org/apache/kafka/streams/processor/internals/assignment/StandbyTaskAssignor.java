@@ -17,19 +17,35 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 
-public interface StandbyTaskAssignor {
+abstract class StandbyTaskAssignor {
+    protected final AssignmentConfigs configs;
 
-    void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                            final TreeMap<UUID, ClientState> clientStates,
-                            final int numStandbyReplicas,
-                            final String rackAwareAssignmentTags);
+    StandbyTaskAssignor(final AssignmentConfigs configs) {
+        this.configs = configs;
+    }
 
-    boolean canTaskBeMoved(final TaskId taskId,
-                           final UUID assignedClientId,
-                           final TreeMap<UUID, ClientState> clientStates);
+    abstract void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
+                                     final TreeMap<UUID, ClientState> clientStates);
+
+    boolean canTaskBeMoved(final StandbyTaskMovement standbyTaskMovement) {
+        return true;
+    }
+
+    static class StandbyTaskMovement {
+        public final TaskId taskId;
+        public final ClientState previousClient;
+        public final ClientState destinationClient;
+
+        StandbyTaskMovement(final TaskId taskId, final ClientState previousClient, final ClientState destinationClient) {
+            this.taskId = taskId;
+            this.previousClient = previousClient;
+            this.destinationClient = destinationClient;
+        }
+    }
 }

@@ -25,15 +25,15 @@ import java.util.Objects;
  * <p>
  * FIXME: maybe it should be called initializer?
  */
-class StandbyTaskAssignmentStrategy {
+class StandbyTaskAssignorInitializer {
 
     StandbyTaskAssignor initStandbyTaskAssignor(final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
-            return new NoopStandbyTaskAssignor();
+            return new NoopStandbyTaskAssignor(configs);
         } else if (Objects.nonNull(configs.rackAwareAssignmentTags)) {
-            return new ClientTagAwareStandbyTaskAssignor();
+            return new ClientTagAwareStandbyTaskAssignor(configs);
         } else {
-            return new DefaultStandbyTaskAssignor();
+            return new DefaultStandbyTaskAssignor(configs);
         }
     }
 }

@@ -22,18 +22,15 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 
-class NoopStandbyTaskAssignor implements StandbyTaskAssignor {
+class NoopStandbyTaskAssignor extends StandbyTaskAssignor {
 
-    @Override
-    public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
-                                   final TreeMap<UUID, ClientState> clientStates,
-                                   final int numStandbyReplicas,
-                                   final String rackAwareAssignmentTags) {
-        // nothing do to here
+    NoopStandbyTaskAssignor(final AssignorConfiguration.AssignmentConfigs configs) {
+        super(configs);
     }
 
     @Override
-    public boolean canTaskBeMoved(final TaskId taskId, final UUID assignedClientId, final TreeMap<UUID, ClientState> clientStates) {
-        return true;
+    public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
+                                   final TreeMap<UUID, ClientState> clientStates) {
+        // nothing do to here
     }
 }
