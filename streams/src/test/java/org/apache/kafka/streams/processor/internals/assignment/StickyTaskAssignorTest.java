@@ -733,7 +733,7 @@ public class StickyTaskAssignorTest {
             final List<Integer> topicGroupIds = new ArrayList<>();
             final Set<TaskId> activeTasks = clientStateEntry.getValue().activeTasks();
             for (final TaskId activeTask : activeTasks) {
-                topicGroupIds.add(activeTask.topicGroupId);
+                topicGroupIds.add(activeTask.subtopology());
             }
             Collections.sort(topicGroupIds);
             assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));

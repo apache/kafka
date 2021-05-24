@@ -119,7 +119,7 @@ class LogCleanerManagerTest extends Logging {
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock(dir: File, config: LogConfig, offsets: LoadedLogOffsets)
       extends Log(dir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
-        offsets.nextOffsetMetadata, time.scheduler, new BrokerTopicStats, time, maxProducerIdExpirationMs,
+        offsets.nextOffsetMetadata, time.scheduler, new BrokerTopicStats, time,
         LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
         producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()

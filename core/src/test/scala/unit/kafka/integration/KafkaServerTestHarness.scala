@@ -161,8 +161,19 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   /**
    * Restart any dead brokers
    */
-  def restartDeadBrokers(): Unit = {
+  def restartDeadBrokers(reconfigure: Boolean = false): Unit = {
+    if (reconfigure) {
+      instanceConfigs = null
+    }
     for(i <- servers.indices if !alive(i)) {
+      if (reconfigure) {
+        servers(i) = TestUtils.createServer(
+          configs(i),
+          time = brokerTime(configs(i).brokerId),
+          threadNamePrefix = None,
+          enableForwarding
+        )
+      }
       servers(i).startup()
       alive(i) = true
     }

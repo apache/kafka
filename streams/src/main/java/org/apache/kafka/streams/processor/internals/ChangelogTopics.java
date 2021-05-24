@@ -75,7 +75,7 @@ public class ChangelogTopics {
                 final Set<TopicPartition> changelogTopicPartitions = topicsInfo.stateChangelogTopics
                     .keySet()
                     .stream()
-                    .map(topic -> new TopicPartition(topic, task.partition))
+                    .map(topic -> new TopicPartition(topic, task.partition()))
                     .collect(Collectors.toSet());
                 changelogPartitionsForStatefulTask.put(task, changelogTopicPartitions);
             }
@@ -84,8 +84,8 @@ public class ChangelogTopics {
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = UNKNOWN;
                 for (final TaskId task : topicGroupTasks) {
-                    if (numPartitions < task.partition + 1) {
-                        numPartitions = task.partition + 1;
+                    if (numPartitions < task.partition() + 1) {
+                        numPartitions = task.partition() + 1;
                     }
                 }
                 topicConfig.setNumberOfPartitions(numPartitions);

@@ -35,7 +35,7 @@ object TransactionCoordinator {
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
-            createProducerIdGenerator: () => ProducerIdGenerator,
+            createProducerIdGenerator: () => ProducerIdManager,
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
@@ -82,7 +82,7 @@ object TransactionCoordinator {
 class TransactionCoordinator(brokerId: Int,
                              txnConfig: TransactionConfig,
                              scheduler: Scheduler,
-                             createProducerIdGenerator: () => ProducerIdGenerator,
+                             createProducerIdManager: () => ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
@@ -99,7 +99,7 @@ class TransactionCoordinator(brokerId: Int,
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
-  val producerIdGenerator = createProducerIdGenerator()
+  val producerIdManager = createProducerIdManager()
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
@@ -109,7 +109,7 @@ class TransactionCoordinator(brokerId: Int,
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val producerId = producerIdGenerator.generateProducerId()
+      val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (transactionalId.isEmpty) {
       // if transactional id is empty then return error as invalid request. This is
@@ -121,7 +121,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          val producerId = producerIdGenerator.generateProducerId()
+          val producerId = producerIdManager.generateProducerId()
           val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
             producerId = producerId,
             lastProducerId = RecordBatch.NO_PRODUCER_ID,
@@ -225,7 +225,7 @@ class TransactionCoordinator(brokerId: Int,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-              val newProducerId = producerIdGenerator.generateProducerId()
+              val newProducerId = producerIdManager.generateProducerId()
               Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds(),
                 expectedProducerIdAndEpoch.isDefined))
             } else {
@@ -675,7 +675,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()
-    producerIdGenerator.shutdown()
+    producerIdManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
     info("Shutdown complete.")

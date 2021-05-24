@@ -280,12 +280,6 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
@@ -425,7 +419,7 @@ public class InternalMockProcessorContext
             key,
             value,
             null,
-            taskId().partition,
+            taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);

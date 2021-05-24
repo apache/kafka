@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
+import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import scala.Option;
 import scala.collection.JavaConverters;
+import scala.collection.Seq;
 import scala.compat.java8.OptionConverters;
 
 import java.io.File;
@@ -89,9 +91,20 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 // This is what tests normally extend from to start a cluster, here we create it anonymously and
                 // configure the cluster using values from ClusterConfig
                 IntegrationTestHarness cluster = new IntegrationTestHarness() {
+
+                    @Override
+                    public void modifyConfigs(Seq<Properties> props) {
+                        super.modifyConfigs(props);
+                        for (int i = 0; i < props.length(); i++) {
+                            props.apply(i).putAll(clusterConfig.brokerServerProperties(i));
+                        }
+                    }
+
                     @Override
                     public Properties serverConfig() {
-                        return clusterConfig.serverProperties();
+                        Properties props = clusterConfig.serverProperties();
+                        clusterConfig.ibp().ifPresent(ibp -> props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp));
+                        return props;
                     }
 
                     @Override
@@ -247,6 +260,17 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             if (stopped.compareAndSet(false, true)) {
                 clusterReference.get().tearDown();
             }
+        }
+
+        @Override
+        public void rollingBrokerRestart() {
+            if (!started.get()) {
+                throw new IllegalStateException("Tried to restart brokers but the cluster has not been started!");
+            }
+            for (int i = 0; i < clusterReference.get().brokerCount(); i++) {
+                clusterReference.get().killBroker(i);
+            }
+            clusterReference.get().restartDeadBrokers(true);
         }
     }
 }

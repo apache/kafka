@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.13'
-def defaultScala213Version = '2.13.5'
+def defaultScala213Version = '2.13.6'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -95,9 +95,9 @@ versions += [
   kafka_24: "2.4.1",
   kafka_25: "2.5.1",
   kafka_26: "2.6.2",
-  kafka_27: "2.7.0",
+  kafka_27: "2.7.1",
   lz4: "1.7.1",
-  mavenArtifact: "3.6.3",
+  mavenArtifact: "3.8.1",
   metrics: "2.2.0",
   mockito: "3.9.0",
   netty: "4.1.62.Final",

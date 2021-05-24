@@ -131,7 +131,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testResponseThrottleTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions ++ RequestQuotaTest.ClusterActionsWithThrottle)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
@@ -160,7 +160,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions) {
+    for (apiKey <- RequestQuotaTest.ClusterActions -- RequestQuotaTest.ClusterActionsWithThrottle) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
 
@@ -642,6 +642,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.LIST_TRANSACTIONS =>
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
 
+        case ApiKeys.ALLOCATE_PRODUCER_IDS =>
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -762,6 +764,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
 object RequestQuotaTest {
   val ClusterActions = ApiKeys.zkBrokerApis.asScala.filter(_.clusterAction).toSet
+  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions
 

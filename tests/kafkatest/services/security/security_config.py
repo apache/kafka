@@ -148,10 +148,10 @@ class SecurityConfig(TemplateRenderer):
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
                  listener_security_config=ListenerSecurityConfig(), tls_version=None,
-                 serves_controller_sasl_mechanism=None, # Raft Controller does this
-                 serves_intercontroller_sasl_mechanism=None, # Raft Controller does this
-                 uses_controller_sasl_mechanism=None, # communication to Raft Controller (broker and controller both do this)
-                 raft_tls=False):
+                 serves_controller_sasl_mechanism=None, # KRaft Controller does this
+                 serves_intercontroller_sasl_mechanism=None, # KRaft Controller does this
+                 uses_controller_sasl_mechanism=None, # communication to KRaft Controller (broker and controller both do this)
+                 kraft_tls=False):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -179,16 +179,16 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        serves_raft_sasl = []
+        serves_kraft_sasl = []
         if serves_controller_sasl_mechanism is not None:
-            serves_raft_sasl += [serves_controller_sasl_mechanism]
+            serves_kraft_sasl += [serves_controller_sasl_mechanism]
         if serves_intercontroller_sasl_mechanism is not None:
-            serves_raft_sasl += [serves_intercontroller_sasl_mechanism]
-        self.serves_raft_sasl = set(serves_raft_sasl)
-        uses_raft_sasl = []
+            serves_kraft_sasl += [serves_intercontroller_sasl_mechanism]
+        self.serves_kraft_sasl = set(serves_kraft_sasl)
+        uses_kraft_sasl = []
         if uses_controller_sasl_mechanism is not None:
-            uses_raft_sasl += [uses_controller_sasl_mechanism]
-        self.uses_raft_sasl = set(uses_raft_sasl)
+            uses_kraft_sasl += [uses_controller_sasl_mechanism]
+        self.uses_kraft_sasl = set(uses_kraft_sasl)
 
         self.zk_sasl = zk_sasl
         self.zk_tls = zk_tls
@@ -207,7 +207,7 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
-        self.raft_tls = raft_tls
+        self.kraft_tls = kraft_tls
 
         if tls_version is not None:
             self.properties.update({'tls.version' : tls_version})
@@ -222,13 +222,13 @@ class SecurityConfig(TemplateRenderer):
         self.has_sasl = self.is_sasl(self.properties['security.protocol']) \
                         or self.is_sasl(self.interbroker_security_protocol) \
                         or self.zk_sasl \
-                        or self.serves_raft_sasl or self.uses_raft_sasl
+                        or self.serves_kraft_sasl or self.uses_kraft_sasl
 
     def calc_has_ssl(self):
         self.has_ssl = self.is_ssl(self.properties['security.protocol']) \
                        or self.is_ssl(self.interbroker_security_protocol) \
                        or self.zk_tls \
-                       or self.raft_tls
+                       or self.kraft_tls
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None,
                       use_inter_broker_mechanism_for_client = False):
@@ -240,12 +240,14 @@ class SecurityConfig(TemplateRenderer):
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         if use_inter_broker_mechanism_for_client:
             client_sasl_mechanism_to_use = self.interbroker_sasl_mechanism
+            security_protocol_to_use = self.interbroker_security_protocol
         else:
             # csv is supported here, but client configs only supports a single mechanism,
             # so arbitrarily take the first one defined in case it has multiple values
             client_sasl_mechanism_to_use = self.client_sasl_mechanism.split(',')[0].strip()
+            security_protocol_to_use = self.security_protocol
 
-        return SecurityConfig(self.context, self.security_protocol,
+        return SecurityConfig(self.context, security_protocol_to_use,
                               client_sasl_mechanism=client_sasl_mechanism_to_use,
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
@@ -384,10 +386,10 @@ class SecurityConfig(TemplateRenderer):
             sasl_mechanisms += [mechanism.strip() for mechanism in self.client_sasl_mechanism.split(',')]
         if self.is_sasl(self.interbroker_security_protocol):
             sasl_mechanisms += [self.interbroker_sasl_mechanism]
-        if self.serves_raft_sasl:
-            sasl_mechanisms += list(self.serves_raft_sasl)
-        if self.uses_raft_sasl:
-            sasl_mechanisms += list(self.uses_raft_sasl)
+        if self.serves_kraft_sasl:
+            sasl_mechanisms += list(self.serves_kraft_sasl)
+        if self.uses_kraft_sasl:
+            sasl_mechanisms += list(self.uses_kraft_sasl)
         if self.zk_sasl:
             sasl_mechanisms += [SecurityConfig.SASL_MECHANISM_GSSAPI]
         sasl_mechanisms.extend(self.additional_sasl_mechanisms)
