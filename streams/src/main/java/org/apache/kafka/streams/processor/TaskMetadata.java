@@ -40,6 +40,18 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
+    /**
+     * @deprecated since 3.0, please use the constructor that accepts a TaskId object instead of a String
+     */
+    @Deprecated
+    public TaskMetadata(final String taskId,
+                        final Set<TopicPartition> topicPartitions,
+                        final Map<TopicPartition, Long> committedOffsets,
+                        final Map<TopicPartition, Long> endOffsets,
+                        final Optional<Long> timeCurrentIdlingStarted) {
+        this(TaskId.parse(taskId), topicPartitions, committedOffsets, endOffsets, timeCurrentIdlingStarted);
+    }
+
     public TaskMetadata(final TaskId taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,

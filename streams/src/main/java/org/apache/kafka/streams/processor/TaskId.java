@@ -21,6 +21,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
+
+import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,7 +79,36 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public String toString() {
-        return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
+        return topicGroupId + "_" + partition;
+    }
+
+    /**
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
+     */
+    public static TaskId parse(final String taskIdStr) {
+        final int firstIndex = taskIdStr.indexOf('_');
+        final int secondIndex = taskIdStr.substring(firstIndex + 1).indexOf('_');
+        if (firstIndex <= 0 || firstIndex + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+
+        try {
+            // If only one copy of '_' exists, there is no named topology in the string
+            if (secondIndex < 0) {
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, firstIndex));
+                final int partition = Integer.parseInt(taskIdStr.substring(firstIndex + 1));
+
+                return new TaskId(topicGroupId, partition);
+            } else {
+                final String namedTopology = taskIdStr.substring(0, firstIndex);
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(firstIndex + 1, secondIndex));
+                final int partition = Integer.parseInt(taskIdStr.substring(secondIndex + 1));
+
+                return new TaskId(topicGroupId, partition, namedTopology);
+            }
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
     }
 
     /**
