@@ -23,27 +23,24 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineLong;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 
 
 public class ProducerIdControlManager {
-    private static final Object PRODUCER_ID_KEY = new Object();
-    private static final int PRODUCER_ID_BLOCK_SIZE = 1000;
 
     private final ClusterControlManager clusterControlManager;
-    private final TimelineHashMap<Object, Long> lastProducerId;
+    private final TimelineLong lastProducerId;
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
-        this.lastProducerId = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.lastProducerId = new TimelineLong(snapshotRegistry, 0L);
     }
 
     ControllerResult<ResultOrError<ProducerIdsBlock>> generateNextProducerId(int brokerId, long brokerEpoch) {
@@ -53,45 +50,38 @@ public class ProducerIdControlManager {
             return ControllerResult.of(Collections.emptyList(), ResultOrError.of(ApiError.fromThrowable(e)));
         }
 
-        long producerId = lastProducerId.getOrDefault(PRODUCER_ID_KEY, 0L);
+        long producerId = lastProducerId.get();
 
-        if (producerId > Long.MAX_VALUE - PRODUCER_ID_BLOCK_SIZE) {
+        if (producerId > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             ApiError error = new ApiError(UNKNOWN_SERVER_ERROR,
                 "Exhausted all producerIds as the next block's end producerId " +
                 "is will has exceeded long type limit");
             return ControllerResult.of(Collections.emptyList(), ResultOrError.of(error));
         }
 
-        long nextProducerId = producerId + PRODUCER_ID_BLOCK_SIZE;
+        long nextProducerId = producerId + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE;
         ProducerIdsRecord record = new ProducerIdsRecord()
             .setProducerIdsEnd(nextProducerId)
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
-        ProducerIdsBlock block = new ProducerIdsBlock(-1, producerId, PRODUCER_ID_BLOCK_SIZE);
+        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, producerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
         return ControllerResult.of(
             Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), ResultOrError.of(block));
     }
 
     void replay(ProducerIdsRecord record) {
-        long currentProducerId = lastProducerId.getOrDefault(PRODUCER_ID_KEY, 0L);
+        long currentProducerId = lastProducerId.get();
         if (record.producerIdsEnd() <= currentProducerId) {
             throw new RuntimeException("Producer ID from record is not monotonically increasing");
         } else {
-            lastProducerId.put(PRODUCER_ID_KEY, record.producerIdsEnd());
+            lastProducerId.set(record.producerIdsEnd());
         }
     }
 
     Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
         List<ApiMessageAndVersion> records = new ArrayList<>(1);
 
-        long producerId = 0L;
-        for (Map.Entry<Object, Long> entry : lastProducerId.entrySet(epoch)) {
-            if (entry.getKey() == PRODUCER_ID_KEY) {
-                producerId = lastProducerId.getOrDefault(PRODUCER_ID_KEY, 0L);
-            } else {
-                throw new IllegalStateException("Unexpected key in producer ids map " + entry.getKey());
-            }
-        }
+        long producerId = lastProducerId.get(epoch);
         if (producerId > 0) {
             records.add(new ApiMessageAndVersion(
                 new ProducerIdsRecord()

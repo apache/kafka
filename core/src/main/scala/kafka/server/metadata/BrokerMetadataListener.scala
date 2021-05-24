@@ -264,7 +264,7 @@ class BrokerMetadataListener(
     // no-op
   }
 
-  class HandleNewLeaderEvent(leader: MetaLogLeader)
+  class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       val imageBuilder =

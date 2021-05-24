@@ -53,7 +53,7 @@ public class ProducerIdControlManagerTest {
         snapshotRegistry = new SnapshotRegistry(logContext);
         clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
-            new SimpleReplicaPlacementPolicy(random));
+            new StripedReplicaPlacer(random));
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {
