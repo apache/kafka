@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.errors.TaskIdFormatException;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
