@@ -462,7 +462,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param timer Timer bounding how long this method can block
      * @param waitForJoinGroup Boolean flag indicating if we should wait until re-join group completes
      * @throws KafkaException if the rebalance callback throws an exception
-     * @return true iff the operation succeeded
+     * @return true if the operation succeeded
      */
     public boolean poll(Timer timer, boolean waitForJoinGroup) {
         maybeUpdateSubscriptionMetadata();
@@ -790,7 +790,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * Refresh the committed offsets for provided partitions.
      *
      * @param timer Timer bounding how long this method can block
-     * @return true iff the operation completed within the timeout
+     * @return true if the operation completed within the timeout
      */
     public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
