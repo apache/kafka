@@ -80,7 +80,11 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public String toString() {
-        return topicGroupId + "_" + partition;
+        if (namedTopology != null) {
+            return namedTopology + "_" + topicGroupId + "_" + partition;
+        } else {
+            return topicGroupId + "_" + partition;
+        }
     }
 
     /**
@@ -88,7 +92,7 @@ public class TaskId implements Comparable<TaskId> {
      */
     public static TaskId parse(final String taskIdStr) {
         final int firstIndex = taskIdStr.indexOf('_');
-        final int secondIndex = taskIdStr.substring(firstIndex + 1).indexOf('_');
+        final int secondIndex = taskIdStr.indexOf('_', firstIndex + 1);
         if (firstIndex <= 0 || firstIndex + 1 >= taskIdStr.length()) {
             throw new TaskIdFormatException(taskIdStr);
         }
