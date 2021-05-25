@@ -2578,4 +2578,38 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
     options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
+
+  // TODO: remove this snippet once JDK >11 is used or https://bugs.openjdk.java.net/browse/JDK-8215291 is backported to JDK11
+  // Patch to include `getURLPrefix` from JDK 12 +
+  // NOTICE: This code was copied from original ORACLE search.js file present in JDK 12 and newer
+  final SEARCH_PATCH_MODULE_LESS_AWARE = "\n\n" +
+          "// Fix for moudle-less aware search\n" +
+          "function getURLPrefix(ui) {\n" +
+          "  var urlPrefix=\"\";\n" +
+          "  var slash = \"/\";\n" +
+          "  if (ui.item.category === catModules) {\n" +
+          "    return ui.item.l + slash;\n" +
+          "  } else if (ui.item.category === catPackages && ui.item.m) {\n" +
+          "    return ui.item.m + slash;\n" +
+          "  } else if (ui.item.category === catTypes || ui.item.category === catMembers) {\n" +
+          "    if (ui.item.m) {\n" +
+          "      urlPrefix = ui.item.m + slash;\n" +
+          "    } else {\n" +
+          "      \$.each(packageSearchIndex, function(index, item) {\n" +
+          "        if (item.m && ui.item.p === item.l) {\n" +
+          "          urlPrefix = item.m + slash;\n" +
+          "        }\n" +
+          "      });\n" +
+          "    }\n" +
+          "  }\n" +
+          "  return urlPrefix;\n" +
+          "}"
+
+  // When all the JavaDoc is generated we proceed to patch the search.js file
+  doLast {
+    def searchJsFile = new File(destinationDir.getAbsolutePath() + '/search.js')
+    // Append the patch to the file. By being defined at a later position, JS will execute that definition instead of
+    // the one provided by default (higher up in the file).
+    searchJsFile.append SEARCH_PATCH_MODULE_LESS_AWARE
+  }
 }
