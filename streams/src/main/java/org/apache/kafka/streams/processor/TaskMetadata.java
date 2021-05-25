@@ -41,7 +41,7 @@ public class TaskMetadata {
     private final Optional<Long> timeCurrentIdlingStarted;
 
     /**
-     * @deprecated since 3.0, please use the constructor that accepts a TaskId object instead of a String
+     * @deprecated since 3.0, please use {@link #TaskMetadata(TaskId, Set, Map, Map, Optional) instead}
      */
     @Deprecated
     public TaskMetadata(final String taskId,
