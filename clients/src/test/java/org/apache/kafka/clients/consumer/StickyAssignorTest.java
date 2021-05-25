@@ -16,27 +16,28 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
-import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.MemberData;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.message.StickyAssignorUserData;
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.apache.kafka.test.TestUtils.toSet;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
@@ -221,19 +222,30 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     private static Subscription buildSubscriptionWithOldSchema(List<String> topics, List<TopicPartition> partitions) {
-        Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
-        List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
-            Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
-            topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
-        }
-        struct.set(StickyAssignor.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        ByteBuffer buffer = ByteBuffer.allocate(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
-        StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
-        buffer.flip();
+        MemberData memberData = new MemberData(partitions, Optional.empty());
+        return new Subscription(topics, StickyAssignor.serializeTopicPartitionAssignment(memberData, StickyAssignorUserData.LOWEST_SUPPORTED_VERSION));
+    }
 
-        return new Subscription(topics, buffer);
+    @Test
+    public void serializeDeserializeStickyAssignorUserDataAllVersions() {
+        List<TopicPartition> ownedPartitions = Arrays.asList(
+                new TopicPartition("foo", 0),
+                new TopicPartition("bar", 0));
+        for (short version = StickyAssignorUserData.LOWEST_SUPPORTED_VERSION;
+             version <= StickyAssignorUserData.HIGHEST_SUPPORTED_VERSION; version++) {
+            for (Optional<Integer> generation: Arrays.asList(Optional.of(1), Optional.<Integer>empty())) {
+
+                MemberData memberData = new MemberData(ownedPartitions, generation);
+                ByteBuffer buffer = StickyAssignor.serializeTopicPartitionAssignment(memberData, version);
+                MemberData parsedMemberData = StickyAssignor.deserializeTopicPartitionAssignment(buffer);
+                assertEquals(toSet(memberData.partitions), toSet(parsedMemberData.partitions));
+
+                if (version >= 1 && generation.isPresent()) {
+                    assertTrue(parsedMemberData.generation.isPresent());
+                } else {
+                    assertFalse(parsedMemberData.generation.isPresent());
+                }
+            }
+        }
     }
 }
