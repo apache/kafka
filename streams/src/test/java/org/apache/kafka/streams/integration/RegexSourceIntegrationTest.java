@@ -213,7 +213,7 @@ public class RegexSourceIntegrationTest {
             pattern1Stream
                 .selectKey((k, v) -> k)
                 .groupByKey()
-                .aggregate(() -> "", (k, v, a) -> v)
+                .aggregate((String key) -> "", (k, v, a) -> v)
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();

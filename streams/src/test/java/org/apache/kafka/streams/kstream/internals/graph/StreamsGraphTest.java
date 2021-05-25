@@ -56,7 +56,7 @@ import static org.junit.Assert.assertEquals;
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
-    private Initializer<String> initializer;
+    private Initializer<String, String> initializer;
     private Aggregator<String, String, String> aggregator;
 
     // Test builds topology in succesive manner but only graph node not yet processed written to topology
@@ -121,7 +121,7 @@ public class StreamsGraphTest {
         properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        initializer = () -> "";
+        initializer = (String key) -> "";
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
         final TransformerSupplier<String, String, KeyValue<String, String>> transformSupplier = () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override

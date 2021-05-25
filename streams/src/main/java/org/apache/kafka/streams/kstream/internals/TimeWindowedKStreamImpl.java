@@ -116,13 +116,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator) {
         return aggregate(initializer, aggregator, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Named named) {
         return aggregate(initializer, aggregator, named, Materialized.with(keySerde, null));
@@ -130,14 +130,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Named named,
                                                   final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized) {

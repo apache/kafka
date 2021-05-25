@@ -125,10 +125,10 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
+  def aggregate[VR](initializer: K => VR)(aggregator: (K, V, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
-    new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized))
+    new KTable(inner.aggregate(((key: K) => initializer(key)).asInitializer, aggregator.asAggregator, materialized))
 
   /**
    * Aggregate the values of records in this stream by the grouped key.

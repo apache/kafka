@@ -175,7 +175,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         final KTable<Windowed<String>, Integer> minAggregation = groupedData
             .windowedBy(TimeWindows.of(Duration.ofDays(1)).grace(Duration.ofMinutes(1)))
             .aggregate(
-                () -> Integer.MAX_VALUE,
+                (String key) -> Integer.MAX_VALUE,
                 (aggKey, value, aggregate) -> (value < aggregate) ? value : aggregate,
                 Materialized
                     .<String, Integer, WindowStore<Bytes, byte[]>>as("uwin-min")
@@ -210,7 +210,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         groupedData
             .windowedBy(TimeWindows.of(Duration.ofDays(2)))
             .aggregate(
-                () -> Integer.MIN_VALUE,
+                (String key) -> Integer.MIN_VALUE,
                 (aggKey, value, aggregate) -> (value > aggregate) ? value : aggregate,
                 Materialized.<String, Integer, WindowStore<Bytes, byte[]>>as("uwin-max").withValueSerde(intSerde))
             .toStream(new Unwindow<>())
@@ -227,7 +227,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         groupedData
             .windowedBy(TimeWindows.of(Duration.ofDays(2)))
             .aggregate(
-                () -> 0L,
+                (String key) -> 0L,
                 (aggKey, value, aggregate) -> (long) value + aggregate,
                 Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("win-sum").withValueSerde(longSerde))
             .toStream(new Unwindow<>())

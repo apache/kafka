@@ -211,7 +211,7 @@ public class RocksDBMetricsIntegrationTest {
         builder.stream(STREAM_INPUT_TWO, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
             .windowedBy(TimeWindows.of(WINDOW_SIZE).grace(Duration.ZERO))
-            .aggregate(() -> 0L,
+            .aggregate((Integer key) -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store")
                     .withValueSerde(Serdes.Long())

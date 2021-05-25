@@ -109,11 +109,14 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(
+  def aggregate[VR](initializer: K => VR)(adder: (K, V, VR) => VR, subtractor: (K, V, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(
-      inner.aggregate((() => initializer).asInitializer, adder.asAggregator, subtractor.asAggregator, materialized)
+      inner.aggregate(((key: K) => initializer(key)).asInitializer,
+                      adder.asAggregator,
+                      subtractor.asAggregator,
+                      materialized)
     )
 
   /**

@@ -816,7 +816,7 @@ public class SuppressScenarioTest {
         final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
             .windowedBy(TimeWindows.of(Duration.ofMinutes(15)))
-            .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .aggregate((String key) -> "", Named.as("test"), Materialized.as("store"))
             .suppress(Suppressed.untilWindowCloses(unbounded()))
             .toStream();
     }

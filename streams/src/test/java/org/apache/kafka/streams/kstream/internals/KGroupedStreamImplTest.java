@@ -349,7 +349,7 @@ public class KGroupedStreamImplTest {
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
-                () -> 0,
+                (String key) -> 0,
                 (aggKey, value, aggregate) -> aggregate + 1,
                 (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
                 Materialized
@@ -367,7 +367,7 @@ public class KGroupedStreamImplTest {
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
-                () -> 0,
+                (String key) -> 0,
                 (aggKey, value, aggregate) -> aggregate + 1,
                 (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
                 Materialized.with(null, Serdes.Integer()));

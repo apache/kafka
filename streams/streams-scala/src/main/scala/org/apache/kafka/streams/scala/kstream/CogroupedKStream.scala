@@ -58,9 +58,9 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => VOut)(
+  def aggregate(initializer: KIn => VOut)(
     implicit materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
-  ): KTable[KIn, VOut] = new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
+  ): KTable[KIn, VOut] = new KTable(inner.aggregate(((key: KIn) => initializer(key)).asInitializer, materialized))
 
   /**
    * Aggregate the values of records in these streams by the grouped key and defined window.

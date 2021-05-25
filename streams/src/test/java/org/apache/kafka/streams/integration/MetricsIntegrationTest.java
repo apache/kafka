@@ -413,7 +413,7 @@ public class MetricsIntegrationTest {
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
             .windowedBy(TimeWindows.of(windowSize).grace(Duration.ZERO))
-            .aggregate(() -> 0L,
+            .aggregate((Integer key) -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
                     .withValueSerde(Serdes.Long())
@@ -452,7 +452,7 @@ public class MetricsIntegrationTest {
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
             .windowedBy(SessionWindows.with(inactivityGap).grace(Duration.ZERO))
-            .aggregate(() -> 0L,
+            .aggregate((Integer key) -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
                 Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)

@@ -464,7 +464,7 @@ public class RepartitionTopicNamingTest {
 
 
     private Topology buildTopology(final String optimizationConfig) {
-        final Initializer<Integer> initializer = () -> 0;
+        final Initializer<String, Integer> initializer = (String key) -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
         final Reducer<String> reducer = (v1, v2) -> v1 + ":" + v2;
         final List<String> processorValueCollector = new ArrayList<>();

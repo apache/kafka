@@ -50,7 +50,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     }
     @SuppressWarnings("unchecked")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                final Initializer<VOut> initializer,
+                                final Initializer<K, VOut> initializer,
                                 final NamedInternal named,
                                 final StoreBuilder<?> storeBuilder,
                                 final Serde<KR> keySerde,
@@ -82,7 +82,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     @SuppressWarnings("unchecked")
     <KR, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                                  final Initializer<VOut> initializer,
+                                                  final Initializer<K, VOut> initializer,
                                                   final NamedInternal named,
                                                   final StoreBuilder<?> storeBuilder,
                                                   final Serde<KR> keySerde,
@@ -120,7 +120,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     @SuppressWarnings("unchecked")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                final Initializer<VOut> initializer,
+                                final Initializer<K, VOut> initializer,
                                 final NamedInternal named,
                                 final StoreBuilder<?> storeBuilder,
                                 final Serde<KR> keySerde,
@@ -159,7 +159,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     @SuppressWarnings("unchecked")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                final Initializer<VOut> initializer,
+                                final Initializer<K, VOut> initializer,
                                 final NamedInternal named,
                                 final StoreBuilder<?> storeBuilder,
                                 final Serde<KR> keySerde,

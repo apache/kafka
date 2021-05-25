@@ -67,18 +67,18 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+    public KTable<K, VOut> aggregate(final Initializer<K, VOut> initializer,
                                      final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer, final Named named) {
+    public KTable<K, VOut> aggregate(final Initializer<K, VOut> initializer, final Named named) {
         return aggregate(initializer, named, Materialized.with(keySerde, null));
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+    public KTable<K, VOut> aggregate(final Initializer<K, VOut> initializer,
                                      final Named named,
                                      final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
@@ -91,7 +91,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer) {
+    public KTable<K, VOut> aggregate(final Initializer<K, VOut> initializer) {
         return aggregate(initializer, Materialized.with(keySerde, null));
     }
 
@@ -133,7 +133,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             groupPatterns);
     }
 
-    private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
+    private KTable<K, VOut> doAggregate(final Initializer<K, VOut> initializer,
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(

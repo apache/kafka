@@ -30,14 +30,14 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
-    private final Initializer<T> initializer;
+    private final Initializer<K, T> initializer;
     private final Aggregator<? super K, ? super V, T> add;
     private final Aggregator<? super K, ? super V, T> remove;
 
     private boolean sendOldValues = false;
 
     KTableAggregate(final String storeName,
-                    final Initializer<T> initializer,
+                    final Initializer<K, T> initializer,
                     final Aggregator<? super K, ? super V, T> add,
                     final Aggregator<? super K, ? super V, T> remove) {
         this.storeName = storeName;
@@ -102,7 +102,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             if (value.newValue != null) {
                 final T initializedAgg;
                 if (intermediateAgg == null) {
-                    initializedAgg = initializer.apply();
+                    initializedAgg = initializer.apply(key);
                 } else {
                     initializedAgg = intermediateAgg;
                 }

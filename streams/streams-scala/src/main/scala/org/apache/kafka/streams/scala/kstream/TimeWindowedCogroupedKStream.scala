@@ -39,10 +39,10 @@ class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStream
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V)(
+  def aggregate(initializer: K => V)(
     implicit materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
-    new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
+    new KTable(inner.aggregate(((key: K) => initializer(key)).asInitializer, materialized))
 
   /**
    * Aggregate the values of records in these streams by the grouped key and defined window.

@@ -326,7 +326,7 @@ public class KStreamWindowAggregateTest {
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).grace(ofMillis(90)))
                .aggregate(
-                   () -> "",
+                   (String key) -> "",
                    MockAggregator.toStringInstance("+"),
                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized")
                        .withValueSerde(Serdes.String())
@@ -401,7 +401,7 @@ public class KStreamWindowAggregateTest {
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(10)).grace(ofMillis(90L)))
                .aggregate(
-                   () -> "",
+                   (String key) -> "",
                    MockAggregator.toStringInstance("+"),
                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()).withCachingDisabled().withLoggingDisabled()
                )

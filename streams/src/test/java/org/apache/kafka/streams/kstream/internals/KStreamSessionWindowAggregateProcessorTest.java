@@ -74,7 +74,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private final String threadId = Thread.currentThread().getName();
     private final ToInternal toInternal = new ToInternal();
-    private final Initializer<Long> initializer = () -> 0L;
+    private final Initializer<String, Long> initializer = (String key) -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final KStreamSessionWindowAggregate<String, String, Long> sessionAggregator =

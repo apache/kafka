@@ -407,7 +407,7 @@ public interface KGroupedStream<K, V> {
      * deletion for the key, and future messages of the same key coming from upstream operators
      * will be handled as newly initialized value.
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator);
 
     /**
@@ -465,7 +465,7 @@ public interface KGroupedStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
                                  final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
@@ -527,7 +527,7 @@ public interface KGroupedStream<K, V> {
      * deletion for the key, and future messages of the same key coming from upstream operators
      * will be handled as newly initialized value.
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
                                  final Named named,
                                  final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);

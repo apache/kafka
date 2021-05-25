@@ -57,24 +57,24 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer) {
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer) {
         return aggregate(initializer, Materialized.with(null, null));
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Named named) {
         return aggregate(initializer, named, Materialized.with(null, null));
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Named named,
                                             final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");

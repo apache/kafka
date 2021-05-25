@@ -20,12 +20,12 @@ import org.apache.kafka.streams.kstream.Initializer;
 
 public class MockInitializer {
 
-    private static class StringInit implements Initializer<String> {
+    private static class StringInit implements Initializer<String, String> {
         @Override
-        public String apply() {
+        public String apply(String key) {
             return "0";
         }
     }
 
-    public final static Initializer<String> STRING_INIT = new StringInit();
+    public final static Initializer<String, String> STRING_INIT = new StringInit();
 }

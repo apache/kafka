@@ -43,11 +43,11 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final GraphNode graphNode;
     private GraphNode repartitionNode;
 
-    final Initializer<Long> countInitializer = () -> 0L;
+    final Initializer<K, Long> countInitializer = (K key) -> 0L;
 
     final Aggregator<K, V, Long> countAggregator = (aggKey, value, aggregate) -> aggregate + 1;
 
-    final Initializer<V> reduceInitializer = () -> null;
+    final Initializer<K, V> reduceInitializer = (K key) -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final GroupedInternal<K, V> groupedInternal,

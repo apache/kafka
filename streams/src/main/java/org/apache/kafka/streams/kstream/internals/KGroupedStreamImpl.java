@@ -104,14 +104,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> aggregator,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> aggregator,
                                         final Named named,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -136,7 +136,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> aggregator) {
         return aggregate(initializer, aggregator, Materialized.with(keySerde, null));
     }

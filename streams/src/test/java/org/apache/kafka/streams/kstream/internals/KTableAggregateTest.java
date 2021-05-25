@@ -238,7 +238,7 @@ public class KTableAggregateTest {
                     String.valueOf(key.charAt(1))),
                 stringSerialized)
             .aggregate(
-                () -> "",
+                (String key) -> "",
                 (aggKey, value, aggregate) -> aggregate + value,
                 (key, value, aggregate) -> aggregate.replaceAll(value, ""),
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore")

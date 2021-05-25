@@ -124,7 +124,7 @@ public class EOSUncleanShutdownIntegrationTest {
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
             .aggregate(
-                () -> "()",
+                (String key) -> "()",
                 (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")",
                 Materialized.as("aggregated_value"));
 
