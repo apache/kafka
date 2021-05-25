@@ -385,7 +385,7 @@ class PartitionLockTest extends Logging {
     leaderEpochCache,
     producerStateManager,
     logDirFailureChannel,
-    topicId = None,
+    _topicId = None,
     keepPartitionMetadataFile = true) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {

@@ -272,7 +272,7 @@ class Log(@volatile private var _dir: File,
           @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          @volatile var topicId: Option[Uuid],
+          @volatile private var _topicId: Option[Uuid],
           val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -332,15 +332,17 @@ class Log(@volatile private var _dir: File,
           }
         else {
           val fileTopicId = partitionMetadataFile.read().topicId
-          if (topicId.isDefined && !topicId.contains(fileTopicId))
+          if (_topicId.isDefined && !_topicId.contains(fileTopicId))
             throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
               s"but log already contained topic ID $fileTopicId")
-          topicId = Some(fileTopicId)
+          _topicId = Some(fileTopicId)
         }
     } else if (keepPartitionMetadataFile) {
-      topicId.foreach(partitionMetadataFile.write)
+      _topicId.foreach(partitionMetadataFile.write)
     }
   }
+
+  def topicId: Option[Uuid] = _topicId
 
   def dir: File = _dir
 
@@ -557,7 +559,7 @@ class Log(@volatile private var _dir: File,
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
     partitionMetadataFile.write(topicId)
-    this.topicId = Some(topicId)
+    _topicId = Some(topicId)
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {

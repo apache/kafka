@@ -143,7 +143,7 @@ class SchedulerTest {
       recoveryPoint = offsets.recoveryPoint, nextOffsetMetadata = offsets.nextOffsetMetadata, scheduler,
       brokerTopicStats, mockTime, LogManager.ProducerIdExpirationCheckIntervalMs,
       topicPartition, leaderEpochCache, producerStateManager, logDirFailureChannel,
-      topicId = None, keepPartitionMetadataFile = true)
+      _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
     assertFalse(scheduler.taskRunning(log.producerExpireCheck))
