@@ -40,6 +40,7 @@ import org.apache.kafka.common.protocol.Errors;
 public class ListOffsetsRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
+    public static final long MAX_TIMESTAMP = -3L;
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
@@ -61,6 +62,10 @@ public class ListOffsetsRequest extends AbstractRequest {
             else if (requireTimestamp)
                 minVersion = 1;
             return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
+
+        public static Builder forMaxTimestamp(IsolationLevel isolationLevel) {
+            return new Builder((short) 7, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         private Builder(short oldestAllowedVersion,
