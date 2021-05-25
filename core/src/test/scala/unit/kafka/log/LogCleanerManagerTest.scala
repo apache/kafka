@@ -101,7 +101,7 @@ class LogCleanerManagerTest extends Logging {
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val segments = new LogSegments(tp)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       tpDir,
       tp,

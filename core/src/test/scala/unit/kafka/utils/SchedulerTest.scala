@@ -124,7 +124,7 @@ class SchedulerTest {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
     val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
