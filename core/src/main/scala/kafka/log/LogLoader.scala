@@ -364,12 +364,50 @@ object LogLoader extends Logging {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, Log.SwapFileSuffix, ""))
       val baseOffset = Log.offsetFromFile(logFile)
+      // Check whether swap index files exist: if not, the cleaned files must exist due to the
+      // existence of swap log file. Therefore, we rename the cleaned files to swap files and continue.
+      var recoverable = true
+      val swapOffsetIndexFile = Log.offsetIndexFile(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
+      if (!swapOffsetIndexFile.exists()) {
+        val cleanedOffsetIndexFile = Log.offsetIndexFile(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
+        if (cleanedOffsetIndexFile.exists())
+          cleanedOffsetIndexFile.renameTo(swapOffsetIndexFile)
+        else
+          recoverable = false
+      }
+      val swapTimeIndexFile = Log.timeIndexFile(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
+      if (!swapTimeIndexFile.exists()) {
+        val cleanedTimeIndexFile = Log.timeIndexFile(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
+        if (cleanedTimeIndexFile.exists())
+          cleanedTimeIndexFile.renameTo(swapTimeIndexFile)
+        else
+          recoverable = false
+      }
+      val swapTxnIndexFile = Log.transactionIndexFile(swapFile.getParentFile, baseOffset, Log.SwapFileSuffix)
+      if (!swapTxnIndexFile.exists()) {
+        val cleanedTxnIndexFile = Log.transactionIndexFile(swapFile.getParentFile, baseOffset, Log.CleanedFileSuffix)
+        if (cleanedTxnIndexFile.exists())
+          cleanedTxnIndexFile.renameTo(swapTxnIndexFile)
+        else
+          recoverable = false
+      }
       val swapSegment = LogSegment.open(swapFile.getParentFile,
         baseOffset = baseOffset,
         params.config,
         time = params.time,
         fileSuffix = Log.SwapFileSuffix)
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
+      if (recoverable) {
+        try {
+          swapSegment.sanityCheck(true)
+          info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is recoverable from ${Log.CleanedFileSuffix} files.")
+          swapSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
+          return
+        } catch {
+          case _: NoSuchFileException => {}
+            // do nothing and fall back to the recover index logic
+          }
+        }
+      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, which is not recoverable from ${Log.CleanedFileSuffix} files, repairing.")
       recoverSegment(swapSegment, params)
 
       // We create swap files for two cases:
