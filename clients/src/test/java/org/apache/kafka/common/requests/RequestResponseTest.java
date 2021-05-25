@@ -141,6 +141,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListTransactionsRequestData;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
@@ -233,7 +234,9 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.MetadataResponse.NO_LEADER_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1527,17 +1530,29 @@ public class RequestResponseTest {
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                asList(new MetadataResponse.PartitionMetadata(Errors.NONE,
-                        new TopicPartition("__consumer_offsets", 1),
-                        Optional.of(node.id()), Optional.of(5), replicas, isr, offlineReplicas))));
+            singletonList(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(1)
+                .setLeaderId(node.id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(replicas)
+                .setIsrNodes(isr)
+                .setOfflineReplicas(offlineReplicas)
+            )));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 emptyList()));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic3", false,
-            asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE,
-                    new TopicPartition("topic3", 0), Optional.empty(),
-                    Optional.empty(), replicas, isr, offlineReplicas))));
+            singletonList(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code())
+                .setPartitionIndex(0)
+                .setLeaderId(NO_LEADER_ID)
+                .setLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                .setReplicaNodes(replicas)
+                .setIsrNodes(isr)
+                .setOfflineReplicas(offlineReplicas)
+            )));
 
-        return RequestTestUtils.metadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return RequestTestUtils.metadataResponse(singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(int version) {
@@ -1553,12 +1568,12 @@ public class RequestResponseTest {
                                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                                 .setPartitionIndex(0)
                                                 .setCommittedOffset(100)
-                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata(""),
                                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                                 .setPartitionIndex(1)
                                                 .setCommittedOffset(200)
-                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata(null)
                                 ))
                 ))
@@ -2008,7 +2023,7 @@ public class RequestResponseTest {
                 new OffsetForLeaderPartition()
                     .setPartition(2)
                     .setLeaderEpoch(3)
-                    .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH))));
+                    .setCurrentLeaderEpoch(NO_PARTITION_LEADER_EPOCH))));
         return topics;
     }
 

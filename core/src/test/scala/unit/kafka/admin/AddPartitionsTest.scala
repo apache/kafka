@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import java.util.Optional
 import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
@@ -88,16 +87,16 @@ class AddPartitionsTest extends BaseRequestTest {
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
-    val partitions = response.topicMetadata.asScala.head.partitionMetadata.asScala.sortBy(_.partition)
+    val partitions = response.topicMetadata.asScala.head.partitionMetadata.asScala.sortBy(_.partitionIndex())
     assertEquals(partitions.size, 3)
-    assertEquals(1, partitions(1).partition)
-    assertEquals(2, partitions(2).partition)
+    assertEquals(1, partitions(1).partitionIndex())
+    assertEquals(2, partitions(2).partitionIndex())
 
     for (partition <- partitions) {
-      val replicas = partition.replicaIds
+      val replicas = partition.replicaNodes()
       assertEquals(2, replicas.size)
-      assertTrue(partition.leaderId.isPresent)
-      val leaderId = partition.leaderId.get
+      assertTrue(partition.leaderId != MetadataResponse.NO_LEADER_ID)
+      val leaderId = partition.leaderId
       assertTrue(replicas.contains(leaderId))
     }
   }
@@ -122,12 +121,12 @@ class AddPartitionsTest extends BaseRequestTest {
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
-    val partitionMetadata = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
+    val partitionMetadata = topicMetadata.partitionMetadata.asScala.sortBy(_.partitionIndex())
     assertEquals(3, topicMetadata.partitionMetadata.size)
-    assertEquals(0, partitionMetadata(0).partition)
-    assertEquals(1, partitionMetadata(1).partition)
-    assertEquals(2, partitionMetadata(2).partition)
-    val replicas = partitionMetadata(1).replicaIds
+    assertEquals(0, partitionMetadata(0).partitionIndex())
+    assertEquals(1, partitionMetadata(1).partitionIndex())
+    assertEquals(2, partitionMetadata(2).partitionIndex())
+    val replicas = partitionMetadata(1).replicaNodes()
     assertEquals(2, replicas.size)
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
@@ -176,12 +175,12 @@ class AddPartitionsTest extends BaseRequestTest {
 
   def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int,
                                 expectedReplicas: Set[Int]): Unit = {
-    val partitionOpt = metadata.partitionMetadata.asScala.find(_.partition == partitionId)
+    val partitionOpt = metadata.partitionMetadata.asScala.find(_.partitionIndex() == partitionId)
     assertTrue(partitionOpt.isDefined, s"Partition $partitionId should exist")
     val partition = partitionOpt.get
 
-    assertEquals(Optional.of(expectedLeaderId), partition.leaderId, "Partition leader id should match")
-    assertEquals(expectedReplicas, partition.replicaIds.asScala.toSet, "Replica set should match")
+    assertEquals(expectedLeaderId, partition.leaderId, "Partition leader id should match")
+    assertEquals(expectedReplicas, partition.replicaNodes().asScala.toSet, "Replica set should match")
   }
 
 }

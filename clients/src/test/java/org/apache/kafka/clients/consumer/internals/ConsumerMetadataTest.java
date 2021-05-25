@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -36,7 +37,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -159,9 +159,14 @@ public class ConsumerMetadataTest {
     }
 
     private MetadataResponse.TopicMetadata topicMetadata(String topic, boolean isInternal) {
-        MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE,
-                new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
-                singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
+        MetadataResponseData.MetadataResponsePartition partitionMetadata = new MetadataResponseData.MetadataResponsePartition()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setLeaderId(node.id())
+            .setLeaderEpoch(5)
+            .setReplicaNodes(singletonList(node.id()))
+            .setIsrNodes(singletonList(node.id()))
+            .setOfflineReplicas(singletonList(node.id()));
         return new MetadataResponse.TopicMetadata(Errors.NONE, topic, isInternal, singletonList(partitionMetadata));
     }
 

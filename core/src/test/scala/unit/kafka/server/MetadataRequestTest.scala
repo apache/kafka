@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Optional
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
@@ -182,13 +181,13 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
     val topicMetadata1 = response2.topicMetadata.asScala.head
     assertEquals(Errors.NONE, topicMetadata1.error)
-    assertEquals(Seq(Errors.NONE), topicMetadata1.partitionMetadata.asScala.map(_.error))
+    assertEquals(Seq(Errors.NONE.code()), topicMetadata1.partitionMetadata.asScala.map(_.errorCode()))
     assertEquals(1, topicMetadata1.partitionMetadata.size)
     val partitionMetadata = topicMetadata1.partitionMetadata.asScala.head
-    assertEquals(0, partitionMetadata.partition)
-    assertEquals(2, partitionMetadata.replicaIds.size)
-    assertTrue(partitionMetadata.leaderId.isPresent)
-    assertTrue(partitionMetadata.leaderId.get >= 0)
+    assertEquals(0, partitionMetadata.partitionIndex())
+    assertEquals(2, partitionMetadata.replicaNodes().size)
+    assertTrue(partitionMetadata.leaderId != MetadataResponse.NO_LEADER_ID)
+    assertTrue(partitionMetadata.leaderId >= 0)
   }
 
   @Test
@@ -251,12 +250,12 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
       val topicMetadata = response.topicMetadata.iterator.next()
       assertEquals(Errors.NONE, topicMetadata.error)
       assertEquals("t1", topicMetadata.topic)
-      assertEquals(Set(0, 1), topicMetadata.partitionMetadata.asScala.map(_.partition).toSet)
+      assertEquals(Set(0, 1), topicMetadata.partitionMetadata.asScala.map(_.partitionIndex()).toSet)
       topicMetadata.partitionMetadata.forEach { partitionMetadata =>
-        val assignment = replicaAssignment(partitionMetadata.partition)
-        assertEquals(assignment, partitionMetadata.replicaIds.asScala)
-        assertEquals(assignment, partitionMetadata.inSyncReplicaIds.asScala)
-        assertEquals(Optional.of(assignment.head), partitionMetadata.leaderId)
+        val assignment = replicaAssignment(partitionMetadata.partitionIndex())
+        assertEquals(assignment, partitionMetadata.replicaNodes().asScala)
+        assertEquals(assignment, partitionMetadata.isrNodes().asScala)
+        assertEquals(assignment.head, partitionMetadata.leaderId)
       }
     }
   }
@@ -275,8 +274,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val downNode = servers.find { server =>
       val serverId = server.dataPlaneRequestProcessor.brokerId
       val leaderId = partitionMetadata.leaderId
-      val replicaIds = partitionMetadata.replicaIds.asScala
-      leaderId.isPresent && leaderId.get() != serverId && replicaIds.contains(serverId)
+      val replicaIds = partitionMetadata.replicaNodes().asScala
+      leaderId != MetadataResponse.NO_LEADER_ID && leaderId != serverId && replicaIds.contains(serverId)
     }.get
     downNode.shutdown()
 
@@ -292,8 +291,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertTrue(v0MetadataResponse.topicMetadata.size == 1, "Response should have one topic")
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
-    assertTrue(v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE, "PartitionMetadata should have an error")
-    assertTrue(v0PartitionMetadata.replicaIds.size == replicaCount - 1, s"Response should have ${replicaCount - 1} replicas")
+    assertTrue(v0PartitionMetadata.errorCode() == Errors.REPLICA_NOT_AVAILABLE.code(), "PartitionMetadata should have an error")
+    assertTrue(v0PartitionMetadata.replicaNodes().size == replicaCount - 1, s"Response should have ${replicaCount - 1} replicas")
 
     // Validate version 1 returns unavailable replicas with no error
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build(1))
@@ -302,8 +301,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertFalse(v1BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertEquals(1, v1MetadataResponse.topicMetadata.size, "Response should have one topic")
     val v1PartitionMetadata = v1MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
-    assertEquals(Errors.NONE, v1PartitionMetadata.error, "PartitionMetadata should have no errors")
-    assertEquals(replicaCount, v1PartitionMetadata.replicaIds.size, s"Response should have $replicaCount replicas")
+    assertEquals(Errors.NONE.code(), v1PartitionMetadata.errorCode(), "PartitionMetadata should have no errors")
+    assertEquals(replicaCount, v1PartitionMetadata.replicaNodes().size, s"Response should have $replicaCount replicas")
   }
 
   @Test
@@ -320,7 +319,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
             Some(brokerSocketServer(broker.config.brokerId)))
           val firstPartitionMetadata = metadataResponse.topicMetadata.asScala.headOption.flatMap(_.partitionMetadata.asScala.headOption)
           actualIsr = firstPartitionMetadata.map { partitionMetadata =>
-            partitionMetadata.inSyncReplicaIds.asScala.map(Int.unbox).toSet
+            partitionMetadata.isrNodes().asScala.map(Int.unbox).toSet
           }.getOrElse(Set.empty)
           expectedIsr == actualIsr
         }, s"Topic metadata not updated correctly in broker $broker\n" +

@@ -24,15 +24,17 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,7 +45,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -159,8 +160,8 @@ public class Metadata implements Closeable {
      * any time it handles a response from the broker that includes leader epoch, except for UpdateMetadata which
      * follows a different code path ({@link #update}).
      *
-     * @param topicPartition
-     * @param leaderEpoch
+     * @param topicPartition The partition to be updated
+     * @param leaderEpoch the epoch of the partition leader
      * @return true if we updated the last seen epoch, false otherwise
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
@@ -204,26 +205,25 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
+    synchronized Optional<MetadataResponseData.MetadataResponsePartition> partitionMetadataIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
-        Optional<MetadataResponse.PartitionMetadata> partitionMetadata = cache.partitionMetadata(topicPartition);
+        Optional<MetadataResponseData.MetadataResponsePartition> partitionMetadata = cache.partitionMetadata(topicPartition);
         if (epoch == null) {
             // old cluster format (no epochs)
             return partitionMetadata;
         } else {
-            return partitionMetadata.filter(metadata ->
-                    metadata.leaderEpoch.orElse(NO_PARTITION_LEADER_EPOCH).equals(epoch));
+            return partitionMetadata.filter(metadata -> metadata.leaderEpoch() == epoch);
         }
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
-        Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
+        Optional<MetadataResponseData.MetadataResponsePartition> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
         if (!maybeMetadata.isPresent())
             return new LeaderAndEpoch(Optional.empty(), Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition)));
 
-        MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
-        Optional<Integer> leaderEpochOpt = partitionMetadata.leaderEpoch;
-        Optional<Node> leaderNodeOpt = partitionMetadata.leaderId.flatMap(cache::nodeById);
+        MetadataResponseData.MetadataResponsePartition partitionMetadata = maybeMetadata.get();
+        Optional<Integer> leaderEpochOpt = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
+        Optional<Node> leaderNodeOpt =  partitionMetadata.leaderId() == MetadataResponse.NO_LEADER_ID ? Optional.empty() : cache.nodeById(partitionMetadata.leaderId());
         return new LeaderAndEpoch(leaderNodeOpt, leaderEpochOpt);
     }
 
@@ -315,7 +315,7 @@ public class Metadata implements Closeable {
         Set<String> unauthorizedTopics = new HashSet<>();
         Set<String> invalidTopics = new HashSet<>();
 
-        List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
+        Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> partitions = new HashMap<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             topics.add(metadata.topic());
 
@@ -326,15 +326,16 @@ public class Metadata implements Closeable {
                 internalTopics.add(metadata.topic());
 
             if (metadata.error() == Errors.NONE) {
-                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                for (MetadataResponseData.MetadataResponsePartition partitionMetadata : metadata.partitionMetadata()) {
                     // Even if the partition's metadata includes an error, we need to handle
                     // the update to catch new epochs
-                    updateLatestMetadata(partitionMetadata, metadataResponse.hasReliableLeaderEpochs())
-                        .ifPresent(partitions::add);
+                    updateLatestMetadata(metadata.topic(), partitionMetadata.duplicate(), metadataResponse.hasReliableLeaderEpochs())
+                        .ifPresent(p -> partitions.put(new TopicPartition(metadata.topic(), p.partitionIndex()), p));
 
-                    if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
+                    Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
+                    if (partitionError.exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
-                                partitionMetadata.topicPartition, partitionMetadata.error);
+                                new TopicPartition(metadata.topic(), partitionMetadata.partitionIndex()), partitionError);
                         requestUpdate();
                     }
                 }
@@ -365,12 +366,13 @@ public class Metadata implements Closeable {
      * Compute the latest partition metadata to cache given ordering by leader epochs (if both
      * available and reliable).
      */
-    private Optional<MetadataResponse.PartitionMetadata> updateLatestMetadata(
-            MetadataResponse.PartitionMetadata partitionMetadata,
-            boolean hasReliableLeaderEpoch) {
-        TopicPartition tp = partitionMetadata.topicPartition;
-        if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
-            int newEpoch = partitionMetadata.leaderEpoch.get();
+    private Optional<MetadataResponseData.MetadataResponsePartition> updateLatestMetadata(
+        String topic,
+        MetadataResponseData.MetadataResponsePartition partitionMetadata,
+        boolean hasReliableLeaderEpoch) {
+        TopicPartition tp = new TopicPartition(topic, partitionMetadata.partitionIndex());
+        if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH) {
+            int newEpoch = partitionMetadata.leaderEpoch();
             // If the received leader epoch is at least the same as the previous one, update the metadata
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
             if (currentEpoch == null || newEpoch >= currentEpoch) {
@@ -385,7 +387,7 @@ public class Metadata implements Closeable {
         } else {
             // Handle old cluster formats as well as error responses where leader and epoch are missing
             lastSeenLeaderEpochs.remove(tp);
-            return Optional.of(partitionMetadata.withoutLeaderEpoch());
+            return Optional.of(partitionMetadata.duplicate().setLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH));
         }
     }
 

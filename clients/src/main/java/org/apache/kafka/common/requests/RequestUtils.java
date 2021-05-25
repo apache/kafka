@@ -37,6 +37,11 @@ public final class RequestUtils {
             Optional.empty() : Optional.of(leaderEpoch);
     }
 
+    public static Optional<Integer> getLeaderId(int leaderId) {
+        return leaderId == MetadataResponse.NO_LEADER_ID ?
+            Optional.empty() : Optional.of(leaderId);
+    }
+
     public static boolean hasTransactionalRecords(ProduceRequest request) {
         return flag(request, RecordBatch::isTransactional);
     }

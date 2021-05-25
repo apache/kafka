@@ -55,6 +55,7 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
@@ -136,7 +137,9 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.MetadataResponse.NO_LEADER_ID;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.apache.kafka.test.TestUtils.assertOptional;
@@ -256,7 +259,7 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                NO_PARTITION_LEADER_EPOCH);
         builder.append(0L, "key".getBytes(), "1".getBytes());
         builder.append(0L, "key".getBytes(), "2".getBytes());
         MemoryRecords records = builder.build();
@@ -2042,18 +2045,12 @@ public class FetcherTest {
         //create a response based on the above one with all partitions being leaderless
         List<MetadataResponse.TopicMetadata> altTopics = new ArrayList<>();
         for (MetadataResponse.TopicMetadata item : originalResponse.topicMetadata()) {
-            List<MetadataResponse.PartitionMetadata> partitions = item.partitionMetadata();
-            List<MetadataResponse.PartitionMetadata> altPartitions = new ArrayList<>();
-            for (MetadataResponse.PartitionMetadata p : partitions) {
-                altPartitions.add(new MetadataResponse.PartitionMetadata(
-                    p.error,
-                    p.topicPartition,
-                    Optional.empty(), //no leader
-                    Optional.empty(),
-                    p.replicaIds,
-                    p.inSyncReplicaIds,
-                    p.offlineReplicaIds
-                ));
+            List<MetadataResponseData.MetadataResponsePartition> partitions = item.partitionMetadata();
+            List<MetadataResponseData.MetadataResponsePartition> altPartitions = new ArrayList<>();
+            for (MetadataResponseData.MetadataResponsePartition p : partitions) {
+                altPartitions.add(p.duplicate()
+                    .setLeaderId(NO_LEADER_ID)
+                    .setLeaderEpoch(NO_PARTITION_LEADER_EPOCH));
             }
             MetadataResponse.TopicMetadata alteredTopic = new MetadataResponse.TopicMetadata(
                 item.error(),
@@ -3528,7 +3525,7 @@ public class FetcherTest {
         // Empty control batch should not cause an exception
         DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, 1L,
                 (short) 0, -1, 0, 0,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, TimestampType.CREATE_TIME, time.milliseconds(),
+                NO_PARTITION_LEADER_EPOCH, TimestampType.CREATE_TIME, time.milliseconds(),
                 true, true);
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
@@ -3570,7 +3567,7 @@ public class FetcherTest {
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                NO_PARTITION_LEADER_EPOCH);
 
         for (SimpleRecord record : records) {
             builder.append(record);
@@ -4580,15 +4577,13 @@ public class FetcherTest {
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {
-        List<MetadataResponse.PartitionMetadata> partitionsMetadata = new ArrayList<>();
+        List<MetadataResponseData.MetadataResponsePartition> partitionsMetadata = new ArrayList<>();
         if (error == Errors.NONE) {
             Optional<MetadataResponse.TopicMetadata> foundMetadata = initialUpdateResponse.topicMetadata()
                     .stream()
                     .filter(topicMetadata -> topicMetadata.topic().equals(topic))
                     .findFirst();
-            foundMetadata.ifPresent(topicMetadata -> {
-                partitionsMetadata.addAll(topicMetadata.partitionMetadata());
-            });
+            foundMetadata.ifPresent(topicMetadata -> partitionsMetadata.addAll(topicMetadata.partitionMetadata()));
         }
 
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,

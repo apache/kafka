@@ -233,6 +233,8 @@ import static org.apache.kafka.common.message.AlterPartitionReassignmentsRespons
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.requests.MetadataResponse.NO_LEADER_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1235,9 +1237,14 @@ public class KafkaAdminClientTest {
 
             // Then we respond to the DescribeTopic request
             Node leader = initializedCluster.nodes().get(0);
-            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
-                    Errors.NONE, new TopicPartition(topic, 0), Optional.of(leader.id()), Optional.of(10),
-                    singletonList(leader.id()), singletonList(leader.id()), singletonList(leader.id()));
+            MetadataResponseData.MetadataResponsePartition partitionMetadata = new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(0)
+                .setLeaderId(leader.id())
+                .setLeaderEpoch(10)
+                .setReplicaNodes(singletonList(leader.id()))
+                .setIsrNodes(singletonList(leader.id()))
+                .setOfflineReplicas(singletonList(leader.id()));
             env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(), 1,
                     singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topic, Uuid.ZERO_UUID, false,
@@ -2034,13 +2041,23 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(3, 0))) {
             List<Node> nodes = env.cluster().nodes();
 
-            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp0,
-                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, tp1,
-                    Optional.of(nodes.get(1).id()), Optional.of(5), singletonList(nodes.get(1).id()),
-                    singletonList(nodes.get(1).id()), Collections.emptyList()));
+            List<MetadataResponseData.MetadataResponsePartition> partitionMetadata = new ArrayList<>();
+            partitionMetadata.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(tp0.partition())
+                .setLeaderId(nodes.get(0).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
+            partitionMetadata.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(tp1.partition())
+                .setLeaderId(nodes.get(1).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(1).id()))
+                .setIsrNodes(singletonList(nodes.get(1).id()))
+                .setOfflineReplicas(Collections.emptyList()));
 
             List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false, partitionMetadata));
@@ -2114,22 +2131,48 @@ public class KafkaAdminClientTest {
                     ).iterator())));
 
             List<MetadataResponse.TopicMetadata> t = new ArrayList<>();
-            List<MetadataResponse.PartitionMetadata> p = new ArrayList<>();
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition0,
-                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition1,
-                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, myTopicPartition2,
-                    Optional.empty(), Optional.empty(), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition3,
-                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
-            p.add(new MetadataResponse.PartitionMetadata(Errors.NONE, myTopicPartition4,
-                    Optional.of(nodes.get(0).id()), Optional.of(5), singletonList(nodes.get(0).id()),
-                    singletonList(nodes.get(0).id()), Collections.emptyList()));
+            List<MetadataResponseData.MetadataResponsePartition> p = new ArrayList<>();
+            p.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(myTopicPartition0.partition())
+                .setLeaderId(nodes.get(0).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
+
+            p.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(myTopicPartition1.partition())
+                .setLeaderId(nodes.get(0).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
+            p.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code())
+                .setPartitionIndex(myTopicPartition2.partition())
+                .setLeaderId(NO_LEADER_ID)
+                .setLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
+            p.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(myTopicPartition3.partition())
+                .setLeaderId(nodes.get(0).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
+            p.add(new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(myTopicPartition4.partition())
+                .setLeaderId(nodes.get(0).id())
+                .setLeaderEpoch(5)
+                .setReplicaNodes(singletonList(nodes.get(0).id()))
+                .setIsrNodes(singletonList(nodes.get(0).id()))
+                .setOfflineReplicas(Collections.emptyList()));
 
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 

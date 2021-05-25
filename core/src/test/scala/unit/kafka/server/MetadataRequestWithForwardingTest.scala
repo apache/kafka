@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.MetadataRequest
+import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -100,12 +100,12 @@ class MetadataRequestWithForwardingTest extends AbstractMetadataRequestTest {
     val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
     val topicMetadata1 = response2.topicMetadata.asScala.head
     assertEquals(Errors.NONE, topicMetadata1.error)
-    assertEquals(Seq(Errors.NONE), topicMetadata1.partitionMetadata.asScala.map(_.error))
+    assertEquals(Seq(Errors.NONE.code()), topicMetadata1.partitionMetadata.asScala.map(_.errorCode()))
     assertEquals(1, topicMetadata1.partitionMetadata.size)
     val partitionMetadata = topicMetadata1.partitionMetadata.asScala.head
-    assertEquals(0, partitionMetadata.partition)
-    assertEquals(2, partitionMetadata.replicaIds.size)
-    assertTrue(partitionMetadata.leaderId.isPresent)
-    assertTrue(partitionMetadata.leaderId.get >= 0)
+    assertEquals(0, partitionMetadata.partitionIndex())
+    assertEquals(2, partitionMetadata.replicaNodes().size)
+    assertTrue(partitionMetadata.leaderId != MetadataResponse.NO_LEADER_ID)
+    assertTrue(partitionMetadata.leaderId >= 0)
   }
 }

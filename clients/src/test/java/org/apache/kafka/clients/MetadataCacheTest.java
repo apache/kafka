@@ -20,15 +20,14 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -47,14 +46,14 @@ public class MetadataCacheTest {
 
         TopicPartition topicPartition = new TopicPartition("topic", 0);
 
-        MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
-                Errors.NONE,
-                topicPartition,
-                Optional.of(5),
-                Optional.of(10),
-                Arrays.asList(5, 6, 7),
-                Arrays.asList(5, 6, 7),
-                Collections.emptyList());
+        MetadataResponseData.MetadataResponsePartition partitionMetadata = new MetadataResponseData.MetadataResponsePartition()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setLeaderId(5)
+            .setLeaderEpoch(10)
+            .setReplicaNodes(Arrays.asList(5, 6, 7))
+            .setIsrNodes(Arrays.asList(5, 6, 7))
+            .setOfflineReplicas(Collections.emptyList());
 
         Map<Integer, Node> nodesById = new HashMap<>();
         nodesById.put(6, new Node(6, "localhost", 2077));
@@ -62,19 +61,19 @@ public class MetadataCacheTest {
         nodesById.put(8, new Node(8, "localhost", 2079));
 
         MetadataCache cache = new MetadataCache("clusterId",
-                nodesById,
-                Collections.singleton(partitionMetadata),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                null);
+            nodesById,
+            Collections.singletonMap(topicPartition, partitionMetadata),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null);
 
         Cluster cluster = cache.cluster();
         assertNull(cluster.leaderFor(topicPartition));
 
         PartitionInfo partitionInfo = cluster.partition(topicPartition);
         Map<Integer, Node> replicas = Arrays.stream(partitionInfo.replicas())
-                .collect(Collectors.toMap(Node::id, Function.identity()));
+            .collect(Collectors.toMap(Node::id, Function.identity()));
         assertNull(partitionInfo.leader());
         assertEquals(3, replicas.size());
         assertTrue(replicas.get(5).isEmpty());

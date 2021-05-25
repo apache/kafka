@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -135,8 +133,8 @@ public class MetadataResponse extends AbstractResponse {
                 if (metadata.topicId() != null && metadata.topicId() != Uuid.ZERO_UUID) {
                     topicIds.put(metadata.topic, metadata.topicId());
                 }
-                for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    partitions.add(toPartitionInfo(partitionMetadata, holder().brokers));
+                for (MetadataResponseData.MetadataResponsePartition partitionMetadata : metadata.partitionMetadata) {
+                    partitions.add(toPartitionInfo(metadata.topic, partitionMetadata, holder().brokers));
                 }
             }
         }
@@ -144,13 +142,13 @@ public class MetadataResponse extends AbstractResponse {
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller(), topicIds);
     }
 
-    public static PartitionInfo toPartitionInfo(PartitionMetadata metadata, Map<Integer, Node> nodesById) {
-        return new PartitionInfo(metadata.topic(),
-                metadata.partition(),
-                metadata.leaderId.map(nodesById::get).orElse(null),
-                convertToNodeArray(metadata.replicaIds, nodesById),
-                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
-                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+    public static PartitionInfo toPartitionInfo(String topic, MetadataResponseData.MetadataResponsePartition metadata, Map<Integer, Node> nodesById) {
+        return new PartitionInfo(topic,
+                metadata.partitionIndex(),
+                nodesById.get(metadata.leaderId()),
+                convertToNodeArray(metadata.replicaNodes(), nodesById),
+                convertToNodeArray(metadata.isrNodes(), nodesById),
+                convertToNodeArray(metadata.offlineReplicas(), nodesById));
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
@@ -258,14 +256,14 @@ public class MetadataResponse extends AbstractResponse {
         private final String topic;
         private final Uuid topicId;
         private final boolean isInternal;
-        private final List<PartitionMetadata> partitionMetadata;
+        private final List<MetadataResponsePartition> partitionMetadata;
         private int authorizedOperations;
 
         public TopicMetadata(Errors error,
                              String topic,
                              Uuid topicId,
                              boolean isInternal,
-                             List<PartitionMetadata> partitionMetadata,
+                             List<MetadataResponsePartition>  partitionMetadata,
                              int authorizedOperations) {
             this.error = error;
             this.topic = topic;
@@ -278,7 +276,7 @@ public class MetadataResponse extends AbstractResponse {
         public TopicMetadata(Errors error,
                              String topic,
                              boolean isInternal,
-                             List<PartitionMetadata> partitionMetadata) {
+                             List<MetadataResponsePartition> partitionMetadata) {
             this(error, topic, Uuid.ZERO_UUID, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
@@ -298,7 +296,7 @@ public class MetadataResponse extends AbstractResponse {
             return isInternal;
         }
 
-        public List<PartitionMetadata> partitionMetadata() {
+        public List<MetadataResponsePartition> partitionMetadata() {
             return partitionMetadata;
         }
 
@@ -341,63 +339,6 @@ public class MetadataResponse extends AbstractResponse {
         }
     }
 
-    // This is used to describe per-partition state in the MetadataResponse
-    public static class PartitionMetadata {
-        public final TopicPartition topicPartition;
-        public final Errors error;
-        public final Optional<Integer> leaderId;
-        public final Optional<Integer> leaderEpoch;
-        public final List<Integer> replicaIds;
-        public final List<Integer> inSyncReplicaIds;
-        public final List<Integer> offlineReplicaIds;
-
-        public PartitionMetadata(Errors error,
-                                 TopicPartition topicPartition,
-                                 Optional<Integer> leaderId,
-                                 Optional<Integer> leaderEpoch,
-                                 List<Integer> replicaIds,
-                                 List<Integer> inSyncReplicaIds,
-                                 List<Integer> offlineReplicaIds) {
-            this.error = error;
-            this.topicPartition = topicPartition;
-            this.leaderId = leaderId;
-            this.leaderEpoch = leaderEpoch;
-            this.replicaIds = replicaIds;
-            this.inSyncReplicaIds = inSyncReplicaIds;
-            this.offlineReplicaIds = offlineReplicaIds;
-        }
-
-        public int partition() {
-            return topicPartition.partition();
-        }
-
-        public String topic() {
-            return topicPartition.topic();
-        }
-
-        public PartitionMetadata withoutLeaderEpoch() {
-            return new PartitionMetadata(error,
-                    topicPartition,
-                    leaderId,
-                    Optional.empty(),
-                    replicaIds,
-                    inSyncReplicaIds,
-                    offlineReplicaIds);
-        }
-
-        @Override
-        public String toString() {
-            return "PartitionMetadata(" +
-                    "error=" + error +
-                    ", partition=" + topicPartition +
-                    ", leader=" + leaderId +
-                    ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicaIds, ",") +
-                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
-        }
-    }
-
     private static class Holder {
         private final Map<Integer, Node> brokers;
         private final Node controller;
@@ -421,23 +362,8 @@ public class MetadataResponse extends AbstractResponse {
                 String topic = topicMetadata.name();
                 Uuid topicId = topicMetadata.topicId();
                 boolean isInternal = topicMetadata.isInternal();
-                List<PartitionMetadata> partitionMetadataList = new ArrayList<>();
 
-                for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
-                    Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
-                    int partitionIndex = partitionMetadata.partitionIndex();
-
-                    int leaderId = partitionMetadata.leaderId();
-                    Optional<Integer> leaderIdOpt = leaderId < 0 ? Optional.empty() : Optional.of(leaderId);
-
-                    Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
-                    TopicPartition topicPartition = new TopicPartition(topic, partitionIndex);
-                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leaderIdOpt,
-                            leaderEpoch, partitionMetadata.replicaNodes(), partitionMetadata.isrNodes(),
-                            partitionMetadata.offlineReplicas()));
-                }
-
-                topicMetadataList.add(new TopicMetadata(topicError, topic, topicId, isInternal, partitionMetadataList,
+                topicMetadataList.add(new TopicMetadata(topicError, topic, topicId, isInternal, topicMetadata.partitions(),
                         topicMetadata.topicAuthorizedOperations()));
             }
             return topicMetadataList;
