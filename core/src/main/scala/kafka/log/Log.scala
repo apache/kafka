@@ -325,7 +325,11 @@ class Log(@volatile private var _dir: File,
     // Ensure we do not try to assign a provided topicId that is inconsistent with the ID on file.
     if (partitionMetadataFile.exists()) {
         if (!keepPartitionMetadataFile)
-          partitionMetadataFile.delete()
+          try partitionMetadataFile.delete()
+          catch {
+            case e: IOException =>
+              error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
+          }
         else {
           val fileTopicId = partitionMetadataFile.read().topicId
           if (topicId.isDefined && !topicId.contains(fileTopicId))

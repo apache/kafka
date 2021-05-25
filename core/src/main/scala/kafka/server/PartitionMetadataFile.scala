@@ -138,7 +138,7 @@ class PartitionMetadataFile(val file: File,
     file.exists()
   }
 
-  def delete(): Boolean = {
-    file.delete()
+  def delete(): Unit = {
+    Files.delete(file.toPath)
   }
 }
