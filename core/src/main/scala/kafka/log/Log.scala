@@ -1201,10 +1201,10 @@ class Log(@volatile private var _dir: File,
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log
         var fetchDataInfo: FetchDataInfo = null
-        val segmentsIterator = segmentOpt.map(segment => segments.higherSegments(segment.baseOffset))
-                                         .getOrElse(List()).iterator
         while (fetchDataInfo == null && segmentOpt.isDefined) {
           val segment = segmentOpt.get
+          val baseOffset = segment.baseOffset
+
           val maxPosition =
             // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
             if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
@@ -1214,7 +1214,7 @@ class Log(@volatile private var _dir: File,
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
               fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
-          } else segmentOpt = segmentsIterator.nextOption()
+          } else segmentOpt = segments.higherSegment(baseOffset)
         }
 
         if (fetchDataInfo != null) fetchDataInfo

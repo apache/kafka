@@ -219,13 +219,13 @@ class LogSegments(topicPartition: TopicPartition) {
 
   /**
    * @return an iterable with log segments ordered from lowest base offset to highest,
-   *         each segment returned  has a base offset strictly greater than the provided baseOffset.
+   *         each segment returned has a base offset strictly greater than the provided baseOffset.
    */
   def higherSegments(baseOffset: Long): Iterable[LogSegment] = {
     val view =
       Option(segments.higherKey(baseOffset)).map {
         higherOffset => segments.tailMap(higherOffset, true)
-      }.getOrElse(new ConcurrentSkipListMap[Long, LogSegment]())
+      }.getOrElse(collection.immutable.Map[Long, LogSegment]().asJava)
     view.values.asScala
   }
 }
