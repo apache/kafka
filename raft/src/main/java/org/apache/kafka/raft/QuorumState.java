@@ -117,7 +117,7 @@ public class QuorumState {
             if (election == null) {
                 election = ElectionState.withUnknownLeader(0, voters);
             }
-        } catch (final Exception e) {
+        } catch (final UncheckedIOException e) {
             // For exceptions during state file loading (missing or not readable),
             // we could assume the file is corrupted already and should be cleaned up.
             log.warn("Clearing local quorum state store after error loading state {}",
