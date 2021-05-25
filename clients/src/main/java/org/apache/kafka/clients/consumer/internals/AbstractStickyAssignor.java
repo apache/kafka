@@ -603,6 +603,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * @param sortedCurrentSubscriptions:   an ascending sorted set of consumers based on how many topic partitions are already assigned to them
      * @param allSubscriptions:             a mapping of all consumers to all potential topics that can be assigned to them
      * @param partitionsPerTopic:           The number of partitions for each subscribed topic
+     * @param totalPartitionCount           total partition count to be assigned
      * @return                              true if the given assignment is balanced; false otherwise
      */
     private boolean isBalanced(Map<String, List<TopicPartition>> currentAssignment,
@@ -636,12 +637,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             // skip if this consumer already has all the topic partitions it can get
             List<String> allSubscribedTopics = allSubscriptions.get(consumer);
-            int maxAssignmentSize;
-            if (allSubscribedTopics.size() == partitionsPerTopic.size()) {
-                maxAssignmentSize = totalPartitionCount;
-            } else {
-                maxAssignmentSize = allSubscribedTopics.stream().map(topic -> partitionsPerTopic.get(topic)).reduce(0, Integer::sum);
-            }
+            int maxAssignmentSize = getMaxAssignmentSize(totalPartitionCount, allSubscribedTopics, partitionsPerTopic);
 
             if (consumerPartitionCount == maxAssignmentSize)
                 continue;
@@ -664,6 +660,26 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
         }
         return true;
+    }
+
+    /**
+     * get the maximum assigned partition size of the {@code allSubscribedTopics}
+     *
+     * @param totalPartitionCount           total partition count to be assigned
+     * @param allSubscribedTopics           the subscribed topics of a consumer
+     * @param partitionsPerTopic            The number of partitions for each subscribed topic
+     * @return                              maximum assigned partition size
+     */
+    private int getMaxAssignmentSize(int totalPartitionCount,
+                                     List<String> allSubscribedTopics,
+                                     Map<String, Integer> partitionsPerTopic) {
+        int maxAssignmentSize;
+        if (allSubscribedTopics.size() == partitionsPerTopic.size()) {
+            maxAssignmentSize = totalPartitionCount;
+        } else {
+            maxAssignmentSize = allSubscribedTopics.stream().map(topic -> partitionsPerTopic.get(topic)).reduce(0, Integer::sum);
+        }
+        return maxAssignmentSize;
     }
 
     /**
@@ -711,7 +727,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     private boolean canParticipateInReassignment(String topic,
                                                  Map<String, List<String>> topic2AllPotentialConsumers) {
-        // if a partition has two or more potential consumers it is subject to reassignment.
+        // if a topic has two or more potential consumers it is subject to reassignment.
         return topic2AllPotentialConsumers.get(topic).size() >= 2;
     }
 
@@ -724,12 +740,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         List<TopicPartition> currentPartitions = currentAssignment.get(consumer);
         int currentAssignmentSize = currentPartitions.size();
         List<String> allSubscribedTopics = consumer2AllPotentialTopics.get(consumer);
-        int maxAssignmentSize;
-        if (allSubscribedTopics.size() == partitionsPerTopic.size()) {
-            maxAssignmentSize = totalPartitionCount;
-        } else {
-            maxAssignmentSize = allSubscribedTopics.stream().map(topic -> partitionsPerTopic.get(topic)).reduce(0, Integer::sum);
-        }
+        int maxAssignmentSize = getMaxAssignmentSize(totalPartitionCount, allSubscribedTopics, partitionsPerTopic);
+
         if (currentAssignmentSize > maxAssignmentSize)
             log.error("The consumer {} is assigned more partitions than the maximum possible.", consumer);
 
