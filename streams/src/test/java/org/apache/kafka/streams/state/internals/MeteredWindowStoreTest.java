@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -45,23 +44,14 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.eq;
@@ -74,19 +64,15 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(Parameterized.class)
 public class MeteredWindowStoreTest {
 
     private static final String STORE_TYPE = "scope";
-    private static final String STORE_LEVEL_GROUP_FROM_0100_TO_24 = "stream-" + STORE_TYPE + "-state-metrics";
     private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
     private static final String THREAD_ID_TAG_KEY = "thread-id";
     private static final String STORE_NAME = "mocked-store";
     private static final String CHANGELOG_TOPIC = "changelog-topic";
@@ -109,29 +95,16 @@ public class MeteredWindowStoreTest {
         new SerdeThatDoesntHandleNull()
     );
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private String storeLevelGroup;
-    private String threadIdTagKey;
     private Map<String, String> tags;
 
     {
         expect(innerStoreMock.name()).andReturn(STORE_NAME).anyTimes();
     }
 
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {StreamsConfig.METRICS_LATEST},
-            {StreamsConfig.METRICS_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public String builtInMetricsVersion;
-
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -142,12 +115,8 @@ public class MeteredWindowStoreTest {
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
             Time.SYSTEM
         );
-        storeLevelGroup =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
-        threadIdTagKey =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? THREAD_ID_TAG_KEY_FROM_0100_TO_24 : THREAD_ID_TAG_KEY;
         tags = mkMap(
-            mkEntry(threadIdTagKey, threadId),
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
             mkEntry("task-id", context.taskId().toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
@@ -246,24 +215,13 @@ public class MeteredWindowStoreTest {
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-            storeLevelGroup,
-            threadIdTagKey,
+            STORE_LEVEL_GROUP,
+            THREAD_ID_TAG_KEY,
             threadId,
             context.taskId().toString(),
             STORE_TYPE,
             STORE_NAME
         )));
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertTrue(reporter.containsMbean(String.format(
-                "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
-                storeLevelGroup,
-                threadIdTagKey,
-                threadId,
-                context.taskId().toString(),
-                STORE_TYPE,
-                ROLLUP_VALUE
-            )));
-        }
     }
 
     @Test
@@ -272,21 +230,8 @@ public class MeteredWindowStoreTest {
         expectLastCall();
         replay(innerStoreMock);
         store.init((StateStoreContext) context, store);
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "restore-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", STORE_NAME)
-            ).metricValue());
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "restore-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", ROLLUP_VALUE)
-            ).metricValue());
-        }
+
+        verify(innerStoreMock);
     }
 
     @Test
@@ -298,21 +243,7 @@ public class MeteredWindowStoreTest {
 
         store.init((StateStoreContext) context, store);
         store.put("a", "a", context.timestamp());
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "put-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", STORE_NAME)
-            ).metricValue());
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "put-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", ROLLUP_VALUE)
-            ).metricValue());
-        }
+
         verify(innerStoreMock);
     }
 
@@ -323,21 +254,7 @@ public class MeteredWindowStoreTest {
 
         store.init((StateStoreContext) context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "fetch-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", STORE_NAME)
-            ).metricValue());
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "fetch-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", ROLLUP_VALUE)
-            ).metricValue());
-        }
+
         verify(innerStoreMock);
     }
 
@@ -348,21 +265,7 @@ public class MeteredWindowStoreTest {
 
         store.init((StateStoreContext) context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "fetch-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", STORE_NAME)
-            ).metricValue());
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "fetch-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", ROLLUP_VALUE)
-            ).metricValue());
-        }
+
         verify(innerStoreMock);
     }
 
@@ -374,21 +277,7 @@ public class MeteredWindowStoreTest {
 
         store.init((StateStoreContext) context, store);
         store.flush();
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "flush-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", STORE_NAME)
-            ).metricValue());
-            assertEquals(1.0, getMetricByNameFilterByTags(
-                metrics,
-                "flush-total",
-                storeLevelGroup,
-                singletonMap(STORE_TYPE + "-state-id", ROLLUP_VALUE)
-            ).metricValue());
-        }
+
         verify(innerStoreMock);
     }
 
@@ -508,7 +397,7 @@ public class MeteredWindowStoreTest {
         return metrics.metrics()
             .keySet()
             .stream()
-            .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+            .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
             .collect(Collectors.toList());
     }
 }

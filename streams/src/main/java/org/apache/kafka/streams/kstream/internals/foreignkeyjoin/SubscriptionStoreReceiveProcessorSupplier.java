@@ -62,7 +62,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 super.init(context);
                 final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
 
-                droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+                droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
                     Thread.currentThread().getName(),
                     internalProcessorContext.taskId().toString(),
                     internalProcessorContext.metrics()

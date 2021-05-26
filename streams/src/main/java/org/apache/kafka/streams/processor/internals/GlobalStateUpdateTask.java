@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 /**
  * Updates the state for all Global State Stores.
@@ -76,7 +76,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     source,
                     deserializationExceptionHandler,
                     logContext,
-                    droppedRecordsSensorOrSkippedRecordsSensor(
+                    droppedRecordsSensor(
                         Thread.currentThread().getName(),
                         processorContext.taskId().toString(),
                         processorContext.metrics()
