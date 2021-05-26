@@ -156,15 +156,39 @@ class LogSegment private[log] (val log: FileRecords,
       // append the messages
       val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
+
+      def appendIndex(): Unit = {
+        var maxTimestampSoFarTmp = RecordBatch.NO_TIMESTAMP
+        var offsetOfMaxTimestampSoFarTmp = 0L
+        val originalLastOffset = offsetIndex.lastOffset
+        var accumulatedBytes = 0
+        
+        for (batch <- log.batches.asScala) {
+            if (batch.maxTimestamp > maxTimestampSoFarTmp) {
+              maxTimestampSoFarTmp = batch.maxTimestamp
+              offsetOfMaxTimestampSoFarTmp = batch.lastOffset
+            }
+
+            if (accumulatedBytes > indexIntervalBytes) {
+              if (batch.lastOffset > originalLastOffset) { 
+                  offsetIndex.append(batch.lastOffset, accumulatedBytes)
+                  timeIndex.maybeAppend(maxTimestampSoFarTmp, offsetOfMaxTimestampSoFarTmp)
+              }
+              accumulatedBytes = 0
+            }
+            accumulatedBytes += batch.sizeInBytes()
+        }
+      }
+
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampSoFar = largestTimestamp
         offsetOfMaxTimestampSoFar = shallowOffsetOfMaxTimestamp
       }
+
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
-        offsetIndex.append(largestOffset, physicalPosition)
-        timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)
+        appendIndex()
         bytesSinceLastIndexEntry = 0
       }
       bytesSinceLastIndexEntry += records.sizeInBytes
