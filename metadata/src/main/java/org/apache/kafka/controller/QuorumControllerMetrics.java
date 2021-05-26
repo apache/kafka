@@ -30,6 +30,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
+    private final static MetricName GLOBAL_BROKER_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "GlobalBrokerCount", null);
     private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
         "kafka.controller", "KafkaController", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
@@ -40,11 +42,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount", null);
     
     private volatile boolean active;
+    private volatile int globalBrokerCount;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
     private final Gauge<Integer> activeControllerCount;
+    private final Gauge<Integer> globalBrokerCountGauge;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> offlinePartitionCountGauge;
@@ -66,6 +70,12 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
+        this.globalBrokerCountGauge = registry.newGauge(GLOBAL_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return globalBrokerCount;
+            }
+        });
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -110,6 +120,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueTime.update(durationMs);
+    }
+
+    @Override
+    public void setGlobalBrokerCount(int brokerCount) {
+        this.globalBrokerCount = brokerCount;
+    }
+
+    @Override
+    public int globalBrokerCount() {
+        return this.globalBrokerCount;
     }
 
     @Override

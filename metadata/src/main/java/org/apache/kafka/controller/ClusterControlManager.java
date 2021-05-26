@@ -113,6 +113,11 @@ public class ClusterControlManager {
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
 
     /**
+     * A reference to the controller's metrics registry.
+     */
+    private final ControllerMetrics controllerMetrics;
+
+    /**
      * The broker heartbeat manager, or null if this controller is on standby.
      */
     private BrokerHeartbeatManager heartbeatManager;
@@ -127,7 +132,8 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacer replicaPlacer) {
+                          ReplicaPlacer replicaPlacer,
+                          ControllerMetrics metrics) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
@@ -136,6 +142,7 @@ public class ClusterControlManager {
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
+        this.controllerMetrics = metrics;
     }
 
     /**
@@ -249,6 +256,7 @@ public class ClusterControlManager {
         brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
             Optional.ofNullable(record.rack()), fenced));
+        controllerMetrics.setGlobalBrokerCount(brokerRegistrations.size());
 
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
@@ -270,6 +278,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.remove(brokerId);
+            controllerMetrics.setGlobalBrokerCount(brokerRegistrations.size());
             log.info("Unregistered broker: {}", record);
         }
     }

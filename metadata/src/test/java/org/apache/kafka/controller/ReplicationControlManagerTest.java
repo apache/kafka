@@ -85,10 +85,10 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
+        final ControllerMetrics metrics = new MockControllerMetrics();
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random));
-        final ControllerMetrics metrics = new MockControllerMetrics();
+            new StripedReplicaPlacer(random), metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap());
         final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
@@ -204,6 +204,27 @@ public class ReplicationControlManagerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testGlobalBrokerCountMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        registerBroker(0, ctx);
+        unfenceBroker(0, ctx);
+        assertEquals(1, ctx.metrics.globalBrokerCount());
+        registerBroker(1, ctx);
+        unfenceBroker(1, ctx);
+        assertEquals(2, ctx.metrics.globalBrokerCount());
+        registerBroker(2, ctx);
+        unfenceBroker(2, ctx);
+        assertEquals(3, ctx.metrics.globalBrokerCount());
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+        assertEquals(1, ctx.metrics.globalBrokerCount());
     }
 
     @Test
