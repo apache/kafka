@@ -497,18 +497,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
-    @Override
-    @Deprecated
-    public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-        sensor.record(endNs - startNs);
-    }
-
-    @Override
-    @Deprecated
-    public void recordThroughput(final Sensor sensor, final long value) {
-        sensor.record(value);
-    }
-
     private Map<String, String> customizedTags(final String threadId,
                                                final String scopeName,
                                                final String entityName,
@@ -583,79 +571,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             tagMap,
             recordingLevel
         );
-    }
-
-    /**
-     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-     */
-    @Deprecated
-    @Override
-    public Sensor addLatencyAndThroughputSensor(final String scopeName,
-                                                final String entityName,
-                                                final String operationName,
-                                                final Sensor.RecordingLevel recordingLevel,
-                                                final String... tags) {
-        final String group = groupNameFromScope(scopeName);
-
-        final String threadId = Thread.currentThread().getName();
-        final Map<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
-        final Map<String, String> allTagMap = customizedTags(threadId, scopeName, "all", tags);
-
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(externalParentSensorName(threadId, operationName), recordingLevel);
-        addAvgAndMaxLatencyToSensor(parent, group, allTagMap, operationName);
-        addInvocationRateAndCountToSensor(parent, group, allTagMap, operationName);
-
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(
-            externalChildSensorName(threadId, operationName, entityName),
-            recordingLevel,
-            parent
-        );
-        addAvgAndMaxLatencyToSensor(sensor, group, tagMap, operationName);
-        addInvocationRateAndCountToSensor(sensor, group, tagMap, operationName);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
-
-    }
-
-    /**
-     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-     */
-    @Deprecated
-    @Override
-    public Sensor addThroughputSensor(final String scopeName,
-                                      final String entityName,
-                                      final String operationName,
-                                      final Sensor.RecordingLevel recordingLevel,
-                                      final String... tags) {
-        final String group = groupNameFromScope(scopeName);
-
-        final String threadId = Thread.currentThread().getName();
-        final Map<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
-        final Map<String, String> allTagMap = customizedTags(threadId, scopeName, "all", tags);
-
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(
-            externalParentSensorName(threadId, operationName),
-            recordingLevel
-        );
-        addInvocationRateAndCountToSensor(parent, group, allTagMap, operationName);
-
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(
-            externalChildSensorName(threadId, operationName, entityName),
-            recordingLevel,
-            parent
-        );
-        addInvocationRateAndCountToSensor(sensor, group, tagMap, operationName);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
-
     }
 
     private String externalChildSensorName(final String threadId, final String operationName, final String entityName) {

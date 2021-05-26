@@ -88,12 +88,6 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
         throw new UnsupportedOperationException("StateStores can't access getStateStore.");
     }
 
-    @Deprecated
-    @Override
-    public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("StateStores can't access schedule.");
-    }
-
     @Override
     public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("StateStores can't access schedule.");

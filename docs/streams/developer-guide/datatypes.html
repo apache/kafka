@@ -55,40 +55,37 @@
     <div class="section" id="configuring-serdes">
       <h2>Configuring SerDes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
       <p>SerDes specified in the Streams configuration are used as the default in your Kafka Streams application.</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
+      <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 
-<span class="n">Properties</span> <span class="n">settings</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="c1">// Default serde for keys of data records (here: built-in serde for String type)</span>
-<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
-<span class="c1">// Default serde for values of data records (here: built-in serde for Long type)</span>
-<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span></code></pre></div>
-      </div>
+Properties settings = new Properties();
+// Default serde for keys of data records (here: built-in serde for String type)
+settings.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+// Default serde for values of data records (here: built-in serde for Long type)
+settings.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());</code></pre>
     </div>
     <div class="section" id="overriding-default-serdes">
       <h2>Overriding default SerDes<a class="headerlink" href="#overriding-default-serdes" title="Permalink to this headline"></a></h2>
       <p>You can also specify SerDes explicitly by passing them to the appropriate API methods, which overrides the default serde settings:</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serde</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
+      <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 
-<span class="kd">final</span> <span class="n">Serde</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">stringSerde</span> <span class="o">=</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">();</span>
-<span class="kd">final</span> <span class="n">Serde</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;</span> <span class="n">longSerde</span> <span class="o">=</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">();</span>
+final Serde&lt;String&gt; stringSerde = Serdes.String();
+final Serde&lt;Long&gt; longSerde = Serdes.Long();
 
-<span class="c1">// The stream userCountByRegion has type `String` for record keys (for region)</span>
-<span class="c1">// and type `Long` for record values (for user counts).</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">userCountByRegion</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">userCountByRegion</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;RegionCountsTopic&quot;</span><span class="o">,</span> <span class="n">Produced</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">stringSerde</span><span class="o">,</span> <span class="n">longSerde</span><span class="o">));</span></code></pre></div>
-      </div>
+// The stream userCountByRegion has type `String` for record keys (for region)
+// and type `Long` for record values (for user counts).
+KStream&lt;String, Long&gt; userCountByRegion = ...;
+userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.with(stringSerde, longSerde));</code></pre>
       <p>If you want to override serdes selectively, i.e., keep the defaults for some fields, then don&#8217;t specify the serde whenever you want to leverage the default settings:</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serde</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
+      <pre class="line-numbers"><code class="language-java">import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 
-<span class="c1">// Use the default serializer for record keys (here: region as String) by not specifying the key serde,</span>
-<span class="c1">// but override the default serializer for record values (here: userCount as Long).</span>
-<span class="kd">final</span> <span class="n">Serde</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;</span> <span class="n">longSerde</span> <span class="o">=</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">();</span>
-<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">userCountByRegion</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">userCountByRegion</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;RegionCountsTopic&quot;</span><span class="o">,</span> <span class="n">Produced</span><span class="o">.</span><span class="na">valueSerde</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">()));</span></code></pre></div>
-      </div>
+// Use the default serializer for record keys (here: region as String) by not specifying the key serde,
+// but override the default serializer for record values (here: userCount as Long).
+final Serde&lt;Long&gt; longSerde = Serdes.Long();
+KStream&lt;String, Long&gt; userCountByRegion = ...;
+userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.Long()));</code></pre>
       <p>If some of your incoming records are corrupted or ill-formatted, they will cause the deserializer class to report an error.
          Since 1.0.x we have introduced an <code>DeserializationExceptionHandler</code> interface which allows
          you to customize how to handle such records. The customized implementation of the interface can be specified via the <code>StreamsConfig</code>.
@@ -101,12 +98,11 @@
         <h3>Primitive and basic types<a class="headerlink" href="#primitive-and-basic-types" title="Permalink to this headline"></a></h3>
         <p>Apache Kafka includes several built-in serde implementations for Java primitives and basic types such as <code class="docutils literal"><span class="pre">byte[]</span></code> in
           its <code class="docutils literal"><span class="pre">kafka-clients</span></code> Maven artifact:</p>
-        <div class="highlight-xml"><div class="highlight"><pre><code><span class="nt">&lt;dependency&gt;</span>
-    <span class="nt">&lt;groupId&gt;</span>org.apache.kafka<span class="nt">&lt;/groupId&gt;</span>
-    <span class="nt">&lt;artifactId&gt;</span>kafka-clients<span class="nt">&lt;/artifactId&gt;</span>
-    <span class="nt">&lt;version&gt;</span>{{fullDotVersion}}<span class="nt">&lt;/version&gt;</span>
-<span class="nt">&lt;/dependency&gt;</span></code></pre></div>
-        </div>
+        <pre class="line-numbers"><code class="language-xml-doc">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+    &lt;version&gt;2.8.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
         <p>This artifact provides the following serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization">org.apache.kafka.common.serialization</a>, which you can leverage when e.g., defining default serializers in your Streams configuration.</p>
         <table border="1" class="docutils">
           <colgroup>

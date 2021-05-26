@@ -139,6 +139,7 @@ class KafkaApisTest {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
+    val config = new KafkaConfig(properties)
 
     val forwardingManagerOpt = if (enableForwarding)
       Some(this.forwardingManager)
@@ -176,7 +177,7 @@ class KafkaApisTest {
       txnCoordinator,
       autoTopicCreationManager,
       brokerId,
-      new KafkaConfig(properties),
+      config,
       configRepository,
       metadataCache,
       metrics,
@@ -1104,7 +1105,6 @@ class KafkaApisTest {
         15L,
         0.toShort,
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build()
       val request = buildRequest(offsetCommitRequest)
 
@@ -1144,7 +1144,6 @@ class KafkaApisTest {
         producerId,
         epoch,
         Map(topicPartition -> partitionOffsetCommitData).asJava,
-        false
       ).build(version.toShort)
       val request = buildRequest(offsetCommitRequest)
 

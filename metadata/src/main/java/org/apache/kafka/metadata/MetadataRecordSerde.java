@@ -14,27 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.namedtopology;
+package org.apache.kafka.metadata;
 
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
 
-public class NamedTaskId extends TaskId {
-    public NamedTaskId(final int topicGroupId, final int partition, final String namedTopology) {
-        super(topicGroupId, partition, namedTopology);
-        if (namedTopology == null) {
-            throw new IllegalStateException("NamedTopology is required for a NamedTaskId");
-        }
-    }
+public class MetadataRecordSerde extends AbstractApiMessageSerde {
 
-    public String namedTopology() {
-        return namedTopology;
-    }
-
-    public static String namedTopology(final TaskId taskId) {
-        if (taskId instanceof NamedTaskId) {
-            return ((NamedTaskId) taskId).namedTopology();
-        } else {
-            return null;
-        }
+    @Override
+    public ApiMessage apiMessageFor(short apiKey) {
+        return MetadataRecordType.fromId(apiKey).newMetadataRecord();
     }
 }
