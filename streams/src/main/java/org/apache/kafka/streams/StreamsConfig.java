@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.config.ConfigDef.ListSize.max;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -748,7 +749,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
                     Type.LIST,
                     Collections.emptyList(),
-                    ConfigDef.ListSize.ofMax(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+                    max(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,

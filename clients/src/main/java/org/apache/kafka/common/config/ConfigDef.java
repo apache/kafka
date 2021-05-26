@@ -950,7 +950,7 @@ public class ConfigDef {
             this.maxSize = maxSize;
         }
 
-        public static ListSize ofMax(final int maxSize) {
+        public static ListSize max(final int maxSize) {
             return new ListSize(maxSize);
         }
 
@@ -959,7 +959,7 @@ public class ConfigDef {
             @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             if (values.size() > maxSize) {
-                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "]");
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "].");
             }
         }
     }

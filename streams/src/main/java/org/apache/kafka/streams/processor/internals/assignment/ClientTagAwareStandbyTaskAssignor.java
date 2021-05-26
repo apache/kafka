@@ -45,9 +45,14 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
     @Override
     public void assignStandbyTasks(final Map<TaskId, UUID> statefulTasksWithClients,
                                    final TreeMap<UUID, ClientState> clientStates) {
-        final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final int numStandbyReplicas = configs.numStandbyReplicas;
+
+        final Set<TaskId> statefulTasks = statefulTasksWithClients.keySet();
         final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
+
+        final Map<String, Set<String>> tagKeyToTagValuesMapping = new HashMap<>();
+        final Map<String, Set<UUID>> clientsPerTagValue = new HashMap<>();
+        final Map<String, String> tagValueTagKeyMapping = new HashMap<>();
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTasks.stream()
                                                                            .collect(
@@ -56,11 +61,6 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
                                                                                    t -> numStandbyReplicas
                                                                                )
                                                                            );
-
-        final Map<String, String> tagValueTagKeyMapping = new HashMap<>();
-        final Map<String, Set<String>> tagKeyToTagValuesMapping = new HashMap<>();
-
-        final Map<String, Set<UUID>> clientsPerTagValue = new HashMap<>();
 
         for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
             final UUID clientId = clientStateEntry.getKey();
@@ -88,9 +88,9 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
             client -> clientStates.get(client).assignedTaskLoad()
         );
 
-        standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
-
         for (final TaskId task : statefulTasks) {
+            standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
+
             final List<List<String>> clientTagValues = new ArrayList<>();
 
             int numRemainingStandbys = tasksToRemainingStandbys.get(task);
@@ -193,7 +193,7 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
             clientsToBeFiltered
         );
 
-        return validClients.stream().anyMatch(it -> !clientStates.get(it).reachedCapacity());
+        return validClients.stream().anyMatch(clientId -> !clientStates.get(clientId).reachedCapacity());
     }
 
     private static Set<UUID> allClientsNotIn(final Set<UUID> allClients, final Set<UUID> toBeFilteredClients) {

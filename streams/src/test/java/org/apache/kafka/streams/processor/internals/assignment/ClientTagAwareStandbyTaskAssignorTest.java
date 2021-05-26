@@ -17,21 +17,27 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ClientTagAwareStandbyTaskAssignorTest {
     private static final String ZONE_TAG = "zone";
@@ -59,86 +65,75 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final UUID UUID_11 = uuidForInt(11);
     private static final UUID UUID_12 = uuidForInt(12);
 
-    private Map<UUID, ClientState> clientStates;
-    private Map<String, String> tagValueToTagKeyMapping;
-    private Function<UUID, ClientState> clientStateFunction;
-    private Function<String, String> tagValueToTagKeyFunction;
+    @Test
+    public void shouldDistributeStandbyTasksOnAppropriateClientTagDimensions() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
 
-    @Before
-    public void setup() {
-        clientStates = mkMap(
-            mkEntry(UUID_1, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)))), // 0_0 (A)
-            mkEntry(UUID_2, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))), // 0_1 (S_1)
-            mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)))), // 0_2 (S_1)
+            mkEntry(UUID_4, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_5, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(UUID_6, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
 
-            mkEntry(UUID_4, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)))), // 0_1 (A)
-            mkEntry(UUID_5, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))), // 0_0 (S_1)
-            mkEntry(UUID_6, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))), //
-
-            mkEntry(UUID_7, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)))), // 0_2 (A)
-            mkEntry(UUID_8, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))), // 0_2 (S_2)
-            mkEntry(UUID_9, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))  // 0_0 (S_2)
-//            mkEntry(UUID_7, new ClientState(mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
-//            mkEntry(UUID_8, new ClientState(mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
-//            mkEntry(UUID_9, new ClientState(mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
-//            mkEntry(UUID_10, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_4)))), // 0_0 (S_3)
-//            mkEntry(UUID_11, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_4)))), // 0_1 (S_3)
-//            mkEntry(UUID_12, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_4)))) // 0_1 (S_2), 0_2 (S_2)
-        );
-        tagValueToTagKeyMapping = mkMap(
-            mkEntry(ZONE_1, ZONE_TAG),
-            mkEntry(ZONE_2, ZONE_TAG),
-            mkEntry(ZONE_3, ZONE_TAG),
-            mkEntry(CLUSTER_1, CLUSTER_TAG),
-            mkEntry(CLUSTER_2, CLUSTER_TAG)
+            mkEntry(UUID_7, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
+            mkEntry(UUID_8, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        tagValueToTagKeyFunction = tagValue -> tagValueToTagKeyMapping.get(tagValue);
-        clientStateFunction = clientId -> clientStates.get(clientId);
+        final AssignorConfiguration.AssignmentConfigs configs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+
+        new ClientTagAwareStandbyTaskAssignor(configs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
+
+        assertFalse(isStandbyTaskOnClientTag(clientStates, TASK_0_0, ZONE_TAG, ZONE_1));
+        assertFalse(isStandbyTaskOnClientTag(clientStates, TASK_0_0, CLUSTER_TAG, CLUSTER_1));
     }
 
-    private ClientState createClientStateWithCapacity(final int capacity, final Map<String, String> clientTags) {
+    private static boolean isStandbyTaskOnClientTag(final Map<UUID, ClientState> clientStates,
+                                                    final TaskId taskId,
+                                                    final String tagKey,
+                                                    final String tagValue) {
+        return clientStates.values()
+                           .stream()
+                           .filter(clientState -> clientState.standbyTasks().contains(taskId))
+                           .anyMatch(clientState -> clientState.clientTags().get(tagKey).equals(tagValue));
+    }
+
+    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas, String... rackAwareAssignmentTags) {
+        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, Arrays.asList(rackAwareAssignmentTags));
+    }
+
+    private static ClientState createClientStateWithCapacity(final int capacity,
+                                                             final Map<String, String> clientTags,
+                                                             final TaskId... tasks) {
         final ClientState clientState = new ClientState(clientTags);
 
-        for (int i = 0; i < capacity; i++) {
-            clientState.incrementCapacity();
-        }
+        IntStream.range(0, capacity).forEach(i -> clientState.incrementCapacity());
+        Optional.ofNullable(tasks).ifPresent(t -> clientState.assignActiveTasks(Arrays.asList(t)));
 
         return clientState;
     }
 
-    @Test
-    public void baseTest() {
-//        mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final Map<TaskId, UUID> allTaskIds = mkMap(
-            mkEntry(TASK_0_0, UUID_1),
-            mkEntry(TASK_0_1, UUID_4),
-            mkEntry(TASK_0_2, UUID_7)
-//            mkEntry(TASK_1_0, UUID_4),
-//            mkEntry(TASK_1_1, UUID_5),
-//            mkEntry(TASK_1_2, UUID_6),
-//            mkEntry(TASK_2_0, UUID_1),
-//            mkEntry(TASK_2_1, UUID_2),
-//            mkEntry(TASK_2_2, UUID_3)
-        );
-
-        clientStates.get(UUID_1).assignActive(TASK_0_0);
-        clientStates.get(UUID_4).assignActive(TASK_0_1);
-        clientStates.get(UUID_7).assignActive(TASK_0_2);
-
-        final AssignorConfiguration.AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(0L, 1, 2, 60000L, Arrays.asList("zone", "cluster"));
-
-        new ClientTagAwareStandbyTaskAssignor(configs).assignStandbyTasks(
-            allTaskIds,
-            new TreeMap<>(clientStates)
-        );
-
-        final String a = "";
+    private static Map<TaskId, UUID> findAllActiveTasks(final Map<UUID, ClientState> clientStates) {
+        return clientStates.entrySet()
+                           .stream()
+                           .flatMap(
+                               clientStateEntry -> clientStateEntry.getValue()
+                                                                   .activeTasks()
+                                                                   .stream()
+                                                                   .map(taskId -> mkEntry(taskId,
+                                                                                          clientStateEntry.getKey()))
+                           )
+                           .collect(
+                               Collectors.toMap(
+                                   Map.Entry::getKey,
+                                   Map.Entry::getValue
+                               )
+                           );
     }
-
-//    private static Map<UUID, ClientState> generateClientStates(final int numberOfZones,
-//                                                               final int numberOfClusters,
-//                                                               final int numberOfRegions) {
-//
-//    }
 }
