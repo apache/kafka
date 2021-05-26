@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.net.InetAddress
+
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -243,8 +244,6 @@ class BrokerServer(
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       groupCoordinator = GroupCoordinator(config, replicaManager, Time.SYSTEM, metrics)
 
-      // Create transaction coordinator, but don't start it until we've started replica manager.
-      // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch(),
@@ -252,6 +251,8 @@ class BrokerServer(
         config.requestTimeoutMs
       )
 
+      // Create transaction coordinator, but don't start it until we've started replica manager.
+      // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)

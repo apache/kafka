@@ -17,9 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
-import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -29,8 +28,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-
-import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 
 
 public class ProducerIdControlManager {
@@ -43,20 +40,14 @@ public class ProducerIdControlManager {
         this.lastProducerId = new TimelineLong(snapshotRegistry, 0L);
     }
 
-    ControllerResult<ResultOrError<ProducerIdsBlock>> generateNextProducerId(int brokerId, long brokerEpoch) {
-        try {
-            clusterControlManager.checkBrokerEpoch(brokerId, brokerEpoch);
-        } catch (StaleBrokerEpochException e) {
-            return ControllerResult.of(Collections.emptyList(), ResultOrError.of(ApiError.fromThrowable(e)));
-        }
+    ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
+        clusterControlManager.checkBrokerEpoch(brokerId, brokerEpoch);
 
         long producerId = lastProducerId.get();
 
         if (producerId > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
-            ApiError error = new ApiError(UNKNOWN_SERVER_ERROR,
-                "Exhausted all producerIds as the next block's end producerId " +
+            throw new UnknownServerException("Exhausted all producerIds as the next block's end producerId " +
                 "is will has exceeded long type limit");
-            return ControllerResult.of(Collections.emptyList(), ResultOrError.of(error));
         }
 
         long nextProducerId = producerId + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE;
@@ -65,8 +56,7 @@ public class ProducerIdControlManager {
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
         ProducerIdsBlock block = new ProducerIdsBlock(brokerId, producerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
-        return ControllerResult.of(
-            Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), ResultOrError.of(block));
+        return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 
     void replay(ProducerIdsRecord record) {

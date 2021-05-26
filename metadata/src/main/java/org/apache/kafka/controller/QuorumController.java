@@ -1218,15 +1218,9 @@ public final class QuorumController implements Controller {
             AllocateProducerIdsRequestData request) {
         return appendWriteEvent("allocateProducerIds",
             () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
-                .thenApply(resultOrError -> {
-                    if (resultOrError.isError()) {
-                        return new AllocateProducerIdsResponseData().setErrorCode(resultOrError.error().error().code());
-                    } else {
-                        return new AllocateProducerIdsResponseData()
-                            .setProducerIdStart(resultOrError.result().producerIdStart())
-                            .setProducerIdLen(resultOrError.result().producerIdLen());
-                    }
-                });
+            .thenApply(result -> new AllocateProducerIdsResponseData()
+                    .setProducerIdStart(result.producerIdStart())
+                    .setProducerIdLen(result.producerIdLen()));
     }
 
     @Override

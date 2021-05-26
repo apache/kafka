@@ -261,7 +261,8 @@ class BrokerMetadataListener(
   }
 
   def handleProducerIdRecord(record: ProducerIdsRecord): Unit = {
-    // no-op
+    // This is a no-op since brokers get their producer ID blocks directly from the controller via
+    // AllocateProducerIds RPC response
   }
 
   class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)
