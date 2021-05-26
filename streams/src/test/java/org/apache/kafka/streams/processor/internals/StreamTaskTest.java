@@ -105,7 +105,6 @@ import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -845,10 +844,7 @@ public class StreamTaskTest {
             mkMap(
                 mkEntry("task-id", taskId),
                 mkEntry("processor-node-id", processorNodeId),
-                mkEntry(
-                    StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? THREAD_ID_TAG
-                        : THREAD_ID_TAG_0100_TO_24,
-                    Thread.currentThread().getName()
+                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()
                 )
             )
         );

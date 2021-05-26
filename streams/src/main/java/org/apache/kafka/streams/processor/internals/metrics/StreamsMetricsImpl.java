@@ -112,7 +112,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String CLIENT_ID_TAG = "client-id";
     public static final String THREAD_ID_TAG = "thread-id";
-    public static final String THREAD_ID_TAG_0100_TO_24 = "client-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
     public static final String STORE_ID_TAG = "state-id";
@@ -164,14 +163,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
-        version = parseBuiltInMetricsVersion(builtInMetricsVersion);
+        version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
         this.parentSensors = new HashMap<>();
-    }
-
-    private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
-        return Version.LATEST;
     }
 
     public Version version() {
