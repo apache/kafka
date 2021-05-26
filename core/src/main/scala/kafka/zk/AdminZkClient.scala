@@ -235,7 +235,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                     numPartitions: Int = 1,
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
                     validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
-    addPartitions(topic, existingAssignment, allBrokers, numPartitions, replicaAssignment, validateOnly, Set.empty[Int])
+    val noNewPartitionBrokerIds = getMaintenanceBrokerList()
+    addPartitions(topic, existingAssignment, allBrokers, numPartitions, replicaAssignment, validateOnly, noNewPartitionBrokerIds.toSet)
   }
 
   /**
