@@ -263,7 +263,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       existingAssignment,
       allBrokers,
       numPartitions,
-      replicaAssignment
+      replicaAssignment,
+      getMaintenanceBrokerList().toSet
     )
 
     if (validateOnly) {
