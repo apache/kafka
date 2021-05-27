@@ -28,9 +28,12 @@ import kafka.log._
 import kafka.message._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.utils.{Time, Utils}
 
+import scala.jdk.CollectionConverters._
 import scala.math._
 
 /**
@@ -63,29 +66,33 @@ object TestLinearWriteSpeed {
                            .describedAs("num_files")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-   val reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
+    val reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(1000L)
-   val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
+    val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
                            .withRequiredArg
                            .describedAs("mb")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(Integer.MAX_VALUE)
-   val flushIntervalOpt = parser.accepts("flush-interval", "The number of messages between flushes")
+    val flushIntervalOpt = parser.accepts("flush-interval", "The number of messages between flushes")
                            .withRequiredArg()
                            .describedAs("message_count")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(Long.MaxValue)
-   val compressionCodecOpt = parser.accepts("compression", "The compression codec to use")
+    val compressionCodecOpt = parser.accepts("compression", "The compression codec to use")
                             .withRequiredArg
                             .describedAs("codec")
                             .ofType(classOf[java.lang.String])
                             .defaultsTo(NoCompressionCodec.name)
-   val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
-   val channelOpt = parser.accepts("channel", "Do writes to file channels.")
-   val logOpt = parser.accepts("log", "Do writes to kafka logs.")
+    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
+                            .withRequiredArg
+                            .describedAs("extra_prop")
+                            .ofType(classOf[String])
+    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
+    val channelOpt = parser.accepts("channel", "Do writes to file channels.")
+    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
 
     val options = parser.parse(args : _*)
 
@@ -101,14 +108,20 @@ object TestLinearWriteSpeed {
     val messageSize = options.valueOf(messageSizeOpt).intValue
     val flushInterval = options.valueOf(flushIntervalOpt).longValue
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
+    val extraProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
+    val properties = new Properties(extraProps)
+    properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000")
+    properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
+    properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
+    properties.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.forId(compressionCodec.codec).name)
+    val producerConfig = new ProducerConfig(properties)
     val messageSet = {
-      val compressionType = CompressionType.forId(compressionCodec.codec)
       val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
-      MemoryRecords.withRecords(compressionType, records: _*)
+      MemoryRecords.withRecords(producerConfig.getCompressionConfig, records: _*)
     }
 
     val writables = new Array[Writable](numFiles)
@@ -234,5 +247,4 @@ object TestLinearWriteSpeed {
       Utils.delete(log.dir)
     }
   }
-
 }

@@ -213,6 +213,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -1153,7 +1154,7 @@ public class RequestResponseTest {
                                         .setEpoch(0))
                                 .setPosition(234L)
                                 .setSize(345L)
-                                .setUnalignedRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes())))))))
+                                .setUnalignedRecords(MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("blah".getBytes())))))))
                 .setThrottleTimeMs(123);
         return new FetchSnapshotResponse(data);
     }
@@ -1628,7 +1629,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put("test", Uuid.randomUuid());
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicIdPartition(topicIds.get("test"), new TopicPartition("test", 0)), new FetchResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setHighWatermark(1000000)
@@ -1648,7 +1649,7 @@ public class RequestResponseTest {
     private FetchResponse createFetchResponse(boolean includeAborted) {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         Uuid topicId = Uuid.randomUuid();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicIdPartition(topicId, new TopicPartition("test", 0)), new FetchResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setHighWatermark(1000000)
@@ -1678,7 +1679,7 @@ public class RequestResponseTest {
             data.setErrorCode(Errors.NONE.code())
                     .setSessionId(123);
         }
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("blah".getBytes()));
         FetchResponseData.PartitionData partition = new FetchResponseData.PartitionData()
                 .setPartitionIndex(0)
                 .setErrorCode(Errors.NONE.code())
@@ -2097,7 +2098,7 @@ public class RequestResponseTest {
 
     private ProduceRequest createProduceRequest(short version) {
         if (version < 2) {
-            MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+            MemoryRecords records = MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("blah".getBytes()));
             ProduceRequestData data = new ProduceRequestData()
                     .setAcks((short) -1)
                     .setTimeoutMs(123)
@@ -2110,7 +2111,7 @@ public class RequestResponseTest {
             return new ProduceRequest.Builder(version, version, data).build(version);
         }
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
-        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionConfig.NONE, new SimpleRecord("woot".getBytes()));
         return ProduceRequest.forMagic(magic,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(

@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -57,7 +58,7 @@ public class ProducerBatchTest {
     private final long now = 1488748346917L;
 
     private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(512),
-            CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+            CompressionConfig.NONE, TimestampType.CREATE_TIME, 128);
 
     @Test
     public void testBatchAbort() throws Exception {
@@ -135,7 +136,7 @@ public class ProducerBatchTest {
             MemoryRecordsBuilder builder = MemoryRecords.builder(
                     ByteBuffer.allocate(1024),
                     MAGIC_VALUE_V2,
-                    compressionType,
+                    CompressionConfig.of(compressionType).build(),
                     TimestampType.CREATE_TIME,
                     0L);
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
@@ -175,7 +176,7 @@ public class ProducerBatchTest {
                     continue;
 
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
-                        compressionType, TimestampType.CREATE_TIME, 0L);
+                    CompressionConfig.of(compressionType).build(), TimestampType.CREATE_TIME, 0L);
 
                 ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
                 while (true) {

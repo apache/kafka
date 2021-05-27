@@ -71,7 +71,7 @@ public class UnalignedFileRecordsTest {
         FileRecords fileRecords = FileRecords.open(tempFile());
 
         for (byte[] value : values) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(value)));
+            fileRecords.append(MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord(value)));
         }
 
         return fileRecords;

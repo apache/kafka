@@ -38,7 +38,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
@@ -422,7 +422,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             serde
         );
 
@@ -2355,7 +2355,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 memoryPool,
                 time,
                 lastContainedLogTime,
-                CompressionType.NONE,
+                CompressionConfig.NONE,
                 serde
             );
     }

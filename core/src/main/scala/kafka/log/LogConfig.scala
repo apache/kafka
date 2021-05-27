@@ -18,13 +18,13 @@
 package kafka.log
 
 import kafka.log.LogConfig.configDef
-import kafka.message.BrokerCompressionCodec
+import kafka.message.{BrokerCompressionCodec, ProducerCompressionCodec}
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.record.{LegacyRecord, RecordVersion, TimestampType}
+import org.apache.kafka.common.record.{CompressionConfig, CompressionType, LegacyRecord, RecordVersion, TimestampType}
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.metadata.ConfigSynonym
 import org.apache.kafka.metadata.ConfigSynonym.{HOURS_TO_MILLISECONDS, MINUTES_TO_MILLISECONDS}
@@ -181,6 +181,34 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
       case (k: String, v) if overriddenConfigs.contains(k) => (k, v.asInstanceOf[AnyRef])
     }
     ConfigUtils.configMapToRedactedString(overriddenTopicProps.asJava, configDef)
+  }
+
+  /**
+   * Returns per-codec [[CompressionConfig]] for given `compressionType`.
+   */
+  private def getCompressionConfig(compressionType: CompressionType): CompressionConfig = {
+    compressionType match {
+      case CompressionType.NONE => CompressionConfig.NONE
+      case CompressionType.GZIP => CompressionConfig.gzip.build
+      case CompressionType.SNAPPY => CompressionConfig.snappy.build
+      case CompressionType.LZ4 => CompressionConfig.lz4.build
+      case CompressionType.ZSTD => CompressionConfig.zstd.build
+    }
+  }
+
+  /**
+   * Returns appropriate [[CompressionConfig]] object for given [[compressionType]] and `producerCompressionType` argument.
+   *
+   * - If [[compressionType]] is "producer", returns `producerCompressionType`'s config.
+   * - If [[compressionType]] is "none" or "uncompressed", returns [[org.apache.kafka.common.compress.NoneConfig]].
+   * - In other cases, returns [[org.apache.kafka.common.compress.GzipConfig]], [[org.apache.kafka.common.compress.SnappyConfig]], [[org.apache.kafka.common.compress.LZ4Config]], or [[org.apache.kafka.common.compress.ZstdConfig]].
+   */
+  def compressionConfig(producerCompressionType: CompressionType): CompressionConfig = {
+    compressionType match {
+      case ProducerCompressionCodec.name => getCompressionConfig(producerCompressionType)
+      case "uncompressed" => CompressionConfig.NONE
+      case _ => getCompressionConfig(CompressionType.forName(compressionType))
+    }
   }
 }
 

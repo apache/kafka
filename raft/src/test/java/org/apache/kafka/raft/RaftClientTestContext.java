@@ -37,7 +37,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -327,7 +327,7 @@ public final class RaftClientTestContext {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             Builder.SERDE,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             baseOffset,
             timestamp,
             false,

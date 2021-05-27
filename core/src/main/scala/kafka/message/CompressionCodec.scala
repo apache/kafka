@@ -32,6 +32,7 @@ object CompressionCodec {
       case _ => throw new UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
+
   def getCompressionCodec(name: String): CompressionCodec = {
     name.toLowerCase(Locale.ROOT) match {
       case NoCompressionCodec.name => NoCompressionCodec

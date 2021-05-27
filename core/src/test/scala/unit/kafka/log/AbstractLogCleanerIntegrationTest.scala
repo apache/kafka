@@ -23,7 +23,7 @@ import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.{AfterEach, Tag}
 
@@ -135,11 +135,11 @@ abstract class AbstractLogCleanerIntegrationTest {
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 
-  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
+  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, compressionConfig: CompressionConfig,
                 startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
-      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
+      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.getType,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
@@ -148,13 +148,13 @@ abstract class AbstractLogCleanerIntegrationTest {
     }
   }
 
-  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: CompressionType): (String, MemoryRecords) = {
+  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, compressionConfig: CompressionConfig): (String, MemoryRecords) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
       new String(random.alphanumeric.take(length).toArray)
     }
     val value = messageValue(128)
-    val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = codec, key = key.toString.getBytes,
+    val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.getType, key = key.toString.getBytes,
       magicValue = messageFormatVersion)
     (value, messageSet)
   }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -51,7 +52,7 @@ class RecordsBatchReaderTest {
         long baseOffset = 57;
 
         List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
-        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(CompressionConfig.of(compressionType).build(), batches);
 
         testBatchReader(baseOffset, memRecords, batches);
     }
@@ -62,7 +63,7 @@ class RecordsBatchReaderTest {
         long baseOffset = 57;
 
         List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(baseOffset);
-        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(CompressionConfig.of(compressionType).build(), batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
         fileRecords.append(memRecords);

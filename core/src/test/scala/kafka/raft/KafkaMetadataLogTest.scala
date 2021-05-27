@@ -23,7 +23,7 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionConfig, CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
@@ -567,7 +567,7 @@ final class KafkaMetadataLogTest {
     val batchBuilder = new BatchBuilder[Array[Byte]](
       buffer,
       new ByteArraySerde,
-      CompressionType.NONE,
+      CompressionConfig.NONE,
       0L,
       mockTime.milliseconds(),
       false,

@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
@@ -1726,7 +1726,7 @@ final public class KafkaRaftClientSnapshotTest {
             MemoryPool.NONE,
             context.time,
             0,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             new StringSerde()
         ).get();
     }

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.metadata.util;
 
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -71,7 +71,7 @@ public class SnapshotFileWriter implements AutoCloseable {
             MAX_BATCH_SIZE_BYTES,
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
             Time.SYSTEM,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             new MetadataRecordSerde());
 
         FileChannel channel = FileChannel.open(snapshotPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);

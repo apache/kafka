@@ -20,6 +20,7 @@ import kafka.common.LongRef;
 import kafka.log.AppendOrigin;
 import kafka.log.LogValidator;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
@@ -38,8 +39,8 @@ import org.openjdk.jmh.infra.Blackhole;
 public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
 
     @Override
-    CompressionType compressionType() {
-        return CompressionType.NONE;
+    CompressionConfig compressionConfig() {
+        return CompressionConfig.NONE;
     }
 
     @Benchmark

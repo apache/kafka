@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
@@ -98,7 +98,7 @@ public class SnapshotGeneratorTest {
             MemoryPool.NONE,
             new MockTime(),
             lastContainedLogTime,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             new MetadataRecordSerde()
         ).get();
     }

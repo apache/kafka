@@ -20,9 +20,7 @@ import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.record.SimpleRecord
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
@@ -1847,7 +1845,7 @@ class FetchSessionTest {
       .setHighWatermark(60)
       .setLastStableOffset(50)
       .setLogStartOffset(0)
-      .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+      .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE,
         new SimpleRecord(100, null))))
     respData3.put(tp3, new FetchResponseData.PartitionData()
       .setPartitionIndex(tp3.topicPartition.partition)

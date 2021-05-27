@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -50,7 +51,7 @@ class BatchBuilderTest {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            compressionType,
+            CompressionConfig.of(compressionType).build(),
             baseOffset,
             logAppendTime,
             isControlBatch,
@@ -102,7 +103,7 @@ class BatchBuilderTest {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             baseOffset,
             logAppendTime,
             isControlBatch,

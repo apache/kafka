@@ -18,6 +18,7 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -44,7 +45,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time time,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        CompressionConfig compressionConfig,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
@@ -58,7 +59,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             maxBatchSize,
             memoryPool,
             time,
-            compressionType,
+            compressionConfig,
             serde
         );
     }
@@ -115,7 +116,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time snapshotTime,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        CompressionConfig compressionConfig,
         RecordSerde<T> serde
     ) {
         return supplier.get().map(snapshot -> {
@@ -125,7 +126,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                     memoryPool,
                     snapshotTime,
                     lastContainedLogTimestamp,
-                    compressionType,
+                    compressionConfig,
                     serde);
             writer.initializeSnapshotWithHeader();
 

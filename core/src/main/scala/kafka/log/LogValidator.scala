@@ -19,11 +19,10 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.{LongRef, RecordValidationException}
-import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, CompressionConfig, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -88,8 +87,8 @@ private[log] object LogValidator extends Logging {
                                                     offsetCounter: LongRef,
                                                     time: Time,
                                                     now: Long,
-                                                    sourceCodec: CompressionCodec,
-                                                    targetCodec: CompressionCodec,
+                                                    sourceType: CompressionType,
+                                                    targetConfig: CompressionConfig,
                                                     compactedTopic: Boolean,
                                                     magic: Byte,
                                                     timestampType: TimestampType,
@@ -99,7 +98,7 @@ private[log] object LogValidator extends Logging {
                                                     interBrokerProtocolVersion: MetadataVersion,
                                                     brokerTopicStats: BrokerTopicStats,
                                                     requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
-    if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
+    if (sourceType == CompressionType.NONE && targetConfig.getType == CompressionType.NONE) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
         convertAndAssignOffsetsNonCompressed(records, topicPartition, offsetCounter, compactedTopic, time, now, timestampType,
@@ -109,13 +108,13 @@ private[log] object LogValidator extends Logging {
         assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch, origin, magic, brokerTopicStats)
     } else {
-      validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec,
-        targetCodec, compactedTopic, magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin,
+      validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceType,
+        targetConfig, compactedTopic, magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin,
         interBrokerProtocolVersion, brokerTopicStats, requestLocal)
     }
   }
 
-  private def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceCodec: CompressionCodec): RecordBatch = {
+  private def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceType: CompressionType): RecordBatch = {
     val batchIterator = records.batches.iterator
 
     if (!batchIterator.hasNext) {
@@ -125,7 +124,7 @@ private[log] object LogValidator extends Logging {
     val batch = batchIterator.next()
 
     // if the format is v2 and beyond, or if the messages are compressed, we should check there's only one batch.
-    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || sourceCodec != NoCompressionCodec) {
+    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || sourceType != CompressionType.NONE) {
       if (batchIterator.hasNext) {
         throw new InvalidRecordException("Compressed outer record has more than one batch")
       }
@@ -239,10 +238,10 @@ private[log] object LogValidator extends Logging {
     // The current implementation of BufferSupplier is naive and works best when the buffer size
     // cardinality is low, so don't use it here
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
-    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
+    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionConfig.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE)
 
     records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, toMagicValue, brokerTopicStats)
@@ -287,7 +286,7 @@ private[log] object LogValidator extends Logging {
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE)
 
     records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, magic, brokerTopicStats)
@@ -359,8 +358,8 @@ private[log] object LogValidator extends Logging {
                                                  offsetCounter: LongRef,
                                                  time: Time,
                                                  now: Long,
-                                                 sourceCodec: CompressionCodec,
-                                                 targetCodec: CompressionCodec,
+                                                 sourceType: CompressionType,
+                                                 targetConfig: CompressionConfig,
                                                  compactedTopic: Boolean,
                                                  toMagic: Byte,
                                                  timestampType: TimestampType,
@@ -371,19 +370,19 @@ private[log] object LogValidator extends Logging {
                                                  brokerTopicStats: BrokerTopicStats,
                                                  requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
-    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
+    if (targetConfig.getType == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
 
     def validateRecordCompression(batchIndex: Int, record: Record): Option[ApiRecordError] = {
-      if (sourceCodec != NoCompressionCodec && record.isCompressed)
+      if (sourceType != CompressionType.NONE && record.isCompressed)
         Some(ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
           s"Compressed outer record should not have an inner record with a compression attribute set: $record")))
       else None
     }
 
     // No in place assignment situation 1
-    var inPlaceAssignment = sourceCodec == targetCodec
+    var inPlaceAssignment = sourceType == targetConfig.getType
 
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     val expectedInnerOffset = new LongRef(0)
@@ -392,9 +391,9 @@ private[log] object LogValidator extends Logging {
     var uncompressedSizeInBytes = 0
 
     // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
-    // One exception though is that with format smaller than v2, if sourceCodec is noCompression, then each batch is actually
+    // One exception though is that with format smaller than v2, if sourceType is CompressionType.NONE, then each batch is actually
     // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceType)
 
     // No in place assignment situation 2 and 3: we only need to check for the first batch because:
     //  1. For most cases (compressed records, v2, for example), there's only one batch anyways.
@@ -403,7 +402,7 @@ private[log] object LogValidator extends Logging {
       inPlaceAssignment = false
 
     // Do not compress control records unless they are written compressed
-    if (sourceCodec == NoCompressionCodec && firstBatch.isControlBatch)
+    if (sourceType == CompressionType.NONE && firstBatch.isControlBatch)
       inPlaceAssignment = true
 
     records.batches.forEach { batch =>
@@ -463,7 +462,7 @@ private[log] object LogValidator extends Logging {
         val first = records.batches.asScala.head
         (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
       }
-      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec),
+      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, targetConfig,
         now, validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch,
         uncompressedSizeInBytes)
     } else {
@@ -496,7 +495,7 @@ private[log] object LogValidator extends Logging {
                                            offsetCounter: LongRef,
                                            time: Time,
                                            timestampType: TimestampType,
-                                           compressionType: CompressionType,
+                                           compressionConfig: CompressionConfig,
                                            logAppendTime: Long,
                                            validatedRecords: Seq[Record],
                                            producerId: Long,
@@ -506,12 +505,12 @@ private[log] object LogValidator extends Logging {
                                            partitionLeaderEpoch: Int,
                                            uncompressedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
-    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
+    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionConfig.getType,
       validatedRecords.asJava)
     // The current implementation of BufferSupplier is naive and works best when the buffer size
     // cardinality is low, so don't use it here
     val buffer = ByteBuffer.allocate(estimatedSize)
-    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
+    val builder = MemoryRecords.builder(buffer, magic, compressionConfig, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
 
     validatedRecords.foreach { record =>

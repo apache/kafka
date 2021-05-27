@@ -58,14 +58,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MemoryRecordsTest {
 
     private static class Args {
-        final CompressionType compression;
+        final CompressionConfig compression;
         final byte magic;
         final long firstOffset;
         final long pid;
         final short epoch;
         final int firstSequence;
 
-        public Args(byte magic, long firstOffset, CompressionType compression) {
+        public Args(byte magic, long firstOffset, CompressionConfig compression) {
             this.magic = magic;
             this.compression = compression;
             this.firstOffset = firstOffset;
@@ -84,7 +84,7 @@ public class MemoryRecordsTest {
         public String toString() {
             return "magic=" + magic +
                 ", firstOffset=" + firstOffset +
-                ", compressionType=" + compression;
+                ", CompressionConfig=" + compression;
         }
     }
 
@@ -98,7 +98,7 @@ public class MemoryRecordsTest {
                             ? Collections.singletonList(RecordBatch.MAGIC_VALUE_V2)
                             : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
                     for (byte magic : magics)
-                        arguments.add(Arguments.of(new Args(magic, firstOffset, type)));
+                        arguments.add(Arguments.of(new Args(magic, firstOffset, CompressionConfig.of(type).build())));
                 }
             return arguments.stream();
         }
@@ -110,7 +110,7 @@ public class MemoryRecordsTest {
             List<Arguments> arguments = new ArrayList<>();
             for (long firstOffset : asList(0L, 57L))
                 for (CompressionType type: CompressionType.values()) {
-                    arguments.add(Arguments.of(new Args(RecordBatch.MAGIC_VALUE_V2, firstOffset, type)));
+                    arguments.add(Arguments.of(new Args(RecordBatch.MAGIC_VALUE_V2, firstOffset, CompressionConfig.of(type).build())));
                 }
             return arguments.stream();
         }
@@ -121,7 +121,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testIterator(Args args) {
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         byte magic = args.magic;
         long pid = args.pid;
         short epoch = args.epoch;
@@ -151,7 +151,7 @@ public class MemoryRecordsTest {
             int total = 0;
             for (RecordBatch batch : memoryRecords.batches()) {
                 assertTrue(batch.isValid());
-                assertEquals(compression, batch.compressionType());
+                assertEquals(compression.getType(), batch.compressionType());
                 assertEquals(firstOffset + total, batch.baseOffset());
 
                 if (magic >= RecordBatch.MAGIC_VALUE_V2) {
@@ -243,10 +243,10 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testChecksum(Args args) {
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         byte magic = args.magic;
         // we get reasonable coverage with uncompressed and one compression type
-        if (compression != CompressionType.NONE && compression != CompressionType.LZ4)
+        if (compression.getType() != CompressionType.NONE && compression.getType() != CompressionType.LZ4)
             return;
 
         SimpleRecord[] records = {
@@ -256,17 +256,17 @@ public class MemoryRecordsTest {
         RecordBatch batch = MemoryRecords.withRecords(magic, compression, records).batches().iterator().next();
         long expectedChecksum;
         if (magic == RecordBatch.MAGIC_VALUE_V0) {
-            if (compression == CompressionType.NONE)
+            if (compression.getType() == CompressionType.NONE)
                 expectedChecksum = 1978725405L;
             else
                 expectedChecksum = 66944826L;
         } else if (magic == RecordBatch.MAGIC_VALUE_V1) {
-            if (compression == CompressionType.NONE)
+            if (compression.getType() == CompressionType.NONE)
                 expectedChecksum = 109425508L;
             else
                 expectedChecksum = 1407303399L;
         } else {
-            if (compression == CompressionType.NONE)
+            if (compression.getType() == CompressionType.NONE)
                 expectedChecksum = 3851219455L;
             else
                 expectedChecksum = 2745969314L;
@@ -590,7 +590,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToBatchDiscard(Args args) {
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         byte magic = args.magic;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
@@ -635,7 +635,7 @@ public class MemoryRecordsTest {
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-        if (compression != CompressionType.NONE || magic >= MAGIC_VALUE_V2) {
+        if (compression.getType() != CompressionType.NONE || magic >= MAGIC_VALUE_V2) {
             assertEquals(2, batches.size());
             assertEquals(0, batches.get(0).lastOffset());
             assertEquals(5, batches.get(1).lastOffset());
@@ -650,7 +650,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToAlreadyCompactedLog(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
@@ -699,7 +699,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToPreservesProducerInfo(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         // non-idempotent, non-transactional
@@ -802,7 +802,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToWithUndersizedBuffer(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -856,7 +856,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterTo(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -893,7 +893,7 @@ public class MemoryRecordsTest {
         assertEquals(filtered.limit(), result.bytesRetained());
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp());
-            if (compression == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
+            if (compression.getType() == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
                 assertEquals(4L, result.shallowOffsetOfMaxTimestamp());
             else
                 assertEquals(5L, result.shallowOffsetOfMaxTimestamp());
@@ -906,7 +906,7 @@ public class MemoryRecordsTest {
         final List<Long> expectedStartOffsets;
         final List<Long> expectedMaxTimestamps;
 
-        if (magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2 && compression.getType() == CompressionType.NONE) {
             expectedEndOffsets = asList(1L, 4L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 5L, 6L);
             expectedMaxTimestamps = asList(11L, 20L, 15L, 16L);
@@ -927,7 +927,7 @@ public class MemoryRecordsTest {
             assertEquals(expectedStartOffsets.get(i).longValue(), batch.baseOffset());
             assertEquals(expectedEndOffsets.get(i).longValue(), batch.lastOffset());
             assertEquals(magic, batch.magic());
-            assertEquals(compression, batch.compressionType());
+            assertEquals(compression.getType(), batch.compressionType());
             if (magic >= RecordBatch.MAGIC_VALUE_V1) {
                 assertEquals(expectedMaxTimestamps.get(i).longValue(), batch.maxTimestamp());
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
@@ -973,7 +973,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToPreservesLogAppendTime(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         long pid = args.pid;
         short epoch = args.epoch;
         int firstSequence = args.firstSequence;
@@ -1008,10 +1008,10 @@ public class MemoryRecordsTest {
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-        assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, batches.size());
+        assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression.getType() == CompressionType.NONE ? 3 : 2, batches.size());
 
         for (RecordBatch batch : batches) {
-            assertEquals(compression, batch.compressionType());
+            assertEquals(compression.getType(), batch.compressionType());
             if (magic > RecordBatch.MAGIC_VALUE_V0) {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
                 assertEquals(logAppendTime, batch.maxTimestamp());
@@ -1054,7 +1054,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testWithRecords(Args args) {
-        CompressionType compression = args.compression;
+        CompressionConfig compression = args.compression;
         byte magic = args.magic;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
                 new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
@@ -1065,7 +1065,7 @@ public class MemoryRecordsTest {
     @Test
     public void testUnsupportedCompress() {
         BiFunction<Byte, CompressionType, MemoryRecords> builderBiFunction = (magic, compressionType) ->
-                 MemoryRecords.withRecords(magic, compressionType, new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
+                 MemoryRecords.withRecords(magic, CompressionConfig.of(compressionType).build(), new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
 
         Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1).forEach(magic -> {
             Exception e = assertThrows(IllegalArgumentException.class, () -> builderBiFunction.apply(magic, CompressionType.ZSTD));

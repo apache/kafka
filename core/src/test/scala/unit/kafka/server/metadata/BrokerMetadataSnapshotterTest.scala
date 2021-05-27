@@ -20,10 +20,9 @@ package kafka.server.metadata
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
-
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -60,9 +59,9 @@ class BrokerMetadataSnapshotterTest {
         MemoryPool.NONE,
         Time.SYSTEM,
         lastContainedLogTime,
-        CompressionType.NONE,
+        CompressionConfig.NONE,
         MetadataRecordSerde.INSTANCE
-      ).get();
+      ).get()
     }
 
     def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
