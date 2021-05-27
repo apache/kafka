@@ -248,7 +248,7 @@ topic1                         0          0</code></pre>
   For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
   <p>
   Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
-  <pre class="line-numbers"><code class="language-bash">> cat topics-to-move.json
+  <pre class="line-numbers"><code class="language-bash">&gt; cat topics-to-move.json
 {"topics": [{"topic": "foo1"},
             {"topic": "foo2"}],
 "version":1
