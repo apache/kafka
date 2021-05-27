@@ -1659,7 +1659,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
     // Create topic IDs for topics missing them if we are using topic IDs
-    // Otherwise, maintain what we have on the topicZNode
+    // Otherwise, maintain what we have in the topicZNode
     val updated = if (config.usesTopicId) {
       zkClient.setTopicIds(topicIdAssignments.filter(_.topicId.isEmpty), controllerContext.epochZkVersion)
     } else {
@@ -1668,6 +1668,7 @@ class KafkaController(val config: KafkaConfig,
 
     // Add topic IDs to controller context
     // If we don't have IBP 2.8, but are running 2.8 code, put any topic IDs from the ZNode in controller context
+    // This is to avoid losing topic IDs during operations like partition reassignments while the cluster is in a mixed state
     (updated ++ topicIdAssignments).foreach{ topicIdAssignment =>
       topicIdAssignment.topicId.foreach { topicId =>
         controllerContext.addTopicId(topicIdAssignment.topic, topicId)
