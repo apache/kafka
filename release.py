@@ -426,7 +426,7 @@ prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 and JDK11 compilers and libraries
+2. JDK8 and JDK15 compilers and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -511,7 +511,6 @@ if not rc:
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
-jdk11_env = get_jdk(prefs, 11)
 jdk15_env = get_jdk(prefs, 15)
 
 def select_gpg_key():
