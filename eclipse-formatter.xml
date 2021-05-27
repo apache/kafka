@@ -35,7 +35,6 @@
     <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
     <setting id="org.eclipse.jdt.core.formatter.continuation_indentation" value="1"/>
     <setting id="org.eclipse.jdt.core.formatter.continuation_indentation_for_array_initializer" value="1"/>
-    <setting id="org.eclipse.jdt.core.formatter.indent_empty_lines" value="false"/>
 
     <!-- Tabs -->
     <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
@@ -46,6 +45,7 @@
     <setting id="org.eclipse.jdt.core.formatter.alignment_for_parameters_in_constructor_declaration" value="18"/>
     <setting id="org.eclipse.jdt.core.formatter.alignment_for_parameters_in_method_declaration" value="18"/>
     <setting id="org.eclipse.jdt.core.formatter.insert_space_before_colon_in_case" value="do not insert"/>
+    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_colon_in_default" value="do not insert"/>
 
     <!-- Wrapping -->
     <setting id="org.eclipse.jdt.core.formatter.join_wrapped_lines" value="false"/>
@@ -53,8 +53,5 @@
 
     <!-- No trailing spaces -->
     <setting id="org.eclipse.jdt.core.formatter.indent_empty_lines" value="false"/>
-
-    <!-- Add a blank line at the end of the class -->
-    <setting id="org.eclipse.jdt.core.formatter.blank_lines_after_last_class_body_declaration" value="1"/>
 </profile>
 </profiles>
