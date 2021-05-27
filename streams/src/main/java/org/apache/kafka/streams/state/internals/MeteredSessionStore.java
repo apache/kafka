@@ -57,7 +57,6 @@ public class MeteredSessionStore<K, V>
     private Sensor removeSensor;
     private Sensor e2eLatencySensor;
     private InternalProcessorContext context;
-    private final String threadId;
     private String taskId;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -66,7 +65,6 @@ public class MeteredSessionStore<K, V>
                         final Serde<V> valueSerde,
                         final Time time) {
         super(inner);
-        threadId = Thread.currentThread().getName();
         this.metricsScope = metricsScope;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,7 +33,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -63,6 +63,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -227,57 +228,138 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
         innerStoreMock.init((StateStoreContext) context, store);
-        expectLastCall();
         replay(innerStoreMock);
         store.init((StateStoreContext) context, store);
 
+        // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("restore-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
         verify(innerStoreMock);
     }
 
     @Test
-    public void shouldRecordPutLatency() {
+    public void shouldPutToInnerStoreAndRecordPutMetrics() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
-        expectLastCall();
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.put("a", "a", context.timestamp());
 
+        // it suffices to verify one put metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("put-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
         verify(innerStoreMock);
     }
 
     @Test
-    public void shouldRecordFetchLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+    public void shouldFetchFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
         verify(innerStoreMock);
     }
 
     @Test
-    public void shouldRecordFetchRangeLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+    public void shouldFetchRangeFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldBackwardFetchFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.backwardFetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldBackwardFetchRangeFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.backwardFetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldFetchAllFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.fetchAll(1, 1)).andReturn(KeyValueIterators.emptyIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.fetchAll(ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(innerStoreMock);
+    }
+
+    @Test
+    public void shouldBackwardFetchAllFromInnerStoreAndRecordFetchMetrics() {
+        expect(innerStoreMock.backwardFetchAll(1, 1)).andReturn(KeyValueIterators.emptyIterator());
+        replay(innerStoreMock);
+
+        store.init((StateStoreContext) context, store);
+        store.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
+
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("fetch-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
         verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFlushLatency() {
         innerStoreMock.flush();
-        expectLastCall();
         replay(innerStoreMock);
 
         store.init((StateStoreContext) context, store);
         store.flush();
 
+        // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("flush-rate");
+        assertTrue((Double) metric.metricValue() > 0);
         verify(innerStoreMock);
     }
 
@@ -391,6 +473,10 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldThrowNullPointerOnbackwardFetchRangeIfToIsNull() {
         assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null, 0L, 1L));
+    }
+
+    private KafkaMetric metric(final String name) {
+        return metrics.metric(new MetricName(name, STORE_LEVEL_GROUP, "", tags));
     }
 
     private List<MetricName> storeMetrics() {

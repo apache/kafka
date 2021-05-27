@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -228,6 +229,19 @@ public class MeteredKeyValueStoreTest {
             STORE_TYPE,
             STORE_NAME
         )));
+    }
+
+    @Test
+    public void shouldRecordRestoreLatencyOnInit() {
+        inner.init((StateStoreContext) context, metered);
+
+        init();
+
+        // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("restore-rate");
+        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        verify(inner);
     }
 
     @Test

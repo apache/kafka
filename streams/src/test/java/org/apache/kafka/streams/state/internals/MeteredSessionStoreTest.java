@@ -242,6 +242,8 @@ public class MeteredSessionStoreTest {
 
         store.put(WINDOWED_KEY, VALUE);
 
+        // it suffices to verify one put metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("put-rate");
         assertTrue(((Double) metric.metricValue()) > 0);
         verify(innerStore);
@@ -259,6 +261,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -279,6 +283,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -296,6 +302,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -316,6 +324,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all put metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -330,6 +340,8 @@ public class MeteredSessionStoreTest {
 
         store.remove(new Windowed<>(KEY, new SessionWindow(0, 0)));
 
+        // it suffices to verify one remove metric since all remove metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("remove-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -347,6 +359,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -367,6 +381,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -384,6 +400,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -404,6 +422,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
@@ -412,6 +432,9 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldRecordRestoreTimeOnInit() {
         init();
+
+        // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("restore-rate");
         assertTrue((Double) metric.metricValue() > 0);
     }
