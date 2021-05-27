@@ -141,4 +141,6 @@ class PartitionMetadataFile(val file: File,
   def delete(): Unit = {
     Files.delete(file.toPath)
   }
+
+  override def toString: String = s"PartitionMetadataFile(path=$path)"
 }
