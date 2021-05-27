@@ -2277,8 +2277,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Optional<LogOffsetMetadata> highWatermarkOpt = quorum().highWatermark();
         if (!highWatermarkOpt.isPresent() || highWatermarkOpt.get().offset < snapshotId.offset) {
             throw new IllegalArgumentException("Trying to creating snapshot with invalid snapshotId: " + snapshotId + " whose offset is larger than the high-watermark: " +
-                    highWatermarkOpt + ". This may necessarily mean a bug in the caller, since the there should be a minimum " +
-                    "size of records between the latest snapshot and the high-watermark when creating snapshot");
+                    highWatermarkOpt);
         }
         int quorumEpoch = quorum().epoch();
         if (snapshotId.epoch > quorumEpoch) {
