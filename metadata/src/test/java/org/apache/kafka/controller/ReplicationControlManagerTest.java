@@ -207,24 +207,37 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testGlobalBrokerCountMetrics() throws Exception {
+    public void testBrokerCountMetrics() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
 
         registerBroker(0, ctx);
+
+        assertEquals(0, ctx.metrics.unfencedBrokerCount());
+        assertEquals(1, ctx.metrics.registeredBrokerCount());
+
         unfenceBroker(0, ctx);
-        assertEquals(1, ctx.metrics.globalBrokerCount());
+
+        assertEquals(1, ctx.metrics.unfencedBrokerCount());
+
         registerBroker(1, ctx);
         unfenceBroker(1, ctx);
-        assertEquals(2, ctx.metrics.globalBrokerCount());
+
+        assertEquals(2, ctx.metrics.registeredBrokerCount());
+
         registerBroker(2, ctx);
         unfenceBroker(2, ctx);
-        assertEquals(3, ctx.metrics.globalBrokerCount());
+
+        assertEquals(3, ctx.metrics.registeredBrokerCount());
+        assertEquals(3, ctx.metrics.unfencedBrokerCount());
+
         ControllerResult<Void> result = replicationControl.unregisterBroker(0);
         ctx.replay(result.records());
         result = replicationControl.unregisterBroker(2);
         ctx.replay(result.records());
-        assertEquals(1, ctx.metrics.globalBrokerCount());
+
+        assertEquals(1, ctx.metrics.registeredBrokerCount());
+        assertEquals(1, ctx.metrics.unfencedBrokerCount());
     }
 
     @Test

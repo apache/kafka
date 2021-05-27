@@ -30,8 +30,10 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
     private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
-    private final static MetricName GLOBAL_BROKER_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "GlobalBrokerCount", null);
+    private final static MetricName REGISTERED_BROKER_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "RegisteredBrokerCount", null);
+    private final static MetricName UNFENCED_BROKER_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "UnfencedBrokerCount", null);
     private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
         "kafka.controller", "KafkaController", "GlobalTopicCount", null);
     private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
@@ -42,13 +44,15 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount", null);
     
     private volatile boolean active;
-    private volatile int globalBrokerCount;
+    private volatile int registeredBrokerCount;
+    private volatile int unfencedBrokerCount;
     private volatile int globalTopicCount;
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
     private final Gauge<Integer> activeControllerCount;
-    private final Gauge<Integer> globalBrokerCountGauge;
+    private final Gauge<Integer> registeredBrokerCountGauge;
+    private final Gauge<Integer> unfencedBrokerCountGauge;
     private final Gauge<Integer> globalPartitionCountGauge;
     private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> offlinePartitionCountGauge;
@@ -58,6 +62,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
+        this.registeredBrokerCount = 0;
+        this.unfencedBrokerCount = 0;
         this.globalTopicCount = 0;
         this.globalPartitionCount = 0;
         this.offlinePartitionCount = 0;
@@ -70,10 +76,16 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.globalBrokerCountGauge = registry.newGauge(GLOBAL_BROKER_COUNT, new Gauge<Integer>() {
+        this.registeredBrokerCountGauge = registry.newGauge(REGISTERED_BROKER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return globalBrokerCount;
+                return registeredBrokerCount;
+            }
+        });
+        this.unfencedBrokerCountGauge = registry.newGauge(UNFENCED_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return unfencedBrokerCount;
             }
         });
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
@@ -123,13 +135,22 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void setGlobalBrokerCount(int brokerCount) {
-        this.globalBrokerCount = brokerCount;
+    public void setRegisteredBrokerCount(int brokerCount) {
+        this.registeredBrokerCount = brokerCount;
     }
 
     @Override
-    public int globalBrokerCount() {
-        return this.globalBrokerCount;
+    public int registeredBrokerCount() {
+        return this.registeredBrokerCount;
+    }
+
+    public void setUnfencedBrokerCount(int unfencedBrokerCount) {
+        this.unfencedBrokerCount = unfencedBrokerCount;
+    }
+
+    @Override
+    public int unfencedBrokerCount() {
+        return this.unfencedBrokerCount;
     }
 
     @Override
