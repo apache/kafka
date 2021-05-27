@@ -18,46 +18,90 @@
 package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 
-public class MockMetaLogManagerListener implements MetaLogListener {
+public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessageAndVersion> {
     public static final String COMMIT = "COMMIT";
     public static final String LAST_COMMITTED_OFFSET = "LAST_COMMITTED_OFFSET";
     public static final String NEW_LEADER = "NEW_LEADER";
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
+    public static final String SNAPSHOT = "SNAPSHOT";
 
+    private final int nodeId;
     private final List<String> serializedEvents = new ArrayList<>();
+    private LeaderAndEpoch leaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
+
+    public MockMetaLogManagerListener(int nodeId) {
+        this.nodeId = nodeId;
+    }
 
     @Override
-    public synchronized void handleCommits(long lastCommittedOffset, List<ApiMessage> messages) {
-        for (ApiMessage message : messages) {
+    public synchronized void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
+        try {
+            while (reader.hasNext()) {
+                Batch<ApiMessageAndVersion> batch = reader.next();
+                long lastCommittedOffset = batch.lastOffset();
+
+                for (ApiMessageAndVersion messageAndVersion : batch.records()) {
+                    ApiMessage message = messageAndVersion.message();
+                    StringBuilder bld = new StringBuilder();
+                    bld.append(COMMIT).append(" ").append(message.toString());
+                    serializedEvents.add(bld.toString());
+                }
+                StringBuilder bld = new StringBuilder();
+                bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
+                serializedEvents.add(bld.toString());
+            }
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Override
+    public synchronized void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+        long lastCommittedOffset = reader.snapshotId().offset - 1;
+        try {
+            while (reader.hasNext()) {
+                Batch<ApiMessageAndVersion> batch = reader.next();
+
+                for (ApiMessageAndVersion messageAndVersion : batch.records()) {
+                    ApiMessage message = messageAndVersion.message();
+                    StringBuilder bld = new StringBuilder();
+                    bld.append(SNAPSHOT).append(" ").append(message.toString());
+                    serializedEvents.add(bld.toString());
+                }
+                StringBuilder bld = new StringBuilder();
+                bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
+                serializedEvents.add(bld.toString());
+            }
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Override
+    public synchronized void handleLeaderChange(LeaderAndEpoch newLeaderAndEpoch) {
+        LeaderAndEpoch oldLeaderAndEpoch = this.leaderAndEpoch;
+        this.leaderAndEpoch = newLeaderAndEpoch;
+
+        if (newLeaderAndEpoch.isLeader(nodeId)) {
             StringBuilder bld = new StringBuilder();
-            bld.append(COMMIT).append(" ").append(message.toString());
+            bld.append(NEW_LEADER).append(" ").
+                append(nodeId).append(" ").append(newLeaderAndEpoch.epoch());
             serializedEvents.add(bld.toString());
-        }
-        StringBuilder bld = new StringBuilder();
-        bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
-        serializedEvents.add(bld.toString());
-    }
-
-    @Override
-    public void handleNewLeader(MetaLogLeader leader) {
-        StringBuilder bld = new StringBuilder();
-        bld.append(NEW_LEADER).append(" ").
-            append(leader.nodeId()).append(" ").append(leader.epoch());
-        synchronized (this) {
-            serializedEvents.add(bld.toString());
-        }
-    }
-
-    @Override
-    public void handleRenounce(long epoch) {
-        StringBuilder bld = new StringBuilder();
-        bld.append(RENOUNCE).append(" ").append(epoch);
-        synchronized (this) {
+        } else if (oldLeaderAndEpoch.isLeader(nodeId)) {
+            StringBuilder bld = new StringBuilder();
+            bld.append(RENOUNCE).append(" ").append(newLeaderAndEpoch.epoch());
             serializedEvents.add(bld.toString());
         }
     }

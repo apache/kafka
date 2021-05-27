@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.KafkaException;
@@ -52,6 +53,7 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +65,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -304,9 +304,7 @@ public class StreamThread extends Thread {
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong cacheResizeSize;
-    private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
-
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -382,7 +380,7 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            StreamThread.processingMode(config)
+            processingMode(config)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -430,7 +428,7 @@ public class StreamThread extends Thread {
 
         EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
 
-        EXACTLY_ONCE_BETA("EXACTLY_ONCE_BETA");
+        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
 
         public final String name;
 
@@ -439,20 +437,28 @@ public class StreamThread extends Thread {
         }
     }
 
+    // Note: the below two methods are static methods here instead of methods on StreamsConfig because it's a public API
+
+    @SuppressWarnings("deprecation")
     public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            return StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+        } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+            return StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
         } else {
             return StreamThread.ProcessingMode.AT_LEAST_ONCE;
         }
     }
 
     public static boolean eosEnabled(final StreamsConfig config) {
-        final ProcessingMode processingMode = processingMode(config);
+        return eosEnabled(processingMode(config));
+    }
+
+    public static boolean eosEnabled(final ProcessingMode processingMode) {
         return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_BETA;
+            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     public StreamThread(final Time time,
@@ -494,7 +500,6 @@ public class StreamThread extends Thread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
-        this.processingMode = processingMode(config);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -567,6 +572,7 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
+    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
         subscribeConsumer();
 
@@ -601,9 +607,9 @@ public class StreamThread extends Thread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                              "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
                           StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          EXACTLY_ONCE_BETA);
+                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
@@ -896,6 +902,14 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
+        for (final TopicPartition topicPartition: records.partitions()) {
+            records
+                .records(topicPartition)
+                .stream()
+                .max(Comparator.comparing(ConsumerRecord::offset))
+                .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
+        }
+
         log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 
         pollSensor.record(pollLatency, now);
@@ -1127,7 +1141,7 @@ public class StreamThread extends Thread {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),
@@ -1137,7 +1151,7 @@ public class StreamThread extends Thread {
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),

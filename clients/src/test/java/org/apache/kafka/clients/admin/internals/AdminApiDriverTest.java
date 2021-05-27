@@ -678,14 +678,14 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public AbstractRequest.Builder<?> buildRequest(Integer brokerId, Set<K> keys) {
+        public AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys) {
             // The request is just a placeholder in these tests
             assertTrue(expectedRequests.containsKey(keys), "Unexpected fulfillment request for keys " + keys);
             return new MetadataRequest.Builder(Collections.emptyList(), false);
         }
 
         @Override
-        public ApiResult<K, V> handleResponse(Integer brokerId, Set<K> keys, AbstractResponse response) {
+        public ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response) {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );

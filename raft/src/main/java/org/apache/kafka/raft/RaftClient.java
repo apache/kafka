@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
-public interface RaftClient<T> extends Closeable {
+public interface RaftClient<T> extends AutoCloseable {
 
     interface Listener<T> {
         /**
          * Callback which is invoked for all records committed to the log.
-         * It is the responsibility of the caller to invoke {@link BatchReader#close()}
+         * It is the responsibility of this implementation to invoke {@link BatchReader#close()}
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
@@ -45,33 +45,47 @@ public interface RaftClient<T> extends Closeable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Invoked after this node has become a leader. This is only called after
-         * all commits up to the start of the leader's epoch have been sent to
-         * {@link #handleCommit(BatchReader)}.
+         * Callback which is invoked when the Listener needs to load a snapshot.
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
          *
-         * After becoming a leader, the client is eligible to write to the log
-         * using {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}.
+         * When handling this call, the implementation must assume that all previous calls
+         * to {@link #handleCommit} contain invalid data.
          *
-         * @param epoch the claimed leader epoch
+         * @param reader snapshot reader instance which must be iterated and closed
          */
-        default void handleClaim(int epoch) {}
+        void handleSnapshot(SnapshotReader<T> reader);
 
         /**
-         * Invoked after a leader has stepped down. This callback may or may not
-         * fire before the next leader has been elected.
+         * Called on any change to leadership. This includes both when a leader is elected and
+         * when a leader steps down or fails.
          *
-         * @param epoch the epoch that the leader is resigning from
+         * If this node is the leader, then the notification of leadership will be delayed until
+         * the implementation of this interface has caughup to the high-watermark through calls to
+         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         *
+         * If this node is not the leader, then this method will be called as soon as possible. In
+         * this case the leader may or may not be known for the current epoch.
+         *
+         * Subsequent calls to this method will expose a monotonically increasing epoch. For a
+         * given epoch the leader may be unknown, {@code leader.leaderId} is {@code OptionalInt#empty},
+         * or known {@code leader.leaderId} is {@code OptionalInt#of}. Once a leader is known for
+         * a given epoch it will remain the leader for that epoch. In other words, the implementation of
+         * method should expect this method will be called at most twice for each epoch. Once if the
+         * epoch changed but the leader is not known and once when the leader is known for the current
+         * epoch.
+         *
+         * @param leader the current leader and epoch
          */
-        default void handleResign(int epoch) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
+
+        default void beginShutdown() {}
     }
 
     /**
-     * Initialize the client.
-     * This should only be called once on startup.
-     *
-     * @throws IOException For any IO errors during initialization
+     * Initialize the client. This should only be called once on startup.
      */
-    void initialize() throws IOException;
+    void initialize();
 
     /**
      * Register a listener to get commit/leader notifications.
@@ -85,6 +99,14 @@ public interface RaftClient<T> extends Closeable {
      * @return the current {@link LeaderAndEpoch}
      */
     LeaderAndEpoch leaderAndEpoch();
+
+    /**
+     * Get local nodeId if one is defined. This may be absent when the client is used
+     * as an anonymous observer, as in the case of the metadata shell.
+     *
+     * @return optional node id
+     */
+    OptionalInt nodeId();
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -148,6 +170,16 @@ public interface RaftClient<T> extends Closeable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
+     * Resign the leadership. The leader will give up its leadership in the current epoch,
+     * and a new election will be held. Note that nothing prevents this leader from getting
+     * reelected.
+     *
+     * @param epoch the epoch to resign from. If this does not match the current epoch, this
+     *              call will be ignored.
+     */
+    void resign(int epoch);
+
+    /**
      * Create a writable snapshot file for a given offset and epoch.
      *
      * The RaftClient assumes that the snapshot return will contain the records up to but
@@ -157,5 +189,5 @@ public interface RaftClient<T> extends Closeable {
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
 }

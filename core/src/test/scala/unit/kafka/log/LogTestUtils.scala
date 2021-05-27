@@ -119,7 +119,7 @@ object LogTestUtils {
     None
   }
 
-  private def rawSegment(logDir: File, baseOffset: Long): FileRecords =
+  def rawSegment(logDir: File, baseOffset: Long): FileRecords =
     FileRecords.open(Log.logFile(logDir, baseOffset))
 
   /**
@@ -185,8 +185,8 @@ object LogTestUtils {
       assertFalse(file.getName.endsWith(Log.CleanedFileSuffix), "Unexpected .cleaned file after recovery")
       assertFalse(file.getName.endsWith(Log.SwapFileSuffix), "Unexpected .swap file after recovery")
     }
-    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
-    assertFalse(LogTest.hasOffsetOverflow(recoveredLog))
+    assertEquals(expectedKeys, keysInLog(recoveredLog))
+    assertFalse(hasOffsetOverflow(recoveredLog))
     recoveredLog
   }
 
@@ -214,10 +214,10 @@ object LogTestUtils {
   }
 
   def readLog(log: Log,
-                      startOffset: Long,
-                      maxLength: Int,
-                      isolation: FetchIsolation = FetchLogEnd,
-                      minOneMessage: Boolean = true): FetchDataInfo = {
+             startOffset: Long,
+             maxLength: Int,
+             isolation: FetchIsolation = FetchLogEnd,
+             minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }
 

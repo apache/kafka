@@ -26,12 +26,12 @@ import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
-import org.junit.jupiter.api.Test
-import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, ObjectSerializationCache}
+import org.apache.kafka.common.protocol.{ApiKeys, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.EasyMock.createNiceMock
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -42,7 +42,6 @@ class RequestConvertToJsonTest {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val cache = new ObjectSerializationCache
       val message = key match {
         case ApiKeys.DESCRIBE_ACLS =>
           ApiMessageType.fromApiKey(key.id).newRequest().asInstanceOf[DescribeAclsRequestData]
@@ -50,12 +49,9 @@ class RequestConvertToJsonTest {
         case _ =>
           ApiMessageType.fromApiKey(key.id).newRequest()
       }
-      val messageSize = message.size(cache, version)
-      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
-      message.write(bytes, cache, version)
-      bytes.flip()
 
-      val req = AbstractRequest.parseRequest(key, version, bytes.buffer).request
+      val bytes = MessageUtil.toByteBuffer(message, version)
+      val req = AbstractRequest.parseRequest(key, version, bytes).request
       try {
         RequestConvertToJson.request(req)
       } catch {
@@ -70,13 +66,9 @@ class RequestConvertToJsonTest {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val cache = new ObjectSerializationCache
       val message = ApiMessageType.fromApiKey(key.id).newResponse()
-      val messageSize = message.size(cache, version)
-      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
-      message.write(bytes, cache, version)
-      bytes.flip()
-      val res = AbstractResponse.parseResponse(key, bytes.buffer, version)
+      val bytes = MessageUtil.toByteBuffer(message, version)
+      val res = AbstractResponse.parseResponse(key, bytes, version)
       try {
         RequestConvertToJson.response(res, version)
       } catch {
@@ -171,8 +163,7 @@ class RequestConvertToJsonTest {
   }
 
   def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
-      req)
+    val buffer = req.serializeWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1))
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,

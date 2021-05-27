@@ -97,7 +97,7 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
         final KafkaClientSupplier kafkaClientSupplier;
         if (streamsProperties.containsKey("test.future.metadata")) {
@@ -330,8 +330,8 @@ public class StreamsUpgradeTest {
             buf.putInt(version); // used version
             buf.putInt(version); // supported version
             LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId);
-            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks);
-            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, activeTasks, version);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks, version);
             LegacySubscriptionInfoSerde.encodeUserEndPoint(buf, endPointBytes);
 
             buf.rewind();

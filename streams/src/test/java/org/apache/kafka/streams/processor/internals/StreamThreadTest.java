@@ -193,7 +193,7 @@ public class StreamThreadTest {
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE : StreamsConfig.AT_LEAST_ONCE)
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE)
         ));
     }
 
@@ -257,7 +257,7 @@ public class StreamThreadTest {
                              final ThreadStateTransitionValidator oldState) {
             ++numChanges;
             if (this.newState != null) {
-                if (this.newState != oldState) {
+                if (!this.newState.equals(oldState)) {
                     throw new RuntimeException("State mismatch " + oldState + " different from " + this.newState);
                 }
             }
@@ -992,11 +992,14 @@ public class StreamThreadTest {
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() {
+    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosAlphaEnabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        final Properties props = configProps(true);
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(props), true);
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
@@ -1023,6 +1026,42 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertEquals(thread.activeTasks().size(), clientSupplier.producers.size());
+        assertSame(clientSupplier.consumer, thread.mainConsumer());
+        assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
+    }
+
+    @Test
+    public void shouldInjectProducerPerThreadUsingClientSupplierOnCreateIfEosV2Enabled() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final Properties props = configProps(true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(props), true);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        assignedPartitions.add(t1p2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
+        mockConsumer.assign(assignedPartitions);
+        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        beginOffsets.put(t1p1, 0L);
+        beginOffsets.put(t1p2, 0L);
+        mockConsumer.updateBeginningOffsets(beginOffsets);
+        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions));
+
+        thread.runOnce();
+
+        assertThat(clientSupplier.producers.size(), is(1));
         assertSame(clientSupplier.consumer, thread.mainConsumer());
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
     }
@@ -1349,7 +1388,7 @@ public class StreamThreadTest {
         consumer.assign(new HashSet<>(assignedPartitions));
 
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 0, new byte[0], new byte[0]));
-        mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1);
+        mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         thread.runOnce();
         assertThat(producer.history().size(), equalTo(1));
 
@@ -1496,6 +1535,7 @@ public class StreamThreadTest {
         assertThat(processed.get(), is(false));
         thread.runOnce();
         assertThat(processed.get(), is(true));
+        thread.taskManager().shutdown(true);
     }
 
     @Test
@@ -1642,7 +1682,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1, Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(metadata.standbyTasks().isEmpty());
 
         assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
@@ -1695,8 +1735,10 @@ public class StreamThreadTest {
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
+        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1, Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(threadMetadata.activeTasks().isEmpty());
+
+        thread.taskManager().shutdown(true);
     }
 
     @SuppressWarnings("unchecked")
@@ -1777,6 +1819,8 @@ public class StreamThreadTest {
 
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
+
+        thread.taskManager().shutdown(true);
     }
 
     @Test

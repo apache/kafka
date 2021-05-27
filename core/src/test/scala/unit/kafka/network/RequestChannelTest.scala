@@ -32,8 +32,8 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.AlterConfigsRequest._
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
@@ -190,8 +190,7 @@ class RequestChannelTest {
   }
 
   def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
-      req)
+    val buffer = req.serializeWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1))
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,

@@ -52,7 +52,7 @@ import java.util.Random;
 
 public class GaussianFlushGenerator implements FlushGenerator {
     private final int messagesPerFlushAverage;
-    private final int messagesPerFlushDeviation;
+    private final double messagesPerFlushDeviation;
 
     private final Random random = new Random();
 
@@ -61,7 +61,7 @@ public class GaussianFlushGenerator implements FlushGenerator {
 
     @JsonCreator
     public GaussianFlushGenerator(@JsonProperty("messagesPerFlushAverage") int messagesPerFlushAverage,
-                                  @JsonProperty("messagesPerFlushDeviation") int messagesPerFlushDeviation) {
+                                  @JsonProperty("messagesPerFlushDeviation") double messagesPerFlushDeviation) {
         this.messagesPerFlushAverage = messagesPerFlushAverage;
         this.messagesPerFlushDeviation = messagesPerFlushDeviation;
         calculateFlushSize();
@@ -73,7 +73,7 @@ public class GaussianFlushGenerator implements FlushGenerator {
     }
 
     @JsonProperty
-    public long messagesPerFlushDeviation() {
+    public double messagesPerFlushDeviation() {
         return messagesPerFlushDeviation;
     }
 

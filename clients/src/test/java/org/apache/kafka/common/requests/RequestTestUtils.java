@@ -48,10 +48,6 @@ public class RequestTestUtils {
         return buffer;
     }
 
-    public static ByteBuffer serializeRequestWithHeader(RequestHeader header, AbstractRequest request) {
-        return RequestUtils.serialize(header.data(), header.headerVersion(), request.data(), request.version());
-    }
-
     public static ByteBuffer serializeResponseWithHeader(AbstractResponse response, short version, int correlationId) {
         return response.serializeWithHeader(new ResponseHeader(correlationId,
             response.apiKey().responseHeaderVersion(version)), version);
