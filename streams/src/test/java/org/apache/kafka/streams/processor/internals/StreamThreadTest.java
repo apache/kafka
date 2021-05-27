@@ -152,7 +152,7 @@ public class StreamThreadTest {
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
-    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
+    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true, false);
     private final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 

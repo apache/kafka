@@ -418,7 +418,7 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
 
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, new TopologyMetadata(internalTopologyBuilder));
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, internalTopologyBuilder.hasPersistentStores(), internalTopologyBuilder.hasNamedTopology());
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,

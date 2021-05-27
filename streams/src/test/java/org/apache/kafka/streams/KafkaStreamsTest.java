@@ -99,14 +99,12 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.capture;
 import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -133,8 +131,6 @@ public class KafkaStreamsTest {
 
     private Properties props;
 
-    @Mock
-    private TopologyMetadata topologyMetadata;
     @Mock
     private StateDirectory stateDirectory;
     @Mock
@@ -938,10 +934,6 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldCleanupOldStateDirs() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.table("topic", Materialized.as("store"));
-        final Topology topology = builder.build();
-
         PowerMock.mockStatic(Executors.class);
         final ScheduledExecutorService cleanupSchedule = EasyMock.mock(ScheduledExecutorService.class);
         EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
@@ -954,22 +946,21 @@ public class KafkaStreamsTest {
             EasyMock.eq(TimeUnit.MILLISECONDS)
         )).andReturn(null);
         EasyMock.expect(cleanupSchedule.shutdownNow()).andReturn(null);
-
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(topology.internalTopologyBuilder);
-        PowerMock.expectNew(TopologyMetadata.class, topology.internalTopologyBuilder).andReturn(topologyMetadata);
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(topologyMetadata)
+            EasyMock.eq(true),
+            EasyMock.eq(false)
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
         stateDirectory.close();
         PowerMock.replayAll(Executors.class, cleanupSchedule, stateDirectory);
 
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("topic", Materialized.as("store"));
 
-        try (final KafkaStreams streams = new KafkaStreams(topology, props, supplier, time)) {
-            assertThat(topologyMetadata.hasPersistentStores(), is(true));
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
         }
 
@@ -1127,19 +1118,17 @@ public class KafkaStreamsTest {
 
     private void startStreamsAndCheckDirExists(final Topology topology,
                                                final boolean shouldFilesExist) throws Exception {
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(topology.internalTopologyBuilder);
-        PowerMock.expectNew(TopologyMetadata.class, topology.internalTopologyBuilder).andReturn(topologyMetadata);
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
-            EasyMock.eq(topologyMetadata)
+            EasyMock.eq(shouldFilesExist),
+            EasyMock.eq(false)
         ).andReturn(stateDirectory);
         EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
 
         PowerMock.replayAll();
 
         new KafkaStreams(topology, props, supplier, time);
-        assertThat(topologyMetadata.hasPersistentStores(), equalTo(shouldFilesExist));
 
         PowerMock.verifyAll();
     }

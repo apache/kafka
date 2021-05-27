@@ -44,9 +44,6 @@ import org.slf4j.LoggerFactory;
 // TODO KAFKA-12648:
 //  1) synchronize on these methods instead of individual InternalTopologyBuilder methods,
 //  where applicable (ie not used elsewhere in potentially thread-unsafe way)
-//  2) refactor TTD to use TopologyMetadata
-//  3) move implementation of getter-like methods to this class, refactor so InternalTopologyBuilder is just the builder
-//  4) make sure all task-level logging includes NamedTopology
 
 public class TopologyMetadata {
     private final Logger log = LoggerFactory.getLogger(TopologyMetadata.class);

@@ -293,11 +293,11 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldNotAddRegexTopicsToOffsetResetLists() {
         final Pattern topicPattern = Pattern.compile("topic-\\d");
-        final String topicName = "topic-5";
+        final String topic = "topic-5";
 
         builder.stream(topicPattern, consumed);
 
-        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topicName), equalTo(OffsetResetStrategy.NONE));
+        assertThat(builder.internalTopologyBuilder.offsetResetStrategy(topic), equalTo(OffsetResetStrategy.NONE));
     }
 
     @Test

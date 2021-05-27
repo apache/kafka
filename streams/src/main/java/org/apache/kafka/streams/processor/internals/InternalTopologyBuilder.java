@@ -1945,6 +1945,10 @@ public class InternalTopologyBuilder {
         private final TreeSet<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
         private final String namedTopology;
 
+        public TopologyDescription() {
+            this(null);
+        }
+
         public TopologyDescription(final String namedTopology) {
             this.namedTopology = namedTopology;
         }

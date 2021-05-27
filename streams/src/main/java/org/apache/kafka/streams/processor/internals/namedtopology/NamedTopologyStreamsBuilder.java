@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.errors.TopologyException;
 
 import java.util.Properties;
 
@@ -28,8 +27,6 @@ public class NamedTopologyStreamsBuilder extends StreamsBuilder {
     /**
      * @param topologyName              any string representing your NamedTopology, all characters allowed except for '_'
      * @throws IllegalArgumentException if the name contains the character '_'
-     * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics
-     *
      */
     public NamedTopologyStreamsBuilder(final String topologyName) {
         super();

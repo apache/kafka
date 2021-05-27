@@ -20,6 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 
 import java.util.HashMap;
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
  *       - interactive queries (IQ)
+ *       - TopologyTestDriver (TTD)
  */
 @Evolving
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
@@ -53,6 +55,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         super(new TopologyMetadata(), new StreamsConfig(props), clientSupplier);
     }
 
+    /**
+     * @throws IllegalArgumentException if any of the named topologies have the same name
+     * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics or pattern
+     */
     public KafkaStreamsNamedTopologyWrapper(final List<NamedTopology> topologies, final Properties props, final KafkaClientSupplier clientSupplier) {
         super(
             new TopologyMetadata(topologies.stream().collect(Collectors.toMap(

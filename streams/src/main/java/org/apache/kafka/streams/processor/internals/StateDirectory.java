@@ -64,7 +64,6 @@ public class StateDirectory {
 
     private static final Pattern TASK_DIR_PATH_NAME = Pattern.compile("\\d+_\\d+");
     private static final Pattern NAMED_TOPOLOGY_DIR_PATH_NAME = Pattern.compile("__.+__"); // named topology dirs follow '__Topology-Name__'
-
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
     static final String LOCK_FILE_NAME = ".lock";
 
@@ -100,16 +99,6 @@ public class StateDirectory {
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
 
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores) {
-        // TODO KAFKA-12648: Explicitly set hasNamedTopology in each test and remove this constructor
-        // Will be done in Pt. 2 as we want some of these integration tests to use named topologies
-        this(config, time, hasPersistentStores, false);
-    }
-
-    public StateDirectory(final StreamsConfig config, final Time time, final TopologyMetadata topologyMetadata) {
-        this(config, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
-    }
-
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
@@ -123,7 +112,7 @@ public class StateDirectory {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created when hasPersistentStores is enabled.
      */
-    StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
+    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
         this.time = time;
         this.hasPersistentStores = hasPersistentStores;
         this.hasNamedTopologies = hasNamedTopologies;
@@ -235,7 +224,6 @@ public class StateDirectory {
     public File getOrCreateDirectoryForTask(final TaskId taskId) {
         final File taskParentDir = getTaskDirectoryParentName(taskId);
         final File taskDir = new File(taskParentDir, StateManagerUtil.toTaskDirString(taskId));
-
         if (hasPersistentStores && !taskDir.exists()) {
             synchronized (taskDirCreationLock) {
                 // to avoid a race condition, we need to check again if the directory does not exist:
@@ -453,7 +441,6 @@ public class StateDirectory {
                 }
             }
         }
-
         // Ok to ignore returned exception as it should be swallowed
         maybeCleanEmptyNamedTopologyDirs(true);
     }
