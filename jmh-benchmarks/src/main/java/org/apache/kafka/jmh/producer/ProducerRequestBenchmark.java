@@ -19,7 +19,7 @@ package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
@@ -55,7 +55,7 @@ public class ProducerRequestBenchmark {
             .setName("tp")
             .setPartitionData(IntStream.range(0, NUMBER_OF_PARTITIONS).mapToObj(partitionIndex -> new ProduceRequestData.PartitionProduceData()
                 .setIndex(partitionIndex)
-                .setRecords(MemoryRecords.withRecords(CompressionType.NONE, IntStream.range(0, NUMBER_OF_RECORDS)
+                .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE, IntStream.range(0, NUMBER_OF_RECORDS)
                     .mapToObj(recordIndex -> new SimpleRecord(100, "hello0".getBytes(StandardCharsets.UTF_8)))
                     .collect(Collectors.toList())
                     .toArray(new SimpleRecord[0]))))

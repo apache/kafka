@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.ClientQuotaEntity
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
@@ -312,7 +312,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
           .setName(topic)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+            .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE,
               new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))
         .iterator))
       .setAcks((-1).toShort)

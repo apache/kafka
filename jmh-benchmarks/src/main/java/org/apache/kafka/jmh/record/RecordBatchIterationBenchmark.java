@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.record;
 
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -42,8 +43,8 @@ public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
     private CompressionType compressionType = CompressionType.NONE;
 
     @Override
-    CompressionType compressionType() {
-        return compressionType;
+    CompressionConfig compressionConfig() {
+        return CompressionConfig.of(this.compressionType).build();
     }
 
     @Benchmark

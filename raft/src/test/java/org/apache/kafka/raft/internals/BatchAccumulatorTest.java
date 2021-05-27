@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
@@ -61,7 +62,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             serde
         );
     }
@@ -441,7 +442,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             serde
         );
 

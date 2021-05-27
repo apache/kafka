@@ -26,6 +26,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.record.CompressionConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Collections;
@@ -521,6 +523,28 @@ public class ProducerConfig extends AbstractConfig {
         if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         return userConfiguredTransactions || idempotenceEnabled;
+    }
+
+    public CompressionConfig getCompressionConfig(CompressionType compressionType) {
+        switch (compressionType) {
+            case NONE:
+                return CompressionConfig.NONE;
+            case GZIP:
+                return CompressionConfig.gzip().build();
+            case SNAPPY:
+                return CompressionConfig.snappy().build();
+            case LZ4:
+                return CompressionConfig.lz4().build();
+            case ZSTD:
+                return CompressionConfig.zstd().build();
+            default:
+                throw new IllegalArgumentException("Unknown compression type: " + compressionType.name);
+        }
+    }
+
+    public CompressionConfig getCompressionConfig() {
+        CompressionType compressionType = CompressionType.forName(getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+        return getCompressionConfig(compressionType);
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {

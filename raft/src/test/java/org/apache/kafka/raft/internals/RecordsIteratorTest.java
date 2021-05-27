@@ -30,6 +30,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -70,7 +72,7 @@ public final class RecordsIteratorTest {
     ) {
         List<TestBatch<String>> batches = createBatches(seed);
 
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        MemoryRecords memRecords = buildRecords(CompressionConfig.of(compressionType).build(), batches);
         testIterator(batches, memRecords);
     }
 
@@ -81,7 +83,7 @@ public final class RecordsIteratorTest {
     ) throws IOException {
         List<TestBatch<String>> batches = createBatches(seed);
 
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        MemoryRecords memRecords = buildRecords(CompressionConfig.of(compressionType).build(), batches);
         FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
         fileRecords.append(memRecords);
 
@@ -161,7 +163,7 @@ public final class RecordsIteratorTest {
     }
 
     public static MemoryRecords buildRecords(
-        CompressionType compressionType,
+        CompressionConfig compressionConfig,
         List<TestBatch<String>> batches
     ) {
         ByteBuffer buffer = ByteBuffer.allocate(102400);
@@ -170,7 +172,7 @@ public final class RecordsIteratorTest {
             BatchBuilder<String> builder = new BatchBuilder<>(
                 buffer,
                 STRING_SERDE,
-                compressionType,
+                compressionConfig,
                 batch.baseOffset,
                 batch.appendTimestamp,
                 false,
