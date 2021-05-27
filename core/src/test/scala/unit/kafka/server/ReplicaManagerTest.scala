@@ -1075,7 +1075,6 @@ class ReplicaManagerTest {
   private def initializeLogAndTopicId(replicaManager: ReplicaManager, topicPartition: TopicPartition, topicId: Uuid): Unit = {
     val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
     val log = replicaManager.logManager.getOrCreateLog(topicPartition, false, false, Some(topicId))
-    log.topicId = Some(topicId)
     partition.log = Some(log)
   }
 
@@ -1517,7 +1516,7 @@ class ReplicaManagerTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
       logDirFailureChannel = mockLogDirFailureChannel,
-      topicId = topicId,
+      _topicId = topicId,
       keepPartitionMetadataFile = true) {
 
       override def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {

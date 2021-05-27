@@ -284,7 +284,7 @@ class LogLoaderTest {
       new Log(logDir, logConfig, interceptedLogSegments, offsets.logStartOffset, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, mockTime.scheduler, brokerTopicStats, mockTime,
         LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, topicId = None, keepPartitionMetadataFile = true)
+        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true)
     }
 
     // Retain snapshots for the last 2 segments
@@ -366,7 +366,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -500,7 +500,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -561,7 +561,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
@@ -624,7 +624,7 @@ class LogLoaderTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
       logDirFailureChannel = logDirFailureChannel,
-      topicId = None,
+      _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
