@@ -278,6 +278,7 @@ class ReplicaAlterLogDirsThreadTest {
       fetchMaxBytes = ArgumentMatchers.eq(config.replicaFetchResponseMaxBytes),
       hardMaxBytesLimit = ArgumentMatchers.eq(false),
       fetchInfos = ArgumentMatchers.eq(Seq(topicPartition -> requestData)),
+      topicIds = ArgumentMatchers.eq(topicIds.asJava),
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
       isolationLevel = ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
@@ -719,6 +720,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
+      EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject())
@@ -960,6 +962,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyInt(),
       EasyMock.anyInt(),
       EasyMock.anyInt(),
+      EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),

@@ -1196,6 +1196,19 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchSessionIdError() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR, 0));
+        consumerClient.poll(time.timer(0));
+        assertEquals(0, fetcher.fetchedRecords().size());
+        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
+    @Test
     public void testFetchFencedLeaderEpoch() {
         buildFetcher();
         assignFromUser(singleton(tp0));

@@ -699,25 +699,29 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponseData.PartitionData)]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+    val sessionTopicIds = mutable.Map[String, Uuid]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-        fetchContext.foreachPartition { (topicPartition, data) =>
+        fetchContext.foreachPartition { (topicPartition, topicId, data) =>
+          sessionTopicIds.put(topicPartition.topic(), topicId)
           if (!metadataCache.contains(topicPartition))
             erroneous += topicPartition -> FetchResponse.partitionResponse(topicPartition.partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
           else
             interesting += (topicPartition -> data)
         }
       } else {
-        fetchContext.foreachPartition { (part, _) =>
+        fetchContext.foreachPartition { (part, topicId, _) =>
+          sessionTopicIds.put(part.topic(), topicId)
           erroneous += part -> FetchResponse.partitionResponse(part.partition, Errors.TOPIC_AUTHORIZATION_FAILED)
         }
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
       val partitionDatas = new mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]
-      fetchContext.foreachPartition { (topicPartition, partitionData) =>
+      fetchContext.foreachPartition { (topicPartition, topicId, partitionData) =>
         partitionDatas += topicPartition -> partitionData
+        sessionTopicIds.put(topicPartition.topic(), topicId)
       }
       val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topic)
       partitionDatas.foreach { case (topicPartition, data) =>
@@ -851,7 +855,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-          FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData, topicIds)
+          FetchResponse.of(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData, sessionTopicIds.asJava)
         // record the bytes out metrics only when the response is being sent
         response.data().responses().forEach { topicResponse =>
           topicResponse.partitions().forEach { data =>
@@ -875,7 +879,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, topicIds)
+        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, sessionTopicIds.asJava)
         quotas.leader.record(responseSize)
         val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
         trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
@@ -941,6 +945,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchMaxBytes,
         versionId <= 2,
         interesting,
+        sessionTopicIds.asJava,
         replicationQuota(fetchRequest),
         processResponseCallback,
         fetchRequest.isolationLevel,

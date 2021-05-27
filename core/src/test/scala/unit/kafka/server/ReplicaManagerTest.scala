@@ -612,7 +612,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, Uuid.randomUuid()),
+        Collections.singletonMap(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
@@ -649,6 +649,7 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tp -> validFetchPartitionData),
+        topicIds = topicIds.asJava,
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -672,6 +673,7 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
+        topicIds = topicIds.asJava,
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -681,6 +683,144 @@ class ReplicaManagerTest {
       assertTrue(successfulFetch.isDefined)
       assertEquals(0L, followerReplica.logStartOffset)
       assertEquals(0L, followerReplica.logEndOffset)
+
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testFetchMessagesWithInconsistentTopicId(): Unit = {
+    val maxFetchBytes = 1024 * 1024
+    val aliveBrokersIds = Seq(0, 1)
+    val leaderEpoch = 5
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val replicas = aliveBrokersIds.toList.map(Int.box).asJava
+
+      // Broker 0 becomes leader of the partition
+      val leaderAndIsrPartitionState = new LeaderAndIsrPartitionState()
+        .setTopicName(topic)
+        .setPartitionIndex(0)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(replicas)
+        .setZkVersion(0)
+        .setReplicas(replicas)
+        .setIsNew(true)
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(leaderAndIsrPartitionState).asJava,
+        Collections.singletonMap(topic, topicId),
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+      assertEquals(Errors.NONE, leaderAndIsrResponse.error)
+
+      assertEquals(Some(topicId), replicaManager.getPartitionOrException(tp).topicId)
+
+      // We receive one valid request from the follower and replica state is updated
+      var successfulFetch: Option[FetchPartitionData] = None
+      def callback(response: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+        successfulFetch = response.headOption.filter(_._1 == tp).map(_._2)
+      }
+
+      val validFetchPartitionData = new FetchRequest.PartitionData(0L, 0L, maxFetchBytes,
+        Optional.of(leaderEpoch))
+
+      // Fetch messages simulating a different ID than the one in the log.
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchMaxBytes = maxFetchBytes,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp -> validFetchPartitionData),
+        topicIds = Collections.singletonMap(topic, Uuid.randomUuid()),
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = None
+      )
+      assertTrue(successfulFetch.isDefined)
+      assertEquals(Errors.INCONSISTENT_TOPIC_ID, successfulFetch.get.error)
+
+      // Simulate where the fetch request did not use topic IDs
+      // Fetch messages simulating an ID in the log.
+      // We should not see topic ID errors.
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchMaxBytes = maxFetchBytes,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp -> validFetchPartitionData),
+        topicIds = Collections.emptyMap(),
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = None
+      )
+      assertTrue(successfulFetch.isDefined)
+      assertEquals(Errors.NONE, successfulFetch.get.error)
+
+      // Next create a topic without a topic ID written in the log.
+      val tp2 = new TopicPartition("noIdTopic", 0)
+
+      // Broker 0 becomes leader of the partition
+      val leaderAndIsrPartitionState2 = new LeaderAndIsrPartitionState()
+        .setTopicName("noIdTopic")
+        .setPartitionIndex(0)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(replicas)
+        .setZkVersion(0)
+        .setReplicas(replicas)
+        .setIsNew(true)
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(leaderAndIsrPartitionState2).asJava,
+        Collections.emptyMap(),
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
+      assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
+
+      assertEquals(None, replicaManager.getPartitionOrException(tp2).topicId)
+
+      // Fetch messages simulating the request containing a topic ID. We should not have an error.
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchMaxBytes = maxFetchBytes,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp -> validFetchPartitionData),
+        topicIds = Collections.singletonMap("noIdTopic", Uuid.randomUuid()),
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = None
+      )
+      assertTrue(successfulFetch.isDefined)
+      assertEquals(Errors.NONE, successfulFetch.get.error)
+
+      // Fetch messages simulating the request not containing a topic ID. We should not have an error.
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = 1,
+        fetchMinBytes = 1,
+        fetchMaxBytes = maxFetchBytes,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp -> validFetchPartitionData),
+        topicIds = Collections.emptyMap(),
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = None
+      )
+      assertTrue(successfulFetch.isDefined)
+      assertEquals(Errors.NONE, successfulFetch.get.error)
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -773,6 +913,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(
           tp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
+        topicIds = topicIds,
         quota = UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
@@ -993,7 +1134,6 @@ class ReplicaManagerTest {
   @Test
   def testFollowerFetchWithDefaultSelectorNoForcedHwPropagation(): Unit = {
     val topicPartition = 0
-    val topicId = Uuid.randomUuid()
     val followerBrokerId = 0
     val leaderBrokerId = 1
     val leaderEpoch = 1
@@ -1451,6 +1591,7 @@ class ReplicaManagerTest {
       fetchMaxBytes = 100,
       hardMaxBytesLimit = false,
       fetchInfos = Seq(topicPartition -> partitionData),
+      topicIds = topicIds.asJava,
       quota = UnboundedQuota,
       isolationLevel = IsolationLevel.READ_UNCOMMITTED,
       responseCallback = callback,
@@ -1741,6 +1882,7 @@ class ReplicaManagerTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       fetchInfos = Seq(partition -> partitionData),
+      topicIds = topicIds.asJava,
       quota = UnboundedQuota,
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel,

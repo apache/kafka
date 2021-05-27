@@ -2103,12 +2103,12 @@ class KafkaApisTest {
     expect(replicaManager.getLogConfig(EasyMock.eq(tp))).andReturn(None)
 
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[util.Map[String, Uuid]](), anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(7)
+        val callback = getCurrentArguments.apply(8)
           .asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
@@ -2667,12 +2667,12 @@ class KafkaApisTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[util.Map[String, Uuid]](), anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
+        val callback = getCurrentArguments.apply(8).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
         callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
           None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
       }

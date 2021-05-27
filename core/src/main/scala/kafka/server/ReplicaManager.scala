@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.util
 import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -1018,6 +1019,7 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchMaxBytes: Int,
                     hardMaxBytesLimit: Boolean,
                     fetchInfos: Seq[(TopicPartition, PartitionData)],
+                    topicIds: util.Map[String, Uuid],
                     quota: ReplicaQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
@@ -1041,6 +1043,7 @@ class ReplicaManager(val config: KafkaConfig,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
+        topicIds = topicIds,
         quota = quota,
         clientMetadata = clientMetadata)
       if (isFromFollower) updateFollowerFetchState(replicaId, result)
@@ -1087,7 +1090,7 @@ class ReplicaManager(val config: KafkaConfig,
         })
       }
       val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit,
-        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
+        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, topicIds, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
         responseCallback)
 
@@ -1110,9 +1113,19 @@ class ReplicaManager(val config: KafkaConfig,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
+                       topicIds: util.Map[String, Uuid],
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
+
+    def topicIdFromSession(topicName: String): Option[Uuid] = {
+      val topicId = topicIds.get(topicName)
+      // if invalid topic ID return None
+      if (topicId == null || topicId == Uuid.ZERO_UUID)
+        None
+      else
+        Some(topicId)
+    }
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -1128,6 +1141,10 @@ class ReplicaManager(val config: KafkaConfig,
 
         val partition = getPartitionOrException(tp)
         val fetchTimeMs = time.milliseconds
+
+        // Check if topic ID from the fetch request/session matches the ID in the log
+        if (!hasConsistentTopicId(topicIdFromSession(partition.topic), partition.topicId))
+          throw new InconsistentTopicIdException("Topic ID in the fetch session did not match the topic ID in the log.")
 
         // If we are the leader, determine the preferred read-replica
         val preferredReadReplica = clientMetadata.flatMap(
@@ -1192,7 +1209,8 @@ class ReplicaManager(val config: KafkaConfig,
                  _: FencedLeaderEpochException |
                  _: ReplicaNotAvailableException |
                  _: KafkaStorageException |
-                 _: OffsetOutOfRangeException) =>
+                 _: OffsetOutOfRangeException |
+                 _: InconsistentTopicIdException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             divergingEpoch = None,
             highWatermark = Log.UnknownOffset,
@@ -1483,14 +1501,15 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Checks if the topic ID provided in the LeaderAndIsr request is consistent with the topic ID in the log.
+   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
+   * When using this method to handle a Fetch request, the topic ID may have been provided by an earlier request.
    *
    * If the request had an invalid topic ID (null or zero), then we assume that topic IDs are not supported.
    * The topic ID was not inconsistent, so return true.
    * If the log does not exist or the topic ID is not yet set, logTopicIdOpt will be None.
    * In both cases, the ID is not inconsistent so return true.
    *
-   * @param requestTopicIdOpt the topic ID from the LeaderAndIsr request if it exists
+   * @param requestTopicIdOpt the topic ID from the request if it exists
    * @param logTopicIdOpt the topic ID in the log if the log and the topic ID exist
    * @return true if the request topic id is consistent, false otherwise
    */

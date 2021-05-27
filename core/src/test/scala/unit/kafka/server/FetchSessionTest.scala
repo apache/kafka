@@ -165,7 +165,7 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachPartition((tp, _, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
@@ -259,13 +259,13 @@ class FetchSessionTest {
 
     def cachedLeaderEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.currentLeaderEpoch)
+      context.foreachPartition((tp, _, data) => mapBuilder += tp -> data.currentLeaderEpoch)
       mapBuilder.result()
     }
 
     def cachedLastFetchedEpochs(context: FetchContext): Map[TopicPartition, Optional[Integer]] = {
       val mapBuilder = Map.newBuilder[TopicPartition, Optional[Integer]]
-      context.foreachPartition((tp, data) => mapBuilder += tp -> data.lastFetchedEpoch)
+      context.foreachPartition((tp, _, data) => mapBuilder += tp -> data.lastFetchedEpoch)
       mapBuilder.result()
     }
 
@@ -381,9 +381,10 @@ class FetchSessionTest {
     )
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
-    context2.foreachPartition((topicPart, data) => {
+    context2.foreachPartition((topicPart, topicId, data) => {
       val entry = reqData2Iter.next()
       assertEquals(entry.getKey, topicPart)
+      assertEquals(topicIds.get(entry.getKey.topic()), topicId)
       assertEquals(entry.getValue, data)
     })
     assertEquals(0, context2.getFetchOffset(new TopicPartition("foo", 0)).get)
@@ -446,9 +447,10 @@ class FetchSessionTest {
     )
     assertEquals(classOf[IncrementalFetchContext], context5.getClass)
     val reqData5Iter = reqData2.entrySet().iterator()
-    context5.foreachPartition((topicPart, data) => {
+    context5.foreachPartition((topicPart, topicId, data) => {
       val entry = reqData5Iter.next()
       assertEquals(entry.getKey, topicPart)
+      assertEquals(topicIds.get(entry.getKey.topic()), topicId)
       assertEquals(entry.getValue, data)
     })
     assertEquals(10, context5.getFetchOffset(new TopicPartition("foo", 1)).get)
@@ -584,7 +586,7 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("foo", 1), new TopicPartition("bar", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachPartition((topicPart, _) => {
+    context2.foreachPartition((topicPart, _, _) => {
       assertEquals(reqData2Iter.next(), topicPart)
     })
     assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
@@ -829,7 +831,8 @@ class FetchSessionTest {
       context2.updateAndGenerateResponseData(respData2).error())
   }
 
-  // This test simulates a session where the topic ID changes broker side (the one handling the request) -- as though the topic is deleted and recreated.
+  // This test simulates a session where the topic ID changes broker side (the one handling the request) in both the metadata cache and the log
+  // -- as though the topic is deleted and recreated.
   @Test
   def testFetchSessionUpdateTopicIdsBrokerSide(): Unit = {
     val time = new MockTime()
@@ -887,23 +890,22 @@ class FetchSessionTest {
       topicIdsFooChanged
     )
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
-    // We only check if the topic ID is consistent when we return a response, so create a dummy response.
-    // This response will be replaced by UNKNOWN_TOPIC_ID.
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    // Likely if the topic ID is different in the broker, it will be different in the log. Simulate the log check finding an inconsistent ID.
     respData2.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
       .setPartitionIndex(0)
       .setHighWatermark(-1)
       .setLastStableOffset(-1)
       .setLogStartOffset(-1)
-      .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
+      .setErrorCode(Errors.INCONSISTENT_TOPIC_ID.code))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
 
     assertEquals(Errors.NONE, resp2.error)
     assertTrue(resp2.sessionId > 0)
     val responseData2 = resp2.responseData(topicNames, request2.version)
     assertEquals(1, responseData2.size())
-    // We should get UNKNOWN_TOPIC_ID error since the topic ID on the partition did not match the ID on the broker.
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code(), responseData2.get(new TopicPartition("foo", 0)).errorCode())
+    // We should still get INCONSISTENT_TOPIC_ID error here since the session will send a response with the old ID.
+    assertEquals(Errors.INCONSISTENT_TOPIC_ID.code(), responseData2.get(new TopicPartition("foo", 0)).errorCode())
   }
 
   @Test
@@ -1453,7 +1455,7 @@ class FetchSessionTest {
 
   private def assertPartitionsOrder(context: FetchContext, partitions: Seq[TopicPartition]): Unit = {
     val partitionsInContext = ArrayBuffer.empty[TopicPartition]
-    context.foreachPartition { (tp, _) =>
+    context.foreachPartition { (tp, _, _) =>
       partitionsInContext += tp
     }
     assertEquals(partitions, partitionsInContext.toSeq)
