@@ -41,7 +41,8 @@ public class MirrorConnectorConfigTest {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
         Map<String, String> props = config.taskConfigForTopicPartitions(topicPartitions);
         MirrorTaskConfig taskConfig = new MirrorTaskConfig(props);
-        assertEquals(taskConfig.taskTopicPartitions(), new HashSet<>(topicPartitions));
+        assertEquals(taskConfig.taskTopicPartitions(), new HashSet<>(topicPartitions),
+                "Setting topic property configuration failed");
     }
 
     @Test
@@ -50,29 +51,36 @@ public class MirrorConnectorConfigTest {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
         Map<String, String> props = config.taskConfigForConsumerGroups(groups);
         MirrorTaskConfig taskConfig = new MirrorTaskConfig(props);
-        assertEquals(taskConfig.taskConsumerGroups(), new HashSet<>(groups));
+        assertEquals(taskConfig.taskConsumerGroups(), new HashSet<>(groups),
+                "Setting consumer groups property configuration failed");
     }
 
     @Test
     public void testTopicMatching() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("topics", "topic1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"));
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"),
+                "topic1 replication property configuration failed");
+        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"),
+                "topic2 replication property configuration failed");
     }
 
     @Test
     public void testGroupMatching() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("groups", "group1"));
-        assertTrue(config.groupFilter().shouldReplicateGroup("group1"));
-        assertFalse(config.groupFilter().shouldReplicateGroup("group2"));
+        assertTrue(config.groupFilter().shouldReplicateGroup("group1"),
+                "topic1 group matching property configuration failed");
+        assertFalse(config.groupFilter().shouldReplicateGroup("group2"),
+                "topic2 group matching property configuration failed");
     }
 
     @Test
     public void testConfigPropertyMatching() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(
             makeProps("config.properties.exclude", "prop2"));
-        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
-        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
+        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"),
+                "config.properties.exclude incorrectly excluded prop1");
+        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"),
+                "config.properties.exclude incorrectly included prop2");
     }
 
     @Test
@@ -92,24 +100,26 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testNoTopics() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("topics", ""));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic1"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"));
-        assertFalse(config.topicFilter().shouldReplicateTopic(""));
+        assertFalse(config.topicFilter().shouldReplicateTopic("topic1"), "topic1 shouldn't exist");
+        assertFalse(config.topicFilter().shouldReplicateTopic("topic2"), "topic2 shouldn't exist");
+        assertFalse(config.topicFilter().shouldReplicateTopic(""), "Empty topic shouldn't exist");
     }
 
     @Test
     public void testAllTopics() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("topics", ".*"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"));
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"),
+                "topic1 created from wildcard should exist");
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"),
+                "topic2 created from wildcard should exist");
     }
 
     @Test
     public void testListOfTopics() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("topics", "topic1, topic2"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"));
-        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"));
-        assertFalse(config.topicFilter().shouldReplicateTopic("topic3"));
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic1"), "topic1 created from list should exist");
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic2"), "topic2 created from list should exist");
+        assertFalse(config.topicFilter().shouldReplicateTopic("topic3"), "topic3 created from list should exist");
     }
 
     @Test
@@ -156,7 +166,8 @@ public class MirrorConnectorConfigTest {
         connectorConsumerProps = config.sourceConsumerConfig();
         expectedConsumerProps.put("auto.offset.reset", "latest");
         expectedConsumerProps.remove("max.poll.interval.ms");
-        assertEquals(expectedConsumerProps, connectorConsumerProps);
+        assertEquals(expectedConsumerProps, connectorConsumerProps,
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + " source consumer config not matching");
     }
 
     @Test
@@ -172,7 +183,8 @@ public class MirrorConnectorConfigTest {
         expectedConsumerProps.put("enable.auto.commit", "false");
         expectedConsumerProps.put("auto.offset.reset", "latest");
         expectedConsumerProps.put("max.poll.interval.ms", "100");
-        assertEquals(expectedConsumerProps, connectorConsumerProps);
+        assertEquals(expectedConsumerProps, connectorConsumerProps,
+                prefix + " source consumer config not matching");
     }
 
     @Test
@@ -184,7 +196,8 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
         Map<String, Object> expectedProducerProps = new HashMap<>();
         expectedProducerProps.put("acks", "1");
-        assertEquals(expectedProducerProps, connectorProducerProps);
+        assertEquals(expectedProducerProps, connectorProducerProps,
+                MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX  + " source product config not matching");
     }
 
     @Test
@@ -195,7 +208,8 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
         Map<String, Object> expectedProducerProps = new HashMap<>();
         expectedProducerProps.put("acks", "1");
-        assertEquals(expectedProducerProps, connectorProducerProps);
+        assertEquals(expectedProducerProps, connectorProducerProps,
+                prefix + " source producer config not matching");
     }
 
     @Test
@@ -208,7 +222,8 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorAdminProps = config.sourceAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
-        assertEquals(expectedAdminProps, connectorAdminProps);
+        assertEquals(expectedAdminProps, connectorAdminProps,
+                MirrorConnectorConfig.ADMIN_CLIENT_PREFIX + " source connector admin props not matching");
     }
 
     @Test
@@ -219,7 +234,7 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorAdminProps = config.sourceAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
-        assertEquals(expectedAdminProps, connectorAdminProps);
+        assertEquals(expectedAdminProps, connectorAdminProps, prefix + " source connector admin props not matching");
     }
 
     @Test
@@ -232,7 +247,8 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorAdminProps = config.targetAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
-        assertEquals(expectedAdminProps, connectorAdminProps);
+        assertEquals(expectedAdminProps, connectorAdminProps,
+                MirrorConnectorConfig.ADMIN_CLIENT_PREFIX + " target connector admin props not matching");
     }
 
     @Test
@@ -243,7 +259,7 @@ public class MirrorConnectorConfigTest {
         Map<String, Object> connectorAdminProps = config.targetAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();
         expectedAdminProps.put("connections.max.idle.ms", "10000");
-        assertEquals(expectedAdminProps, connectorAdminProps);
+        assertEquals(expectedAdminProps, connectorAdminProps, prefix + " source connector admin props not matching");
     }
 
 }

@@ -5773,7 +5773,7 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> {
                 time.sleep(1);
                 return disconnectFuture.isDone();
-            }, 1, 5000, () -> "Timed out waiting for expected disconnect");
+            }, 5000, 1, () -> "Timed out waiting for expected disconnect");
             assertFalse(disconnectFuture.isCompletedExceptionally());
             assertFalse(result.future.isDone());
             TestUtils.waitForCondition(env.kafkaClient()::hasInFlightRequests,
