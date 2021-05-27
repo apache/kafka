@@ -31,6 +31,10 @@ public class Action {
     private final boolean logIfAllowed;
     private final boolean logIfDenied;
 
+    /**
+     * @param operation non-null operation being performed
+     * @param resourcePattern non-null resource pattern on which this action is being performed
+     */
     public Action(AclOperation operation,
                   ResourcePattern resourcePattern,
                   int resourceReferenceCount,
@@ -44,14 +48,15 @@ public class Action {
     }
 
     /**
-     * Resource on which action is being performed. never null
+     * @return a non-null resource pattern on which this action is being performed
      */
     public ResourcePattern resourcePattern() {
         return resourcePattern;
     }
 
     /**
-     * Operation being performed. never null
+     *
+     * @return a non-null operation being performed
      */
     public AclOperation operation() {
         return operation;
