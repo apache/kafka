@@ -18,10 +18,8 @@
 package kafka.log
 
 import java.io.{File, IOException}
-import java.lang.{Long => JLong}
 import java.nio.file.Files
 import java.text.NumberFormat
-import java.util.Map.{Entry => JEntry}
 import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.TimeUnit
@@ -1181,10 +1179,10 @@ class Log(@volatile private var _dir: File,
       // We create the local variables to avoid race conditions with updates to the log.
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
-      var segmentEntryOpt = segments.floorEntry(startOffset)
+      var segmentOpt = segments.floorSegment(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > endOffset || segmentEntryOpt.isEmpty || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentOpt.isEmpty || startOffset < logStartOffset)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments in the range $logStartOffset to $endOffset.")
 
@@ -1202,12 +1200,10 @@ class Log(@volatile private var _dir: File,
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log
-        var done = segmentEntryOpt.isEmpty
         var fetchDataInfo: FetchDataInfo = null
-        while (!done) {
-          val segmentEntry = segmentEntryOpt.get
-          val baseOffset = segmentEntry.getKey
-          val segment = segmentEntry.getValue
+        while (fetchDataInfo == null && segmentOpt.isDefined) {
+          val segment = segmentOpt.get
+          val baseOffset = segment.baseOffset
 
           val maxPosition =
             // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
@@ -1217,10 +1213,8 @@ class Log(@volatile private var _dir: File,
           fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
             if (includeAbortedTxns)
-              fetchDataInfo = addAbortedTransactions(startOffset, segmentEntry, fetchDataInfo)
-          } else segmentEntryOpt = segments.higherEntry(baseOffset)
-
-          done = fetchDataInfo != null || segmentEntryOpt.isEmpty
+              fetchDataInfo = addAbortedTransactions(startOffset, segment, fetchDataInfo)
+          } else segmentOpt = segments.higherSegment(baseOffset)
         }
 
         if (fetchDataInfo != null) fetchDataInfo
@@ -1235,25 +1229,25 @@ class Log(@volatile private var _dir: File,
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
-    val segmentEntryOpt = segments.floorEntry(startOffset)
+    val segmentEntry = segments.floorSegment(startOffset)
     val allAbortedTxns = ListBuffer.empty[AbortedTxn]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
-    collectAbortedTransactions(logStartOffset, upperBoundOffset, segmentEntryOpt.get, accumulator)
+    segmentEntry.foreach(segment => collectAbortedTransactions(logStartOffset, upperBoundOffset, segment, accumulator))
     allAbortedTxns.toList
   }
 
-  private def addAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
+  private def addAbortedTransactions(startOffset: Long, segment: LogSegment,
                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
     val startOffsetPosition = OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    val upperBoundOffset = segmentEntry.getValue.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
-      segments.higherSegment(segmentEntry.getKey).map(_.baseOffset).getOrElse(logEndOffset)
+    val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+      segments.higherSegment(segment.baseOffset).map(_.baseOffset).getOrElse(logEndOffset)
     }
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
-    collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry, accumulator)
+    collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator)
 
     FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
       records = fetchInfo.records,
@@ -1262,17 +1256,17 @@ class Log(@volatile private var _dir: File,
   }
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
-                                         startingSegmentEntry: JEntry[JLong, LogSegment],
+                                         startingSegment: LogSegment,
                                          accumulator: List[AbortedTxn] => Unit): Unit = {
-    var segmentEntryOpt = Option(startingSegmentEntry)
+    val higherSegments = segments.higherSegments(startingSegment.baseOffset).iterator
+    var segmentEntryOpt = Option(startingSegment)
     while (segmentEntryOpt.isDefined) {
-      val baseOffset = segmentEntryOpt.get.getKey
-      val segment = segmentEntryOpt.get.getValue
+      val segment = segmentEntryOpt.get
       val searchResult = segment.collectAbortedTxns(startOffset, upperBoundOffset)
       accumulator(searchResult.abortedTransactions)
       if (searchResult.isComplete)
         return
-      segmentEntryOpt = segments.higherEntry(baseOffset)
+      segmentEntryOpt = nextOption(higherSegments)
     }
   }
 
@@ -1438,23 +1432,23 @@ class Log(@volatile private var _dir: File,
       Seq.empty
     } else {
       val deletable = ArrayBuffer.empty[LogSegment]
-      var segmentEntryOpt = segments.firstEntry
-      while (segmentEntryOpt.isDefined) {
-        val segmentEntry = segmentEntryOpt.get
-        val segment = segmentEntry.getValue
-        val nextSegmentEntryOpt = segments.higherEntry(segmentEntry.getKey)
-        val (nextSegment, upperBoundOffset, isLastSegmentAndEmpty) =
-          nextSegmentEntryOpt.map {
-            entry => (entry.getValue, entry.getValue.baseOffset, false)
+      val segmentsIterator = segments.values.iterator
+      var segmentOpt = nextOption(segmentsIterator)
+      while (segmentOpt.isDefined) {
+        val segment = segmentOpt.get
+        val nextSegmentOpt = nextOption(segmentsIterator)
+        val (upperBoundOffset: Long, isLastSegmentAndEmpty: Boolean) =
+          nextSegmentOpt.map {
+            nextSegment => (nextSegment.baseOffset, false)
           }.getOrElse {
-            (null, logEndOffset, segment.size == 0)
+            (logEndOffset, segment.size == 0)
           }
 
-        if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
+        if (highWatermark >= upperBoundOffset && predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
           deletable += segment
-          segmentEntryOpt = nextSegmentEntryOpt
+          segmentOpt = nextSegmentOpt
         } else {
-          segmentEntryOpt = Option.empty
+          segmentOpt = Option.empty
         }
       }
       deletable
@@ -2450,11 +2444,11 @@ object Log extends Logging {
                                         time: Time,
                                         reloadFromCleanShutdown: Boolean,
                                         logPrefix: String): Unit = {
-    val allSegments = segments.values
     val offsetsToSnapshot =
-      if (allSegments.nonEmpty) {
-        val nextLatestSegmentBaseOffset = segments.lowerSegment(allSegments.last.baseOffset).map(_.baseOffset)
-        Seq(nextLatestSegmentBaseOffset, Some(allSegments.last.baseOffset), Some(lastOffset))
+      if (segments.nonEmpty) {
+        val lastSegmentBaseOffset = segments.lastSegment.get.baseOffset
+        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).map(_.baseOffset)
+        Seq(nextLatestSegmentBaseOffset, Some(lastSegmentBaseOffset), Some(lastOffset))
       } else {
         Seq(Some(lastOffset))
       }
@@ -2608,6 +2602,21 @@ object Log extends Logging {
         }
         throw e
     }
+  }
+
+  /**
+   * Wraps the value of iterator.next() in an option.
+   * Note: this facility is a part of the Iterator class starting from scala v2.13.
+   *
+   * @param iterator
+   * @tparam T the type of object held within the iterator
+   * @return Some(iterator.next) if a next element exists, None otherwise.
+   */
+  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
+    if (iterator.hasNext)
+      Some(iterator.next())
+    else
+      None
   }
 }
 
