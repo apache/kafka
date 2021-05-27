@@ -54,6 +54,7 @@
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
+    <allow pkg="org.apache.kafka.server.common" />
   </subpackage>
 
   <subpackage name="tools">

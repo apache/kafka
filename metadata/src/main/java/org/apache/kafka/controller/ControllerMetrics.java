@@ -26,4 +26,20 @@ public interface ControllerMetrics {
     void updateEventQueueTime(long durationMs);
 
     void updateEventQueueProcessingTime(long durationMs);
+
+    void setGlobalTopicsCount(int topicCount);
+
+    int globalTopicsCount();
+
+    void setGlobalPartitionCount(int partitionCount);
+
+    int globalPartitionCount();
+
+    void setOfflinePartitionCount(int offlinePartitions);
+
+    int offlinePartitionCount();
+
+    void setPreferredReplicaImbalanceCount(int replicaImbalances);
+
+    int preferredReplicaImbalanceCount();
 }

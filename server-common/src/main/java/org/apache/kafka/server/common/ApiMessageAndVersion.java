@@ -15,44 +15,48 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metalog;
+package org.apache.kafka.server.common;
+
+import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.Objects;
 
 /**
- * The current leader of the MetaLog.
+ * An ApiMessage and an associated version.
  */
-public class MetaLogLeader {
-    private final int nodeId;
-    private final long epoch;
+public class ApiMessageAndVersion {
+    private final ApiMessage message;
+    private final short version;
 
-    public MetaLogLeader(int nodeId, long epoch) {
-        this.nodeId = nodeId;
-        this.epoch = epoch;
+    public ApiMessageAndVersion(ApiMessage message, short version) {
+        this.message = message;
+        this.version = version;
     }
 
-    public int nodeId() {
-        return nodeId;
+    public ApiMessage message() {
+        return message;
     }
 
-    public long epoch() {
-        return epoch;
+    public short version() {
+        return version;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof MetaLogLeader)) return false;
-        MetaLogLeader other = (MetaLogLeader) o;
-        return other.nodeId == nodeId && other.epoch == epoch;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApiMessageAndVersion that = (ApiMessageAndVersion) o;
+        return version == that.version &&
+            Objects.equals(message, that.message);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(nodeId, epoch);
+        return Objects.hash(message, version);
     }
 
     @Override
     public String toString() {
-        return "MetaLogLeader(nodeId=" + nodeId + ", epoch=" + epoch + ")";
+        return "ApiMessageAndVersion(" + message + " at version " + version + ")";
     }
 }

@@ -77,7 +77,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    val pidGenerator: ProducerIdGenerator = EasyMock.createNiceMock(classOf[ProducerIdGenerator])
+    val pidGenerator: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
     EasyMock.expect(pidGenerator.generateProducerId())
       .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()

@@ -34,7 +34,7 @@ import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -601,7 +601,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
 
     if (!validateOnly) {
-      info(s"Reconfiguring $reconfigurable, updated configs: $updatedConfigNames custom configs: $newCustomConfigs")
+      info(s"Reconfiguring $reconfigurable, updated configs: $updatedConfigNames " +
+           s"custom configs: ${ConfigUtils.configMapToRedactedString(newCustomConfigs, KafkaConfig.configDef)}")
       reconfigurable.reconfigure(newConfigs)
     }
   }

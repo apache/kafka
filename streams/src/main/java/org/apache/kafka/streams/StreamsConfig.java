@@ -58,6 +58,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.parseType;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -144,6 +145,7 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
@@ -394,15 +396,22 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
     private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default.windowed.value.serde.inner} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
     private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
+
+    public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
+    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the \" +\n" +
+        "        \"<code>org.apache.kafka.common.serialization.Serde</code> interface.. Note that setting this config in KafkaStreams application would result " +
+        "in an error as it is meant to be used only from Plain consumer client.";
 
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
@@ -501,8 +510,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code replication.factor} */
     @SuppressWarnings("WeakerAccess")
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
-    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application." +
-        " If your broker cluster is on version 2.4 or newer, you can set -1 to use the broker default replication factor.";
+    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application."
+        + " The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer";
 
     /** {@code request.timeout.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -608,11 +617,6 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LIST,
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-            .define(REPLICATION_FACTOR_CONFIG,
-                    Type.INT,
-                    1,
-                    Importance.HIGH,
-                    REPLICATION_FACTOR_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -648,6 +652,26 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
+            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
@@ -663,16 +687,6 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC)
-            .define(DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -700,6 +714,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(REPLICATION_FACTOR_CONFIG,
+                    Type.INT,
+                    -1,
+                    Importance.MEDIUM,
+                    REPLICATION_FACTOR_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
@@ -858,6 +877,11 @@ public class StreamsConfig extends AbstractConfig {
                        UPGRADE_FROM_23),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
+            .define(WINDOWED_INNER_CLASS_SERDE,
+                Type.STRING,
+                null,
+                Importance.LOW,
+                WINDOWED_INNER_CLASS_SERDE_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
                     24 * 60 * 60 * 1000L,
@@ -885,7 +909,7 @@ public class StreamsConfig extends AbstractConfig {
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -917,6 +941,21 @@ public class StreamsConfig extends AbstractConfig {
 
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
+
+        // Private API used to disable the fix on left/outer joins (https://issues.apache.org/jira/browse/KAFKA-10847)
+        public static final String ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__enable.kstreams.outer.join.spurious.results.fix__";
+
+        public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Boolean) {
+                return (boolean) value;
+            } else if (value instanceof String) {
+                return Boolean.parseBoolean((String) value);
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                return defaultValue;
+            }
+        }
     }
 
     /**
@@ -1041,6 +1080,26 @@ public class StreamsConfig extends AbstractConfig {
         if (props.containsKey(RETRIES_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
         }
+
+        if (eosEnabled) {
+            verifyEOSTransactionTimeoutCompatibility();
+        }
+    }
+
+    private void verifyEOSTransactionTimeoutCompatibility() {
+        final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
+        final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
+        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
+            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+
+        if (transactionTimeout < commitInterval) {
+            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+                "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
+                "caused by long commit interval. Consider reconfiguring commit interval to match " +
+                "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
+                "commit interval by tuning `producer.transaction.timeout.ms` config.",
+                transactionTimeout, commitInterval));
+        }
     }
 
     @Override
@@ -1141,23 +1200,6 @@ public class StreamsConfig extends AbstractConfig {
                 throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
             }
         }
-    }
-
-    /**
-     * Get the configs to the {@link KafkaConsumer consumer}.
-     * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
-     * except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG} where we always use the non-prefixed
-     * version as we only support reading/writing from/to the same Kafka Cluster.
-     *
-     * @param groupId      consumer groupId
-     * @param clientId     clientId
-     * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
     }
 
     /**

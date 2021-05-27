@@ -14,24 +14,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.metadata;
+package org.apache.kafka.server.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
+/**
+ * This is an implementation of {@code RecordSerde} with {@link ApiMessageAndVersion} but implementors need to implement
+ * {@link #apiMessageFor(short)} to return a {@code ApiMessage} instance for the given {@code apiKey}.
+ *
+ * This can be used as the underlying serialization mechanism for records defined with {@link ApiMessage}s.
+ * <p></p>
+ * Serialization format for the given {@code ApiMessageAndVersion} is below:
+ * <p></p>
+ * <pre>
+ *     [data_frame_version header message]
+ *     header => [api_key version]
+ *
+ *     data_frame_version   : This is the header version, current value is 0. Header includes both api_key and version.
+ *     api_key              : apiKey of {@code ApiMessageAndVersion} object.
+ *     version              : version of {@code ApiMessageAndVersion} object.
+ *     message              : serialized message of {@code ApiMessageAndVersion} object.
+ * </pre>
+ */
+public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageAndVersion> {
     private static final short DEFAULT_FRAME_VERSION = 0;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
     @Override
-    public int recordSize(ApiMessageAndVersion data, ObjectSerializationCache serializationCache) {
+    public int recordSize(ApiMessageAndVersion data,
+                          ObjectSerializationCache serializationCache) {
         int size = DEFAULT_FRAME_VERSION_SIZE;
         size += ByteUtils.sizeOfUnsignedVarint(data.message().apiKey());
         size += ByteUtils.sizeOfUnsignedVarint(data.version());
@@ -40,7 +57,9 @@ public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
     }
 
     @Override
-    public void write(ApiMessageAndVersion data, ObjectSerializationCache serializationCache, Writable out) {
+    public void write(ApiMessageAndVersion data,
+                      ObjectSerializationCache serializationCache,
+                      Writable out) {
         out.writeUnsignedVarint(DEFAULT_FRAME_VERSION);
         out.writeUnsignedVarint(data.message().apiKey());
         out.writeUnsignedVarint(data.version());
@@ -48,19 +67,26 @@ public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
     }
 
     @Override
-    public ApiMessageAndVersion read(Readable input, int size) {
+    public ApiMessageAndVersion read(Readable input,
+                                     int size) {
         short frameVersion = (short) input.readUnsignedVarint();
         if (frameVersion != DEFAULT_FRAME_VERSION) {
             throw new SerializationException("Could not deserialize metadata record due to unknown frame version "
-                + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
+                                                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }
 
         short apiKey = (short) input.readUnsignedVarint();
         short version = (short) input.readUnsignedVarint();
-        MetadataRecordType recordType = MetadataRecordType.fromId(apiKey);
-        ApiMessage record = recordType.newMetadataRecord();
+        ApiMessage record = apiMessageFor(apiKey);
         record.read(input, version);
         return new ApiMessageAndVersion(record, version);
     }
 
+    /**
+     * Return {@code ApiMessage} instance for the given {@code apiKey}. This is used while deserializing the bytes
+     * payload into the respective {@code ApiMessage} in {@link #read(Readable, int)} method.
+     *
+     * @param apiKey apiKey for which a {@code ApiMessage} to be created.
+     */
+    public abstract ApiMessage apiMessageFor(short apiKey);
 }

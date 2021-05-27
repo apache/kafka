@@ -74,10 +74,9 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
     private class KTablePassThroughValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

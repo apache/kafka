@@ -242,6 +242,7 @@ public class KStreamKTableJoinTest {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            driver.close();
             driver = new TopologyTestDriver(builder.build(), props);
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
@@ -272,7 +273,7 @@ public class KStreamKTableJoinTest {
 
     private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-
+        driver.close();
         driver = new TopologyTestDriver(builder.build(), props);
         final TestInputTopic<Integer, String> inputTopic =
             driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());

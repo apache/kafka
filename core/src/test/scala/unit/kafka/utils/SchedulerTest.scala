@@ -123,8 +123,8 @@ class SchedulerTest {
     val topicPartition = Log.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
-    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
+    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -141,7 +141,7 @@ class SchedulerTest {
       producerStateManager))
     val log = new Log(logDir, logConfig, segments = segments, logStartOffset = offsets.logStartOffset,
       recoveryPoint = offsets.recoveryPoint, nextOffsetMetadata = offsets.nextOffsetMetadata, scheduler,
-      brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+      brokerTopicStats, mockTime, LogManager.ProducerIdExpirationCheckIntervalMs,
       topicPartition, leaderEpochCache, producerStateManager, logDirFailureChannel,
       topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))

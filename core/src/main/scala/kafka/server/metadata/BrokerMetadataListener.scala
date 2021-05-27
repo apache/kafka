@@ -16,8 +16,8 @@
  */
 package kafka.server.metadata
 
-import java.util
 import java.util.concurrent.TimeUnit
+
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.metrics.KafkaMetricsGroup
@@ -27,9 +27,12 @@ import org.apache.kafka.common.metadata.MetadataRecordType._
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.metalog.{MetaLogLeader, MetaLogListener}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotReader
 
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object BrokerMetadataListener{
@@ -37,16 +40,17 @@ object BrokerMetadataListener{
   val MetadataBatchSizes = "MetadataBatchSizes"
 }
 
-class BrokerMetadataListener(brokerId: Int,
-                             time: Time,
-                             metadataCache: RaftMetadataCache,
-                             configRepository: CachedConfigRepository,
-                             groupCoordinator: GroupCoordinator,
-                             replicaManager: RaftReplicaManager,
-                             txnCoordinator: TransactionCoordinator,
-                             threadNamePrefix: Option[String],
-                             clientQuotaManager: ClientQuotaMetadataManager
-                            ) extends MetaLogListener with KafkaMetricsGroup {
+class BrokerMetadataListener(
+  brokerId: Int,
+  time: Time,
+  metadataCache: RaftMetadataCache,
+  configRepository: CachedConfigRepository,
+  groupCoordinator: GroupCoordinator,
+  replicaManager: RaftReplicaManager,
+  txnCoordinator: TransactionCoordinator,
+  threadNamePrefix: Option[String],
+  clientQuotaManager: ClientQuotaMetadataManager
+) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
@@ -73,21 +77,42 @@ class BrokerMetadataListener(brokerId: Int,
   /**
    * Handle new metadata records.
    */
-  override def handleCommits(lastOffset: Long, records: util.List[ApiMessage]): Unit = {
-    eventQueue.append(new HandleCommitsEvent(lastOffset, records))
+  override def handleCommit(reader: BatchReader[ApiMessageAndVersion]): Unit = {
+    eventQueue.append(new HandleCommitsEvent(reader))
   }
 
-  // Visible for testing. It's useful to execute events synchronously
-  private[metadata] def execCommits(lastOffset: Long, records: util.List[ApiMessage]): Unit = {
-    new HandleCommitsEvent(lastOffset, records).run()
+  /**
+   * Handle metadata snapshots
+   */
+  override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit = {
+    // Loading snapshot on the broker is currently not supported.
+    reader.close();
+    throw new UnsupportedOperationException(s"Loading snapshot (${reader.snapshotId()}) is not supported")
   }
 
-  class HandleCommitsEvent(lastOffset: Long,
-                           records: util.List[ApiMessage])
-      extends EventQueue.FailureLoggingEvent(log) {
+  // Visible for testing. It's useful to execute events synchronously in order
+  // to make tests deterministic. This object is responsible for closing the reader.
+  private[metadata] def execCommits(batchReader: BatchReader[ApiMessageAndVersion]): Unit = {
+    new HandleCommitsEvent(batchReader).run()
+  }
+
+  class HandleCommitsEvent(
+    reader: BatchReader[ApiMessageAndVersion]
+  ) extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      try {
+        apply(reader.next())
+      } finally {
+        reader.close()
+      }
+    }
+
+    private def apply(batch: Batch[ApiMessageAndVersion]): Unit = {
+      val records = batch.records
+      val lastOffset = batch.lastOffset
+
       if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: handling ${records.size()} record(s).")
+        debug(s"Metadata batch $lastOffset: handling ${records.size()} record(s).")
       }
       val imageBuilder =
         MetadataImageBuilder(brokerId, log, metadataCache.currentImage())
@@ -100,37 +125,37 @@ class BrokerMetadataListener(brokerId: Int,
             trace("Metadata batch %d: processing [%d/%d]: %s.".format(lastOffset, index + 1,
               records.size(), record.toString))
           }
-          handleMessage(imageBuilder, record, lastOffset)
+          handleMessage(imageBuilder, record.message, lastOffset)
         } catch {
-          case e: Exception => error(s"Unable to handle record ${index} in batch " +
-            s"ending at offset ${lastOffset}", e)
+          case e: Exception => error(s"Unable to handle record $index in batch " +
+            s"ending at offset $lastOffset", e)
         }
         index = index + 1
       }
       if (imageBuilder.hasChanges) {
         val newImage = imageBuilder.build()
         if (isTraceEnabled) {
-          trace(s"Metadata batch ${lastOffset}: creating new metadata image ${newImage}")
+          trace(s"Metadata batch $lastOffset: creating new metadata image ${newImage}")
         } else if (isDebugEnabled) {
-          debug(s"Metadata batch ${lastOffset}: creating new metadata image")
+          debug(s"Metadata batch $lastOffset: creating new metadata image")
         }
         metadataCache.image(newImage)
       } else if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: no new metadata image required.")
+        debug(s"Metadata batch $lastOffset: no new metadata image required.")
       }
       if (imageBuilder.hasPartitionChanges) {
         if (isDebugEnabled) {
-          debug(s"Metadata batch ${lastOffset}: applying partition changes")
+          debug(s"Metadata batch $lastOffset: applying partition changes")
         }
         replicaManager.handleMetadataRecords(imageBuilder, lastOffset,
           RequestHandlerHelper.onLeadershipChange(groupCoordinator, txnCoordinator, _, _))
       } else if (isDebugEnabled) {
-        debug(s"Metadata batch ${lastOffset}: no partition changes found.")
+        debug(s"Metadata batch $lastOffset: no partition changes found.")
       }
       _highestMetadataOffset = lastOffset
       val endNs = time.nanoseconds()
       val deltaUs = TimeUnit.MICROSECONDS.convert(endNs - startNs, TimeUnit.NANOSECONDS)
-      debug(s"Metadata batch ${lastOffset}: advanced highest metadata offset in ${deltaUs} " +
+      debug(s"Metadata batch $lastOffset: advanced highest metadata offset in ${deltaUs} " +
         "microseconds.")
       batchProcessingTimeHist.update(deltaUs)
     }
@@ -234,21 +259,17 @@ class BrokerMetadataListener(brokerId: Int,
     clientQuotaManager.handleQuotaRecord(record)
   }
 
-  class HandleNewLeaderEvent(leader: MetaLogLeader)
+  class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       val imageBuilder =
         MetadataImageBuilder(brokerId, log, metadataCache.currentImage())
-      if (leader.nodeId() < 0) {
-        imageBuilder.controllerId(None)
-      } else {
-        imageBuilder.controllerId(Some(leader.nodeId()))
-      }
+      imageBuilder.controllerId(leaderAndEpoch.leaderId.asScala)
       metadataCache.image(imageBuilder.build())
     }
   }
 
-  override def handleNewLeader(leader: MetaLogLeader): Unit = {
+  override def handleLeaderChange(leader: LeaderAndEpoch): Unit = {
     eventQueue.append(new HandleNewLeaderEvent(leader))
   }
 

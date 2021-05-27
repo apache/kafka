@@ -408,7 +408,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Scheduled rebalance at: {} (now: {} nextRequestTimeoutMs: {}) ",
                     scheduledRebalance, now, nextRequestTimeoutMs);
         }
-        if (internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
+        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
             nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));
             log.debug("Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) ",
                     keyExpiration, now, nextRequestTimeoutMs);
@@ -1583,10 +1583,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.sessionKey = sessionKey.key();
-                // Track the expiration of the key if and only if this worker is the leader
+                // Track the expiration of the key.
                 // Followers will receive rotated keys from the leader and won't be responsible for
-                // tracking expiration and distributing new keys themselves
-                if (isLeader() && keyRotationIntervalMs > 0) {
+                // tracking expiration and distributing new keys themselves, but may become leaders
+                // later on and will need to know when to update the key.
+                if (keyRotationIntervalMs > 0) {
                     DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
                 }
             }
