@@ -1266,7 +1266,7 @@ class Log(@volatile private var _dir: File,
       accumulator(searchResult.abortedTransactions)
       if (searchResult.isComplete)
         return
-      segmentEntryOpt = higherSegments.nextOption()
+      segmentEntryOpt = nextOption(higherSegments)
     }
   }
 
@@ -1433,11 +1433,11 @@ class Log(@volatile private var _dir: File,
     } else {
       val deletable = ArrayBuffer.empty[LogSegment]
       val segmentsIterator = segments.values.iterator
-      var segmentOpt = segmentsIterator.nextOption()
+      var segmentOpt = nextOption(segmentsIterator)
       while (segmentOpt.isDefined) {
         val segment = segmentOpt.get
-        val nextSegmentOpt = segmentsIterator.nextOption()
-        val (upperBoundOffset, isLastSegmentAndEmpty) =
+        val nextSegmentOpt = nextOption(segmentsIterator)
+        val (upperBoundOffset: Long, isLastSegmentAndEmpty: Boolean) =
           nextSegmentOpt.map {
             nextSegment => (nextSegment.baseOffset, false)
           }.getOrElse {
@@ -2602,6 +2602,21 @@ object Log extends Logging {
         }
         throw e
     }
+  }
+
+  /**
+   * Wraps the value of iterator.next() in an option.
+   * Note: this facility is a part of the Iterator class starting from scala v2.13.
+   *
+   * @param iterator
+   * @tparam T the type of object held within the iterator
+   * @return Some(iterator.next) if a next element exists, None otherwise.
+   */
+  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
+    if (iterator.hasNext)
+      Some(iterator.next())
+    else
+      None
   }
 }
 

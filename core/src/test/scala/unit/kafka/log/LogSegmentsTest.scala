@@ -174,4 +174,53 @@ class LogSegmentsTest {
 
     segments.close()
   }
+
+  @Test
+  def testHigherSegments(): Unit = {
+    val segments = new LogSegments(topicPartition)
+
+    val seg1 = createSegment(1)
+    val seg2 = createSegment(3)
+    val seg3 = createSegment(5)
+    val seg4 = createSegment(7)
+    val seg5 = createSegment(9)
+
+    List(seg1, seg2, seg3, seg4, seg5).foreach(segments.add)
+
+    // higherSegments(0) should return all segments in order
+    {
+      val iterator = segments.higherSegments(0).iterator
+      List(seg1, seg2, seg3, seg4, seg5).foreach {
+        segment =>
+          assertTrue(iterator.hasNext)
+          assertEquals(segment, iterator.next())
+      }
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(1) should return all segments in order except seg1
+    {
+      val iterator = segments.higherSegments(1).iterator
+      List(seg2, seg3, seg4, seg5).foreach {
+        segment =>
+          assertTrue(iterator.hasNext)
+          assertEquals(segment, iterator.next())
+      }
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(8) should return only seg5
+    {
+      val iterator = segments.higherSegments(8).iterator
+      assertTrue(iterator.hasNext)
+      assertEquals(seg5, iterator.next())
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(9) should return no segments
+    {
+      val iterator = segments.higherSegments(9).iterator
+      assertFalse(iterator.hasNext)
+    }
+  }
 }
