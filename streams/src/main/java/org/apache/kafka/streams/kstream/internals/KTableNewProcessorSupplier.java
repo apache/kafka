@@ -33,7 +33,7 @@ public interface KTableNewProcessorSupplier<KIn, VIn, KOut, VOut> extends Proces
      *
      * @param forceMaterialization indicates if an upstream node should be forced to materialize to enable sending old
      *                             values.
-     * @return {@code true} is sending old values is enabled, i.e. either because {@code forceMaterialization} was
+     * @return {@code true} if sending old values is enabled, i.e. either because {@code forceMaterialization} was
      * {@code true} or some upstream node is materialized.
      */
     boolean enableSendingOldValues(boolean forceMaterialization);
