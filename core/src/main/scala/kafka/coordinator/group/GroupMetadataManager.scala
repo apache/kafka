@@ -270,7 +270,7 @@ class GroupMetadataManager(brokerId: Int,
 
           // construct the error status in the propagated assignment response in the cache
           val status = responseStatus(groupMetadataPartition)
-          System.err.println("responseStatus" + responseStatus)
+//          System.err.println("responseStatus" + responseStatus)
 //          System.err.println("!!! status" + status)
 
           val responseError = if (status.error == Errors.NONE) {

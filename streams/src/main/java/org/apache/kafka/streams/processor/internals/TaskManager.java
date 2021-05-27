@@ -265,12 +265,12 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
-//        System.err.println(("Handle new assignment with:\n" +
-//                "\tNew active tasks: {}\n" +
-//                "\tNew standby tasks: {}\n" +
-//                "\tExisting active tasks: {}\n" +
-//                "\tExisting standby tasks: {}",
-//            activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
+        System.err.println(String.format("%s: Handle new assignment with:" +
+                "New active tasks: %s," +
+                "New standby tasks: %s," +
+                "Existing active tasks: %s," +
+                "Existing standby tasks: %s",
+            logPrefix, activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds()));
 
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
@@ -1090,7 +1090,7 @@ public class TaskManager {
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         if (offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)).size() > 0) {
             log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
-            System.err.println("committing task off:" + offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)));
+            System.err.println("committing task offset:" + offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue)));
         }
 
         final Set<TaskId> corruptedTasks = new HashSet<>();
