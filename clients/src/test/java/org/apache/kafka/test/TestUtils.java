@@ -316,7 +316,7 @@ public class TestUtils {
      */
     public static void retryOnExceptionWithTimeout(final long timeoutMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, timeoutMs, runnable);
+        retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -328,7 +328,7 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, DEFAULT_MAX_WAIT_MS, runnable);
+        retryOnExceptionWithTimeout(DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -336,13 +336,13 @@ public class TestUtils {
      * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
      * last exception or assertion failure will be thrown thus providing context for the failure.
      *
-     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param runnable the code to attempt to execute successfully.
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
-    public static void retryOnExceptionWithTimeout(final long pollIntervalMs,
-                                                   final long timeoutMs,
+    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+                                                   final long pollIntervalMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
 

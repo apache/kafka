@@ -53,7 +53,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
 
     QuorumController activeController() throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             QuorumController activeController = null;
             for (QuorumController controller : controllers) {
                 if (controller.isActive()) {
