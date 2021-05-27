@@ -72,7 +72,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(17L, log.logEndOffset)
 
     val leaderEpoch = 10
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
 
     def epochEndOffset(epoch: Int, endOffset: Long): FetchResponseData.EpochEndOffset = {
       new FetchResponseData.EpochEndOffset()
@@ -143,7 +143,7 @@ class PartitionTest extends AbstractPartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
     assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
@@ -171,7 +171,7 @@ class PartitionTest extends AbstractPartitionTest {
     ), leaderEpoch = 5)
     assertEquals(4, log.logEndOffset)
 
-    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
     assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
     assertEquals(None, log.latestEpoch)
 
@@ -733,8 +733,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
-                                      isLeader: Boolean,
-                                      log: Log = logManager.getOrCreateLog(topicPartition, topicId = None)): Partition = {
+                                      isLeader: Boolean): Partition = {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
     val controllerEpoch = 0
@@ -2046,7 +2045,7 @@ class PartitionTest extends AbstractPartitionTest {
     leaderEpochCache,
     producerStateManager,
     logDirFailureChannel,
-    topicId = None,
+    _topicId = None,
     keepPartitionMetadataFile = true) {
 
     override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
