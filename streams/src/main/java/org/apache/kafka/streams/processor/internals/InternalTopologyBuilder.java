@@ -345,6 +345,10 @@ public class InternalTopologyBuilder {
 
     public void setTopologyName(final String namedTopology) {
         Objects.requireNonNull(namedTopology, "named topology can't be null");
+        if (this.namedTopology != null) {
+            log.error("Tried to reset the namedTopology to {} but it was already set to {}", namedTopology, this.namedTopology);
+            throw new IllegalStateException("NamedTopology has already been set to " + this.namedTopology);
+        }
         this.namedTopology = namedTopology;
     }
 
@@ -1046,7 +1050,8 @@ public class InternalTopologyBuilder {
 
                     // remember the changelog topic if this state store is change-logging enabled
                     if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
-                        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName, namedTopology);
+                        final String changelogTopic =
+                            ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName, namedTopology);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
@@ -1978,7 +1983,7 @@ public class InternalTopologyBuilder {
             if (namedTopology == null) {
                 sb.append("Topologies:\n ");
             } else {
-                sb.append(namedTopology).append(":\n ");
+                sb.append("Topology - ").append(namedTopology).append(":\n ");
             }
             final TopologyDescription.Subtopology[] sortedSubtopologies =
                 subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[0]);

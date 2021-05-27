@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
-import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
  *       - interactive queries (IQ)
  *       - TopologyTestDriver (TTD)
  */
-@Evolving
+@Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     final Map<String, NamedTopology> nameToTopology = new HashMap<>();
@@ -59,7 +59,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws IllegalArgumentException if any of the named topologies have the same name
      * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics or pattern
      */
-    public KafkaStreamsNamedTopologyWrapper(final List<NamedTopology> topologies, final Properties props, final KafkaClientSupplier clientSupplier) {
+    public KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final Properties props, final KafkaClientSupplier clientSupplier) {
         super(
             new TopologyMetadata(topologies.stream().collect(Collectors.toMap(
                 NamedTopology::name,
