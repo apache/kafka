@@ -209,7 +209,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             these are simply text files that reside in the same directory as your CA keys.
 
             <pre class="line-numbers"><code class="language-bash">&gt; echo 01 &gt; serial.txt
-touch index.txt</code></pre>
+&gt; touch index.txt</code></pre>
 
             With these steps done you are now ready to generate your CA that will be used to sign certificates later.
 
@@ -241,7 +241,7 @@ touch index.txt</code></pre>
 
             Finally, you need to import both the certificate of the CA and the signed certificate into the keystore:
             <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore {keystore} -alias CARoot -import -file {CA certificate}
-keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></pre>
+&gt; keytool -keystore {keystore} -alias localhost -import -file cert-signed</code></pre>
 
             The definitions of the parameters are the following:
             <ol>
@@ -394,39 +394,39 @@ ssl.key.password=test1234</code></pre>
             <br>
             Examples using console-producer and console-consumer:
             <pre class="line-numbers"><code class="language-bash">&gt; kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --producer.config client-ssl.properties
-kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --consumer.config client-ssl.properties</code></pre>
+&gt; kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --consumer.config client-ssl.properties</code></pre>
         </li>
     </ol>
     <h3 class="anchor-heading"><a id="security_sasl" class="anchor-link"></a><a href="#security_sasl">7.3 Authentication using SASL</a></h3>
 
     <ol>
-    <li><h4 class="anchor-heading"><a id="security_sasl_jaasconfig" class="anchor-link"></a><a href="#security_sasl_jaasconfig">JAAS configuration</a></h4>
-    <p>Kafka uses the Java Authentication and Authorization Service
-    (<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jaas/JAASRefGuide.html">JAAS</a>)
-    for SASL configuration.</p>
-        <ol>
-        <li><h5><a id="security_jaas_broker"
-            href="#security_jaas_broker">JAAS configuration for Kafka brokers</a></h5>
+        <li><h4 class="anchor-heading"><a id="security_sasl_jaasconfig" class="anchor-link"></a><a href="#security_sasl_jaasconfig">JAAS configuration</a></h4>
+            <p>Kafka uses the Java Authentication and Authorization Service
+            (<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jaas/JAASRefGuide.html">JAAS</a>)
+            for SASL configuration.</p>
+                <ol>
+                <li><h5><a id="security_jaas_broker"
+                    href="#security_jaas_broker">JAAS configuration for Kafka brokers</a></h5>
 
-            <p><tt>KafkaServer</tt> is the section name in the JAAS file used by each
-            KafkaServer/Broker. This section provides SASL configuration options
-            for the broker including any SASL client connections made by the broker
-            for inter-broker communication. If multiple listeners are configured to use
-            SASL, the section name may be prefixed with the listener name in lower-case
-            followed by a period, e.g. <tt>sasl_ssl.KafkaServer</tt>.</p>
+                    <p><tt>KafkaServer</tt> is the section name in the JAAS file used by each
+                    KafkaServer/Broker. This section provides SASL configuration options
+                    for the broker including any SASL client connections made by the broker
+                    for inter-broker communication. If multiple listeners are configured to use
+                    SASL, the section name may be prefixed with the listener name in lower-case
+                    followed by a period, e.g. <tt>sasl_ssl.KafkaServer</tt>.</p>
 
-            <p><tt>Client</tt> section is used to authenticate a SASL connection with
-            zookeeper. It also allows the brokers to set SASL ACL on zookeeper
-            nodes which locks these nodes down so that only the brokers can
-            modify it. It is necessary to have the same principal name across all
-            brokers. If you want to use a section name other than Client, set the
-            system property <tt>zookeeper.sasl.clientconfig</tt> to the appropriate
-            name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.clientconfig=ZkClient</tt>).</p>
+                    <p><tt>Client</tt> section is used to authenticate a SASL connection with
+                    zookeeper. It also allows the brokers to set SASL ACL on zookeeper
+                    nodes which locks these nodes down so that only the brokers can
+                    modify it. It is necessary to have the same principal name across all
+                    brokers. If you want to use a section name other than Client, set the
+                    system property <tt>zookeeper.sasl.clientconfig</tt> to the appropriate
+                    name (<i>e.g.</i>, <tt>-Dzookeeper.sasl.clientconfig=ZkClient</tt>).</p>
 
-            <p>ZooKeeper uses "zookeeper" as the service name by default. If you
-            want to change this, set the system property
-            <tt>zookeeper.sasl.client.username</tt> to the appropriate name
-            (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
+                    <p>ZooKeeper uses "zookeeper" as the service name by default. If you
+                    want to change this, set the system property
+                    <tt>zookeeper.sasl.client.username</tt> to the appropriate name
+                    (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
 
                     <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
                         The property name must be prefixed with the listener prefix including the SASL mechanism,
