@@ -102,7 +102,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     MetaLogLeader waitForLeader() throws InterruptedException {
         AtomicReference<MetaLogLeader> value = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(2000, 3, () -> {
             MetaLogLeader result = null;
             for (LocalLogManager logManager : logManagers) {
                 MetaLogLeader leader = logManager.leader();
