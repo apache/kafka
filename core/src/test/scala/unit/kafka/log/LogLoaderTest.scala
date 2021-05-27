@@ -95,7 +95,7 @@ class LogLoaderTest {
           val maxProducerIdExpirationMs = 60 * 60 * 1000
           val segments = new LogSegments(topicPartition)
           val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
-          val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+          val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, time)
           val loadLogParams = LoadLogParams(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
@@ -265,7 +265,7 @@ class LogLoaderTest {
         }
       }
       val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
-      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
       val loadLogParams = LoadLogParams(
         logDir,
         topicPartition,

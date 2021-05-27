@@ -324,7 +324,11 @@ object LogLoader extends Logging {
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, params: LoadLogParams): Int = {
-    val producerStateManager = new ProducerStateManager(params.topicPartition, params.dir, params.maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(
+      params.topicPartition,
+      params.dir,
+      params.maxProducerIdExpirationMs,
+      params.time)
     Log.rebuildProducerState(
       producerStateManager,
       params.segments,
