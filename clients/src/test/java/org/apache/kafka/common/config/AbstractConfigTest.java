@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -507,55 +506,6 @@ public class AbstractConfigTest {
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
 
         assertNull(config.documentationOf("xyz"));
-    }
-
-    @Test
-    public void testConcurrentUnusedUse() throws InterruptedException {
-        ConfigDef configDef = new ConfigDef();
-        Properties props = new Properties();
-        for (int i = 0; i < 1000; i++) {
-            String prop = "a" + i;
-            configDef.define(prop,
-                    Type.LIST,
-                    "",
-                    Importance.LOW,
-                    "doc");
-            props.put(prop, "value");
-        }
-        AbstractConfig config = new AbstractConfig(configDef, props);
-        AtomicBoolean error = new AtomicBoolean(false);
-        Thread t1 = new Thread("unused") {
-            public void run() {
-                for (int i = 0; i < 1000; i++) {
-                    try {
-                        config.unused();
-                    } catch (Throwable e) {
-                        error.set(true);
-                        e.printStackTrace();
-                    }
-                }
-            }
-        };
-        Thread t2 = new Thread("getter") {
-            public void run() {
-                for (int i = 0; i < 100; i++) {
-                    for (int j = 0; j < 1000; j++) {
-                        try {
-                            config.get("a" + j);
-                        } catch (Throwable e) {
-                            error.set(true);
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-        };
-
-        t1.start();
-        t2.start();
-        t1.join();
-        t2.join();
-        assertFalse(error.get());
     }
 
     private static class TestIndirectConfigResolution extends AbstractConfig {
