@@ -556,8 +556,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-                        stateStoreNames: String*): KStream[K1, V1] =
+  def transform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.transform(transformerSupplier, stateStoreNames: _*))
 
   /**
@@ -576,9 +578,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-                        named: Named,
-                        stateStoreNames: String*): KStream[K1, V1] =
+  def transform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.transform(transformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -596,8 +600,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def flatTransform[K1, V1](transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-                            stateStoreNames: String*): KStream[K1, V1] =
+  def flatTransform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.flatTransform(transformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -616,9 +622,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def flatTransform[K1, V1](transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-                            named: Named,
-                            stateStoreNames: String*): KStream[K1, V1] =
+  def flatTransform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.flatTransform(transformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -636,8 +644,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-                              stateStoreNames: String*): KStream[K, VR] =
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -656,9 +666,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-                              named: Named,
-                              stateStoreNames: String*): KStream[K, VR] =
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -676,8 +688,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-                              stateStoreNames: String*): KStream[K, VR] =
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -696,9 +710,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-                              named: Named,
-                              stateStoreNames: String*): KStream[K, VR] =
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -715,8 +731,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
-                          stateStoreNames: String*): KStream[K, VR] =
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*))
 
   /**
@@ -734,9 +752,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
-                          named: Named,
-                          stateStoreNames: String*): KStream[K, VR] =
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -753,8 +773,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          stateStoreNames: String*): KStream[K, VR] =
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*))
 
   /**
@@ -772,9 +794,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          named: Named,
-                          stateStoreNames: String*): KStream[K, VR] =
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -995,7 +1019,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV,
+    joiner: (V, GV) => RV
   ): KStream[K, RV] =
     new KStream(
       inner.join[GK, GV, RV](
