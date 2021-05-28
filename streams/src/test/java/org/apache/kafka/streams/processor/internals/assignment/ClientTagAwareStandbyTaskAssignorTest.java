@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,7 +65,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final UUID UUID_9 = uuidForInt(9);
 
     @Test
-    public void shouldDistributeStandbyTasksOnAppropriateClientTagDimensions() {
+    public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameZone() {
         final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
             mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
@@ -146,7 +147,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     @Test
-    public void shouldDistributeStandbyTasksWhenLocatedOnSingleDimension() {
+    public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameCluster() {
         final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
             mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1, TASK_1_1)),
@@ -230,8 +231,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,
                                                             final Map<UUID, ClientState> clientStates,
                                                             final List<Set<UUID>> validClientIdsBasedOnRackAwareAssignmentTags) {
-
         final Set<UUID> standbyTaskClientIds = findAllStandbyTaskClients(clientStates, activeTaskId);
+
         return validClientIdsBasedOnRackAwareAssignmentTags.stream()
                                                            .filter(it -> it.equals(standbyTaskClientIds))
                                                            .count() == 1;
@@ -246,7 +247,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
                                                                                 final String... rackAwareAssignmentTags) {
-        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, asList(rackAwareAssignmentTags));
+        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, Collections.emptyList());
     }
 
     private static ClientState createClientStateWithCapacity(final int capacity,

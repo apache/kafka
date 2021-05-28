@@ -232,7 +232,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 2,
                                                                 0,
-                                                                60_000L, null);
+                                                                60_000L, Collections.emptyList());
 
         final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1);
 
@@ -251,7 +251,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L, null);
+                                                                60_000L, Collections.emptyList());
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -273,7 +273,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L, null);
+                                                                60_000L, Collections.emptyList());
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -314,7 +314,7 @@ public class TaskAssignorConvergenceTest {
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
-                                                                    60_000L, null);
+                                                                    60_000L, Collections.emptyList());
 
             harness = Harness.initializeCluster(
                 numStatelessTasks,
