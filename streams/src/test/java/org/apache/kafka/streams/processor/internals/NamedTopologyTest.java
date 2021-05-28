@@ -144,11 +144,11 @@ public class NamedTopologyTest {
         assertThrows(
             TopologyException.class,
             () -> streams = new KafkaStreamsNamedTopologyWrapper(
-            asList(
-                builder1.buildNamedTopology(props),
-                builder2.buildNamedTopology(props)),
-            props,
-            clientSupplier)
+                asList(
+                    builder1.buildNamedTopology(props),
+                    builder2.buildNamedTopology(props)),
+                props,
+                clientSupplier)
         );
     }
 

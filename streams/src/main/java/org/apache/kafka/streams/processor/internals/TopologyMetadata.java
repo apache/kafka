@@ -52,17 +52,15 @@ public class TopologyMetadata {
     private static final String UNNAMED_TOPOLOGY = "__UNNAMED_TOPOLOGY__";
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
+    private final StreamsConfig config;
     private final SortedMap<String, InternalTopologyBuilder> builders; // Sort by topology name
 
     private ProcessorTopology globalTopology;
     private Map<String, StateStore> globalStateStores = new HashMap<>();
+    final Set<String> allInputTopics = new HashSet<>();
 
-    public TopologyMetadata() {
-        builders = new TreeMap<>();
-        log.debug("Building KafkaStreams app with no named topology");
-    }
-
-    public TopologyMetadata(final InternalTopologyBuilder builder) {
+    public TopologyMetadata(final InternalTopologyBuilder builder, final StreamsConfig config) {
+        this.config = config;
         builders = new TreeMap<>();
         if (builder.hasNamedTopology()) {
             builders.put(builder.namedTopology(), builder);
@@ -71,8 +69,12 @@ public class TopologyMetadata {
         }
     }
 
-    public TopologyMetadata(final SortedMap<String, InternalTopologyBuilder> builders) {
+    public TopologyMetadata(final SortedMap<String, InternalTopologyBuilder> builders, final StreamsConfig config) {
+        this.config = config;
         this.builders = builders;
+        if (builders.isEmpty()) {
+            log.debug("Building KafkaStreams app with no empty topology");
+        }
     }
 
     public int getNumStreamThreads(final StreamsConfig config) {
@@ -188,14 +190,12 @@ public class TopologyMetadata {
         return sb.toString();
     }
 
-    public final void rewriteAndBuildTopology(final StreamsConfig config) {
-        // As we go, check each topology for overlap in the set of input topics/patterns
-        final Set<String> allInputTopics = new HashSet<>();
-
+    public final void buildAndRewriteTopology() {
         applyToEachBuilder(builder -> {
             builder.rewriteTopology(config);
             builder.buildTopology();
 
+            // As we go, check each topology for overlap in the set of input topics/patterns
             final int numInputTopics = allInputTopics.size();
             final List<String> inputTopics = builder.fullSourceTopicNames();
             final Collection<String> inputPatterns = builder.allSourcePatternStrings();

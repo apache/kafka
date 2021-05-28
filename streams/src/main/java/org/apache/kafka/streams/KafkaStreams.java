@@ -690,7 +690,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -708,7 +708,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
     }
 
     /**
@@ -725,7 +725,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
     }
 
     /**
@@ -745,7 +745,7 @@ public class KafkaStreams implements AutoCloseable {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), new StreamsConfig(props), clientSupplier, time);
+        this(topology, new StreamsConfig(props), clientSupplier, time);
     }
 
     /**
@@ -778,7 +778,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), config, clientSupplier);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier);
     }
 
     /**
@@ -795,7 +795,14 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder), config, new DefaultKafkaClientSupplier(), time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, new DefaultKafkaClientSupplier(), time);
+    }
+
+    private KafkaStreams(final Topology topology,
+                         final StreamsConfig config,
+                         final KafkaClientSupplier clientSupplier,
+                         final Time time) throws StreamsException {
+        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier, time);
     }
 
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
@@ -812,7 +819,7 @@ public class KafkaStreams implements AutoCloseable {
         this.time = time;
 
         this.topologyMetadata = topologyMetadata;
-        this.topologyMetadata.rewriteAndBuildTopology(config);
+        this.topologyMetadata.buildAndRewriteTopology();
 
         final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 

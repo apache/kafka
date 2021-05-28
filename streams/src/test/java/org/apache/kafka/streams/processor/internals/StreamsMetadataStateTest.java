@@ -125,8 +125,8 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-four", 0, null, null, null));
 
         cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build()));
-        topologyMetadata.rewriteAndBuildTopology(new DummyStreamsConfig());
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build()), new DummyStreamsConfig());
+        topologyMetadata.buildAndRewriteTopology();
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, cluster);
         partitioner = (topic, key, value, numPartitions) -> 1;
@@ -136,7 +136,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldNotThrowExceptionWhenOnChangeNotCalled() {
         final Collection<StreamsMetadata> metadata = new StreamsMetadataState(
-            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build())),
+            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build()), new DummyStreamsConfig()),
             hostOne
         ).getAllMetadataForStore("store");
         assertEquals(0, metadata.size());
@@ -330,7 +330,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyIfMyHostUnknown() {
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
-            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build())),
+            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build()), new DummyStreamsConfig()),
             StreamsMetadataState.UNKNOWN_HOST
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, cluster);
@@ -347,7 +347,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyAndPartitionerIfMyHostUnknown() {
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
-            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build())),
+            new TopologyMetadata(TopologyWrapper.getInternalTopologyBuilder(builder.build()), new DummyStreamsConfig()),
             StreamsMetadataState.UNKNOWN_HOST
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, cluster);

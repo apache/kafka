@@ -20,10 +20,13 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -90,6 +93,7 @@ public class RepartitionTopicsTest {
         mkMap(mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1)),
         Collections.emptyMap()
     );
+    final  StreamsConfig config = new DummyStreamsConfig();
 
     final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
     final InternalTopicManager internalTopicManager = mock(InternalTopicManager.class);
@@ -116,7 +120,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -151,7 +155,7 @@ public class RepartitionTopicsTest {
         setupClusterWithMissingTopics(mkSet(SOURCE_TOPIC_NAME1));
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -181,7 +185,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -220,7 +224,7 @@ public class RepartitionTopicsTest {
         setupClusterWithMissingPartitionCounts(mkSet(SOURCE_TOPIC_NAME1));
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -266,7 +270,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -321,7 +325,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -361,7 +365,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            new TopologyMetadata(internalTopologyBuilder),
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
