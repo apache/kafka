@@ -67,6 +67,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         // should be empty initially

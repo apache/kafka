@@ -53,9 +53,10 @@ public class SegmentIteratorTest {
 
     private SegmentIterator<KeyValueSegment> iterator = null;
 
+    @SuppressWarnings("rawtypes")
     @Before
     public void before() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),

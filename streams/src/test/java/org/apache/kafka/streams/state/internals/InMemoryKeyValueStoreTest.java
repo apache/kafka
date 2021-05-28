@@ -80,6 +80,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         return store;
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRemoveKeysWithNullValues() {
         store.close();
