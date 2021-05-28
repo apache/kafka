@@ -125,9 +125,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doCallRealMethod;
 
 public class KafkaConsumerTest {
     private final String topic = "test";
@@ -605,6 +606,40 @@ public class KafkaConsumerTest {
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
         consumer.poll(Duration.ZERO);
+    }
+
+    @Test
+    public void testSkipMetadataCacheUpdate() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        ConsumerMetadata mockConsumerMetadata = mock(ConsumerMetadata.class);
+        MockClient client = new MockClient(time, mockConsumerMetadata);
+
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        boolean skipMetadataCacheUpdateUponUnassignment = false;
+
+        // Case 1: Default behavior. Metadata cache updated requested upon every topic assignment change.
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, mockConsumerMetadata, assignor,
+                true, groupId, groupInstanceId, skipMetadataCacheUpdateUponUnassignment);
+        consumer.assign(Arrays.asList(tp0, tp1));
+        verify(mockConsumerMetadata, times(1)).requestUpdateForNewTopics();
+        consumer.assign(Arrays.asList(tp0, tp1, t2p0));
+        verify(mockConsumerMetadata, times(2)).requestUpdateForNewTopics();
+        consumer.assign(Arrays.asList(tp0, tp1));
+        verify(mockConsumerMetadata, times(3)).requestUpdateForNewTopics();
+
+        // Case 2: Skip metadata cache update.
+        skipMetadataCacheUpdateUponUnassignment = true;
+        subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        mockConsumerMetadata = mock(ConsumerMetadata.class);
+        consumer = newConsumer(time, client, subscription, mockConsumerMetadata, assignor,
+                true, groupId, groupInstanceId, skipMetadataCacheUpdateUponUnassignment);
+        consumer.assign(Arrays.asList(tp0, tp1));
+        verify(mockConsumerMetadata, times(1)).requestUpdateForNewTopics();
+        consumer.assign(Arrays.asList(tp0, tp1, t2p0));
+        verify(mockConsumerMetadata, times(2)).requestUpdateForNewTopics();
+        consumer.assign(Arrays.asList(tp0, tp1)); // Not trigger metadata cache update in this case
+        verify(mockConsumerMetadata, times(2)).requestUpdateForNewTopics();
     }
 
     @Test
@@ -2030,6 +2065,18 @@ public class KafkaConsumerTest {
                                                       boolean autoCommitEnabled,
                                                       String groupId,
                                                       Optional<String> groupInstanceId) {
+        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false);
+    }
+
+    private KafkaConsumer<String, String> newConsumer(Time time,
+                                                      KafkaClient client,
+                                                      SubscriptionState subscription,
+                                                      ConsumerMetadata metadata,
+                                                      ConsumerPartitionAssignor assignor,
+                                                      boolean autoCommitEnabled,
+                                                      String groupId,
+                                                      Optional<String> groupInstanceId,
+                                                      boolean skipMetadataCacheUpdateUponUnassignment) {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
@@ -2116,7 +2163,8 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,
-                groupId);
+                groupId,
+                skipMetadataCacheUpdateUponUnassignment);
     }
 
     private static class FetchInfo {

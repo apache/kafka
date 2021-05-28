@@ -62,7 +62,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collection;
@@ -596,6 +595,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHashAllFetchPositions;
+    private final boolean skipMetadataCacheUpdateUponUnassignment;
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -819,6 +819,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
+            this.skipMetadataCacheUpdateUponUnassignment = config.getBoolean(ConsumerConfig.SKIP_METADATA_CACHE_UPDATE_UPON_UNASSIGN);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -849,6 +850,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   int defaultApiTimeoutMs,
                   List<ConsumerPartitionAssignor> assignors,
                   String groupId) {
+        this(logContext, clientId, coordinator, keyDeserializer, valueDeserializer, fetcher, interceptors, time, client,
+                metrics, subscriptions, metadata, retryBackoffMs, requestTimeoutMs, defaultApiTimeoutMs, assignors, groupId,
+                false);
+    }
+
+    // visible for testing
+    KafkaConsumer(LogContext logContext,
+                  String clientId,
+                  ConsumerCoordinator coordinator,
+                  Deserializer<K> keyDeserializer,
+                  Deserializer<V> valueDeserializer,
+                  Fetcher<K, V> fetcher,
+                  ConsumerInterceptors<K, V> interceptors,
+                  Time time,
+                  ConsumerNetworkClient client,
+                  Metrics metrics,
+                  SubscriptionState subscriptions,
+                  ConsumerMetadata metadata,
+                  long retryBackoffMs,
+                  long requestTimeoutMs,
+                  int defaultApiTimeoutMs,
+                  List<ConsumerPartitionAssignor> assignors,
+                  String groupId,
+                  boolean skipMetadataCacheUpdateUponUnassignment) {
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
         this.coordinator = coordinator;
@@ -867,6 +892,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = groupId;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.skipMetadataCacheUpdateUponUnassignment = skipMetadataCacheUpdateUponUnassignment;
     }
 
     private static String buildClientId(String configuredClientId, GroupRebalanceConfig rebalanceConfig) {
@@ -1131,8 +1157,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
 
                 log.info("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-                if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
-                    metadata.requestUpdateForNewTopics();
+                boolean skipMetadataCacheUpdate = this.skipMetadataCacheUpdateUponUnassignment && this.subscriptions.areAllAssigned(partitions);
+                if (this.subscriptions.assignFromUser(new HashSet<>(partitions))) {
+                    if (!skipMetadataCacheUpdate) {
+                        metadata.requestUpdateForNewTopics();
+                    }
+                }
             }
         } finally {
             release();
