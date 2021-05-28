@@ -31,10 +31,10 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -77,7 +77,7 @@ public class ProducerPerformanceTest {
     @Test
     public void testReadProps() throws Exception {
         
-        List<String> producerProps = asList("bootstrap.servers=localhost:9000");
+        List<String> producerProps = Collections.singletonList("bootstrap.servers=localhost:9000");
         String producerConfig = createTempFile("acks=1").getAbsolutePath();
         String transactionalId = "1234";
         boolean transactionsEnabled = true;
