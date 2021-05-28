@@ -246,7 +246,7 @@ class ZkAdminManager(val config: KafkaConfig,
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      System.err.println("delay")
+//      System.err.println("delay")
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
         responseCallback)
       val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer

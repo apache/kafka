@@ -82,6 +82,12 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @Override
             public void process(final K key, final SubscriptionResponseWrapper<VO> value) {
+                System.err.println("!!! joiner:" + key + "," + value);
+//                final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//                for (int i = 1; i < elements.length; i++) {
+//                    final StackTraceElement s = elements[i];
+//                    System.out.println("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//                }
                 if (value.getVersion() != SubscriptionResponseWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
                     //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for
@@ -103,6 +109,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                     if (value.getForeignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
                         result = null; //Emit tombstone
                     } else {
+                        System.err.println("!!! ready to apply");
                         result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), value.getForeignValue());
                     }
                     context().forward(key, result);

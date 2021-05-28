@@ -263,11 +263,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         }
 
         final Function<Float, String> tableOneKeyExtractor = value -> {
-            System.err.println("tableOneKeyExtractor:" + Integer.toString((int) value.floatValue()));
+            System.err.println("!!! tableOneKeyExtractor:" + Integer.toString((int) value.floatValue()));
             return Integer.toString((int) value.floatValue());
         };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
-            System.err.println("joinedTableKeyExtractor:" + value);
+            System.err.println("!!! joinedTableKeyExtractor:" + value);
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
@@ -276,11 +276,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         };
 
         final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> {
-            System.err.println("value1 " + value1 + "," + value2);
+            System.err.println("!!! value1 " + value1 + "," + value2);
             return "value1=" + value1 + ",value2=" + value2;
         };
         final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> {
-            System.err.println("joiner2: value1 " + value1 + "," + value2);
+            System.err.println("!!! joiner2: value1 " + value1 + "," + value2);
             return value1 + ",value3=" + value2;
         };
 
