@@ -18,18 +18,15 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
-import java.util.Objects;
-
 /**
- * Decides which {@link TaskAssignor} implementation to use for standby task assignment.
- * <p>
+ * Decides which {@link TaskAssignor} implementation to use for standby task assignment based on {@link AssignmentConfigs}.
  */
 class StandbyTaskAssignorInitializer {
 
     StandbyTaskAssignor initStandbyTaskAssignor(final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas == 0) {
             return new NoopStandbyTaskAssignor(configs);
-        } else if (Objects.nonNull(configs.rackAwareAssignmentTags) && !configs.rackAwareAssignmentTags.isEmpty()) {
+        } else if (!configs.rackAwareAssignmentTags.isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor(configs);
         } else {
             return new DefaultStandbyTaskAssignor(configs);
