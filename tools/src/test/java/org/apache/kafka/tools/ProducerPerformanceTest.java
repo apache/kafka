@@ -51,7 +51,7 @@ public class ProducerPerformanceTest {
     KafkaProducer<byte[], byte[]> producerMock;
 
     @Spy
-    ProducerPerformance producerPerformaceSpy;
+    ProducerPerformance producerPerformanceSpy;
 
     private File createTempFile(String contents) throws IOException {
         File file = File.createTempFile("ProducerPerformanceTest", ".tmp");
@@ -93,10 +93,10 @@ public class ProducerPerformanceTest {
     public void testNumberOfCallsForSendAndClose() throws IOException {
 
         doReturn(null).when(producerMock).send(ArgumentMatchers.<ProducerRecord<byte[], byte[]>>any(), ArgumentMatchers.<Callback>any());
-        doReturn(producerMock).when(producerPerformaceSpy).createKafkaProducer(any(Properties.class));
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
 
         String[] args = new String[] {"--topic", "Hello-Kafka", "--num-records", "5", "--throughput", "100", "--record-size", "100", "--producer-props", "bootstrap.servers=localhost:9000"};
-        producerPerformaceSpy.start(args);
+        producerPerformanceSpy.start(args);
         verify(producerMock, times(5)).send(ArgumentMatchers.<ProducerRecord<byte[], byte[]>>any(), ArgumentMatchers.<Callback>any());
         verify(producerMock, times(1)).close();
     }
