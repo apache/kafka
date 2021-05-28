@@ -19,16 +19,19 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -36,7 +39,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ClientTagAwareStandbyTaskAssignorTest {
@@ -50,7 +52,6 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final String CLUSTER_1 = "cluster1";
     private static final String CLUSTER_2 = "cluster2";
     private static final String CLUSTER_3 = "cluster3";
-    private static final String CLUSTER_4 = "cluster4";
 
     private static final UUID UUID_1 = uuidForInt(1);
     private static final UUID UUID_2 = uuidForInt(2);
@@ -61,9 +62,6 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final UUID UUID_7 = uuidForInt(7);
     private static final UUID UUID_8 = uuidForInt(8);
     private static final UUID UUID_9 = uuidForInt(9);
-    private static final UUID UUID_10 = uuidForInt(10);
-    private static final UUID UUID_11 = uuidForInt(11);
-    private static final UUID UUID_12 = uuidForInt(12);
 
     @Test
     public void shouldDistributeStandbyTasksOnAppropriateClientTagDimensions() {
@@ -81,31 +79,174 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        final AssignorConfiguration.AssignmentConfigs configs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+        new ClientTagAwareStandbyTaskAssignor(newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG))
+            .assignStandbyTasks(
+                findAllActiveTasks(clientStates),
+                new TreeMap<>(clientStates)
+            );
 
-        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
-        new ClientTagAwareStandbyTaskAssignor(configs).assignStandbyTasks(
-            allActiveTasks,
-            new TreeMap<>(clientStates)
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_9, UUID_5), mkSet(UUID_6, UUID_8)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_9, UUID_5), mkSet(UUID_6, UUID_8)
+                )
+            )
         );
 
-        assertFalse(isStandbyTaskOnClientTag(clientStates, TASK_0_0, ZONE_TAG, ZONE_1));
-        assertFalse(isStandbyTaskOnClientTag(clientStates, TASK_0_0, CLUSTER_TAG, CLUSTER_1));
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_2, UUID_9), mkSet(UUID_3, UUID_8)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_2, UUID_9), mkSet(UUID_3, UUID_8)
+                )
+            )
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_5, UUID_3), mkSet(UUID_2, UUID_6)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_5, UUID_3), mkSet(UUID_2, UUID_6)
+                )
+            )
+        );
     }
 
-    private static boolean isStandbyTaskOnClientTag(final Map<UUID, ClientState> clientStates,
-                                                    final TaskId taskId,
-                                                    final String tagKey,
-                                                    final String tagValue) {
-        return clientStates.values()
+    @Test
+    public void shouldDistributeStandbyTasksWhenLocatedOnSingleDimension() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2, TASK_1_2)),
+
+            mkEntry(UUID_4, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(UUID_5, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(UUID_6, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+
+            mkEntry(UUID_7, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(UUID_8, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
+        );
+
+        new ClientTagAwareStandbyTaskAssignor(newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG))
+            .assignStandbyTasks(
+                findAllActiveTasks(clientStates),
+                new TreeMap<>(clientStates)
+            );
+
+        assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_9, UUID_5), mkSet(UUID_6, UUID_8)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_9, UUID_5), mkSet(UUID_6, UUID_8)
+                )
+            )
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_4, UUID_9), mkSet(UUID_6, UUID_7)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_4, UUID_9), mkSet(UUID_6, UUID_7)
+                )
+            )
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_5, UUID_7), mkSet(UUID_4, UUID_8)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_5, UUID_7), mkSet(UUID_4, UUID_8)
+                )
+            )
+        );
+    }
+
+    private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,
+                                                            final Map<UUID, ClientState> clientStates,
+                                                            final List<Set<UUID>> validClientIdsBasedOnRackAwareAssignmentTags) {
+
+        final Set<UUID> standbyTaskClientIds = findAllStandbyTaskClients(clientStates, activeTaskId);
+        return validClientIdsBasedOnRackAwareAssignmentTags.stream()
+                                                           .filter(it -> it.equals(standbyTaskClientIds))
+                                                           .count() == 1;
+    }
+
+    private static Set<UUID> findAllStandbyTaskClients(final Map<UUID, ClientState> clientStates, final TaskId task) {
+        return clientStates.keySet()
                            .stream()
-                           .filter(clientState -> clientState.standbyTasks().contains(taskId))
-                           .anyMatch(clientState -> clientState.clientTags().get(tagKey).equals(tagValue));
+                           .filter(clientId -> clientStates.get(clientId).standbyTasks().contains(task))
+                           .collect(Collectors.toSet());
     }
 
-    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas, String... rackAwareAssignmentTags) {
-        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, Arrays.asList(rackAwareAssignmentTags));
+    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
+                                                                                final String... rackAwareAssignmentTags) {
+        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, asList(rackAwareAssignmentTags));
     }
 
     private static ClientState createClientStateWithCapacity(final int capacity,
@@ -114,7 +255,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final ClientState clientState = new ClientState(clientTags);
 
         IntStream.range(0, capacity).forEach(i -> clientState.incrementCapacity());
-        Optional.ofNullable(tasks).ifPresent(t -> clientState.assignActiveTasks(Arrays.asList(t)));
+        Optional.ofNullable(tasks).ifPresent(t -> clientState.assignActiveTasks(asList(t)));
 
         return clientState;
     }
