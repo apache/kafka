@@ -85,14 +85,14 @@ ARG KIBOSH_VERSION="8841dd392e6fbf02986e2fb1f1ebf04df344b65a"
 
 # Aligning uid inside/outside docker enables containers to modify files of kafka source (mounted in /opt/kafka-dev")
 # By default, the outside user id is 1000 (UID_MIN). The known exception in QA is travis which gives non-1000 id.
-ARG UID="1000"
+ARG UID_DUCKER="1000"
 
 # Install Kibosh
 RUN apt-get install fuse
 RUN cd /opt && git clone -q  https://github.com/confluentinc/kibosh.git && cd "/opt/kibosh" && git reset --hard $KIBOSH_VERSION && mkdir "/opt/kibosh/build" && cd "/opt/kibosh/build" && ../configure && make -j 2
 
 # Set up the ducker user.
-RUN useradd -u $UID -ms /bin/bash ducker \
+RUN useradd -u $UID_DUCKER -ms /bin/bash ducker \
   && mkdir -p /home/ducker/ \
   && rsync -aiq /root/.ssh/ /home/ducker/.ssh \
   && chown -R ducker /home/ducker/ /mnt/ /var/log/ \
