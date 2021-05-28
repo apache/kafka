@@ -101,7 +101,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testUnexpectedArg() throws Exception {
+    public void testUnexpectedArg() {
 
         String[] args = new String[] {"--test", "test", "--topic", "Hello-Kafka", "--num-records", "5", "--throughput", "100", "--record-size", "100", "--producer-props", "bootstrap.servers=localhost:9000"};
         ArgumentParser parser = ProducerPerformance.argParser();
