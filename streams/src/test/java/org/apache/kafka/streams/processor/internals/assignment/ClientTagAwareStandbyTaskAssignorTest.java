@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -80,11 +80,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        new ClientTagAwareStandbyTaskAssignor(newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG))
-            .assignStandbyTasks(
-                findAllActiveTasks(clientStates),
-                new TreeMap<>(clientStates)
-            );
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
@@ -162,11 +164,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
-        new ClientTagAwareStandbyTaskAssignor(newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG))
-            .assignStandbyTasks(
-                findAllActiveTasks(clientStates),
-                new TreeMap<>(clientStates)
-            );
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
 
         assertTrue(clientStates.values().stream().allMatch(ClientState::reachedCapacity));
 
@@ -245,9 +249,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                            .collect(Collectors.toSet());
     }
 
-    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
-                                                                                final String... rackAwareAssignmentTags) {
-        return new AssignorConfiguration.AssignmentConfigs(0L, 1, numStandbyReplicas, 60000L, Collections.emptyList());
+    private static AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
+                                                          final String... rackAwareAssignmentTags) {
+        return new AssignmentConfigs(0L,
+                                     1,
+                                     numStandbyReplicas,
+                                     60000L,
+                                     asList(rackAwareAssignmentTags));
     }
 
     private static ClientState createClientStateWithCapacity(final int capacity,
