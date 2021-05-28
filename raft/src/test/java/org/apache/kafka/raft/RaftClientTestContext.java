@@ -955,17 +955,20 @@ public final class RaftClientTestContext {
     }
 
     public void advanceLeaderHighWatermarkToEndOffset() throws InterruptedException {
-        Integer replicaId = null;
-        for (Integer voter: voters) {
-            if (voter != localId.getAsInt()) {
-                replicaId = voter;
-                break;
-            }
+        assertEquals(localId, currentLeader());
+        long localLogEndOffset = log.endOffset().offset;
+        Set<Integer> followers = voters.stream().filter(voter -> voter != localId.getAsInt()).collect(Collectors.toSet());
+
+        // Send a request from every follower
+        for (int follower: followers) {
+            deliverRequest(
+                    fetchRequest(currentEpoch(), follower, localLogEndOffset, currentEpoch(), 0)
+            );
+            pollUntilResponse();
+            assertSentFetchPartitionResponse(Errors.NONE, currentEpoch(), localId);
         }
-        deliverRequest(fetchRequest(currentEpoch(), replicaId, log.endOffset().offset, currentEpoch(), 0));
-        pollUntilResponse();
-        assertSentFetchPartitionResponse(Errors.NONE, currentEpoch(), localId);
-        assertEquals(log.endOffset().offset, client.highWatermark().getAsLong());
+
+        pollUntil(() -> OptionalLong.of(localLogEndOffset).equals(client.highWatermark()));
     }
 
     void assertFetchRequestData(
