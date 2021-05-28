@@ -51,7 +51,7 @@ public class ProducerPerformance {
         perf.start(args);
     }
     
-    public void start(String[] args) throws IOException {
+    void start(String[] args) throws IOException {
         ArgumentParser parser = argParser();
 
         try {
@@ -166,11 +166,11 @@ public class ProducerPerformance {
 
     }
 
-    public KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
+    KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
         return new KafkaProducer<>(props);
     }
     
-    public static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
+    static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
             boolean transactionsEnabled) throws IOException {
         Properties props = new Properties();
         if (producerConfig != null) {
@@ -191,7 +191,7 @@ public class ProducerPerformance {
         return props;
     }
 
-    public static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
+    static List<byte[]> readPayloadFile(String payloadFilePath, String payloadDelimiter) throws IOException {
         List<byte[]> payloadByteList = new ArrayList<>();
         if (payloadFilePath != null) {
             Path path = Paths.get(payloadFilePath);
@@ -212,7 +212,7 @@ public class ProducerPerformance {
     }
 
     /** Get the command-line argument parser. */
-    public static ArgumentParser argParser() {
+    static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("producer-performance")
                 .defaultHelp(true)
