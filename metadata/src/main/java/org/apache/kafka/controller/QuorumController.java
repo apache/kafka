@@ -73,6 +73,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -130,7 +131,6 @@ public final class QuorumController implements Controller {
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
-        private Function<Long, SnapshotWriter> snapshotWriterBuilder;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
 
@@ -183,11 +183,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSnapshotWriterBuilder(Function<Long, SnapshotWriter> snapshotWriterBuilder) {
-            this.snapshotWriterBuilder = snapshotWriterBuilder;
-            return this;
-        }
-
         public Builder setSessionTimeoutNs(long sessionTimeoutNs) {
             this.sessionTimeoutNs = sessionTimeoutNs;
             return this;
@@ -213,15 +208,12 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
-            if (snapshotWriterBuilder == null) {
-                snapshotWriterBuilder = new NoOpSnapshotWriterBuilder();
-            }
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
-                    defaultNumPartitions, replicaPlacer, snapshotWriterBuilder,
+                    defaultNumPartitions, replicaPlacer,
                     sessionTimeoutNs, controllerMetrics);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -333,12 +325,12 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final Function<Long, SnapshotWriter> writerBuilder;
+        private final Function<Long, SnapshotWriter<ApiMessageAndVersion>> writerBuilder;
         private final ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
-        SnapshotGeneratorManager(Function<Long, SnapshotWriter> writerBuilder) {
+        SnapshotGeneratorManager(Function<Long, SnapshotWriter<ApiMessageAndVersion>> writerBuilder) {
             this.writerBuilder = writerBuilder;
         }
 
@@ -394,7 +386,7 @@ public final class QuorumController implements Controller {
             }
             if (!nextDelay.isPresent()) {
                 try {
-                    generator.writer().completeSnapshot();
+                    generator.writer().freeze();
                     log.info("Finished generating snapshot {}.", generator.epoch());
                 } catch (Exception e) {
                     log.error("Error while completing snapshot {}", generator.epoch(), e);
@@ -978,7 +970,6 @@ public final class QuorumController implements Controller {
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
-                             Function<Long, SnapshotWriter> snapshotWriterBuilder,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics) {
         this.logContext = logContext;
@@ -995,7 +986,7 @@ public final class QuorumController implements Controller {
         this.clusterControl = new ClusterControlManager(logContext, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
-        this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
+        this.snapshotGeneratorManager = new SnapshotGeneratorManager(raftClient::createSnapshot);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics);

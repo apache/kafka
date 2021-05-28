@@ -180,14 +180,16 @@ public interface RaftClient<T> extends AutoCloseable {
     void resign(int epoch);
 
     /**
-     * Create a writable snapshot file for a given offset and epoch.
+     * Create a writable snapshot file for a commmitted offset.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
-     * details on how to use this object.
+     * The RaftClient assumes that the snapshot return will contain the records up to and
+     * including the committed offset. See {@link SnapshotWriter} for details on how to use
+     * this object.
      *
-     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @param committedOffset the last committed offset that will be included in the snapshot
      * @return a writable snapshot
+     * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
+     *         or less than the log start offset.
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    SnapshotWriter<T> createSnapshot(long committedOffset);
 }

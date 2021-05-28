@@ -35,7 +35,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private int committed = 0;
     private int uncommitted = 0;
     private OptionalInt claimedEpoch = OptionalInt.empty();
-    private long lastSnapshotEndOffset = 0;
+    private long lastSnapshotCommittedOffset = -1;
 
     public ReplicatedCounter(
         int nodeId,
@@ -69,8 +69,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     public synchronized void handleCommit(BatchReader<Integer> reader) {
         try {
             int initialCommitted = committed;
-            long nextReadOffset = 0;
-            int readEpoch = 0;
+            long lastCommittedOffset = -1;
 
             while (reader.hasNext()) {
                 Batch<Integer> batch = reader.next();
@@ -93,17 +92,20 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     committed = nextCommitted;
                 }
 
-                nextReadOffset = batch.lastOffset() + 1;
-                readEpoch = batch.epoch();
+                lastCommittedOffset = batch.lastOffset();
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastSnapshotEndOffset + snapshotDelayInRecords  < nextReadOffset) {
-                log.debug("Generating new snapshot at {} since next commit offset is {}", lastSnapshotEndOffset, nextReadOffset);
-                try (SnapshotWriter<Integer> snapshot = client.createSnapshot(new OffsetAndEpoch(nextReadOffset, readEpoch))) {
+            if (lastSnapshotCommittedOffset + snapshotDelayInRecords  < lastCommittedOffset) {
+                log.debug(
+                    "Generating new snapshot at {} since the previoud snapshot includes {}",
+                    lastCommittedOffset,
+                    lastSnapshotCommittedOffset
+                );
+                try (SnapshotWriter<Integer> snapshot = client.createSnapshot(lastCommittedOffset)) {
                     snapshot.append(singletonList(committed));
                     snapshot.freeze();
-                    lastSnapshotEndOffset = nextReadOffset;
+                    lastSnapshotCommittedOffset = lastCommittedOffset;
                 }
             }
         } finally {

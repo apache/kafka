@@ -238,6 +238,13 @@ public interface ReplicatedLog extends AutoCloseable {
     RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     /**
+     * TODO: Write documentation...
+     *
+     * offset needs to be less than high-watermark
+     */
+    RawSnapshotWriter createSnapshotFromEndOffset(long endOffset);
+
+    /**
      * Opens a readable snapshot for the given snapshot id.
      *
      * Returns an Optional with a readable snapshot, if the snapshot exists, otherwise

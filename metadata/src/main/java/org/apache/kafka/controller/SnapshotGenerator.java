@@ -25,6 +25,7 @@ import java.util.OptionalLong;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 
@@ -48,7 +49,7 @@ final class SnapshotGenerator {
     }
 
     private final Logger log;
-    private final SnapshotWriter writer;
+    private final SnapshotWriter<ApiMessageAndVersion> writer;
     private final int maxBatchesPerGenerateCall;
     private final ExponentialBackoff exponentialBackoff;
     private final List<Section> sections;
@@ -57,10 +58,9 @@ final class SnapshotGenerator {
     private List<ApiMessageAndVersion> batch;
     private Section section;
     private long numRecords;
-    private long numWriteTries;
 
     SnapshotGenerator(LogContext logContext,
-                      SnapshotWriter writer,
+                      SnapshotWriter<ApiMessageAndVersion> writer,
                       int maxBatchesPerGenerateCall,
                       ExponentialBackoff exponentialBackoff,
                       List<Section> sections) {
@@ -74,14 +74,16 @@ final class SnapshotGenerator {
         this.batch = null;
         this.section = null;
         this.numRecords = 0;
-        this.numWriteTries = 0;
     }
 
     /**
+     * TODO: I don't we should call this epoch it makes it confusing the meaning of epoch in the Log, and RaftClient
+     * TODO: A better name is maybe lastCommitOffset.
      * Returns the epoch of the snapshot that we are generating.
      */
     long epoch() {
-        return writer.epoch();
+        // TODO: think about added a field to SnapshotWriter called lastCommitOffset
+        return writer.snapshotId().offset - 1;
     }
 
     SnapshotWriter writer() {
@@ -91,39 +93,34 @@ final class SnapshotGenerator {
     /**
      * Generate the next batch of records.
      *
-     * @return  0 if a batch was sent to the writer,
-     *          -1 if there are no more batches to generate,
-     *          or the number of times we tried to write and the writer
-     *          was busy, otherwise.
+     * TODO: Fix this API since we no longer return the number of tries
+     * @return
      */
-    private long generateBatch() throws Exception {
+    private boolean generateBatch() throws Exception {
         if (batch == null) {
             while (!batchIterator.hasNext()) {
                 if (section != null) {
                     log.info("Generated {} record(s) for the {} section of snapshot {}.",
-                             numRecords, section.name(), writer.epoch());
+                             numRecords, section.name(), writer.snapshotId());
                     section = null;
                     numRecords = 0;
                 }
                 if (!sectionIterator.hasNext()) {
-                    writer.completeSnapshot();
-                    return -1;
+                    writer.freeze();
+                    return true;
                 }
                 section = sectionIterator.next();
                 log.info("Generating records for the {} section of snapshot {}.",
-                         section.name(), writer.epoch());
+                         section.name(), writer.snapshotId());
                 batchIterator = section.iterator();
             }
             batch = batchIterator.next();
         }
-        if (writer.writeBatch(batch)) {
-            numRecords += batch.size();
-            numWriteTries = 0;
-            batch = null;
-            return 0;
-        } else {
-            return ++numWriteTries;
-        }
+
+        writer.append(batch);
+        numRecords += batch.size();
+        batch = null;
+        return false;
     }
 
     /**
@@ -133,12 +130,10 @@ final class SnapshotGenerator {
      *          generateBatches event, or empty if the snapshot is done.
      */
     OptionalLong generateBatches() throws Exception {
+        // TODO: revisit this API and implementation
         for (int numBatches = 0; numBatches < maxBatchesPerGenerateCall; numBatches++) {
-            long result = generateBatch();
-            if (result < 0) {
+            if (generateBatch()) {
                 return OptionalLong.empty();
-            } else if (result > 0) {
-                return OptionalLong.of(exponentialBackoff.backoff(result - 1));
             }
         }
         return OptionalLong.of(0);

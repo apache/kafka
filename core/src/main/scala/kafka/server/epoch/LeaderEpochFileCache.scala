@@ -269,6 +269,23 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   /**
+   * TODO: Document this method
+   *
+   * Make sure to mention that this look up is linear
+   */
+  def findEpochEntryByEndOffset(endOffset: Long): Option[EpochEntry] = {
+    inReadLock(lock) {
+      for (epochEntry <- epochs.descendingMap.values().asScala) {
+        if (epochEntry.startOffset < endOffset) {
+          return Some(epochEntry)
+        }
+      }
+
+      None
+    }
+  }
+
+  /**
     * Delete all entries.
     */
   def clearAndFlush(): Unit = {

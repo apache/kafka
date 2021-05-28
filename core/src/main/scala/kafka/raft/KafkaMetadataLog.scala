@@ -234,7 +234,7 @@ final class KafkaMetadataLog private (
   }
 
   override def createSnapshot(snapshotId: OffsetAndEpoch): RawSnapshotWriter = {
-    // Do not let the state machine create snapshots older than the latest snapshot
+    // Snapshots older than the latest snapshot are not allowed
     latestSnapshotId().ifPresent { latest =>
       if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
         // Since snapshots are less than the high-watermark absolute offset comparison is okay.
@@ -245,6 +245,35 @@ final class KafkaMetadataLog private (
     }
 
     FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this))
+  }
+
+  // TODO: Write test for this method in KafkaMetadataLogTest
+  override def createSnapshotFromEndOffset(endOffset: Long): RawSnapshotWriter = {
+    val highWatermarkOffset = highWatermark.offset
+    if (endOffset > highWatermarkOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create a snapshot for an end offset ($endOffset) greater than the high-watermark ($highWatermarkOffset)"
+      )
+    }
+
+    if (endOffset <= startOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create a snapshot for an end offset ($endOffset) less or equal to the log start offset ($startOffset)"
+      )
+    }
+
+    val epoch = log.leaderEpochCache.flatMap(_.findEpochEntryByEndOffset(endOffset)) match {
+      case Some(epochEntry) =>
+        epochEntry.epoch
+      case None =>
+        // Assume that the end offset falls in the current epoch since based on the check above:
+        // 1. it was not found in the leader epoch cache
+        // 2. it cannot be less than the log start offset
+        // 3. it is not greater than the log end offset
+        lastFetchedEpoch
+    }
+
+    createSnapshot(new OffsetAndEpoch(endOffset, epoch))
   }
 
   override def readSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotReader] = {
