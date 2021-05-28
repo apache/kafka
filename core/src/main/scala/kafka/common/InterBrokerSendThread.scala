@@ -121,8 +121,8 @@ abstract class InterBrokerSendThread(
       val (node, requests) = (entry.getKey, entry.getValue)
       if (!requests.isEmpty && networkClient.connectionFailed(node)) {
         iterator.remove()
+        val authenticationException = networkClient.authenticationException(node)
         for (request <- requests.asScala) {
-          val authenticationException = networkClient.authenticationException(node)
           if (authenticationException != null)
             error(s"Failed to send the following request due to authentication error: $request")
           completeWithDisconnect(request, now, authenticationException)
