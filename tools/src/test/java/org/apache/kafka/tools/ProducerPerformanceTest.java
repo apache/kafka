@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -92,12 +91,12 @@ public class ProducerPerformanceTest {
     @Test
     public void testNumberOfCallsForSendAndClose() throws IOException {
 
-        doReturn(null).when(producerMock).send(ArgumentMatchers.<ProducerRecord<byte[], byte[]>>any(), ArgumentMatchers.<Callback>any());
+        doReturn(null).when(producerMock).send(any(), ArgumentMatchers.<Callback>any());
         doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
 
         String[] args = new String[] {"--topic", "Hello-Kafka", "--num-records", "5", "--throughput", "100", "--record-size", "100", "--producer-props", "bootstrap.servers=localhost:9000"};
         producerPerformanceSpy.start(args);
-        verify(producerMock, times(5)).send(ArgumentMatchers.<ProducerRecord<byte[], byte[]>>any(), ArgumentMatchers.<Callback>any());
+        verify(producerMock, times(5)).send(any(), ArgumentMatchers.<Callback>any());
         verify(producerMock, times(1)).close();
     }
 
