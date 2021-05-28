@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
@@ -92,6 +93,15 @@ public class MetadataRequest extends AbstractRequest {
             if (!data.allowAutoTopicCreation() && version < 4)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
                         "allowAutoTopicCreation field");
+            if (version >= 10) {
+                if (data.topics() != null) {
+                    data.topics().forEach(topic -> {
+                        if (topic.name() == null || topic.topicId() != Uuid.ZERO_UUID)
+                            throw new UnsupportedVersionException("MetadataRequest version " + version  +
+                                    " does not support null topic names or topic IDs.");
+                    });
+                }
+            }
             return new MetadataRequest(data, version);
         }
 
