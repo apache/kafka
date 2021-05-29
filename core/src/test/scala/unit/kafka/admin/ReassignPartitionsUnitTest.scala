@@ -663,6 +663,15 @@ class ReassignPartitionsUnitTest {
       addTopics(adminClient)
       assertStartsWith("Unexpected character",
         assertThrows(classOf[AdminOperationException], () => executeAssignment(adminClient, additional = false, "{invalid_json")).getMessage)
+
+      assertStartsWith("Unexpected character",
+        assertThrows(classOf[AdminOperationException], () => verifyAssignment(adminClient, "{invalid_json", preserveThrottles = false)).getMessage)
+
+      assertStartsWith("Unexpected character",
+        assertThrows(classOf[AdminOperationException], () => cancelAssignment(adminClient, "{invalid_json", preserveThrottles = false)).getMessage)
+
+      assertStartsWith("Unexpected character",
+        assertThrows(classOf[AdminOperationException], () => generateAssignment(adminClient, "{invalid_json", "1", enableRackAwareness = false)).getMessage)
     } finally {
       adminClient.close()
     }

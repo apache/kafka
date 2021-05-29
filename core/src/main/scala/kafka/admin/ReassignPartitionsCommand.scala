@@ -1581,14 +1581,15 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def parseTopicsData(jsonData: String): Seq[String] = {
-    Json.parseFull(jsonData) match {
-      case Some(js) =>
+    Json.tryParseFull(jsonData) match {
+      case Right(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestTopicsJsonVersion
         }
         parseTopicsData(version, js)
-      case None => throw new AdminOperationException("The input string is not a valid JSON")
+      case Left(f) =>
+        throw new AdminOperationException(f)
     }
   }
 
