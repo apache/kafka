@@ -31,11 +31,16 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -107,5 +112,53 @@ public class ProducerPerformanceTest {
         ArgumentParser parser = ProducerPerformance.argParser();
         ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
         assertEquals("unrecognized arguments: '--test'", thrown.getMessage());
+    }
+
+    @Test
+    public void testGenerateRandomPayloadByPayloadFile() throws UnsupportedEncodingException {
+
+        Integer recordSize = null;
+        boolean hasPayloadFile = true;
+
+        String inputString = "Hello Kafka";
+        byte[] byteArrray = inputString.getBytes(StandardCharsets.UTF_8);
+        List<byte[]> payloadByteList = new ArrayList<byte[]>();
+        payloadByteList.add(byteArrray);
+    
+        byte[] payload = null;
+        Random random = new Random(0);
+        payload = ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
+        assertEquals("Hello Kafka", new String(payload));
+    }
+
+    @Test
+    public void testGenerateRandomPayloadByRecordSize() throws UnsupportedEncodingException {
+
+        Integer recordSize = 100;
+        byte[] payload = new byte[recordSize];
+
+        boolean hasPayloadFile = false;
+        List<byte[]> payloadByteList = null;
+    
+        Random random = new Random(0);
+        payload = ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
+        
+        for (int i = 0; i < payload.length; i++) {
+            assertFalse(payload[i] == 0);
+        }
+    }
+
+    @Test
+    public void testGenerateRandomPayloadException() throws UnsupportedEncodingException {
+
+        Integer recordSize = null;
+        byte[] payload = null;
+
+        boolean hasPayloadFile = false;
+        List<byte[]> payloadByteList = null;
+    
+        Random random = new Random(0);
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random));
+        assertEquals("no payload File Path or record Size provided", thrown.getMessage());
     }
 }

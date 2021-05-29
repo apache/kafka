@@ -69,6 +69,7 @@ public class ProducerPerformance {
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             boolean transactionsEnabled =  0 < transactionDurationMs;
+            boolean hasPayloadFile = payloadFilePath != null;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -102,14 +103,7 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                } else if (recordSize != null) {
-                    for (int j = 0; j < payload.length; ++j)
-                        payload[j] = (byte) (random.nextInt(26) + 65);
-                } else {
-                    throw new IllegalArgumentException("no payload File Path or record Size provided");
-                }
+                payload = generateRandomPayload(recordSize, hasPayloadFile, payloadByteList, payload, random);
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -168,6 +162,19 @@ public class ProducerPerformance {
 
     KafkaProducer<byte[], byte[]> createKafkaProducer(Properties props) {
         return new KafkaProducer<>(props);
+    }
+
+    static byte[] generateRandomPayload(Integer recordSize, Boolean hasPayloadFile, List<byte[]> payloadByteList, byte[] payload,
+            Random random) {
+        if (hasPayloadFile) {
+            payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
+        } else if (recordSize != null) {
+            for (int j = 0; j < payload.length; ++j)
+                payload[j] = (byte) (random.nextInt(26) + 65);
+        } else {
+            throw new IllegalArgumentException("no payload File Path or record Size provided");
+        }
+        return payload;
     }
     
     static Properties readProps(List<String> producerProps, String producerConfig, String transactionalId,
