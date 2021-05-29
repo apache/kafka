@@ -327,7 +327,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param filter The filter to use.
-     * @return The DescribeAclsResult.
+     * @return The DeleteAclsResult.
      */
     default DescribeAclsResult describeAcls(AclBindingFilter filter) {
         return describeAcls(filter, new DescribeAclsOptions());
@@ -343,7 +343,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param filter  The filter to use.
      * @param options The options to use when listing the ACLs.
-     * @return The DescribeAclsResult.
+     * @return The DeleteAclsResult.
      */
     DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
