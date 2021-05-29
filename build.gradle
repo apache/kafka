@@ -380,15 +380,6 @@ subprojects {
     }
   }
 
-  cleanTest {
-    subprojects.each {
-      delete "${it.buildDir}/test-results/unitTest"
-      delete "${it.buildDir}/reports/tests/unitTest"
-      delete "${it.buildDir}/test-results/integrationTest"
-      delete "${it.buildDir}/reports/tests/integrationTest"
-    }
-  }
-
   task integrationTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
     ignoreFailures = userIgnoreFailures
@@ -455,6 +446,14 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
+    }
+  }
+
+  // remove test output from Test, IntegrationTest and UnitTest
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.destination
+      delete t.reports.html.destination
     }
   }
 
