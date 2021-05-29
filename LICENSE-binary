@@ -248,9 +248,9 @@ netty-transport-native-unix-common-4.1.59.Final
 plexus-utils-3.2.1
 rocksdbjni-5.18.4
 scala-collection-compat_2.13-2.3.0
-scala-library-2.13.5
+scala-library-2.13.6
 scala-logging_2.13-3.9.2
-scala-reflect-2.13.5
+scala-reflect-2.13.6
 scala-java8-compat_2.13-0.9.1
 snappy-java-1.1.8.1
 zookeeper-3.5.9

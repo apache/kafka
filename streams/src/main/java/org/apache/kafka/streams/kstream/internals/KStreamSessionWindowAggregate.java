@@ -82,27 +82,23 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private SessionStore<K, Agg> store;
         private SessionTupleForwarder<K, Agg> tupleForwarder;
-        private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
-            metrics = (StreamsMetricsImpl) context.metrics();
+            final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
                 threadId,
                 context.taskId().toString(),
-                internalProcessorContext.currentNode().name(),
+                ((InternalProcessorContext) context).currentNode().name(),
                 metrics
             );
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
         }
 
@@ -182,8 +178,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
-        final long start = one.start() < two.start() ? one.start() : two.start();
-        final long end = one.end() > two.end() ? one.end() : two.end();
+        final long start = Math.min(one.start(), two.start());
+        final long end = Math.max(one.end(), two.end());
         return new SessionWindow(start, end);
     }
 
@@ -205,10 +201,9 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
         private SessionStore<K, Agg> store;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (SessionStore<K, Agg>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         @Override

@@ -89,7 +89,7 @@ public abstract class AbstractSessionBytesStoreTest {
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -536,6 +536,7 @@ public abstract class AbstractSessionBytesStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(

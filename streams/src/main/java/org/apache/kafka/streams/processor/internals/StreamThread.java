@@ -1141,7 +1141,7 @@ public class StreamThread extends Thread {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),
@@ -1151,7 +1151,7 @@ public class StreamThread extends Thread {
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(
-                task.getValue().id().toString(),
+                task.getValue().id(),
                 task.getValue().inputPartitions(),
                 task.getValue().committedOffsets(),
                 task.getValue().highWaterMark(),

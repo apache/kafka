@@ -615,7 +615,7 @@ public class ProcessorStateManager implements StateManager {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)
-        return new TopicPartition(changelogFor(storeName), taskId.partition);
+        return new TopicPartition(changelogFor(storeName), taskId.partition());
     }
 
     private boolean isLoggingEnabled(final String storeName) {
