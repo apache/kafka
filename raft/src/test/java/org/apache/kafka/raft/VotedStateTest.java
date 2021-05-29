@@ -24,7 +24,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,16 +37,13 @@ class VotedStateTest {
     private final int votedId = 1;
     private final int electionTimeoutMs = 10000;
 
-    private VotedState newVotedState(
-        Set<Integer> voters,
-        Optional<LogOffsetMetadata> highWatermark
-    ) {
+    private VotedState newVotedStateWithVoters(Integer... voters) {
         return new VotedState(
             time,
             epoch,
             votedId,
-            voters,
-            highWatermark,
+            Utils.mkSet(voters),
+            Optional.empty(),
             electionTimeoutMs,
             logContext
         );
@@ -55,13 +51,13 @@ class VotedStateTest {
 
     @Test
     public void testElectionTimeout() {
-        Set<Integer> voters = Utils.mkSet(1, 2, 3);
+        Integer[] voters = {1, 2, 3};
 
-        VotedState state = newVotedState(voters, Optional.empty());
+        VotedState state = newVotedStateWithVoters(voters);
 
         assertEquals(epoch, state.epoch());
         assertEquals(votedId, state.votedId());
-        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, voters), state.election());
+        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, Utils.mkSet(voters)), state.election());
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
 
@@ -77,10 +73,7 @@ class VotedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        VotedState state = newVotedState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()
-        );
+        VotedState state = newVotedStateWithVoters(1, 2, 3);
 
         assertTrue(state.canGrantVote(1, isLogUpToDate));
         assertFalse(state.canGrantVote(2, isLogUpToDate));
