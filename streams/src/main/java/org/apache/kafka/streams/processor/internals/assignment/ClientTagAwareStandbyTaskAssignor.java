@@ -144,8 +144,6 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
             }
         }
 
-        log.info("Movement of task [{}] is valid", taskMovementAttempt.taskId());
-
         return true;
     }
 
