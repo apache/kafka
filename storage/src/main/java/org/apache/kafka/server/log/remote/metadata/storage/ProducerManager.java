@@ -51,12 +51,12 @@ public class ProducerManager implements Closeable {
     }
 
     public RecordMetadata publishMessage(TopicIdPartition topicIdPartition,
-                                         RemoteLogMetadata remoteLogMetadataContext) throws KafkaException {
+                                         RemoteLogMetadata remoteLogMetadata) throws KafkaException {
         ensureNotClosed();
 
         int metadataPartitionNo = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
-                topicIdPartition, metadataPartitionNo, remoteLogMetadataContext);
+                topicIdPartition, metadataPartitionNo, remoteLogMetadata);
 
         ProducerCallback callback = new ProducerCallback();
         try {
@@ -66,7 +66,7 @@ public class ProducerManager implements Closeable {
                                          " is more than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
             }
             producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNo, null,
-                    serde.serialize(remoteLogMetadataContext)), callback).get();
+                    serde.serialize(remoteLogMetadata)), callback).get();
         } catch (KafkaException e) {
             throw e;
         } catch (Exception e) {

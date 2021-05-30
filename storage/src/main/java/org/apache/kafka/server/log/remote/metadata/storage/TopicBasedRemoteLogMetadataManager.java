@@ -64,8 +64,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
     private Thread initializationThread;
     private Time time = Time.SYSTEM;
-    private ProducerManager producerManager;
-    private ConsumerManager consumerManager;
+    private volatile ProducerManager producerManager;
+    private volatile ConsumerManager consumerManager;
 
     // This allows to gracefully close this instance using {@link #close()} method while there are some pending or new
     // requests calling different methods which use the resources like producer/consumer managers.
@@ -74,6 +74,14 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private final RemotePartitionMetadataStore remotePartitionMetadataStore = new RemotePartitionMetadataStore();
     private volatile TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
     private RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner;
+
+    public TopicBasedRemoteLogMetadataManager() {
+    }
+
+    // Visible for testing.
+    public TopicBasedRemoteLogMetadataManager(Time time) {
+        this.time = time;
+    }
 
     @Override
     public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
@@ -268,37 +276,26 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
     private void initializeResources() {
         log.info("Initializing the resources.");
-        while (true) {
-            if (!initialized.get() && !close.get()) {
-                try {
-                    //todo: There were race conditions observed in creating the remote log metadata topic when multiple
-                    // brokers started running RLMM and creating the topic based on auto create flag.
-                    // We may want to add a check here later.
+        if (!initialized.get() && !close.get()) {
+            try {
+                //todo: There were race conditions observed in creating the remote log metadata topic when multiple
+                // brokers started running RLMM and creating the topic based on auto create flag.
+                // We may want to add a check here later.
 
-                    // Create producer and consumer managers.
-                    if (producerManager == null) {
-                        producerManager = new ProducerManager(rlmmConfig, rlmmTopicPartitioner);
-                    }
-
-                    if (consumerManager == null) {
-                        consumerManager = new ConsumerManager(rlmmConfig, remotePartitionMetadataStore, rlmmTopicPartitioner, time);
-                        consumerManager.startConsumerThread();
-                    }
-
-                    initialized.set(true);
-                    log.info("Initialized resources successfully.");
-                    break;
-                } catch (Exception e) {
-                    log.error("Encountered error while initializing producer/consumer", e);
-
-                    // If it is already closing, break from here before it retries.
-                    if (close.get()) {
-                        break;
-                    }
-
-                    log.error("Sleep for : {} ms before it is retried again.", INITIALIZATION_RETRY_INTERVAL_MS);
-                    Utils.sleep(INITIALIZATION_RETRY_INTERVAL_MS);
+                // Create producer and consumer managers.
+                if (producerManager == null) {
+                    producerManager = new ProducerManager(rlmmConfig, rlmmTopicPartitioner);
                 }
+
+                if (consumerManager == null) {
+                    consumerManager = new ConsumerManager(rlmmConfig, remotePartitionMetadataStore, rlmmTopicPartitioner, time);
+                    consumerManager.startConsumerThread();
+                }
+
+                initialized.set(true);
+                log.info("Initialized resources successfully.");
+            } catch (Exception e) {
+                log.error("Encountered error while initializing producer/consumer", e);
             }
         }
     }
@@ -312,11 +309,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
                                             " close: " + close);
         }
-    }
-
-    // Visible for testing.
-    void setTime(Time time) {
-        this.time = time;
     }
 
     @Override

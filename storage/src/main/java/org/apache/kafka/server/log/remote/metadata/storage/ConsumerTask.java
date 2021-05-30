@@ -51,7 +51,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
  * partitions to be deleted. This class receives those notifications with
  * {@link #addAssignmentsForPartitions(Set)} and {@link #removeAssignmentsForPartitions(Set)} assigns consumer for the
  * respective remote log metadata partitions by using {@link RemoteLogMetadataTopicPartitioner#metadataPartition(TopicIdPartition)}.
- * Any leadership changes later are called through the same API. We will remove the partitions that ard deleted from
+ * Any leadership changes later are called through the same API. We will remove the partitions that are deleted from
  * this broker which are received through {@link #removeAssignmentsForPartitions(Set)}.
  * <p>
  * After receiving these events it invokes {@link RemotePartitionMetadataEventHandler#handleRemoteLogSegmentMetadata(RemoteLogSegmentMetadata)},
@@ -77,9 +77,6 @@ class ConsumerTask implements Runnable, Closeable {
 
     // User topic partitions that this broker is a leader/follower for.
     private Set<TopicIdPartition> assignedTopicPartitions = Collections.emptySet();
-
-    // Map of remote log metadata topic partition to target end offsets to be consumed.
-    private final Map<Integer, Long> partitionToTargetEndOffsets = new ConcurrentHashMap<>();
 
     // Map of remote log metadata topic partition to consumed offsets.
     private final Map<Integer, Long> partitionToConsumedOffsets = new ConcurrentHashMap<>();
@@ -109,16 +106,6 @@ class ConsumerTask implements Runnable, Closeable {
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
                     handleRemoteLogMetadata(serde.deserialize(record.value()));
                     partitionToConsumedOffsets.put(record.partition(), record.offset());
-                }
-
-                // Check whether messages are received till end offsets or not for the assigned metadata partitions.
-                if (!partitionToTargetEndOffsets.isEmpty()) {
-                    for (Map.Entry<Integer, Long> entry : partitionToTargetEndOffsets.entrySet()) {
-                        final Long offset = partitionToConsumedOffsets.getOrDefault(entry.getKey(), 0L);
-                        if (offset >= entry.getValue()) {
-                            partitionToTargetEndOffsets.remove(entry.getKey());
-                        }
-                    }
                 }
             }
         } catch (Exception e) {
@@ -171,25 +158,6 @@ class ConsumerTask implements Runnable, Closeable {
                 .collect(Collectors.toSet());
         log.info("Reassigning partitions to consumer task [{}]", assignedMetaTopicPartitions);
         consumer.assign(assignedMetaTopicPartitions);
-
-        log.debug("Fetching end offsets to consumer task [{}]", assignedMetaTopicPartitions);
-        Map<TopicPartition, Long> endOffsets;
-        while (true) {
-            try {
-                endOffsets = consumer.endOffsets(assignedMetaTopicPartitions, Duration.ofSeconds(30));
-                break;
-            } catch (Exception e) {
-                // ignore exception
-                log.debug("Error encountered in fetching end offsets", e);
-            }
-        }
-        log.debug("Fetched end offsets to consumer task [{}]", endOffsets);
-
-        for (Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
-            if (entry.getValue() > 0) {
-                partitionToTargetEndOffsets.put(entry.getKey().partition(), entry.getValue());
-            }
-        }
     }
 
     public void addAssignmentsForPartitions(Set<TopicIdPartition> updatedPartitions) {
@@ -220,12 +188,16 @@ class ConsumerTask implements Runnable, Closeable {
             for (TopicIdPartition tp : updatedReassignedPartitions) {
                 updatedAssignedMetaPartitions.add(topicPartitioner.metadataPartition(tp));
             }
+            assignedTopicPartitions = Collections.unmodifiableSet(updatedReassignedPartitions);
+            log.debug("Assigned topic partitions: {}", assignedTopicPartitions);
 
             if (!updatedAssignedMetaPartitions.equals(assignedMetaPartitions)) {
-                assignedTopicPartitions = Collections.unmodifiableSet(updatedReassignedPartitions);
                 assignedMetaPartitions = Collections.unmodifiableSet(updatedAssignedMetaPartitions);
+                log.debug("Assigned metadata topic partitions: {}", assignedMetaPartitions);
                 assignPartitions = true;
                 assignPartitionsLock.notifyAll();
+            } else {
+                log.debug("No change in assigned metadata topic partitions: {}", assignedMetaPartitions);
             }
         }
     }

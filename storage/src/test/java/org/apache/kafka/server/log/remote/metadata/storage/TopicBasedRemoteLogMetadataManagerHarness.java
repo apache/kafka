@@ -60,8 +60,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         // Make sure the remote log metadata topic is created before it is used.
         createMetadataTopic();
 
-        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager();
-        topicBasedRemoteLogMetadataManager.setTime(time);
+        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(time);
 
         // Initialize TopicBasedRemoteLogMetadataManager.
         Map<String, Object> configs = new HashMap<>();
