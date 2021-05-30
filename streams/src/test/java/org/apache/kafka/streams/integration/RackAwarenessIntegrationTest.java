@@ -46,40 +46,26 @@ import org.junit.rules.TestName;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 @Category({IntegrationTest.class})
 public class RackAwarenessIntegrationTest {
-    public static final TaskId TASK_0_0 = new TaskId(0, 0);
-    public static final TaskId TASK_0_1 = new TaskId(0, 1);
-    public static final TaskId TASK_0_2 = new TaskId(0, 2);
-    public static final TaskId TASK_0_3 = new TaskId(0, 3);
-    public static final TaskId TASK_0_4 = new TaskId(0, 4);
-    public static final TaskId TASK_0_5 = new TaskId(0, 5);
-    public static final TaskId TASK_0_6 = new TaskId(0, 6);
-    public static final TaskId TASK_1_0 = new TaskId(1, 0);
-    public static final TaskId TASK_1_1 = new TaskId(1, 1);
-    public static final TaskId TASK_1_2 = new TaskId(1, 2);
-    public static final TaskId TASK_1_3 = new TaskId(1, 3);
-    public static final TaskId TASK_2_0 = new TaskId(2, 0);
-    public static final TaskId TASK_2_1 = new TaskId(2, 1);
-    public static final TaskId TASK_2_2 = new TaskId(2, 2);
-    public static final TaskId TASK_2_3 = new TaskId(2, 3);
-
     private static final int NUM_BROKERS = 1;
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @Rule
     public TestName testName = new TestName();
 
     private static final String INPUT_TOPIC = "input-topic";
+    private static final String TAG_ZONE = "zone";
+    private static final String TAG_CLUSTER = "cluster";
 
     private List<KafkaStreamsWithConfiguration> kafkaStreamsInstances;
     private Properties baseConfiguration;
@@ -87,7 +73,7 @@ public class RackAwarenessIntegrationTest {
     @BeforeClass
     public static void createTopics() throws Exception {
         CLUSTER.start();
-        CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
+        CLUSTER.createTopic(INPUT_TOPIC, 6, 1);
     }
 
     @Before
@@ -113,17 +99,109 @@ public class RackAwarenessIntegrationTest {
     }
 
     @Test
-    public void simpleTest() throws Exception {
+    public void shouldDistributeStandbyReplicasBasedOnClientTags() throws Exception {
+        final Topology topology = createStatefulTopology();
+        final int numberOfStandbyReplicas = 1;
+
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        waitUntilRackAwareTaskDistributionIsReached(TAG_ZONE);
+    }
+
+    @Test
+    public void shouldDistributeStandbyReplicasOverMultipleClientTags() throws Exception {
+        final Topology topology = createStatefulTopology();
+        final int numberOfStandbyReplicas = 2;
+
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1c", "k8s-cluster-1"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-2"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-2"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1c", "k8s-cluster-2"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+        createAndStart(topology, buildClientTagMap("eu-central-1a", "k8s-cluster-3"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1b", "k8s-cluster-3"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+        createAndStart(topology, buildClientTagMap("eu-central-1c", "k8s-cluster-3"), Arrays.asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
+
+
+        waitUntilRackAwareTaskDistributionIsReached(TAG_ZONE, TAG_CLUSTER);
+    }
+
+    private void waitUntilRackAwareTaskDistributionIsReached(final String... tagsToCheck) throws Exception {
+        final TestCondition condition = () -> {
+
+            final List<TaskDistribution> tasksDistributions = getTasksDistributions();
+
+            if (tasksDistributions.isEmpty()) {
+                return false;
+            }
+
+            return tasksDistributions.stream().allMatch(taskDistribution -> {
+                final Map<String, String> activeTaskClientTags = taskDistribution.activeClientTaskView.clientTags;
+
+                return verifyTasksDistribution(taskDistribution.standbyTasks,
+                                               activeTaskClientTags,
+                                               Arrays.asList(tagsToCheck));
+            });
+        };
+
+        TestUtils.waitForCondition(
+            condition,
+            IntegrationTestUtils.DEFAULT_TIMEOUT,
+            "Rack aware task distribution couldn't be reached on " +
+            "client tags [" + Arrays.toString(tagsToCheck) + "]."
+        );
+    }
+
+    private static boolean verifyTasksDistribution(final List<ClientTaskView> standbyTasks,
+                                                   final Map<String, String> activeTaskClientTags,
+                                                   final List<String> tagsToCheck) {
+        return tagsAmongstStandbyTasksAreDifferent(standbyTasks, tagsToCheck)
+               && tagsAmongstActiveAndStandbyTasksAreDifferent(standbyTasks, activeTaskClientTags, tagsToCheck);
+    }
+
+    private static boolean tagsAmongstActiveAndStandbyTasksAreDifferent(final List<ClientTaskView> standbyTasks,
+                                                                        final Map<String, String> activeTaskClientTags,
+                                                                        final List<String> tagsToCheck) {
+        return standbyTasks.stream().allMatch(standbyTask -> tagsToCheck.stream().noneMatch(tag -> activeTaskClientTags.get(tag).equals(standbyTask.clientTags.get(tag))));
+    }
+
+    private static boolean tagsAmongstStandbyTasksAreDifferent(final List<ClientTaskView> standbyTasks, final List<String> tagsToCheck) {
+        final Map<String, Integer> statistics = new HashMap<>();
+
+        for (final ClientTaskView standbyTask : standbyTasks) {
+            for (final String tag : tagsToCheck) {
+                final String tagValue = standbyTask.clientTags.get(tag);
+                final Integer tagValueOccurrence = statistics.getOrDefault(tagValue, 0);
+                statistics.put(tagValue, tagValueOccurrence + 1);
+            }
+        }
+
+        return statistics.values().stream().noneMatch(occurrence -> occurrence > 1);
+    }
+
+    private static Topology createStatefulTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
-        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
-                                        Serdes.Integer(),
-                                        Serdes.Integer());
+
+        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore(stateStoreName),
+            Serdes.Integer(),
+            Serdes.Integer()
+        );
+
         builder.addStateStore(keyValueStoreBuilder);
+
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
                .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                   @SuppressWarnings("unchecked")
                    @Override
                    public void init(final ProcessorContext context) {
                    }
@@ -138,75 +216,124 @@ public class RackAwarenessIntegrationTest {
                    }
                }, stateStoreName);
 
-        final Topology topology = builder.build();
+        return builder.build();
+    }
 
-        final KafkaStreams kStream1ACluster1 = createAndStart(topology, streamsConfiguration(buildClientTagMap("eu-central-1a", "k8s-cluster-1"), "zone,cluster", 1));
-        final KafkaStreams kStream1BCluster1 = createAndStart(topology, streamsConfiguration(buildClientTagMap("eu-central-1b", "k8s-cluster-1"), "zone,cluster", 1));
-        final KafkaStreams kStream1CCluster1 = createAndStart(topology, streamsConfiguration(buildClientTagMap("eu-central-1c", "k8s-cluster-1"), "zone,cluster", 1));
+    private List<TaskDistribution> getTasksDistributions() {
+        final List<TaskDistribution> taskDistributions = new ArrayList<>();
 
-        waitUntilBothClientAreOK(
-            "At least one client did not reach state RUNNING with active tasks but no stand-by tasks",
-            () -> {
-                final boolean b = hasActiveTasks(kStream1ACluster1);
-                final boolean b1 = hasActiveTasks(kStream1BCluster1);
-                final boolean b2 = hasActiveTasks(kStream1CCluster1);
-                return b || b1 || b2;
+        for (final KafkaStreamsWithConfiguration kafkaStreamsInstance : kafkaStreamsInstances) {
+            final StreamsConfig config = new StreamsConfig(kafkaStreamsInstance.configuration);
+            for (final ThreadMetadata localThreadsMetadata : kafkaStreamsInstance.kafkaStreams.localThreadsMetadata()) {
+                localThreadsMetadata.activeTasks().forEach(activeTask -> {
+                    final TaskId activeTaskId = activeTask.getTaskId();
+                    final Map<String, String> clientTags = config.getClientTags();
+                    final List<ClientTaskView> standbyTasks = findStandbysForActiveTask(activeTaskId);
+
+                    final ClientTaskView activeTaskView = new ClientTaskView(activeTaskId, clientTags);
+                    taskDistributions.add(new TaskDistribution(activeTaskView, standbyTasks));
+                });
+
             }
-        );
+        }
+
+        return taskDistributions;
+    }
+
+    private List<ClientTaskView> findStandbysForActiveTask(final TaskId taskId) {
+        final List<ClientTaskView> standbyTasks = new ArrayList<>();
+
+        for (final KafkaStreamsWithConfiguration kafkaStreamsInstance : kafkaStreamsInstances) {
+            for (final ThreadMetadata localThreadsMetadata : kafkaStreamsInstance.kafkaStreams.localThreadsMetadata()) {
+                localThreadsMetadata.standbyTasks().forEach(standbyTask -> {
+                    final TaskId standbyTaskId = standbyTask.getTaskId();
+                    if (taskId.equals(standbyTaskId)) {
+                        final StreamsConfig config = new StreamsConfig(kafkaStreamsInstance.configuration);
+                        standbyTasks.add(new ClientTaskView(standbyTaskId, config.getClientTags()));
+                    }
+                });
+            }
+        }
+
+        return standbyTasks;
     }
 
     private static Map<String, String> buildClientTagMap(final String zone, final String cluster) {
         final Map<String, String> clientTags = new HashMap<>();
 
-        clientTags.put("zone", zone);
-        clientTags.put("cluster", cluster);
+        clientTags.put(TAG_ZONE, zone);
+        clientTags.put(TAG_CLUSTER, cluster);
 
         return clientTags;
     }
 
-    private boolean hasActiveTasks(final KafkaStreams kafkaStreams) {
-        final Set<ThreadMetadata> threadMetadata1 = kafkaStreams.localThreadsMetadata();
-        return threadMetadata1.stream().anyMatch(threadMetadata -> !threadMetadata.activeTasks().isEmpty());
-    }
+    private void createAndStart(final Topology topology,
+                                final Map<String, String> clientTags,
+                                final List<String> rackAwareAssignmentTags,
+                                final int numberOfStandbyReplicas) {
+        final Properties streamsConfiguration = createStreamsConfiguration(clientTags, rackAwareAssignmentTags, numberOfStandbyReplicas);
+        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
-    private boolean hasStandbyTasks(final KafkaStreams kafkaStreams) {
-        return kafkaStreams.localThreadsMetadata().stream().anyMatch(threadMetadata -> !threadMetadata.standbyTasks().isEmpty());
-    }
-
-    private void waitUntilBothClientAreOK(final String message, final TestCondition testCondition) throws Exception {
-        TestUtils.waitForCondition(testCondition, IntegrationTestUtils.DEFAULT_TIMEOUT, message);
-    }
-
-    private KafkaStreams createAndStart(final Topology topology,
-                                        final Properties streamsConfigs) {
-        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfigs);
-
-        kafkaStreamsInstances.add(new KafkaStreamsWithConfiguration(streamsConfigs, kafkaStreams));
+        kafkaStreamsInstances.add(new KafkaStreamsWithConfiguration(streamsConfiguration, kafkaStreams));
 
         kafkaStreams.start();
-
-        return kafkaStreams;
     }
 
-    private Properties streamsConfiguration(final Map<String, String> clientTags,
-                                            final String rackAwareAssignmentTags,
-                                            final int numStandbyReplicas) {
+    private Properties createStreamsConfiguration(final Map<String, String> clientTags,
+                                                  final List<String> rackAwareAssignmentTags,
+                                                  final int numStandbyReplicas) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.putAll(baseConfiguration);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
-        streamsConfiguration.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
+        streamsConfiguration.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
         clientTags.forEach((key, value) -> streamsConfiguration.put(StreamsConfig.clientTagPrefix(key), value));
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(String.join("-", clientTags.values())).getPath());
         return streamsConfiguration;
     }
 
-    private static class KafkaStreamsWithConfiguration {
+    private static final class KafkaStreamsWithConfiguration {
         private final Properties configuration;
         private final KafkaStreams kafkaStreams;
 
         KafkaStreamsWithConfiguration(final Properties configuration, final KafkaStreams kafkaStreams) {
             this.configuration = configuration;
             this.kafkaStreams = kafkaStreams;
+        }
+    }
+
+    private static final class TaskDistribution {
+        private final ClientTaskView activeClientTaskView;
+        private final List<ClientTaskView> standbyTasks;
+
+        TaskDistribution(final ClientTaskView activeClientTaskView, final List<ClientTaskView> standbyTasks) {
+            this.activeClientTaskView = activeClientTaskView;
+            this.standbyTasks = standbyTasks;
+        }
+
+        @Override
+        public String toString() {
+            return "TaskDistribution{" +
+                   "activeTaskClientTagsView=" + activeClientTaskView +
+                   ", standbyTasks=" + standbyTasks +
+                   '}';
+        }
+    }
+
+    private static final class ClientTaskView {
+        private final TaskId taskId;
+        private final Map<String, String> clientTags;
+
+        ClientTaskView(final TaskId taskId, final Map<String, String> clientTags) {
+            this.taskId = taskId;
+            this.clientTags = clientTags;
+        }
+
+        @Override
+        public String toString() {
+            return "TaskClientTagsView{" +
+                   "taskId=" + taskId +
+                   ", clientTags=" + clientTags +
+                   '}';
         }
     }
 }

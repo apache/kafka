@@ -232,6 +232,85 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         );
     }
 
+    @Test
+    public void shouldDistributeClientsOnDifferentZoneTagsEvenWhenClientsReachedCapacity() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(UUID_4, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0)),
+
+            mkEntry(UUID_2, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1)),
+            mkEntry(UUID_5, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_1)),
+
+            mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2)),
+            mkEntry(UUID_6, createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_2))
+        );
+
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, ZONE_TAG, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_2), mkSet(UUID_5), mkSet(UUID_3), mkSet(UUID_6)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_0,
+                clientStates,
+                asList(
+                    mkSet(UUID_2), mkSet(UUID_5), mkSet(UUID_3), mkSet(UUID_6)
+                )
+            )
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_1), mkSet(UUID_4), mkSet(UUID_3), mkSet(UUID_6)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_1,
+                clientStates,
+                asList(
+                    mkSet(UUID_1), mkSet(UUID_4), mkSet(UUID_3), mkSet(UUID_6)
+                )
+            )
+        );
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_1), mkSet(UUID_4), mkSet(UUID_2), mkSet(UUID_5)
+                )
+            )
+        );
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_1_2,
+                clientStates,
+                asList(
+                    mkSet(UUID_1), mkSet(UUID_4), mkSet(UUID_2), mkSet(UUID_5)
+                )
+            )
+        );
+    }
+
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,
                                                             final Map<UUID, ClientState> clientStates,
                                                             final List<Set<UUID>> validClientIdsBasedOnRackAwareAssignmentTags) {

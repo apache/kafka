@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -101,7 +100,6 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
 
             while (numRemainingStandbys > 0) {
                 final Set<UUID> toBeFilteredClients = findClientsViolatingRackAwareness(rackAwareAssignmentTags,
-                                                                                        clientStates,
                                                                                         tagKeyToTagValuesMapping,
                                                                                         tagValueTagKeyMapping,
                                                                                         clientsPerTagValue,
@@ -149,12 +147,10 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
     }
 
     private static Set<UUID> findClientsViolatingRackAwareness(final Set<String> rackAwareAssignmentTags,
-                                                               final TreeMap<UUID, ClientState> clientStates,
                                                                final Map<String, Set<String>> allTags,
                                                                final Map<String, String> tagValueTagKeyMapping,
                                                                final Map<String, Set<UUID>> clientsPerTagValue,
                                                                final List<List<String>> clientTagValues) {
-        final Set<UUID> allClients = clientStates.keySet();
         final Set<UUID> filteredClients = new HashSet<>();
 
         for (final List<String> tagValues : clientTagValues) {
@@ -172,33 +168,10 @@ class ClientTagAwareStandbyTaskAssignor extends StandbyTaskAssignor {
                     continue;
                 }
 
-                if (willRemainingClientsHaveEnoughCapacity(allClients, filteredClients, clientsToBeFiltered, clientStates)) {
-                    filteredClients.addAll(clientsToBeFiltered);
-                }
+                filteredClients.addAll(clientsToBeFiltered);
             }
         }
 
         return filteredClients;
-    }
-
-    private static boolean willRemainingClientsHaveEnoughCapacity(final Set<UUID> allClients,
-                                                                  final Set<UUID> filteredClients,
-                                                                  final Set<UUID> clientsToBeFiltered,
-                                                                  final TreeMap<UUID, ClientState> clientStates) {
-        final Collection<UUID> validClients = allClientsNotIn(
-            allClientsNotIn(
-                allClients,
-                filteredClients
-            ),
-            clientsToBeFiltered
-        );
-
-        return validClients.stream().anyMatch(clientId -> !clientStates.get(clientId).reachedCapacity());
-    }
-
-    private static Set<UUID> allClientsNotIn(final Set<UUID> allClients, final Set<UUID> toBeFilteredClients) {
-        final Set<UUID> clients = new HashSet<>(allClients);
-        clients.removeAll(toBeFilteredClients);
-        return clients;
     }
 }
