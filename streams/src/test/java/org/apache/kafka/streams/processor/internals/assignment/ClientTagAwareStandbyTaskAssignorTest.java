@@ -40,6 +40,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ClientTagAwareStandbyTaskAssignorTest {
@@ -63,6 +64,31 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final UUID UUID_7 = uuidForInt(7);
     private static final UUID UUID_8 = uuidForInt(8);
     private static final UUID UUID_9 = uuidForInt(9);
+
+    @Test
+    public void shouldPermitTaskMovementWhenClientTagsMatch() {
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor(assignmentConfigs);
+        final TaskMovementAttempt taskMovementAttempt = new TaskMovementAttempt(
+            TASK_0_0,
+            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1))),
+            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)))
+        );
+        assertTrue(standbyTaskAssignor.isValidTaskMovement(taskMovementAttempt));
+    }
+
+    @Test
+    public void shouldDeclineTaskMovementWhenClientTagsMatch() {
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+        final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor(assignmentConfigs);
+        final TaskMovementAttempt taskMovementAttempt = new TaskMovementAttempt(
+            TASK_0_0,
+            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1))),
+            createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))
+        );
+
+        assertFalse(standbyTaskAssignor.isValidTaskMovement(taskMovementAttempt));
+    }
 
     @Test
     public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameZone() {
