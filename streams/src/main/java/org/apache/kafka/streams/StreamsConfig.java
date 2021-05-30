@@ -805,7 +805,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG,
                     Type.SHORT,
                     DEFAULT_MAX_CLIENT_TAG_KEY_VALUE_LENGTH,
-                    atLeast(1),
+                    between(1, 200),
                     Importance.LOW,
                     MAX_CLIENT_TAG_KEY_VALUE_LENGTH_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
@@ -1166,6 +1166,11 @@ public class StreamsConfig extends AbstractConfig {
         final short maxClientTagKeyValueLength = getShort(MAX_CLIENT_TAG_KEY_VALUE_LENGTH_CONFIG);
         final List<String> rackAwareAssignmentTags = getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         final Map<String, String> clientTags = getClientTags();
+
+        if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
+            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
+                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+        }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {

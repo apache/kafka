@@ -38,6 +38,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -1138,15 +1139,26 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldThrowExceptionWhenRackAwareAssignmentTagsExceedsMaxListSize() {
-        props.put(StreamsConfig.clientTagPrefix("t1"), "a");
-        props.put(StreamsConfig.clientTagPrefix("t2"), "b");
-        props.put(StreamsConfig.clientTagPrefix("t3"), "c");
-        props.put(StreamsConfig.clientTagPrefix("t4"), "d");
-        props.put(StreamsConfig.clientTagPrefix("t5"), "e");
-        props.put(StreamsConfig.clientTagPrefix("t6"), "f");
+    public void shouldThrowExceptionWhenClientTagsExceedTheLimit() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        for (int i = 0; i < limit; i++) {
+            props.put(StreamsConfig.clientTagPrefix("k" + i), "v" + i);
+        }
 
-        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "t1,t2,t3,t4,t5,t6");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenRackAwareAssignmentTagsExceedsMaxListSize() {
+        final int limit = StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + 1;
+        final List<String> rackAwareAssignmentTags = new ArrayList<>();
+        for (int i = 0; i < limit; i++) {
+            final String clientTagKey = "k" + i;
+            rackAwareAssignmentTags.add(clientTagKey);
+            props.put(StreamsConfig.clientTagPrefix(clientTagKey), "v" + i);
+        }
+
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
