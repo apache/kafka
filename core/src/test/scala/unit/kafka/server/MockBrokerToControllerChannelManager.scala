@@ -19,7 +19,7 @@ package kafka.server
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientResponse, MockClient, NodeApiVersions}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.AbstractRequest
+import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
 
 class MockBrokerToControllerChannelManager(
   val client: MockClient,
@@ -39,12 +39,14 @@ class MockBrokerToControllerChannelManager(
 
   override def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler
+    callback: ControllerRequestCompletionHandler,
+    requestHeader: RequestHeader
   ): Unit = {
     unsentQueue.add(BrokerToControllerQueueItem(
       createdTimeMs = time.milliseconds(),
       request = request,
-      callback = callback
+      callback = callback,
+      requestHeader = requestHeader
     ))
   }
 

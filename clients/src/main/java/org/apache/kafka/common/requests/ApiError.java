@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Objects;
+import java.util.concurrent.CompletionException;
 
 /**
  * Encapsulates an error code (via the Errors enum) and an optional message. Generally, the optional message is only
@@ -36,10 +37,16 @@ public class ApiError {
     private final String message;
 
     public static ApiError fromThrowable(Throwable t) {
+        Throwable throwableToBeDecode = t;
+        // Future will wrap the original exception with completionException, which will return unexpected UNKNOWN_SERVER_ERROR.
+        if (t instanceof CompletionException) {
+            throwableToBeDecode = t.getCause();
+        }
         // Avoid populating the error message if it's a generic one. Also don't populate error
         // message for UNKNOWN_SERVER_ERROR to ensure we don't leak sensitive information.
-        Errors error = Errors.forException(t);
-        String message = error == Errors.UNKNOWN_SERVER_ERROR || error.message().equals(t.getMessage()) ? null : t.getMessage();
+        Errors error = Errors.forException(throwableToBeDecode);
+        String message = error == Errors.UNKNOWN_SERVER_ERROR ||
+            error.message().equals(throwableToBeDecode.getMessage()) ? null : throwableToBeDecode.getMessage();
         return new ApiError(error, message);
     }
 
