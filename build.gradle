@@ -449,7 +449,7 @@ subprojects {
     }
   }
 
-  // remove test output from Test, IntegrationTest and UnitTest
+  // remove test output from all test types
   tasks.withType(Test).all { t ->
     cleanTest {
       delete t.reports.junitXml.destination
