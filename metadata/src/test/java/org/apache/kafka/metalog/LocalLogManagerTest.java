@@ -96,7 +96,7 @@ public class LocalLogManagerTest {
 
     private static void waitForLastCommittedOffset(long targetOffset,
                 LocalLogManager logManager) throws InterruptedException {
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             MockMetaLogManagerListener listener =
                 (MockMetaLogManagerListener) logManager.listeners().get(0);
             long highestOffset = -1;

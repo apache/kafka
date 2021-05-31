@@ -18,13 +18,12 @@ package kafka.log
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
-
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.log.LogValidator.ValidationAndOffsetAssignResult
 import kafka.message._
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
@@ -128,8 +127,8 @@ class LogValidatorTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       origin = AppendOrigin.Client,
       KAFKA_2_3_IV1,
-      brokerTopicStats
-    )
+      brokerTopicStats,
+      RequestLocal.withThreadConfinedCaching)
   }
 
   @Test
@@ -160,7 +159,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size, "message set size should not change")
     validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
@@ -199,7 +199,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size,
@@ -247,7 +248,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals(records.records.asScala.size, validatedRecords.records.asScala.size,
@@ -309,7 +311,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
   }
 
   @Test
@@ -353,7 +356,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = partitionLeaderEpoch,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -425,7 +429,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = partitionLeaderEpoch,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -481,7 +486,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -526,7 +532,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -583,7 +590,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = partitionLeaderEpoch,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val validatedRecords = validatedResults.validatedRecords
 
     var i = 0
@@ -636,7 +644,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -659,7 +668,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -682,7 +692,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -705,7 +716,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -727,7 +739,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -749,7 +762,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -772,7 +786,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -796,7 +811,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -821,7 +837,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -846,7 +863,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -869,7 +887,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -894,7 +913,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -919,7 +939,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -944,7 +965,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -969,7 +991,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -991,7 +1014,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Coordinator,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching)
     val batches = TestUtils.toList(result.validatedRecords.batches)
     assertEquals(1, batches.size)
     val batch = batches.get(0)
@@ -1018,7 +1042,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1041,7 +1066,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1063,7 +1089,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1085,7 +1112,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1108,7 +1136,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1131,7 +1160,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1156,7 +1186,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -1181,7 +1212,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -1204,7 +1236,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1227,7 +1260,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching).validatedRecords, offset)
   }
 
   @Test
@@ -1248,7 +1282,8 @@ class LogValidatorTest {
         partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
         origin = AppendOrigin.Client,
         interBrokerProtocolVersion = ApiVersion.latestVersion,
-        brokerTopicStats = brokerTopicStats)
+        brokerTopicStats = brokerTopicStats,
+        requestLocal = RequestLocal.withThreadConfinedCaching)
     )
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
@@ -1278,7 +1313,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = KAFKA_2_0_IV1,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -1312,7 +1348,8 @@ class LogValidatorTest {
         partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
         origin = AppendOrigin.Client,
         interBrokerProtocolVersion = ApiVersion.latestVersion,
-        brokerTopicStats = brokerTopicStats)
+        brokerTopicStats = brokerTopicStats,
+        requestLocal = RequestLocal.withThreadConfinedCaching)
     )
 
     assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
@@ -1390,7 +1427,8 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats))
+      brokerTopicStats = brokerTopicStats,
+      requestLocal = RequestLocal.withThreadConfinedCaching))
   }
 
   private def createRecords(magicValue: Byte,

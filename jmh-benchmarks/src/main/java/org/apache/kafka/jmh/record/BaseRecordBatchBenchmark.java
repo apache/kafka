@@ -17,9 +17,9 @@
 package org.apache.kafka.jmh.record;
 
 import kafka.server.BrokerTopicStats;
+import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -74,7 +74,7 @@ public abstract class BaseRecordBatchBenchmark {
 
     // Used by measureVariableBatchSize
     ByteBuffer[] batchBuffers;
-    BufferSupplier bufferSupplier;
+    RequestLocal requestLocal;
     final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
 
     @Setup
@@ -85,9 +85,9 @@ public abstract class BaseRecordBatchBenchmark {
         startingOffset = messageVersion == 2 ? 0 : 42;
 
         if (bufferSupplierStr.equals("NO_CACHING")) {
-            bufferSupplier = BufferSupplier.NO_CACHING;
+            requestLocal = RequestLocal.NoCaching();
         } else if (bufferSupplierStr.equals("CREATE")) {
-            bufferSupplier = BufferSupplier.create();
+            requestLocal = RequestLocal.withThreadConfinedCaching();
         } else {
             throw new IllegalArgumentException("Unsupported buffer supplier " + bufferSupplierStr);
         }
