@@ -24,6 +24,7 @@ import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.FetchRequestData
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -74,7 +75,6 @@ class ReplicaAlterLogDirsThread(name: String,
 
   def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
     var partitionData: Seq[(TopicPartition, FetchData)] = null
-    val request = fetchRequest.build()
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
@@ -91,20 +91,29 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
+    val request = fetchRequest.build()
+    val partitions = mutable.ArrayBuffer[(TopicPartition, FetchRequestData.FetchPartition)]()
+    request.data.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        partitions += new TopicPartition(topic.topic, partition.partition) -> partition
+      }
+    }
+
     replicaMgr.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
       Request.FutureLocalReplicaId,
       request.minBytes,
       request.maxBytes,
       false,
-      request.fetchData.asScala.toSeq,
+      partitions,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
-      None)
+      None
+    )
 
     if (partitionData == null)
-      throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
+      throw new IllegalStateException(s"Failed to fetch data for partitions ${partitions.map(_._1).mkString(",")}")
 
     partitionData.toMap
   }

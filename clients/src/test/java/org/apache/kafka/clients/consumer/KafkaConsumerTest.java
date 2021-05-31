@@ -46,6 +46,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -620,8 +621,10 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                return request.fetchData().keySet().equals(singleton(tp0)) &&
-                        request.fetchData().get(tp0).fetchOffset == 50L;
+                Map<TopicPartition, FetchRequestData.FetchPartition> partitions =
+                    FetchRequest.toFetchPartitionMap(request.data());
+                return partitions.keySet().equals(singleton(tp0)) &&
+                    partitions.get(tp0).fetchOffset() == 50L;
 
             }, fetchResponse(tp0, 50L, 5));
 
@@ -1660,7 +1663,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+            && FetchRequest.toFetchPartitionMap(((FetchRequest) body).data()).containsKey(tp0), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));

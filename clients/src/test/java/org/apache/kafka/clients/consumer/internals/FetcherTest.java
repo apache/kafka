@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -428,8 +429,9 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return body -> {
             FetchRequest fetch = (FetchRequest) body;
-            return fetch.fetchData().containsKey(tp) &&
-                    fetch.fetchData().get(tp).fetchOffset == offset;
+            Map<TopicPartition, FetchRequestData.FetchPartition> partitions =
+                FetchRequest.toFetchPartitionMap(fetch.data());
+            return partitions.containsKey(tp) && partitions.get(tp).fetchOffset() == offset;
         };
     }
 
@@ -1176,10 +1178,9 @@ public class FetcherTest {
         MockClient.RequestMatcher matcher = body -> {
             if (body instanceof FetchRequest) {
                 FetchRequest fetchRequest = (FetchRequest) body;
-                fetchRequest.fetchData().values().forEach(partitionData -> {
-                    assertTrue(partitionData.currentLeaderEpoch.isPresent(), "Expected Fetcher to set leader epoch in request");
-                    assertEquals(99, partitionData.currentLeaderEpoch.get().longValue(), "Expected leader epoch to match epoch from metadata update");
-                });
+                fetchRequest.data().topics().forEach(topic -> topic.partitions().forEach(partition -> {
+                    assertEquals(99, partition.currentLeaderEpoch(), "Expected leader epoch to match epoch from metadata update");
+                }));
                 return true;
             } else {
                 fail("Should have seen FetchRequest");
@@ -3415,16 +3416,15 @@ public class FetcherTest {
                         ClientRequest request = client.requests().peek();
                         FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
                         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseMap = new LinkedHashMap<>();
-                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData().entrySet()) {
-                            TopicPartition tp = entry.getKey();
-                            long offset = entry.getValue().fetchOffset;
+                        fetchRequest.data().topics().forEach(topic -> topic.partitions().forEach(partition -> {
+                            TopicPartition tp = new TopicPartition(topic.topic(), partition.partition());
                             responseMap.put(tp, new FetchResponseData.PartitionData()
-                                    .setPartitionIndex(tp.partition())
-                                    .setHighWatermark(offset + 2)
-                                    .setLastStableOffset(offset + 2)
-                                    .setLogStartOffset(0)
-                                    .setRecords(buildRecords(offset, 2, offset)));
-                        }
+                                .setPartitionIndex(tp.partition())
+                                .setHighWatermark(partition.fetchOffset() + 2)
+                                .setLastStableOffset(partition.fetchOffset() + 2)
+                                .setLogStartOffset(0)
+                                .setRecords(buildRecords(partition.fetchOffset(), 2, partition.fetchOffset())));
+                        }));
                         client.respondToRequest(request, FetchResponse.of(Errors.NONE, 0, 123, responseMap));
                         consumerClient.poll(time.timer(0));
                     }

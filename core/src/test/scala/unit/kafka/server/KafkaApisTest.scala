@@ -45,6 +45,8 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
+import org.apache.kafka.common.message.FetchRequestData.FetchPartition
+import org.apache.kafka.common.message.FetchRequestData.FetchTopic
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
@@ -64,7 +66,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
@@ -2127,7 +2129,7 @@ class KafkaApisTest {
     expect(replicaManager.getLogConfig(EasyMock.eq(tp))).andReturn(None)
 
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicPartition, FetchRequestData.FetchPartition)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
@@ -2141,19 +2143,34 @@ class KafkaApisTest {
       }
     })
 
-    val fetchData = Map(tp -> new FetchRequest.PartitionData(0, 0, 1000,
-      Optional.empty())).asJava
-    val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false)
-    expect(fetchManager.newContext(anyObject[JFetchMetadata],
-      anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+    val expectedFetchRequestData = new FetchRequestData()
+      .setReplicaId(-1)
+      .setMaxWaitMs(100)
+      .setMinBytes(0)
+      .setMaxBytes(FetchRequest.DEFAULT_RESPONSE_MAX_BYTES)
+      .setTopics(Collections.singletonList(
+        new FetchTopic().setTopic(tp.topic).setPartitions(Collections.singletonList(
+          new FetchPartition()
+            .setPartition(tp.partition)
+            .setFetchOffset(0)
+            .setLogStartOffset(0)
+            .setPartitionMaxBytes(1000)))))
+
+    val fetchContext = new FullFetchContext(
+      time,
+      new FetchSessionCache(1000, 100),
+      FetchRequest.toFetchPartitionMap(expectedFetchRequestData),
+      false
+    )
+
+    expect(fetchManager.newContext(expectedFetchRequestData, false)).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
 
+    val fetchData = Map(
+      tp -> new FetchRequest.PartitionData(0, 0, 1000, Optional.empty())
+    ).asJava
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, 100, 0, fetchData)
       .build()
     val request = buildRequest(fetchRequest)
@@ -2694,7 +2711,7 @@ class KafkaApisTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicPartition, FetchRequestData.FetchPartition)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
@@ -2705,13 +2722,27 @@ class KafkaApisTest {
       }
     })
 
-    val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, true)
-    expect(fetchManager.newContext(anyObject[JFetchMetadata],
-      anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+    val expectedFetchRequestData = new FetchRequestData()
+      .setReplicaId(1)
+      .setMaxWaitMs(1000)
+      .setMinBytes(0)
+      .setMaxBytes(FetchRequest.DEFAULT_RESPONSE_MAX_BYTES)
+      .setTopics(Collections.singletonList(
+        new FetchTopic().setTopic(tp0.topic).setPartitions(Collections.singletonList(
+          new FetchPartition()
+            .setPartition(tp0.partition)
+            .setFetchOffset(0)
+            .setLogStartOffset(0)
+            .setPartitionMaxBytes(Int.MaxValue)
+            .setCurrentLeaderEpoch(leaderEpoch)))))
+
+    val fetchContext = new FullFetchContext(
+      time,
+      new FetchSessionCache(1000, 100),
+      FetchRequest.toFetchPartitionMap(expectedFetchRequestData),
+      true
+    )
+    expect(fetchManager.newContext(expectedFetchRequestData, true)).andReturn(fetchContext)
 
     expect(replicaQuotaManager.record(anyLong()))
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)

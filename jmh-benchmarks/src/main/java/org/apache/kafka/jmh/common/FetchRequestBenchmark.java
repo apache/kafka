@@ -100,7 +100,7 @@ public class FetchRequestBenchmark {
     public int testFetchRequestForConsumer() {
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
-        return fetchRequest.fetchData().size();
+        return fetchRequest.data().topics().size();
     }
 
     @Benchmark
@@ -108,7 +108,7 @@ public class FetchRequestBenchmark {
         FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
             ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
                 .build(ApiKeys.FETCH.latestVersion());
-        return fetchRequest.fetchData().size();
+        return fetchRequest.data().topics().size();
     }
 
     @Benchmark

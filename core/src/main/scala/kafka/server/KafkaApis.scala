@@ -659,10 +659,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
     val fetchContext = fetchManager.newContext(
-      fetchRequest.metadata,
-      fetchRequest.fetchData,
-      fetchRequest.toForget,
-      fetchRequest.isFromFollower)
+      fetchRequest.data,
+      fetchRequest.isFromFollower
+    )
 
     val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
       // Fetch API version 11 added preferred replica logic
@@ -677,7 +676,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponseData.PartitionData)]()
-    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequestData.FetchPartition)]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
@@ -694,7 +693,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
-      val partitionDatas = new mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]
+      val partitionDatas = new mutable.ArrayBuffer[(TopicPartition, FetchRequestData.FetchPartition)]
       fetchContext.foreachPartition { (topicPartition, partitionData) =>
         partitionDatas += topicPartition -> partitionData
       }

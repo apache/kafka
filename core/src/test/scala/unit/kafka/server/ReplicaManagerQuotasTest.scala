@@ -19,18 +19,17 @@ package kafka.server
 import java.io.File
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.CachedConfigRepository
+import org.apache.kafka.common.message.FetchRequestData
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -44,8 +43,17 @@ class ReplicaManagerQuotasTest {
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
   val fetchInfo = Seq(
-    topicPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
-    topicPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
+    topicPartition1 -> new FetchRequestData.FetchPartition()
+      .setPartition(topicPartition1.partition())
+      .setFetchOffset(0L)
+      .setLogStartOffset(0L)
+      .setPartitionMaxBytes(100),
+    topicPartition2 -> new FetchRequestData.FetchPartition()
+      .setPartition(topicPartition2.partition())
+      .setFetchOffset(0L)
+      .setLogStartOffset(0L)
+      .setPartitionMaxBytes(100)
+  )
   var quotaManager: QuotaManagers = _
   var replicaManager: ReplicaManager = _
 
@@ -176,8 +184,14 @@ class ReplicaManagerQuotasTest {
       EasyMock.replay(replicaManager, partition)
 
       val tp = new TopicPartition("t1", 0)
-      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-         relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()))
+      val fetchPartitionStatus = FetchPartitionStatus(
+        LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L, relativePositionInSegment = 250),
+        new FetchRequestData.FetchPartition()
+          .setPartition(tp.partition())
+          .setFetchOffset(50)
+          .setLogStartOffset(0)
+          .setPartitionMaxBytes(1)
+      )
       val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
         fetchMaxBytes = 1000,
         hardMaxBytesLimit = true,
@@ -197,8 +211,11 @@ class ReplicaManagerQuotasTest {
     assertFalse(setupDelayedFetch(isReplicaInSync = false).tryComplete(), "Out of sync replica should not complete")
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
-                 bothReplicasInSync: Boolean = false): Unit = {
+  def setUpMocks(
+    fetchInfo: Seq[(TopicPartition, FetchRequestData.FetchPartition)],
+    record: SimpleRecord = this.record,
+    bothReplicasInSync: Boolean = false
+  ): Unit = {
     val configRepository = new CachedConfigRepository()
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
