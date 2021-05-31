@@ -40,6 +40,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -50,6 +51,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     private static final String ZONE_1 = "zone1";
     private static final String ZONE_2 = "zone2";
     private static final String ZONE_3 = "zone3";
+    private static final String ZONE_4 = "zone4";
 
     private static final String CLUSTER_1 = "cluster1";
     private static final String CLUSTER_2 = "cluster2";
@@ -335,6 +337,48 @@ public class ClientTagAwareStandbyTaskAssignorTest {
                 )
             )
         );
+    }
+
+    @Test
+    public void shouldDistributeTasksOnLeastLoadedClientsWhenThereAreNoEnoughUniqueTagDimensions() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(UUID_2, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0, TASK_1_1, TASK_1_2)),
+
+            mkEntry(UUID_3, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(UUID_4, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1))))
+        );
+
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
+
+        assertEquals(3, clientStates.get(UUID_3).standbyTaskCount());
+        assertEquals(3, clientStates.get(UUID_4).standbyTaskCount());
+    }
+
+    @Test
+    public void shouldIgnoreTagsThatAreNotPresentInRackAwareness() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_2)))),
+
+            mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1))))
+        );
+
+        final Map<TaskId, UUID> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor(assignmentConfigs).assignStandbyTasks(
+            allActiveTasks,
+            new TreeMap<>(clientStates)
+        );
+
+        assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
     }
 
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,
