@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.ListSize;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
@@ -709,6 +710,26 @@ public class ConfigDefTest {
 
         assertEquals(" (7 days)", ConfigDef.niceTimeUnits(Duration.ofDays(7).toMillis()));
         assertEquals(" (365 days)", ConfigDef.niceTimeUnits(Duration.ofDays(365).toMillis()));
+    }
+
+    @Test
+    public void testThrowsExceptionWhenListSizeExceedsLimit() {
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
+                                                                         Type.LIST,
+                                                                         asList("a", "b"),
+                                                                         ListSize.max(1),
+                                                                         Importance.HIGH,
+                                                                         "lst doc"));
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeIsWithinTheLimit() {
+        new ConfigDef().define("lst",
+                               Type.LIST,
+                               asList("a", "b"),
+                               ListSize.max(2),
+                               Importance.HIGH,
+                               "lst doc");
     }
 
 }
