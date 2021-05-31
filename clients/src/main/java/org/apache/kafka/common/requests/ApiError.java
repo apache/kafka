@@ -37,16 +37,16 @@ public class ApiError {
     private final String message;
 
     public static ApiError fromThrowable(Throwable t) {
-        Throwable throwableToBeDecode = t;
+        Throwable throwableToBeEncode = t;
         // Future will wrap the original exception with completionException, which will return unexpected UNKNOWN_SERVER_ERROR.
         if (t instanceof CompletionException) {
-            throwableToBeDecode = t.getCause();
+            throwableToBeEncode = t.getCause();
         }
         // Avoid populating the error message if it's a generic one. Also don't populate error
         // message for UNKNOWN_SERVER_ERROR to ensure we don't leak sensitive information.
-        Errors error = Errors.forException(throwableToBeDecode);
+        Errors error = Errors.forException(throwableToBeEncode);
         String message = error == Errors.UNKNOWN_SERVER_ERROR ||
-            error.message().equals(throwableToBeDecode.getMessage()) ? null : throwableToBeDecode.getMessage();
+            error.message().equals(throwableToBeEncode.getMessage()) ? null : throwableToBeEncode.getMessage();
         return new ApiError(error, message);
     }
 
