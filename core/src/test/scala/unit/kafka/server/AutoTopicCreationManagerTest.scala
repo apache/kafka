@@ -124,7 +124,8 @@ class AutoTopicCreationManagerTest {
 
     Mockito.verify(brokerToController).sendRequest(
       ArgumentMatchers.eq(requestBody),
-      any(classOf[ControllerRequestCompletionHandler]))
+      any(classOf[ControllerRequestCompletionHandler]),
+      any())
   }
 
   @Test
@@ -251,7 +252,8 @@ class AutoTopicCreationManagerTest {
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
       argumentCaptor.capture(),
-      any(classOf[ControllerRequestCompletionHandler]))
+      any(classOf[ControllerRequestCompletionHandler]),
+      any())
     val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
     assertEquals(userPrincipal, SecurityUtils.parseKafkaPrincipal(Utils.utf8(capturedRequest.requestPrincipal)))
   }
@@ -288,7 +290,8 @@ class AutoTopicCreationManagerTest {
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
-      argumentCaptor.capture())
+      argumentCaptor.capture(),
+      any())
 
     // Complete with unsupported version will not trigger a retry, but cleanup the inflight topics instead
     val header = new RequestHeader(ApiKeys.ENVELOPE, 0, "client", 1)
@@ -298,14 +301,16 @@ class AutoTopicCreationManagerTest {
     argumentCaptor.getValue.asInstanceOf[RequestCompletionHandler].onComplete(clientResponse)
     Mockito.verify(brokerToController, Mockito.times(1)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
-      argumentCaptor.capture())
+      argumentCaptor.capture(),
+      any())
 
     // Could do the send again as inflight topics are cleared.
     autoTopicCreationManager.createTopics(
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
     Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
-      argumentCaptor.capture())
+      argumentCaptor.capture(),
+      any())
   }
 
   private def initializeRequestContext(topicName: String,

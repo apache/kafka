@@ -185,6 +185,7 @@ class DefaultAutoTopicCreationManager(
       throw new IllegalStateException("Channel manager must be defined in order to send CreateTopic requests.")
     }
 
+    var requestHeader: RequestHeader = null
     val request = metadataRequestContext.map { context =>
       val requestVersion =
         channelManager.controllerApiVersions() match {
@@ -198,7 +199,7 @@ class DefaultAutoTopicCreationManager(
 
       // Borrow client information such as client id and correlation id from the original request,
       // in order to correlate the create request with the original metadata request.
-      val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
+      requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
         requestVersion,
         context.clientId,
         context.correlationId)
@@ -206,7 +207,7 @@ class DefaultAutoTopicCreationManager(
         createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader))
     }.getOrElse(createTopicsRequest)
 
-    channelManager.sendRequest(request, requestCompletionHandler)
+    channelManager.sendRequest(request, requestCompletionHandler, requestHeader)
 
     val creatableTopicResponses = creatableTopics.keySet.toSeq.map { topic =>
       new MetadataResponseTopic()
