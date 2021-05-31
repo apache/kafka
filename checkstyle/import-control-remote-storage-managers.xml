@@ -1,0 +1,53 @@
+<!DOCTYPE import-control PUBLIC
+"-//Puppy Crawl//DTD Import Control 1.1//EN"
+"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+<!--
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+-->
+
+<import-control pkg="org.apache.kafka.rsm">
+  <allow pkg="java"/>
+  <allow pkg="scala"/>
+  <allow pkg="javax.management"/>
+  <allow pkg="org.slf4j"/>
+  <allow pkg="org.apache.kafka.common"/>
+  <allow pkg="org.apache.kafka.server.log.remote.storage"/>
+  <allow pkg="kafka.log"/>
+  <allow pkg="kafka.utils"/>
+  <allow pkg="org.apache.hadoop" />
+  <allow pkg="org.junit"/>
+  <allow pkg="org.mockito"/>
+
+  <subpackage name="hdfs">
+    <allow pkg="org.apache.kafka.rsm.hdfs"/>
+
+    <!-- tests -->
+    <allow pkg="com.google.common.annotations"/>
+    <allow pkg="org.apache.kafka.test"/>
+  </subpackage>
+
+  <subpackage name="s3">
+    <allow pkg="com.amazonaws.client.builder" />
+    <allow pkg="com.amazonaws.services.s3" />
+    <allow pkg="com.amazonaws.auth" />
+    <allow pkg="com.amazonaws.regions" />
+    <!-- Tests -->
+    <allow pkg="org.jetbrains.annotations" />
+    <allow pkg="org.testcontainers.containers.localstack" />
+    <allow pkg="org.hamcrest" />
+  </subpackage>
+
+</import-control>
