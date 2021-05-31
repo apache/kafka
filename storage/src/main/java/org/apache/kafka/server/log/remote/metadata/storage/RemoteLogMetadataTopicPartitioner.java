@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 public class RemoteLogMetadataTopicPartitioner {
@@ -35,9 +34,27 @@ public class RemoteLogMetadataTopicPartitioner {
     public int metadataPartition(TopicIdPartition topicIdPartition) {
         Objects.requireNonNull(topicIdPartition, "TopicPartition can not be null");
 
-        int partitionNo = Utils.toPositive(Utils.murmur2(topicIdPartition.toString().getBytes(StandardCharsets.UTF_8)))
-                          % noOfMetadataTopicPartitions;
+        int partitionNo = Utils.toPositive(Utils.murmur2(toBytes(topicIdPartition))) % noOfMetadataTopicPartitions;
         log.debug("No of partitions [{}], partitionNo: [{}] for given topic: [{}]", noOfMetadataTopicPartitions, partitionNo, topicIdPartition);
         return partitionNo;
+    }
+
+    private byte[] toBytes(TopicIdPartition topicIdPartition) {
+        // We do not want to depend upon hash code generation of Uuid as that may change.
+        int hash = Objects.hash(topicIdPartition.topicId().getLeastSignificantBits(),
+                                topicIdPartition.topicId().getMostSignificantBits(),
+                                topicIdPartition.topicPartition().topic(),
+                                topicIdPartition.topicPartition().partition());
+
+        return toBytes(hash);
+    }
+
+    private byte[] toBytes(int n) {
+        return new byte[]{
+            (byte) (n >> 24),
+            (byte) (n >> 16),
+            (byte) (n >> 8),
+            (byte) n
+        };
     }
 }

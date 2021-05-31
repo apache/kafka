@@ -149,7 +149,11 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     private void handleRemoteLogMetadata(RemoteLogMetadata remoteLogMetadata) {
-        remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
+        if (assignedTopicPartitions.contains(remoteLogMetadata.topicIdPartition())) {
+            remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
+        } else {
+            log.debug("This event {} is skipped as the topic partition is not assigned for this instance.", remoteLogMetadata);
+        }
     }
 
     private void executeReassignment(Set<Integer> assignedMetaPartitionsSnapshot) {

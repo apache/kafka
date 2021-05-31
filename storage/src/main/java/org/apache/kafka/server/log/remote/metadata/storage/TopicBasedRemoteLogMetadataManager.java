@@ -52,9 +52,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManager.class);
 
-    // Take these as configs with the respective default values.
-    private static final long INITIALIZATION_RETRY_INTERVAL_MS = 30_000L;
-
     private volatile boolean configured = false;
 
     // Using AtomicBoolean instead of volatile as it may encounter http://findbugs.sourceforge.net/bugDescriptions.html#SP_SPIN_ON_FIELD
