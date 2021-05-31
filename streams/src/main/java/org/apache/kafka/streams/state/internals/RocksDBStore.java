@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -504,6 +505,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    private ByteBuffer createDirectByteBufferAndPut(byte[] bytes) {
+        ByteBuffer directBuffer = ByteBuffer.allocateDirect(bytes.length);
+        directBuffer.clear();
+        directBuffer.put(bytes);
+        directBuffer.flip();
+        return directBuffer;
+    }
+
     interface RocksDBAccessor {
 
         void put(final byte[] key,
@@ -568,7 +577,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 }
             } else {
                 try {
-                    db.put(columnFamily, wOptions, key, value);
+                    ByteBuffer keyBuffer = createDirectByteBufferAndPut(key);
+                    ByteBuffer valueBuffer = createDirectByteBufferAndPut(value);
+                    db.put(columnFamily, wOptions, keyBuffer, valueBuffer);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
