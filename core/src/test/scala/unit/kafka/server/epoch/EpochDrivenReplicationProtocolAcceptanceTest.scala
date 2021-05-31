@@ -190,7 +190,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer = createBufferingProducer
 
     //Write 100 messages
-    (0 until 100).foreach { i =>
+    (0 until 100).foreach { _ =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
       producer.flush()
     }
