@@ -142,8 +142,12 @@ trait BrokerToControllerChannelManager {
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler,
-    requestHeader: RequestHeader = null
+    requestHeader: RequestHeader
   ): Unit
+  def sendRequest(
+   request: AbstractRequest.Builder[_ <: AbstractRequest],
+   callback: ControllerRequestCompletionHandler
+ ): Unit
 }
 
 
@@ -240,11 +244,12 @@ class BrokerToControllerChannelManagerImpl(
    *
    * @param request         The request to be sent.
    * @param callback        Request completion callback.
+   * @param requestHeader   The request header to be sent, used for parsing the envelop response
    */
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler,
-    requestHeader: RequestHeader = null
+    requestHeader: RequestHeader
   ): Unit = {
     requestThread.enqueue(BrokerToControllerQueueItem(
       time.milliseconds(),
@@ -252,6 +257,19 @@ class BrokerToControllerChannelManagerImpl(
       callback,
       requestHeader
     ))
+  }
+
+  /**
+   * Send request to the controller.
+   *
+   * @param request         The request to be sent.
+   * @param callback        Request completion callback.
+   */
+  def sendRequest(
+   request: AbstractRequest.Builder[_ <: AbstractRequest],
+   callback: ControllerRequestCompletionHandler,
+ ): Unit = {
+    sendRequest(request, callback, null)
   }
 
   def controllerApiVersions(): Option[NodeApiVersions] =

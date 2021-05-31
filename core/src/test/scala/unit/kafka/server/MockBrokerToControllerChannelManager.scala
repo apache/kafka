@@ -50,6 +50,13 @@ class MockBrokerToControllerChannelManager(
     ))
   }
 
+  override def sendRequest(
+    request: AbstractRequest.Builder[_ <: AbstractRequest],
+    callback: ControllerRequestCompletionHandler
+  ): Unit = {
+    sendRequest(request, callback, null)
+  }
+
   override def controllerApiVersions(): Option[NodeApiVersions] = {
     Some(controllerApiVersions)
   }
