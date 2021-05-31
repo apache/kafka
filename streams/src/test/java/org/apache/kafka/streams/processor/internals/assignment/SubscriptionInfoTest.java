@@ -390,6 +390,13 @@ public class SubscriptionInfoTest {
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
+    @Test
+    public void shouldEncodeAndDecodeVersion10() {
+        final SubscriptionInfo info =
+            new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, mkMap(mkEntry("t1", "v1")));
+        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+    }
+
     private static ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
                                                        + 4 /* supported version */);
