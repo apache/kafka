@@ -2943,8 +2943,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.INVALID_PRINCIPAL_TYPE, request.context.principal))
       }
       else {
+        val ownerPrincipalName = createTokenRequest.data().ownerPrincipalName()
+        val owner = if (ownerPrincipalName == null || ownerPrincipalName.isEmpty) {
+          request.context.principal
+        } else {
+          new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), ownerPrincipalName)
+        }
         tokenManager.createToken(
-          new KafkaPrincipal(createTokenRequest.data().ownerPrincipalType(), createTokenRequest.data().ownerPrincipalName()),
+          owner,
           request.context.principal,
           renewerList,
           createTokenRequest.data.maxLifetimeMs,
