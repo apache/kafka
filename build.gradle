@@ -829,6 +829,7 @@ project(':core') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
   }
 
   if (userEnableTestCoverage) {
