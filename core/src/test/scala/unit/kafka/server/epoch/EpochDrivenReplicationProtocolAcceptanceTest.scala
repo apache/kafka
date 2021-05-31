@@ -225,7 +225,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     printSegments()
 
     //Start broker 101. When it comes up it should read a whole batch of messages from the leader.
-    //As the chronology is lost we would end up with non-monatonic offsets (pre kip-101)
+    //As the chronology is lost we would end up with non-monotonic offsets (pre kip-101)
     brokers(1).startup()
 
     //Wait for replication to resync
