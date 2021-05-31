@@ -274,7 +274,8 @@ class ControllerApisTest {
     val request = buildRequest(brokerRegistrationRequest)
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
 
-    createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request)
+    createControllerApis(Some(createDenyAllAuthorizer()), mock(classOf[Controller])).handle(request,
+      RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),

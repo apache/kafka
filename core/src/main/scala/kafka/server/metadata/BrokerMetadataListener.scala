@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{RaftReplicaManager, RequestHandlerHelper}
+import kafka.server.{RaftReplicaManager, RequestHandlerHelper, RequestLocal}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.MetadataRecordType._
 import org.apache.kafka.common.metadata._
@@ -248,7 +248,7 @@ class BrokerMetadataListener(
       case Some(topicName) =>
         info(s"Processing deletion of topic $topicName with id ${record.topicId}")
         val removedPartitions = imageBuilder.partitionsBuilder().removeTopicById(record.topicId())
-        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)
+        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq, RequestLocal.NoCaching)
         configRepository.remove(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
     }
   }
