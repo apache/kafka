@@ -115,9 +115,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
                 clientStateIterator = clientStates.entrySet().iterator();
             }
-            final Map.Entry<UUID, ClientState> next = clientStateIterator.next();
-            taskAndClients.put(task, next.getKey());
-            next.getValue().assignActive(task);
+            final Map.Entry<UUID, ClientState> clientStateEntry = clientStateIterator.next();
+            taskAndClients.put(task, clientStateEntry.getKey());
+            clientStateEntry.getValue().assignActive(task);
         }
 
         balanceTasksOverThreads(
