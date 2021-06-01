@@ -1075,7 +1075,6 @@ class ReplicaManagerTest {
   private def initializeLogAndTopicId(replicaManager: ReplicaManager, topicPartition: TopicPartition, topicId: Uuid): Unit = {
     val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
     val log = replicaManager.logManager.getOrCreateLog(topicPartition, false, false, Some(topicId))
-    log.topicId = Some(topicId)
     partition.log = Some(log)
   }
 
@@ -1486,8 +1485,8 @@ class ReplicaManagerTest {
     val tp = new TopicPartition(topic, topicPartition)
     val maxProducerIdExpirationMs = 30000
     val segments = new LogSegments(tp)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.messageFormatVersion.recordVersion)
-    val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs)
+    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
+    val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs, time)
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       tp,
@@ -1517,7 +1516,7 @@ class ReplicaManagerTest {
       leaderEpochCache = leaderEpochCache,
       producerStateManager = producerStateManager,
       logDirFailureChannel = mockLogDirFailureChannel,
-      topicId = topicId,
+      _topicId = topicId,
       keepPartitionMetadataFile = true) {
 
       override def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
@@ -2195,7 +2194,7 @@ class ReplicaManagerTest {
     val batch = TestUtils.records(records = List(
       new SimpleRecord(10, "k1".getBytes, "v1".getBytes),
       new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
-    partition.appendRecordsToLeader(batch, AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch, AppendOrigin.Client, requiredAcks = 0, RequestLocal.withThreadConfinedCaching)
     partition.log.get.updateHighWatermark(2L)
     partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()

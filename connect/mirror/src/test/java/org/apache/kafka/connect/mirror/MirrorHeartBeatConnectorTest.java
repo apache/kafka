@@ -34,7 +34,7 @@ public class MirrorHeartBeatConnectorTest {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size());
+        assertEquals(0, output.size(), "Expected task to not be created");
     }
 
     @Test
@@ -47,6 +47,6 @@ public class MirrorHeartBeatConnectorTest {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect one task will be created, even the replication is disabled
-        assertEquals(1, output.size());
+        assertEquals(1, output.size(), "Task should have been created even with replication disabled");
     }
 }

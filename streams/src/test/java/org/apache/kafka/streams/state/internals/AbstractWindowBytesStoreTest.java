@@ -101,7 +101,7 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
             Serdes.Integer(),

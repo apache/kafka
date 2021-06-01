@@ -27,7 +27,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.13'
+def defaultScala212Version = '2.12.14'
 def defaultScala213Version = '2.13.6'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
@@ -65,8 +65,7 @@ versions += [
   grgit: "4.1.0",
   httpclient: "4.5.13",
   easymock: "4.3",
-  jackson: "2.10.5",
-  jacksonDatabind: "2.10.5.1",
+  jackson: "2.12.3",
   jacoco: "0.8.7",
   javassist: "3.27.0-GA",
   jetty: "9.4.39.v20210325",
@@ -75,7 +74,7 @@ versions += [
   jmh: "1.27",
   hamcrest: "2.2",
   log4j: "1.2.17",
-  scalaLogging: "3.9.2",
+  scalaLogging: "3.9.3",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
@@ -104,9 +103,9 @@ versions += [
   powermock: "2.0.9",
   reflections: "0.9.12",
   rocksDB: "6.19.3",
-  scalaCollectionCompat: "2.3.0",
+  scalaCollectionCompat: "2.4.4",
   scalafmt: "1.5.1",
-  scalaJava8Compat : "0.9.1",
+  scalaJava8Compat : "1.0.0",
   scoverage: "1.4.1",
   slf4j: "1.7.30",
   snappy: "1.1.8.1",
@@ -131,7 +130,7 @@ libs += [
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",

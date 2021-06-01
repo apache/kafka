@@ -40,6 +40,19 @@ public class TaskMetadata {
 
     private final Optional<Long> timeCurrentIdlingStarted;
 
+    /**
+     * @deprecated since 3.0, not intended for public use
+     */
+    @Deprecated
+    public TaskMetadata(final String taskId,
+                        final Set<TopicPartition> topicPartitions,
+                        final Map<TopicPartition, Long> committedOffsets,
+                        final Map<TopicPartition, Long> endOffsets,
+                        final Optional<Long> timeCurrentIdlingStarted) {
+        this(TaskId.parse(taskId), topicPartitions, committedOffsets, endOffsets, timeCurrentIdlingStarted);
+    }
+
+    // For internal use -- not a public API
     public TaskMetadata(final TaskId taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,

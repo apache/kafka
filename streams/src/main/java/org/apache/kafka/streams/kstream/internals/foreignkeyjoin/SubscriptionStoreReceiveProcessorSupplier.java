@@ -60,7 +60,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
-                final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+                final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
 
                 droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
                     Thread.currentThread().getName(),
