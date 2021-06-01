@@ -399,7 +399,7 @@ class BrokerToControllerRequestThread(
       }
     }
 
-    false;
+    false
   }
 
   override def doWork(): Unit = {

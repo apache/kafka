@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
@@ -38,21 +39,36 @@ public class ApiErrorTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void fromThrowableShouldReturnCorrectError(Throwable t, Errors expectedErrors) {
+    public void fromThrowableShouldReturnCorrectError(Throwable t, Errors expectedErrors, String expectedMsg) {
         ApiError apiError = ApiError.fromThrowable(t);
         assertEquals(apiError.error(), expectedErrors);
+        assertEquals(apiError.message(), expectedMsg);
     }
 
     private static Collection<Arguments> parameters() {
         List<Arguments> arguments = new ArrayList<>();
 
-        arguments.add(Arguments.of(new UnknownServerException(), Errors.UNKNOWN_SERVER_ERROR));
-        arguments.add(Arguments.of(new UnknownTopicOrPartitionException(), Errors.UNKNOWN_TOPIC_OR_PARTITION));
-        arguments.add(Arguments.of(new NotCoordinatorException("not coordinator"), Errors.NOT_COORDINATOR));
+        arguments.add(Arguments.of(
+            new UnknownServerException("Don't leak sensitive information "), Errors.UNKNOWN_SERVER_ERROR, null));
+
+        arguments.add(Arguments.of(
+            new NotEnoughReplicasException(), Errors.NOT_ENOUGH_REPLICAS, null));
+
+        // avoid populating the error message if it's a generic one
+        arguments.add(Arguments.of(
+            new UnknownTopicOrPartitionException(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()), Errors.UNKNOWN_TOPIC_OR_PARTITION, null));
+
+        String notCoordinatorErrorMsg = "Not coordinator";
+        arguments.add(Arguments.of(
+            new NotCoordinatorException(notCoordinatorErrorMsg), Errors.NOT_COORDINATOR, notCoordinatorErrorMsg));
+
+        String notControllerErrorMsg = "Not coordinator";
         // test the NotControllerException is wrapped in the CompletionException, should return correct error
-        arguments.add(Arguments.of(new CompletionException(new NotControllerException("not controller")), Errors.NOT_CONTROLLER));
+        arguments.add(Arguments.of(
+            new CompletionException(new NotControllerException(notControllerErrorMsg)), Errors.NOT_CONTROLLER, notControllerErrorMsg));
+
         // test the exception not in the Errors list, should return UNKNOWN_SERVER_ERROR
-        arguments.add(Arguments.of(new IOException(), Errors.UNKNOWN_SERVER_ERROR));
+        arguments.add(Arguments.of(new IOException(), Errors.UNKNOWN_SERVER_ERROR, null));
 
         return arguments;
     }
