@@ -76,7 +76,7 @@
             Server host name verification may be disabled by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string.<br>
             For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>:<br>
 
-            <pre class="line-numbers"><code class="language-text">&gt; bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
+            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
 
             <p><b>Note:</b></p>
             Normally there is no good reason to disable hostname verification apart from being the quickest way to "just get it to work" followed
@@ -98,7 +98,7 @@
             signing request. It can also be specified when generating the keypair, but this will not automatically be copied into the signing request.<br>
 
 
-            To add a SAN field append the following argument <code> -ext SAN=DNS:{FQDN},IP:{IPADDRESS} </code> to the keytool command:
+            To add a SAN field append the following argument <code> -ext SAN=DNS:{FQDN},IP:{IPADDRESS}</code> to the keytool command:
             <pre class="line-numbers"><code class="language-bash">&gt; keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}</code></pre>
         </li>
 
@@ -429,11 +429,11 @@ ssl.key.password=test1234</code></pre>
                     (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p>
 
                     <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
-                        The property name must be prefixed with the listener prefix including the SASL mechanism,
-                        i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
-                        login module may be specified in the config value. If multiple mechanisms are configured on a
-                        listener, configs must be provided for each mechanism using the listener and mechanism prefix.
-                        For example,
+                    The property name must be prefixed with the listener prefix including the SASL mechanism,
+                    i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
+                    login module may be specified in the config value. If multiple mechanisms are configured on a
+                    listener, configs must be provided for each mechanism using the listener and mechanism prefix.
+                    For example,</p>
                     <pre class="line-numbers"><code class="language-text">listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
     username="admin" \
     password="admin-secret";
