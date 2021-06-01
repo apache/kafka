@@ -420,7 +420,6 @@ public class MockLog implements ReplicatedLog {
         });
     }
 
-    // TODO: Write tests in MockLogTest for this method
     @Override
     public RawSnapshotWriter createSnapshotFromEndOffset(long endOffset) {
         long highWatermarkOffset = highWatermark().offset;

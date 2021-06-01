@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
  */
 public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
+        int epoch();
         int size();
     }
 
@@ -71,6 +72,11 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
         LeaderChangeBatch(LeaderAndEpoch newLeader) {
             this.newLeader = newLeader;
+        }
+
+        @Override
+        public int epoch() {
+            return newLeader.epoch();
         }
 
         @Override
@@ -98,12 +104,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     static class LocalRecordBatch implements LocalBatch {
-        private final long leaderEpoch;
+        private final int leaderEpoch;
         private final List<ApiMessageAndVersion> records;
 
-        LocalRecordBatch(long leaderEpoch, List<ApiMessageAndVersion> records) {
+        LocalRecordBatch(int leaderEpoch, List<ApiMessageAndVersion> records) {
             this.leaderEpoch = leaderEpoch;
             this.records = records;
+        }
+
+        @Override
+        public int epoch() {
+            return leaderEpoch;
         }
 
         @Override
@@ -155,7 +166,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         private long prevOffset;
 
         /**
-         * TODO: document this
+         * Maps committed offset to snapshot reader.
          */
         private NavigableMap<Long, RawSnapshotReader> snapshots = new TreeMap<>();
 
@@ -251,8 +262,30 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             });
         }
 
+        synchronized OptionalInt epochForCommittedOffset(long committedOffset) {
+            log.error("committedOffset = {}; batches = {}", committedOffset, batches);
+            OptionalInt lastEpoch = OptionalInt.empty();
+            for (Entry<Long, LocalBatch> entry : batches.entrySet()) {
+                if (entry.getKey() > committedOffset) {
+                    break;
+                } else {
+                    lastEpoch = OptionalInt.of(entry.getValue().epoch());
+                }
+            }
+
+            if (!lastEpoch.isPresent()) {
+                // See if we already have a snapshot for this committed offset
+                RawSnapshotReader reader = snapshots.get(committedOffset);
+                if (reader != null) {
+                    lastEpoch = OptionalInt.of(reader.snapshotId().epoch);
+                }
+            }
+
+            return lastEpoch;
+        }
+
         /**
-         * TODO: write documentation for this method
+         * Stores a new snapshot and notifies all threads waiting for a snapshot.
          */
         synchronized void addSnapshot(RawSnapshotReader newSnapshot) {
             if (newSnapshot.snapshotId().offset - 1 > prevOffset) {
@@ -268,7 +301,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * TODO: write documentation for this method
+         * Returns the snapshot whos last offset is the committed offset.
+         *
+         * If such snapshot doesn't exists it wait until it does.
          */
         synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
             while (true) {
@@ -527,8 +562,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public SnapshotWriter<ApiMessageAndVersion> createSnapshot(long committedOffset) {
-        // TODO: What is the epoch for committedOffset? Need to find it in shared. For now just set it to 1.
-        int epoch = 1;
+        int epoch = shared.epochForCommittedOffset(committedOffset).getAsInt();
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, epoch);
         return new SnapshotWriter<>(
             new MockRawSnapshotWriter(snapshotId, buffer -> {

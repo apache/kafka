@@ -247,7 +247,6 @@ final class KafkaMetadataLog private (
     FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this))
   }
 
-  // TODO: Write test for this method in KafkaMetadataLogTest
   override def createSnapshotFromEndOffset(endOffset: Long): RawSnapshotWriter = {
     val highWatermarkOffset = highWatermark.offset
     if (endOffset > highWatermarkOffset) {
@@ -256,7 +255,7 @@ final class KafkaMetadataLog private (
       )
     }
 
-    if (endOffset <= startOffset) {
+    if (endOffset < startOffset) {
       throw new IllegalArgumentException(
         s"Cannot create a snapshot for an end offset ($endOffset) less or equal to the log start offset ($startOffset)"
       )

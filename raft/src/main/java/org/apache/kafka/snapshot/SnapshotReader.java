@@ -50,6 +50,13 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
         return snapshotId;
     }
 
+    /**
+     * Returns the last offset included in the snapshot.
+     */
+    public long lastOffset() {
+        return snapshotId.offset - 1;
+    }
+
     @Override
     public boolean hasNext() {
         return iterator.hasNext();

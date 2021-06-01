@@ -183,7 +183,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     *
     * @param requestedEpoch requested leader epoch
     * @param logEndOffset the existing Log End Offset
-    * @return found leader epoch and end offset  
+    * @return found leader epoch and end offset
     */
   def endOffsetFor(requestedEpoch: Int, logEndOffset: Long): (Int, Long) = {
     inReadLock(lock) {
@@ -269,9 +269,15 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   /**
-   * TODO: Document this method
+   * Finds the epoch entry (epoch and end offset) that spans the given end offset.
    *
-   * Make sure to mention that this look up is linear
+   * If Some[EpochEntry] is return then the returned epoch entry has the largest
+   * start offset that is less than the given end offset. Otherwise, None is returned.
+   *
+   * This operation is linear on the number of epoch entries.
+   *
+   * @param endOffset the end offset to use for look up
+   * @return found leader epoch and end offset
    */
   def findEpochEntryByEndOffset(endOffset: Long): Option[EpochEntry] = {
     inReadLock(lock) {

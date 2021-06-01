@@ -385,15 +385,9 @@ public final class QuorumController implements Controller {
                 return;
             }
             if (!nextDelay.isPresent()) {
-                try {
-                    generator.writer().freeze();
-                    log.info("Finished generating snapshot {}.", generator.epoch());
-                } catch (Exception e) {
-                    log.error("Error while completing snapshot {}", generator.epoch(), e);
-                } finally {
-                    generator.writer().close();
-                    generator = null;
-                }
+                log.info("Finished generating snapshot {}.", generator.epoch());
+                generator.writer().close();
+                generator = null;
                 return;
             }
             reschedule(nextDelay.getAsLong());
@@ -715,7 +709,7 @@ public final class QuorumController implements Controller {
                         }
                     }
 
-                    lastCommittedOffset = reader.snapshotId().offset - 1;
+                    lastCommittedOffset = reader.lastOffset();
                     snapshotRegistry.createSnapshot(lastCommittedOffset);
                 } finally {
                     reader.close();

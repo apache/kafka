@@ -88,7 +88,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val numberOfRecords = 10
-    val epoch = 0
+    val epoch = 1
     val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
     val log = buildMetadataLog(tempDir, mockTime)
 
@@ -100,6 +100,78 @@ final class KafkaMetadataLogTest {
     }
 
     assertEquals(0, log.readSnapshot(snapshotId).get().sizeInBytes())
+  }
+
+  @Test
+  def testCreateSnapshotFromEndOffset(): Unit = {
+    val numberOfRecords = 10
+    val firstEpoch = 1
+    val secondEpoch = 3
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, firstEpoch)
+    append(log, numberOfRecords, secondEpoch)
+    log.updateHighWatermark(new LogOffsetMetadata(2 * numberOfRecords))
+
+    // Test finding the first epoch
+    TestUtils.resource(log.createSnapshotFromEndOffset(numberOfRecords)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(numberOfRecords, firstEpoch), snapshot.snapshotId())
+    }
+    TestUtils.resource(log.createSnapshotFromEndOffset(numberOfRecords - 1)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch), snapshot.snapshotId())
+    }
+    TestUtils.resource(log.createSnapshotFromEndOffset(1)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(1, firstEpoch), snapshot.snapshotId())
+    }
+
+    // Test finding the second epoch
+    TestUtils.resource(log.createSnapshotFromEndOffset(2 * numberOfRecords)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch), snapshot.snapshotId())
+    }
+    TestUtils.resource(log.createSnapshotFromEndOffset(2 * numberOfRecords - 1)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch), snapshot.snapshotId())
+    }
+    TestUtils.resource(log.createSnapshotFromEndOffset(numberOfRecords + 1)) { snapshot =>
+      assertEquals(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch), snapshot.snapshotId())
+    }
+  }
+
+  @Test
+  def testCreateSnapshotLaterThanHighWatermark(): Unit = {
+    val numberOfRecords = 10
+    val epoch = 1
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    assertThrows(
+      classOf[IllegalArgumentException],
+      () => log.createSnapshotFromEndOffset(numberOfRecords + 1)
+    )
+  }
+
+  @Test
+  def testCreateSnapshotBeforeLogStartOffset(): Unit = {
+    val numberOfRecords = 10
+    val epoch = 1
+    val snapshotId = new OffsetAndEpoch(numberOfRecords - 1, epoch)
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    assertTrue(log.deleteBeforeSnapshot(snapshotId))
+    assertEquals(snapshotId.offset, log.startOffset)
+
+    assertThrows(
+      classOf[IllegalArgumentException],
+      () => log.createSnapshotFromEndOffset(snapshotId.offset - 1)
+    )
   }
 
   @Test

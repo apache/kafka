@@ -446,6 +446,75 @@ public class MockLogTest {
     }
 
     @Test
+    public void testCreateSnapshotFromEndOffset() {
+        int numberOfRecords = 10;
+        int firstEpoch = 1;
+        int secondEpoch = 3;
+
+        appendBatch(numberOfRecords, firstEpoch);
+        appendBatch(numberOfRecords, secondEpoch);
+        log.updateHighWatermark(new LogOffsetMetadata(2 * numberOfRecords));
+
+        // Test finding the first epoch
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(numberOfRecords)) {
+            assertEquals(new OffsetAndEpoch(numberOfRecords, firstEpoch), snapshot.snapshotId());
+        }
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(numberOfRecords - 1)) {
+            assertEquals(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch), snapshot.snapshotId());
+        }
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(1)) {
+            assertEquals(new OffsetAndEpoch(1, firstEpoch), snapshot.snapshotId());
+        }
+
+        // Test finding the second epoch
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(2 * numberOfRecords)) {
+            assertEquals(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch), snapshot.snapshotId());
+        }
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(2 * numberOfRecords - 1)) {
+            assertEquals(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch), snapshot.snapshotId());
+        }
+        try (RawSnapshotWriter snapshot = log.createSnapshotFromEndOffset(numberOfRecords + 1)) {
+            assertEquals(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch), snapshot.snapshotId());
+        }
+    }
+
+    @Test
+    public void testCreateSnapshotLaterThanHighWatermark() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createSnapshotFromEndOffset(numberOfRecords + 1)
+        );
+    }
+
+    @Test
+    public void testCreateSnapshotBeforeLogStartOffset() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
+        assertEquals(snapshotId.offset, log.startOffset());
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createSnapshotFromEndOffset(snapshotId.offset - 1)
+        );
+    }
+
+    @Test
     public void testReadMissingSnapshot() {
         assertFalse(log.readSnapshot(new OffsetAndEpoch(10, 0)).isPresent());
     }

@@ -86,6 +86,13 @@ final public class SnapshotWriter<T> implements AutoCloseable {
     }
 
     /**
+     * Returns the last offset included in the snapshot.
+     */
+    public long lastOffset() {
+        return snapshot.snapshotId().offset - 1;
+    }
+
+    /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
      *
      * Modification to the snapshot are not allowed once it is frozen.

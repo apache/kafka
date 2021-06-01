@@ -264,7 +264,7 @@ public class QuorumControllerTest {
                 long snapshotEpoch = active.beginWritingSnapshot().get();
                 reader = logEnv.waitForSnapshot(snapshotEpoch);
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
-                assertEquals(snapshotEpoch, snapshot.snapshotId().offset - 1);
+                assertEquals(snapshotEpoch, snapshot.lastOffset());
                 checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
         }
@@ -277,7 +277,7 @@ public class QuorumControllerTest {
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
                     logEnv.waitForSnapshot(snapshotEpoch)
                 );
-                assertEquals(snapshotEpoch, snapshot.snapshotId().offset - 1);
+                assertEquals(snapshotEpoch, snapshot.lastOffset());
                 checkSnapshotContents(fooId, brokerEpochs, snapshot);
             }
         }

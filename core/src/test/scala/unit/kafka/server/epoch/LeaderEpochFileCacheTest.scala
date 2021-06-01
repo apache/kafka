@@ -123,7 +123,7 @@ class LeaderEpochFileCacheTest {
     //Then epoch should have been updated
     assertEquals(ListBuffer(EpochEntry(3, 9)), cache.epochEntries)
   }
-  
+
   @Test
   def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
     cache.assign(2, 6)
@@ -579,4 +579,20 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromEnd(7)
   }
 
+  @Test
+  def testFindEpochEntryByEndOffset(): Unit = {
+    //Given
+    cache.assign(epoch = 2, startOffset = 6)
+    cache.assign(epoch = 3, startOffset = 10)
+    cache.assign(epoch = 6, startOffset = 15)
+
+    //Then
+    assertEquals(None, cache.findEpochEntryByEndOffset(0))
+    assertEquals(None, cache.findEpochEntryByEndOffset(6))
+    assertEquals(Some(EpochEntry(2, 6)), cache.findEpochEntryByEndOffset(7))
+    assertEquals(Some(EpochEntry(2, 6)), cache.findEpochEntryByEndOffset(10))
+    assertEquals(Some(EpochEntry(3, 10)), cache.findEpochEntryByEndOffset(11))
+    assertEquals(Some(EpochEntry(3, 10)), cache.findEpochEntryByEndOffset(15))
+    assertEquals(Some(EpochEntry(6, 15)), cache.findEpochEntryByEndOffset(16))
+  }
 }

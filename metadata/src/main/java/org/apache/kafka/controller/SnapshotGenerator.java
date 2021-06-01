@@ -77,13 +77,10 @@ final class SnapshotGenerator {
     }
 
     /**
-     * TODO: I don't we should call this epoch it makes it confusing the meaning of epoch in the Log, and RaftClient
-     * TODO: A better name is maybe lastCommitOffset.
      * Returns the epoch of the snapshot that we are generating.
      */
     long epoch() {
-        // TODO: think about added a field to SnapshotWriter called lastCommitOffset
-        return writer.snapshotId().offset - 1;
+        return writer.lastOffset();
     }
 
     SnapshotWriter writer() {
@@ -91,10 +88,9 @@ final class SnapshotGenerator {
     }
 
     /**
-     * Generate the next batch of records.
+     * Generate and write the next batch of records.
      *
-     * TODO: Fix this API since we no longer return the number of tries
-     * @return
+     * @return true if the last batch was generated, otherwise false
      */
     private boolean generateBatch() throws Exception {
         if (batch == null) {
@@ -130,7 +126,6 @@ final class SnapshotGenerator {
      *          generateBatches event, or empty if the snapshot is done.
      */
     OptionalLong generateBatches() throws Exception {
-        // TODO: revisit this API and implementation
         for (int numBatches = 0; numBatches < maxBatchesPerGenerateCall; numBatches++) {
             if (generateBatch()) {
                 return OptionalLong.empty();

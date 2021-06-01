@@ -234,13 +234,21 @@ public interface ReplicatedLog extends AutoCloseable {
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot
+     * @throws IllegalArgumentException if this snapshot is older than existing snapshots
      */
     RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     /**
-     * TODO: Write documentation...
+     * Create a writable snapshot for the given end offset.
      *
-     * offset needs to be less than high-watermark
+     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
+     *
+     * @param endOffset end offset that identifies the snapshot
+     * @return a writable snapshot
+     * @throws IllegalArgumentException if end offset is greater than the high-watermark
+     * @throws IllegalArgumentException if end offset is less than the log start offset
+     * @throws IllegalArgumentException if this snapshot is older than existing snapshots
      */
     RawSnapshotWriter createSnapshotFromEndOffset(long endOffset);
 
