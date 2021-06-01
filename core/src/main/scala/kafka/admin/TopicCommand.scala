@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> Fixed line endings
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -92,6 +95,7 @@ object TopicCommand extends Logging {
   }
 
   class CommandTopicPartition(opts: TopicCommandOptions) {
+<<<<<<< HEAD
     val name = opts.topic.get
     val partitions = opts.partitions
     val replicationFactor = opts.replicationFactor
@@ -873,6 +877,8 @@ object TopicCommand extends Logging {
   }
 
   class CommandTopicPartition(opts: TopicCommandOptions) {
+=======
+>>>>>>> Fixed line endings
     val name: String = opts.topic.get
     val partitions: Option[Integer] = opts.partitions
     val replicationFactor: Option[Integer] = opts.replicationFactor
@@ -887,7 +893,10 @@ object TopicCommand extends Logging {
   }
 
   case class TopicDescription(topic: String,
+<<<<<<< HEAD
                               topicId: Uuid,
+=======
+>>>>>>> Fixed line endings
                               numPartitions: Int,
                               replicationFactor: Int,
                               config: JConfig,
@@ -896,7 +905,10 @@ object TopicCommand extends Logging {
     def printDescription(): Unit = {
       val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
       print(s"Topic: $topic")
+<<<<<<< HEAD
       if(topicId != Uuid.ZERO_UUID) print(s"\tTopicId: $topicId")
+=======
+>>>>>>> Fixed line endings
       print(s"\tPartitionCount: $numPartitions")
       print(s"\tReplicationFactor: $replicationFactor")
       print(s"\tConfigs: $configsAsString")
@@ -1110,7 +1122,10 @@ object TopicCommand extends Logging {
 
         for (td <- topicDescriptions) {
           val topicName = td.name
+<<<<<<< HEAD
           val topicId = td.topicId()
+=======
+>>>>>>> Fixed line endings
           val config = allConfigs.get(new ConfigResource(Type.TOPIC, topicName)).get()
           val sortedPartitions = td.partitions.asScala.sortBy(_.partition)
 
@@ -1120,7 +1135,11 @@ object TopicCommand extends Logging {
               val numPartitions = td.partitions().size
               val firstPartition = td.partitions.iterator.next()
               val reassignment = reassignments.get(new TopicPartition(td.name, firstPartition.partition))
+<<<<<<< HEAD
               val topicDesc = TopicDescription(topicName, topicId, numPartitions, getReplicationFactor(firstPartition, reassignment), config, markedForDeletion = false)
+=======
+              val topicDesc = TopicDescription(topicName, numPartitions, getReplicationFactor(firstPartition, reassignment), config, markedForDeletion = false)
+>>>>>>> Fixed line endings
               topicDesc.printDescription()
             }
           }
@@ -1233,24 +1252,42 @@ object TopicCommand extends Logging {
       val adminZkClient = new AdminZkClient(zkClient)
 
       for (topic <- topics) {
+<<<<<<< HEAD
         zkClient.getReplicaAssignmentAndTopicIdForTopics(immutable.Set(topic)).headOption match {
           case Some(replicaAssignmentAndTopicId) =>
+=======
+        zkClient.getPartitionAssignmentForTopics(immutable.Set(topic)).get(topic) match {
+          case Some(topicPartitionAssignment) =>
+>>>>>>> Fixed line endings
             val markedForDeletion = zkClient.isTopicMarkedForDeletion(topic)
             if (describeOptions.describeConfigs) {
               val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
               if (!opts.reportOverriddenConfigs || configs.nonEmpty) {
+<<<<<<< HEAD
                 val numPartitions = replicaAssignmentAndTopicId.assignment.size
                 val replicationFactor = replicaAssignmentAndTopicId.assignment.head._2.replicas.size
                 val config = new JConfig(configs.map{ case (k, v) => new ConfigEntry(k, v) }.asJavaCollection)
 
                 val topicDesc = TopicDescription(topic,
                   replicaAssignmentAndTopicId.topicId.getOrElse(Uuid.ZERO_UUID), numPartitions, replicationFactor, config, markedForDeletion)
+=======
+                val numPartitions = topicPartitionAssignment.size
+                val replicationFactor = topicPartitionAssignment.head._2.replicas.size
+                val config = new JConfig(configs.map{ case (k, v) => new ConfigEntry(k, v) }.asJavaCollection)
+                val topicDesc = TopicDescription(topic, numPartitions, replicationFactor, config, markedForDeletion)
+>>>>>>> Fixed line endings
                 topicDesc.printDescription()
               }
             }
             if (describeOptions.describePartitions) {
+<<<<<<< HEAD
               for ((tp, replicaAssignment) <- replicaAssignmentAndTopicId.assignment.toSeq.sortBy(_._1.partition())) {
                 val assignedReplicas = replicaAssignment.replicas
+=======
+              for ((partitionId, replicaAssignment) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
+                val assignedReplicas = replicaAssignment.replicas
+                val tp = new TopicPartition(topic, partitionId)
+>>>>>>> Fixed line endings
                 val (leaderOpt, isr) =  zkClient.getTopicPartitionState(tp).map(_.leaderAndIsr) match {
                   case Some(leaderAndIsr) => (leaderAndIsr.leaderOpt, leaderAndIsr.isr)
                   case None => (None, Seq.empty[Int])
@@ -1263,7 +1300,11 @@ object TopicCommand extends Logging {
                   }
                 }
 
+<<<<<<< HEAD
                 val info = new TopicPartitionInfo(tp.partition(), leaderOpt.map(asNode).orNull,
+=======
+                val info = new TopicPartitionInfo(partitionId, leaderOpt.map(asNode).orNull,
+>>>>>>> Fixed line endings
                   assignedReplicas.map(asNode).toList.asJava,
                   isr.map(asNode).toList.asJava)
 
@@ -1535,6 +1576,10 @@ object TopicCommand extends Logging {
       if (has(bootstrapServerOpt) && has(alterOpt)) {
         CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt),
         Some(kafkaConfigsCanAlterTopicConfigsViaBootstrapServer))
+<<<<<<< HEAD
+=======
+        CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, Set(alterOpt))
+>>>>>>> Fixed line endings
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
       }
 
@@ -1563,4 +1608,7 @@ object TopicCommand extends Logging {
   }
 }
 
+<<<<<<< HEAD
 >>>>>>> KAFKA-10547; Add TopicId in MetadataResponse (#9622)
+=======
+>>>>>>> Fixed line endings
