@@ -255,7 +255,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             userEndPoint,
             taskManager.getTaskOffsetSums(),
             uniqueField,
-            assignmentErrorCode.get()
+            assignmentErrorCode.get(),
+            Collections.emptyMap()
         ).encode();
     }
 
@@ -1255,6 +1256,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 7:
             case 8:
             case 9:
+            case 10:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
