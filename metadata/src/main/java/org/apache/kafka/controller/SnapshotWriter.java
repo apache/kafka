@@ -19,7 +19,7 @@ package org.apache.kafka.controller;
 
 import java.io.IOException;
 import java.util.List;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 
 interface SnapshotWriter extends AutoCloseable {

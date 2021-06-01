@@ -22,15 +22,9 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -46,7 +40,6 @@ import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockRunnerDelegate(Parameterized.class)
 @PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
 public class ProcessorNodeMetricsTest {
 
@@ -60,20 +53,9 @@ public class ProcessorNodeMetricsTest {
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
     private final Map<String, String> parentTagMap = Collections.singletonMap("hi", "universe");
 
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-            {Version.LATEST},
-            {Version.FROM_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public Version builtInMetricsVersion;
-
     @Before
     public void setUp() {
-        expect(streamsMetrics.version()).andReturn(builtInMetricsVersion).anyTimes();
+        expect(streamsMetrics.version()).andStubReturn(Version.LATEST);
         mockStatic(StreamsMetricsImpl.class);
     }
 
@@ -121,23 +103,6 @@ public class ProcessorNodeMetricsTest {
     }
 
     @Test
-    public void shouldGetProcessSensor() {
-        final String metricNamePrefix = "process";
-        final String descriptionOfCount = "The total number of calls to process";
-        final String descriptionOfRate = "The average number of calls to process per second";
-        final String descriptionOfAvgLatency = "The average latency of calls to process";
-        final String descriptionOfMaxLatency = "The maximum latency of calls to process";
-        shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            () -> ProcessorNodeMetrics.processSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
-        );
-    }
-
-    @Test
     public void shouldGetProcessAtSourceSensor() {
         final String metricNamePrefix = "process";
         final String descriptionOfCount = "The total number of calls to process";
@@ -163,57 +128,6 @@ public class ProcessorNodeMetricsTest {
         );
 
         verifySensor(() -> ProcessorNodeMetrics.processAtSourceSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
-    }
-
-    @Test
-    public void shouldGetPunctuateSensor() {
-        final String metricNamePrefix = "punctuate";
-        final String descriptionOfCount = "The total number of calls to punctuate";
-        final String descriptionOfRate = "The average number of calls to punctuate per second";
-        final String descriptionOfAvgLatency = "The average latency of calls to punctuate";
-        final String descriptionOfMaxLatency = "The maximum latency of calls to punctuate";
-        shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            () -> ProcessorNodeMetrics.punctuateSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
-        );
-    }
-
-    @Test
-    public void shouldGetCreateSensor() {
-        final String metricNamePrefix = "create";
-        final String descriptionOfCount = "The total number of processor nodes created";
-        final String descriptionOfRate = "The average number of processor nodes created per second";
-        final String descriptionOfAvgLatency = "The average latency of creations of processor nodes";
-        final String descriptionOfMaxLatency = "The maximum latency of creations of processor nodes";
-        shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            () -> ProcessorNodeMetrics.createSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
-        );
-    }
-
-    @Test
-    public void shouldGetDestroySensor() {
-        final String metricNamePrefix = "destroy";
-        final String descriptionOfCount = "The total number of destructions of processor nodes";
-        final String descriptionOfRate = "The average number of destructions of processor nodes per second";
-        final String descriptionOfAvgLatency = "The average latency of destructions of processor nodes";
-        final String descriptionOfMaxLatency = "The maximum latency of destructions of processor nodes";
-        shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            () -> ProcessorNodeMetrics.destroySensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
-        );
     }
 
     @Test
@@ -252,91 +166,6 @@ public class ProcessorNodeMetricsTest {
         verifySensor(() -> ProcessorNodeMetrics.lateRecordDropSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }
 
-    @Test
-    public void shouldGetProcessAtSourceSensorOrForwardSensor() {
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            shouldGetForwardSensor();
-        } else {
-            shouldGetProcessAtSourceSensor();
-        }
-    }
-
-    private void shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(final String metricNamePrefix,
-                                                                            final String descriptionOfRate,
-                                                                            final String descriptionOfCount,
-                                                                            final String descriptionOfAvgLatency,
-                                                                            final String descriptionOfMaxLatency,
-                                                                            final Supplier<Sensor> sensorSupplier) {
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            setUpThroughputAndLatencySensorWithParent(
-                metricNamePrefix,
-                descriptionOfRate,
-                descriptionOfCount,
-                descriptionOfAvgLatency,
-                descriptionOfMaxLatency
-            );
-        } else {
-            expect(streamsMetrics.nodeLevelSensor(
-                THREAD_ID,
-                TASK_ID,
-                PROCESSOR_NODE_ID,
-                metricNamePrefix,
-                RecordingLevel.DEBUG
-            )).andReturn(expectedSensor);
-        }
-
-        verifySensor(sensorSupplier);
-    }
-
-    private void setUpThroughputAndLatencySensorWithParent(final String metricNamePrefix,
-                                                           final String descriptionOfRate,
-                                                           final String descriptionOfCount,
-                                                           final String descriptionOfAvgLatency,
-                                                           final String descriptionOfMaxLatency) {
-        setUpThroughputAndLatencyParentSensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency
-        );
-        setUpThroughputAndLatencySensor(
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            expectedParentSensor
-        );
-    }
-
-    private void setUpThroughputAndLatencyParentSensor(final String metricNamePrefix,
-                                                       final String descriptionOfRate,
-                                                       final String descriptionOfCount,
-                                                       final String descriptionOfAvg,
-                                                       final String descriptionOfMax) {
-        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricNamePrefix, RecordingLevel.DEBUG))
-            .andReturn(expectedParentSensor);
-        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
-            .andReturn(parentTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-            expectedParentSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            parentTagMap,
-            metricNamePrefix,
-            descriptionOfRate,
-            descriptionOfCount
-        );
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedParentSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            parentTagMap,
-            metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
-            descriptionOfAvg,
-            descriptionOfMax
-        );
-    }
-
     private void setUpThroughputParentSensor(final String metricNamePrefix,
                                              final String descriptionOfRate,
                                              final String descriptionOfCount) {
@@ -351,23 +180,6 @@ public class ProcessorNodeMetricsTest {
             metricNamePrefix,
             descriptionOfRate,
             descriptionOfCount
-        );
-    }
-
-    private void setUpThroughputAndLatencySensor(final String metricNamePrefix,
-                                                 final String descriptionOfRate,
-                                                 final String descriptionOfCount,
-                                                 final String descriptionOfAvgLatency,
-                                                 final String descriptionOfMaxLatency,
-                                                 final Sensor... parentSensors) {
-        setUpThroughputSensor(metricNamePrefix, descriptionOfRate, descriptionOfCount, RecordingLevel.DEBUG, parentSensors);
-        StreamsMetricsImpl.addAvgAndMaxToSensor(
-            expectedSensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            metricNamePrefix + StreamsMetricsImpl.LATENCY_SUFFIX,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency
         );
     }
 

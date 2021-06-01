@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
@@ -351,7 +352,7 @@ public class StateDirectory {
 
     public synchronized void clean() {
         try {
-            cleanRemovedTasksCalledByUser();
+            cleanStateAndTaskDirectoriesCalledByUser();
         } catch (final Exception e) {
             throw new StreamsException(e);
         }
@@ -388,7 +389,7 @@ public class StateDirectory {
     private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
         for (final File taskDir : listNonEmptyTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
+            final TaskId id = parseTaskDirectoryName(dirName, null);
             if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
@@ -413,43 +414,31 @@ public class StateDirectory {
         }
     }
 
-    private void cleanRemovedTasksCalledByUser() throws Exception {
+    private void cleanStateAndTaskDirectoriesCalledByUser() throws Exception {
+        if (!lockedTasksToOwner.isEmpty()) {
+            log.warn("Found some still-locked task directories when user requested to cleaning up the state, " 
+                         + "since Streams is not running any more these will be ignored to complete the cleanup");
+        }
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parseTaskDirectoryName(dirName, null);
-            if (!lockedTasksToOwner.containsKey(id)) {
-                try {
-                    if (lock(id)) {
-                        log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
-                            logPrefix(), dirName, id);
-                        Utils.delete(taskDir);
-                    } else {
-                        log.warn("{} Could not get lock for state directory {} for task {} as user calling cleanup.",
-                            logPrefix(), dirName, id);
-                    }
-                } catch (final OverlappingFileLockException | IOException exception) {
-                    log.error(
-                        String.format("%s Failed to delete state directory %s for task %s with exception:",
-                            logPrefix(), dirName, id),
-                        exception
-                    );
-                    firstException.compareAndSet(null, exception);
-                } finally {
-                    try {
-                        unlock(id);
-                        // for manual user call, stream threads are not running so it is safe to delete
-                        // the whole directory
-                        Utils.delete(taskDir);
-                    } catch (final IOException exception) {
-                        log.error(
-                            String.format("%s Failed to release lock on state directory %s for task %s with exception:",
-                                logPrefix(), dirName, id),
-                            exception
-                        );
-                        firstException.compareAndSet(null, exception);
-                    }
+            final TaskId id = parseTaskDirectoryName(dirName, null);
+            try {
+                log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
+                         logPrefix(), dirName, id);
+                
+                if (lockedTasksToOwner.containsKey(id)) {
+                    log.warn("{} Task {} in state directory {} was still locked by {}",
+                             logPrefix(), dirName, id, lockedTasksToOwner.get(id));
                 }
+                Utils.delete(taskDir);
+            } catch (final IOException exception) {
+                log.error(
+                    String.format("%s Failed to delete state directory %s for task %s with exception:",
+                                  logPrefix(), dirName, id),
+                    exception
+                );
+                firstException.compareAndSet(null, exception);
             }
         }
         final Exception exception = firstException.get();

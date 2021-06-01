@@ -55,6 +55,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
@@ -223,7 +224,7 @@ public final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
             LogContext logContext = new LogContext();
-            MockListener listener = new MockListener();
+            MockListener listener = new MockListener(localId);
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
@@ -365,11 +366,11 @@ public final class RaftClientTestContext {
     }
 
     OptionalInt currentLeader() {
-        return currentLeaderAndEpoch().leaderId;
+        return currentLeaderAndEpoch().leaderId();
     }
 
     int currentEpoch() {
-        return currentLeaderAndEpoch().epoch;
+        return currentLeaderAndEpoch().epoch();
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
@@ -1057,8 +1058,13 @@ public final class RaftClientTestContext {
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
+        private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
+
+        MockListener(OptionalInt localId) {
+            this.localId = localId;
+        }
 
         int numCommittedBatches() {
             return commits.size();
@@ -1141,19 +1147,18 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleClaim(int epoch) {
+        public void handleLeaderChange(LeaderAndEpoch leader) {
             // We record the next expected offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleClaim` callback
             // was not received early.
-            long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                lastCommitOffset().getAsLong() + 1 : 0L;
-            this.currentClaimedEpoch = OptionalInt.of(epoch);
-            this.claimedEpochStartOffsets.put(epoch, claimedEpochStartOffset);
-        }
-
-        @Override
-        public void handleResign(int epoch) {
-            this.currentClaimedEpoch = OptionalInt.empty();
+            if (localId.isPresent() && leader.isLeader(localId.getAsInt())) {
+                long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                    lastCommitOffset().getAsLong() + 1 : 0L;
+                this.currentClaimedEpoch = OptionalInt.of(leader.epoch());
+                this.claimedEpochStartOffsets.put(leader.epoch(), claimedEpochStartOffset);
+            } else {
+                this.currentClaimedEpoch = OptionalInt.empty();
+            }
         }
 
         @Override

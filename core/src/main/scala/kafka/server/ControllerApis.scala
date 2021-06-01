@@ -21,7 +21,7 @@ import java.util
 import java.util.Collections
 import java.util.Map.Entry
 import java.util.concurrent.{CompletableFuture, ExecutionException}
-
+import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -50,8 +50,9 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
+import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.jdk.CollectionConverters._
 
@@ -73,8 +74,9 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
-  override def handle(request: RequestChannel.Request): Unit = {
+  override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
@@ -95,10 +97,13 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
-        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
+        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
+        case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
+        case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -108,12 +113,12 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleEnvelopeRequest(request: RequestChannel.Request): Unit = {
+  def handleEnvelopeRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
         s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
     } else {
-      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
+      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle(_, requestLocal))
     }
   }
 
@@ -204,6 +209,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         throw new TopicDeletionDisabledException()
       }
     }
+    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
     // The first step is to load up the names and IDs that have been provided by the
     // request.  This is a bit messy because we support multiple ways of referring to
     // topics (both by name and by id) and because we need to check for duplicates or
@@ -256,7 +262,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     val toAuthenticate = new util.HashSet[String]
     toAuthenticate.addAll(providedNames)
     val idToName = new util.HashMap[Uuid, String]
-    controller.findTopicNames(providedIds).thenCompose { topicNames =>
+    controller.findTopicNames(deadlineNs, providedIds).thenCompose { topicNames =>
       topicNames.forEach { (id, nameOrError) =>
         if (nameOrError.isError) {
           appendResponse(null, id, nameOrError.error())
@@ -291,7 +297,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       // For each topic that was provided by name, check if authentication failed.
       // If so, create an error response for it. Otherwise, add it to the idToName map.
-      controller.findTopicIds(providedNames).thenCompose { topicIds =>
+      controller.findTopicIds(deadlineNs, providedNames).thenCompose { topicIds =>
         topicIds.forEach { (name, idOrError) =>
           if (!describeable.contains(name)) {
             appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
@@ -315,7 +321,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         }
         // Finally, the idToName map contains all the topics that we are authorized to delete.
         // Perform the deletion and create responses for each one.
-        controller.deleteTopics(idToName.keySet).thenApply { idToError =>
+        controller.deleteTopics(deadlineNs, idToName.keySet).thenApply { idToError =>
           idToError.forEach { (id, error) =>
             appendResponse(idToName.get(id), id, error)
           }
@@ -706,6 +712,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                        hasClusterAuth: Boolean,
                        getCreatableTopics: Iterable[String] => Set[String])
                        : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
     val topicNames = new util.HashSet[String]()
@@ -739,7 +746,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           setErrorCode(TOPIC_AUTHORIZATION_FAILED.code))
       }
     }
-    controller.createPartitions(topics).thenApply { results =>
+    controller.createPartitions(deadlineNs, topics).thenApply { results =>
       results.forEach(response => responses.add(response))
       responses
     }
@@ -750,7 +757,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, ALTER)
     val response = controller.alterPartitionReassignments(alterRequest.data()).get()
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new AlterPartitionReassignmentsResponse(response))
+      new AlterPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
   def handleListPartitionReassignments(request: RequestChannel.Request): Unit = {
@@ -758,6 +765,6 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val response = controller.listPartitionReassignments(listRequest.data()).get()
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new ListPartitionReassignmentsResponse(response))
+      new ListPartitionReassignmentsResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 }
