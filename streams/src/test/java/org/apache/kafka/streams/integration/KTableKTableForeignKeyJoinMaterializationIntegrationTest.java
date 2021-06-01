@@ -78,7 +78,9 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     public void before() {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
+            mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName())
         ));
     }
 

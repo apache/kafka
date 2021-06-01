@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.errors.StreamsException;
 
 /**
  * If a component's serdes are Wrapping serdes, then they require a little extra setup
@@ -41,6 +41,12 @@ public class WrappingNullableUtils {
     private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
         Serializer<T> serializerToUse = specificSerializer;
         if (serializerToUse == null) {
+            if (contextKeySerializer == null) {
+                throw  new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+            }
+            if (contextValueSerializer == null) {
+                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+            }
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
         } else {
             initNullableSerializer(serializerToUse, contextKeySerializer, contextValueSerializer);
@@ -48,16 +54,16 @@ public class WrappingNullableUtils {
         return serializerToUse;
     }
 
-    //need to intercept the null before it gets invoked
-    //set serde to null and see what happens
-    //probably put the check in key/value serde
-    // a few cases where we would need to do null checks
-    // add to wrapping nullable utiliziers, get serializer if not null
-
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde, final boolean isKey) {
         Serde<T> serdeToUse = specificSerde;
         if (serdeToUse == null) {
+            if (contextKeySerde == null) {
+                throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+            }
+            if (contextValueSerde == null) {
+                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+            }
             serdeToUse = (Serde<T>) (isKey ?  contextKeySerde : contextValueSerde);
         } else if (serdeToUse instanceof WrappingNullableSerde) {
             ((WrappingNullableSerde) serdeToUse).setIfUnset(contextKeySerde, contextValueSerde);
@@ -74,30 +80,18 @@ public class WrappingNullableUtils {
     }
 
     public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        if (specificSerializer == null && contextKeySerializer == null) {
-            throw new StreamsException("Please specify a key serde or set one through the default.key.serde config");
-        }
         return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, true);
     }
 
     public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        if (specificSerializer == null && contextValueSerializer == null) {
-            throw new StreamsException("Please specify a value serde or set one through the default.value.serde config");
-        }
         return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, false);
     }
 
     public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        if (specificSerde == null && keySerde == null) {
-            throw new StreamsException("Please specify a key serde or set one through the default.key.serde config");
-        }
         return prepareSerde(specificSerde, keySerde, valueSerde, true);
     }
 
     public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        if (specificSerde == null && valueSerde == null) {
-            throw new StreamsException("Please specify a value serde or set one through the default.value.serde config");
-        }
         return prepareSerde(specificSerde, keySerde, valueSerde, false);
     }
     @SuppressWarnings({"rawtypes", "unchecked"})

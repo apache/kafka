@@ -17,10 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -80,16 +80,17 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements o
             foreignKeySerdeTopic = foreignKeySerdeTopicSupplier.get();
             valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
-            if (context.keySerde() == null || context.keySerde().serializer() == null) {
-                throw new StreamsException("Please specify a key serde or set one through the default.key.serde config");
-            }
+
             if (foreignKeySerializer == null) {
+                if (context.keySerde() == null || context.keySerde().serializer() == null) {
+                    throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
+                }
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
-            if (context.valueSerde().serializer() == null) {
-                throw new StreamsException("Please specify a value serde or set one through the default.value.serde config");
-            }
             if (valueSerializer == null) {
+                if (context.valueSerde().serializer() == null) {
+                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                }
                 valueSerializer = (Serializer<V>) context.valueSerde().serializer();
             }
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(

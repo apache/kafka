@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
@@ -77,6 +78,10 @@ class RecordDeserializer {
                     rawRecord,
                     deserializationException);
                 throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
+            }
+
+            if (deserializationException instanceof ConfigException) {
+                throw deserializationException;
             }
 
             if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
