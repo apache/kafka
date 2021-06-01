@@ -99,11 +99,11 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
 
     private void validateLookupKeys(Set<BrokerKey> keys) {
         if (keys.size() != 1) {
-            throw new IllegalArgumentException("Unexpected key set " + keys);
+            throw new IllegalArgumentException("Unexpected key set: " + keys);
         }
         BrokerKey key = keys.iterator().next();
         if (key != ANY_BROKER) {
-            throw new IllegalArgumentException("Unexpected key set " + keys);
+            throw new IllegalArgumentException("Unexpected key set: " + keys);
         }
     }
 
@@ -195,12 +195,12 @@ public class AllBrokersStrategy implements AdminApiLookupStrategy<AllBrokersStra
 
         private KafkaFutureImpl<V> futureOrThrow(BrokerKey key) {
             if (!key.brokerId.isPresent()) {
-                throw new IllegalArgumentException("Attempt to complete with invalid key " + key);
+                throw new IllegalArgumentException("Attempt to complete with invalid key: " + key);
             } else {
                 int brokerId = key.brokerId.getAsInt();
                 KafkaFutureImpl<V> future = brokerFutures.get(brokerId);
                 if (future == null) {
-                    throw new IllegalArgumentException("Attempt to complete with unknown broker id " + brokerId);
+                    throw new IllegalArgumentException("Attempt to complete with unknown broker id: " + brokerId);
                 } else {
                     return future;
                 }

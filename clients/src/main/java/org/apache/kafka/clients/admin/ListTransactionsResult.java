@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -42,6 +41,13 @@ public class ListTransactionsResult {
         this.future = future;
     }
 
+    /**
+     * Get all transaction listings. If any of the underlying requests fail, then the future
+     * returned from this method will also fail with the first encountered error.
+     *
+     * @return A future containing the collection of transaction listings. The future completes
+     *         when all transaction listings are available and fails after any non-retriable error.
+     */
     public KafkaFuture<Collection<TransactionListing>> all() {
         return allByBrokerId().thenApply(map -> {
             List<TransactionListing> allListings = new ArrayList<>();
@@ -52,10 +58,40 @@ public class ListTransactionsResult {
         });
     }
 
-    public KafkaFuture<Set<Integer>> brokerIds() {
-        return future.thenApply(map -> new HashSet<>(map.keySet()));
+    /**
+     * Get a future which returns a map containing the underlying listing future for each broker
+     * in the cluster. This is useful, for example, if a partial listing of transactions is
+     * sufficient, or if you want more granular error details.
+     *
+     * @return A future containing a map of futures by broker which complete individually when
+     *         their respective transaction listings are available. The top-level future returned
+     *         from this method may fail if the admin client is unable to lookup the available
+     *         brokers in the cluster.
+     */
+    public KafkaFuture<Map<Integer, KafkaFuture<Collection<TransactionListing>>>> byBrokerId() {
+        KafkaFutureImpl<Map<Integer, KafkaFuture<Collection<TransactionListing>>>> result = new KafkaFutureImpl<>();
+        future.whenComplete((brokerFutures, exception) -> {
+            if (brokerFutures != null) {
+                Map<Integer, KafkaFuture<Collection<TransactionListing>>> brokerFuturesCopy =
+                    new HashMap<>(brokerFutures.size());
+                brokerFuturesCopy.putAll(brokerFutures);
+                result.complete(brokerFuturesCopy);
+            } else {
+                result.completeExceptionally(exception);
+            }
+        });
+        return result;
     }
 
+    /**
+     * Get all transaction listings in a map which is keyed by the ID of respective broker
+     * that is currently managing them. If any of the underlying requests fail, then the future
+     * returned from this method will also fail with the first encountered error.
+     *
+     * @return A future containing a map from the broker ID to the transactions hosted by that
+     *         broker respectively. This future completes when all transaction listings are
+     *         available and fails after any non-retriable error.
+     */
     public KafkaFuture<Map<Integer, Collection<TransactionListing>>> allByBrokerId() {
         KafkaFutureImpl<Map<Integer, Collection<TransactionListing>>> allFuture = new KafkaFutureImpl<>();
         Map<Integer, Collection<TransactionListing>> allListingsMap = new HashMap<>();
@@ -84,31 +120,6 @@ public class ListTransactionsResult {
         });
 
         return allFuture;
-    }
-
-    public KafkaFuture<Collection<TransactionListing>> byBrokerId(Integer brokerId) {
-        KafkaFutureImpl<Collection<TransactionListing>> resultFuture = new KafkaFutureImpl<>();
-        future.whenComplete((map, exception) -> {
-            if (exception != null) {
-                resultFuture.completeExceptionally(exception);
-            } else {
-                KafkaFutureImpl<Collection<TransactionListing>> brokerFuture = map.get(brokerId);
-                if (brokerFuture == null) {
-                    resultFuture.completeExceptionally(new KafkaException("ListTransactions result " +
-                        "did not include listings from broker " + brokerId + ". The included listings " +
-                        "were from brokers " + map.keySet()));
-                } else {
-                    brokerFuture.whenComplete((listings, brokerException) -> {
-                        if (brokerException != null) {
-                            resultFuture.completeExceptionally(brokerException);
-                        } else {
-                            resultFuture.complete(listings);
-                        }
-                    });
-                }
-            }
-        });
-        return resultFuture;
     }
 
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
@@ -43,8 +44,7 @@ public class ListTransactionsResultTest {
         future.completeExceptionally(new KafkaException());
         assertFutureThrows(result.all(), KafkaException.class);
         assertFutureThrows(result.allByBrokerId(), KafkaException.class);
-        assertFutureThrows(result.byBrokerId(0), KafkaException.class);
-        assertFutureThrows(result.brokerIds(), KafkaException.class);
+        assertFutureThrows(result.byBrokerId(), KafkaException.class);
     }
 
     @Test
@@ -69,9 +69,12 @@ public class ListTransactionsResultTest {
         );
         future2.complete(broker2Listings);
 
-        assertEquals(Utils.mkSet(1, 2), result.brokerIds().get());
-        assertEquals(broker1Listings, result.byBrokerId(1).get());
-        assertEquals(broker2Listings, result.byBrokerId(2).get());
+        Map<Integer, KafkaFuture<Collection<TransactionListing>>> resultBrokerFutures =
+            result.byBrokerId().get();
+
+        assertEquals(Utils.mkSet(1, 2), resultBrokerFutures.keySet());
+        assertEquals(broker1Listings, resultBrokerFutures.get(1).get());
+        assertEquals(broker2Listings, resultBrokerFutures.get(2).get());
         assertEquals(broker1Listings, result.allByBrokerId().get().get(1));
         assertEquals(broker2Listings, result.allByBrokerId().get().get(2));
 
@@ -100,14 +103,17 @@ public class ListTransactionsResultTest {
         future1.complete(broker1Listings);
         future2.completeExceptionally(new KafkaException());
 
+        Map<Integer, KafkaFuture<Collection<TransactionListing>>> resultBrokerFutures =
+            result.byBrokerId().get();
+
         // Ensure that the future for broker 1 completes successfully
-        assertEquals(Utils.mkSet(1, 2), result.brokerIds().get());
-        assertEquals(broker1Listings, result.byBrokerId(1).get());
+        assertEquals(Utils.mkSet(1, 2), resultBrokerFutures.keySet());
+        assertEquals(broker1Listings, resultBrokerFutures.get(1).get());
 
         // Everything else should fail
         assertFutureThrows(result.all(), KafkaException.class);
         assertFutureThrows(result.allByBrokerId(), KafkaException.class);
-        assertFutureThrows(result.byBrokerId(2), KafkaException.class);
+        assertFutureThrows(resultBrokerFutures.get(2), KafkaException.class);
     }
 
 }
