@@ -33,7 +33,6 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
@@ -52,8 +51,7 @@ import java.util.function.Supplier;
 public class StreamsMetricsImpl implements StreamsMetrics {
 
     public enum Version {
-        LATEST,
-        FROM_0100_TO_24
+        LATEST
     }
 
     static class ImmutableMetricValue<T> implements Gauge<T> {
@@ -114,7 +112,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String CLIENT_ID_TAG = "client-id";
     public static final String THREAD_ID_TAG = "thread-id";
-    public static final String THREAD_ID_TAG_0100_TO_24 = "client-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
     public static final String STORE_ID_TAG = "state-id";
@@ -137,11 +134,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String GROUP_SUFFIX = "-metrics";
     public static final String CLIENT_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + "thread" + GROUP_SUFFIX;
-    public static final String THREAD_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String PROCESSOR_NODE_LEVEL_GROUP = GROUP_PREFIX + "processor-node" + GROUP_SUFFIX;
     public static final String STATE_STORE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
-    public static final String BUFFER_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX + "buffer" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
     public static final String OPERATIONS = " operations";
@@ -168,18 +163,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
-        version = parseBuiltInMetricsVersion(builtInMetricsVersion);
+        version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
         this.parentSensors = new HashMap<>();
-    }
-
-    private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
-            return Version.LATEST;
-        } else {
-            return Version.FROM_0100_TO_24;
-        }
     }
 
     public Version version() {
@@ -250,7 +237,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_24, threadId);
+        tagMap.put(THREAD_ID_TAG, threadId);
         return tagMap;
     }
 
@@ -386,11 +373,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String taskId,
                                                 final String storeName) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        if (version == Version.FROM_0100_TO_24) {
-            tagMap.put(THREAD_ID_TAG_0100_TO_24, threadId);
-        } else {
-            tagMap.put(THREAD_ID_TAG, threadId);
-        }
+        tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(RECORD_CACHE_ID_TAG, storeName);
         return tagMap;
