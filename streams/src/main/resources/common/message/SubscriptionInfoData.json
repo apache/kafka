@@ -16,6 +16,7 @@
 {
   "name": "SubscriptionInfoData",
   "validVersions": "1-10",
+  "flexibleVersions": "none",
   "fields": [
     {
       "name": "version",
