@@ -33,7 +33,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaCache, ConfigRepository, MockConfigRepository, RaftMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -108,7 +108,6 @@ class KafkaApisTest {
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
     clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
-  private val quotaCache = new ClientQuotaCache()
   private val fetchManager: FetchManager = EasyMock.createNiceMock(classOf[FetchManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
@@ -149,10 +148,9 @@ class KafkaApisTest {
 
     val metadataSupport = if (raftSupport) {
       // it will be up to the test to replace the default ZkMetadataCache implementation
-      // with a RaftMetadataCache instance
+      // with a KRaftMetadataCache instance
       metadataCache match {
-        case raftMetadataCache: RaftMetadataCache =>
-          RaftSupport(forwardingManager, raftMetadataCache, quotaCache)
+        case cache: KRaftMetadataCache => RaftSupport(forwardingManager, cache)
         case _ => throw new IllegalStateException("Test must set an instance of RaftMetadataCache")
       }
     } else {
@@ -3106,7 +3104,7 @@ class KafkaApisTest {
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
@@ -3160,7 +3158,7 @@ class KafkaApisTest {
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
 
@@ -3310,7 +3308,7 @@ class KafkaApisTest {
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1): Unit = {
     val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers)
-    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
   }
 
   private def createMetadataBroker(brokerId: Int,

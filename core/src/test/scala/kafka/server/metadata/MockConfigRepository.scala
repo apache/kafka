@@ -30,7 +30,7 @@ object MockConfigRepository {
     forTopic(topic, properties)
   }
 
-  def forTopic(topic:String, properties: Properties): MockConfigRepository = {
+  def forTopic(topic: String, properties: Properties): MockConfigRepository = {
     val repository = new MockConfigRepository()
     repository.configs.put(new ConfigResource(TOPIC, topic), properties)
     repository
