@@ -36,11 +36,14 @@
         <li>The <code>Metric#value()</code> method was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12573">KAFKA-12573</a>).</li>
         <li>The <code>Sum</code> and <code>Total</code> classes were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12584">KAFKA-12584</a>).
             Please use <code>WindowedSum</code> and <code>CumulativeSum</code> instead.</li>
+        <li>The <code>Count</code> and <code>SampledTotal</code> classes were removed. Please use <code>WindowedCount</code> and <code>WindowedSum</code>
+            respectively instead.</li>
         <li>The <code>PrincipalBuilder</code>, <code>DefaultPrincipalBuilder</code> and <code>ResourceFilter</code> classes were removed.
         <li>Various constants and constructors were removed from <code>SslConfigs</code>, <code>SaslConfigs</code>, <code>AclBinding</code> and
             <code>AclBindingFilter</code>.</li>
         <li>The <code>Admin.electedPreferredLeaders()</code> methods were removed. Please use <code>Admin.electLeaders</code> instead.</li>
         <li>The <code>kafka-preferred-replica-election</code> command line tool was removed. Please use <code>kafka-leader-election</code> instead.</li>
+        <li>The <code>--zookeeper</code> option was removed from the <code>bin/kafka-topics.sh</code> command line tool. Please use <code>--bootstrap-server</code> instead.</li>
         <li>The <code>ConfigEntry</code> constructor was removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12577">KAFKA-12577</a>).
             Please use the remaining public constructor instead.</li>
         <li>The config value <code>default</code> for the client config <code>client.dns.lookup</code> has been removed. In the unlikely
@@ -65,7 +68,6 @@
             <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> instead.</li>
         <li>The <code>quota.producer.default</code> and <code>quota.consumer.default</code> configurations were removed (<a href="https://issues.apache.org/jira/browse/KAFKA-12591">KAFKA-12591</a>).
             Dynamic quota defaults must be used instead.</li>
-        <li>The <code>--zookeeper</code> option was removed from the <code>bin/kafka-topics.sh</code> command line tool. Please use <code>--bootstrap-server</code> instead.</li>
     </ul>
     <li> The <code>Producer#sendOffsetsToTransaction(Map offsets, String consumerGroupId)</code> method has been deprecated. Please use
         <code>Producer#sendOffsetsToTransaction(Map offsets, ConsumerGroupMetadata metadata)</code> instead, where the <code>ConsumerGroupMetadata</code>
