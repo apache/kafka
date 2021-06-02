@@ -58,7 +58,11 @@ import scala.util.{Failure, Success, Try}
  *            enable.auto.commit=false
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
+ *
+ * @deprecated The original Mirror Maker is deprecated since release 3.0. Similar functionality can be
+ *    found in the Connect-based re-implementation by the same name (aka MM2).
  */
+@Deprecated
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] var producer: MirrorMakerProducer = null
@@ -80,6 +84,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   def main(args: Array[String]): Unit = {
 
+    warn("This tool is deprecated and may be removed in a future major release.")
     info("Starting mirror maker")
     try {
       val opts = new MirrorMakerOptions(args)
