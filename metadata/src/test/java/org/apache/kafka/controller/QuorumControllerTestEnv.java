@@ -41,7 +41,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         try {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i);
-                builder.setLogManager(logEnv.logManagers().get(i));
+                builder.setRaftClient(logEnv.logManagers().get(i));
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -53,7 +53,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
 
     QuorumController activeController() throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             QuorumController activeController = null;
             for (QuorumController controller : controllers) {
                 if (controller.isActive()) {

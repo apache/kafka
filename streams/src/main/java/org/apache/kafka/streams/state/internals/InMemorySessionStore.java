@@ -83,11 +83,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         if (context instanceof InternalProcessorContext) {
             this.context = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = this.context.metrics();
-            expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+            expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 threadId,
                 taskName,
-                metricScope,
-                name,
                 metrics
             );
         } else {

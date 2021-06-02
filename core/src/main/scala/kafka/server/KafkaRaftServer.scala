@@ -24,10 +24,10 @@ import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
@@ -55,7 +55,7 @@ class KafkaRaftServer(
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    metaProps.clusterId.toString
+    metaProps.clusterId
   )
 
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -73,13 +73,11 @@ class KafkaRaftServer(
     controllerQuorumVotersFuture
   )
 
-  private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
-
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
     Some(new BrokerServer(
       config,
       metaProps,
-      metaLogShim,
+      raftManager,
       time,
       metrics,
       threadNamePrefix,
@@ -95,7 +93,6 @@ class KafkaRaftServer(
     Some(new ControllerServer(
       metaProps,
       config,
-      metaLogShim,
       raftManager,
       time,
       metrics,

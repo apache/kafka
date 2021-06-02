@@ -16,14 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -57,12 +54,10 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
@@ -585,35 +580,14 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndMeasureSkipsInAggregate(final String builtInMetricsVersion) {
+    public void shouldLogAndMeasureSkipsInAggregate() {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamAggregate.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);
 
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-                assertEquals(
-                    1.0,
-                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
-                );
-                assertNotEquals(
-                    0.0,
-                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
-                );
-            }
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
@@ -651,40 +625,19 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndMeasureSkipsInReduce(final String builtInMetricsVersion) {
+    public void shouldLogAndMeasureSkipsInReduce() {
         groupedStream.reduce(
             MockReducer.STRING_ADDER,
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())
         );
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamReduce.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);
 
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-                assertEquals(
-                    1.0,
-                    getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue()
-                );
-                assertNotEquals(
-                    0.0,
-                    getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue()
-                );
-            }
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "

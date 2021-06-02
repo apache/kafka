@@ -129,9 +129,9 @@ public class SubscriptionInfo {
         final Map<Integer, List<SubscriptionInfoData.PartitionToOffsetSum>> topicGroupIdToPartitionOffsetSum = new HashMap<>();
         for (final Map.Entry<TaskId, Long> taskEntry : taskOffsetSums.entrySet()) {
             final TaskId task = taskEntry.getKey();
-            topicGroupIdToPartitionOffsetSum.computeIfAbsent(task.topicGroupId, t -> new ArrayList<>()).add(
+            topicGroupIdToPartitionOffsetSum.computeIfAbsent(task.subtopology(), t -> new ArrayList<>()).add(
                 new SubscriptionInfoData.PartitionToOffsetSum()
-                    .setPartition(task.partition)
+                    .setPartition(task.partition())
                     .setOffsetSum(taskEntry.getValue()));
         }
 
@@ -157,14 +157,14 @@ public class SubscriptionInfo {
 
         data.setPrevTasks(prevTasks.stream().map(t -> {
             final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
-            taskId.setTopicGroupId(t.topicGroupId);
-            taskId.setPartition(t.partition);
+            taskId.setTopicGroupId(t.subtopology());
+            taskId.setPartition(t.partition());
             return taskId;
         }).collect(Collectors.toList()));
         data.setStandbyTasks(standbyTasks.stream().map(t -> {
             final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
-            taskId.setTopicGroupId(t.topicGroupId);
-            taskId.setPartition(t.partition);
+            taskId.setTopicGroupId(t.subtopology());
+            taskId.setPartition(t.partition());
             return taskId;
         }).collect(Collectors.toList()));
     }

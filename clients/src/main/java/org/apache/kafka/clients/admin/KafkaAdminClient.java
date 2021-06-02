@@ -34,10 +34,14 @@ import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AbortTransactionHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler;
+import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -4729,34 +4733,43 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeProducersResult describeProducers(Collection<TopicPartition> topicPartitions, DescribeProducersOptions options) {
-        DescribeProducersHandler handler = new DescribeProducersHandler(
-            new HashSet<>(topicPartitions),
-            options,
-            logContext
-        );
-        return new DescribeProducersResult(invokeDriver(handler, options.timeoutMs));
+        AdminApiFuture.SimpleAdminApiFuture<TopicPartition, DescribeProducersResult.PartitionProducerState> future =
+            DescribeProducersHandler.newFuture(topicPartitions);
+        DescribeProducersHandler handler = new DescribeProducersHandler(options, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DescribeProducersResult(future.all());
     }
 
     @Override
     public DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options) {
-        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(
-            transactionalIds,
-            logContext
-        );
-        return new DescribeTransactionsResult(invokeDriver(handler, options.timeoutMs));
+        AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, TransactionDescription> future =
+            DescribeTransactionsHandler.newFuture(transactionalIds);
+        DescribeTransactionsHandler handler = new DescribeTransactionsHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DescribeTransactionsResult(future.all());
     }
 
     @Override
     public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
-        AbortTransactionHandler handler = new AbortTransactionHandler(
-            spec,
-            logContext
-        );
-        return new AbortTransactionResult(invokeDriver(handler, options.timeoutMs));
+        AdminApiFuture.SimpleAdminApiFuture<TopicPartition, Void> future =
+            AbortTransactionHandler.newFuture(Collections.singleton(spec.topicPartition()));
+        AbortTransactionHandler handler = new AbortTransactionHandler(spec, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new AbortTransactionResult(future.all());
     }
 
-    private <K, V> Map<K, KafkaFutureImpl<V>> invokeDriver(
+    @Override
+    public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
+        AllBrokersStrategy.AllBrokersFuture<Collection<TransactionListing>> future =
+            ListTransactionsHandler.newFuture();
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new ListTransactionsResult(future.all());
+    }
+
+    private <K, V> void invokeDriver(
         AdminApiHandler<K, V> handler,
+        AdminApiFuture<K, V> future,
         Integer timeoutMs
     ) {
         long currentTimeMs = time.milliseconds();
@@ -4764,13 +4777,13 @@ public class KafkaAdminClient extends AdminClient {
 
         AdminApiDriver<K, V> driver = new AdminApiDriver<>(
             handler,
+            future,
             deadlineMs,
             retryBackoffMs,
             logContext
         );
 
         maybeSendRequests(driver, currentTimeMs);
-        return driver.futures();
     }
 
     private <K, V> void maybeSendRequests(AdminApiDriver<K, V> driver, long currentTimeMs) {
