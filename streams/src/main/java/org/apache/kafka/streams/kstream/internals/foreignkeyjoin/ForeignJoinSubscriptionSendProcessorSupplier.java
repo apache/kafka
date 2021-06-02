@@ -80,7 +80,6 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements o
             foreignKeySerdeTopic = foreignKeySerdeTopicSupplier.get();
             valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
-
             if (foreignKeySerializer == null) {
                 if (context.keySerde() == null || context.keySerde().serializer() == null) {
                     throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");

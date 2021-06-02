@@ -862,11 +862,12 @@ public class StreamsConfigTest {
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
-    /*@Test
+    @Test
     public void shouldThrowErrorOnDefaults() {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
         try {
-            config.defaultValueSerde();
+            final Serde serde = config.defaultValueSerde();
+            serde.serializer();
             fail("Test should throw a StreamsException");
         } catch (final StreamsException e) {
             assertEquals(
@@ -883,7 +884,7 @@ public class StreamsConfigTest {
                     e.getMessage()
             );
         }
-    }*/
+    }
 
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
