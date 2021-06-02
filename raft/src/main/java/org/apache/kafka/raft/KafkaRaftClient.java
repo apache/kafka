@@ -2279,9 +2279,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void validateSnapshotId(OffsetAndEpoch snapshotId) {
         Optional<LogOffsetMetadata> highWatermarkOpt = quorum().highWatermark();
-        if (!highWatermarkOpt.isPresent() || highWatermarkOpt.get().offset < snapshotId.offset) {
-            throw new IllegalArgumentException("Trying to creating snapshot with invalid snapshotId: " + snapshotId + " whose offset is larger than the high-watermark: " +
-                    highWatermarkOpt);
+        if (!highWatermarkOpt.isPresent()) {
+            throw new IllegalArgumentException("Trying to creating snapshot with empty high-watermark.");
+        }
+        if (snapshotId.offset > highWatermarkOpt.get().offset) {
+            throw new IllegalArgumentException("Trying to creating snapshot with invalid snapshotId: " + snapshotId +
+                    " whose offset is larger than the high-watermark: " + highWatermarkOpt.get().offset);
         }
         int quorumEpoch = quorum().epoch();
         if (snapshotId.epoch > quorumEpoch) {
@@ -2289,7 +2292,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     " larger than the quorum epoch: " + quorumEpoch);
         }
         OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(snapshotId.epoch);
-        if (endOffsetAndEpoch.epoch != snapshotId.epoch || endOffsetAndEpoch.offset < snapshotId.offset) {
+        if (snapshotId.epoch != endOffsetAndEpoch.epoch || snapshotId.offset > endOffsetAndEpoch.offset) {
             throw new IllegalArgumentException("Trying to creating snapshot with invalid snapshotId: " + snapshotId +
                     " the endOffsetAndEpoch for epoch: " + snapshotId.epoch + " is: " + endOffsetAndEpoch);
         }
