@@ -59,8 +59,7 @@ import scala.util.{Failure, Success, Try}
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
  *
- * @deprecated The original Mirror Maker is deprecated since release 3.0. Similar functionality can be
- *    found in the Connect-based re-implementation by the same name (aka MM2).
+ * @deprecated Since 3.0, use the Connect-based MirrorMaker instead (aka MM2).
  */
 @Deprecated
 object MirrorMaker extends Logging with KafkaMetricsGroup {
