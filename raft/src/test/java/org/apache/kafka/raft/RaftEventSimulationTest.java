@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -37,7 +38,6 @@ import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.junit.jupiter.api.Tag;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;

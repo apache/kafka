@@ -55,34 +55,12 @@ public class KTableSuppressProcessorMetricsTest {
     private Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
     private final String threadId = Thread.currentThread().getName();
 
-    private final MetricName evictionTotalMetric0100To24 = new MetricName(
-        "suppression-emit-total",
-        "stream-processor-node-metrics",
-        "The total number of emitted records from the suppression buffer",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
-        )
-    );
-
     private final MetricName evictionTotalMetricLatest = new MetricName(
         "suppression-emit-total",
         "stream-processor-node-metrics",
         "The total number of emitted records from the suppression buffer",
         mkMap(
             mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
-        )
-    );
-
-    private final MetricName evictionRateMetric0100To24 = new MetricName(
-        "suppression-emit-rate",
-        "stream-processor-node-metrics",
-        "The average number of emitted records from the suppression buffer per second",
-        mkMap(
-            mkEntry("client-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
             mkEntry("processor-node-id", "testNode")
         )
@@ -99,17 +77,6 @@ public class KTableSuppressProcessorMetricsTest {
         )
     );
 
-    private final MetricName bufferSizeAvgMetric0100To24 = new MetricName(
-        "suppression-buffer-size-avg",
-        "stream-buffer-metrics",
-        "The average size of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
-        )
-    );
-
     private final MetricName bufferSizeAvgMetricLatest = new MetricName(
         "suppression-buffer-size-avg",
         "stream-state-metrics",
@@ -118,28 +85,6 @@ public class KTableSuppressProcessorMetricsTest {
             mkEntry("thread-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
             mkEntry("in-memory-suppression-state-id", "test-store")
-        )
-    );
-
-    private final MetricName bufferSizeCurrentMetric = new MetricName(
-        "suppression-buffer-size-current",
-        "stream-buffer-metrics",
-        "The current size of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
-        )
-    );
-
-    private final MetricName bufferSizeMaxMetric0100To24 = new MetricName(
-        "suppression-buffer-size-max",
-        "stream-buffer-metrics",
-        "The maximum size of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
         )
     );
 
@@ -154,17 +99,6 @@ public class KTableSuppressProcessorMetricsTest {
         )
     );
 
-    private final MetricName bufferCountAvgMetric0100To24 = new MetricName(
-        "suppression-buffer-count-avg",
-        "stream-buffer-metrics",
-        "The average count of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
-        )
-    );
-
     private final MetricName bufferCountAvgMetricLatest = new MetricName(
         "suppression-buffer-count-avg",
         "stream-state-metrics",
@@ -173,28 +107,6 @@ public class KTableSuppressProcessorMetricsTest {
             mkEntry("thread-id", threadId),
             mkEntry("task-id", TASK_ID.toString()),
             mkEntry("in-memory-suppression-state-id", "test-store")
-        )
-    );
-
-    private final MetricName bufferCountCurrentMetric = new MetricName(
-        "suppression-buffer-count-current",
-        "stream-buffer-metrics",
-        "The current count of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
-        )
-    );
-
-    private final MetricName bufferCountMaxMetric0100To24 = new MetricName(
-        "suppression-buffer-count-max",
-        "stream-buffer-metrics",
-        "The maximum count of buffered records",
-        mkMap(
-            mkEntry("client-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("buffer-id", "test-store")
         )
     );
 
@@ -211,15 +123,6 @@ public class KTableSuppressProcessorMetricsTest {
 
     @Test
     public void shouldRecordMetricsWithBuiltInMetricsVersionLatest() {
-        shouldRecordMetrics(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldRecordMetricsWithBuiltInMetricsVersion0100To24() {
-        shouldRecordMetrics(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldRecordMetrics(final String builtInMetricsVersion) {
         final String storeName = "test-store";
 
         final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
@@ -237,7 +140,7 @@ public class KTableSuppressProcessorMetricsTest {
                 mock
             ).get();
 
-        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         final MockInternalProcessorContext context =
             new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
         final Time time = new SystemTime();
@@ -253,18 +156,12 @@ public class KTableSuppressProcessorMetricsTest {
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
 
-        final MetricName evictionRateMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? evictionRateMetric0100To24 : evictionRateMetricLatest;
-        final MetricName evictionTotalMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? evictionTotalMetric0100To24 : evictionTotalMetricLatest;
-        final MetricName bufferSizeAvgMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? bufferSizeAvgMetric0100To24 : bufferSizeAvgMetricLatest;
-        final MetricName bufferSizeMaxMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? bufferSizeMaxMetric0100To24 : bufferSizeMaxMetricLatest;
-        final MetricName bufferCountAvgMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? bufferCountAvgMetric0100To24 : bufferCountAvgMetricLatest;
-        final MetricName bufferCountMaxMetric =
-            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? bufferCountMaxMetric0100To24 : bufferCountMaxMetricLatest;
+        final MetricName evictionRateMetric = evictionRateMetricLatest;
+        final MetricName evictionTotalMetric = evictionTotalMetricLatest;
+        final MetricName bufferSizeAvgMetric = bufferSizeAvgMetricLatest;
+        final MetricName bufferSizeMaxMetric = bufferSizeMaxMetricLatest;
+        final MetricName bufferCountAvgMetric = bufferCountAvgMetricLatest;
+        final MetricName bufferCountMaxMetric = bufferCountMaxMetricLatest;
 
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
@@ -275,10 +172,6 @@ public class KTableSuppressProcessorMetricsTest {
             verifyMetric(metrics, bufferSizeMaxMetric, is(43.0));
             verifyMetric(metrics, bufferCountAvgMetric, is(0.5));
             verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                verifyMetric(metrics, bufferSizeCurrentMetric, is(43.0));
-                verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
-            }
         }
 
         context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
@@ -293,10 +186,6 @@ public class KTableSuppressProcessorMetricsTest {
             verifyMetric(metrics, bufferSizeMaxMetric, is(82.0));
             verifyMetric(metrics, bufferCountAvgMetric, is(1.0));
             verifyMetric(metrics, bufferCountMaxMetric, is(2.0));
-            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-                verifyMetric(metrics, bufferSizeCurrentMetric, is(39.0));
-                verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
-            }
         }
     }
 

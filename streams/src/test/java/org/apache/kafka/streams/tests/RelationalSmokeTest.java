@@ -635,17 +635,19 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                            final String id,
                                            final String processingGuarantee,
                                            final String stateDir) {
-            return mkProperties(
-                mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, application),
-                    mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
-                    mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
-                    mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000"),
-                    mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
-                )
-            );
+            final Properties properties =
+                mkProperties(
+                    mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, application),
+                        mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
+                        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
+                        mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+                    )
+                );
+            properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+            return properties;
         }
 
         public static KafkaStreams startSync(final String broker,

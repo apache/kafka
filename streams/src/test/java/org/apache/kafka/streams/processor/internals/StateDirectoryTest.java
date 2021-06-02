@@ -149,6 +149,18 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldParseUnnamedTaskId() {
+        final TaskId task = new TaskId(1, 0);
+        assertThat(TaskId.parse(task.toString()), equalTo(task));
+    }
+
+    @Test
+    public void shouldParseNamedTaskId() {
+        final TaskId task = new TaskId(1, 0, "namedTopology");
+        assertThat(TaskId.parse(task.toString()), equalTo(task));
+    }
+
+    @Test
     public void shouldCreateTaskStateDirectory() {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);

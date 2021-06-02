@@ -18,15 +18,11 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Objects.requireNonNull;
 
 public interface AdminApiHandler<K, V> {
 
@@ -34,19 +30,6 @@ public interface AdminApiHandler<K, V> {
      * Get a user-friendly name for the API this handler is implementing.
      */
     String apiName();
-
-    /**
-     * Initialize the set of keys required to handle this API and how the driver
-     * should map them to the broker that will handle the request for these keys.
-     *
-     * Two mapping types are supported:
-     *
-     * - Static mapping: when the brokerId is known ahead of time
-     * - Dynamic mapping: when the brokerId must be discovered dynamically
-     *
-     * @return the key mappings
-     */
-    Keys<K> initializeKeys();
 
     /**
      * Build the request. The set of keys are derived by {@link AdminApiDriver}
@@ -82,44 +65,13 @@ public interface AdminApiHandler<K, V> {
      */
     ApiResult<K, V> handleResponse(int brokerId, Set<K> keys, AbstractResponse response);
 
-    class Keys<K> {
-        public final Map<K, Integer> staticKeys;
-        public final Set<K> dynamicKeys;
-        public final AdminApiLookupStrategy<K> lookupStrategy;
-
-        public Keys(
-            Map<K, Integer> staticKeys,
-            Set<K> dynamicKeys,
-            AdminApiLookupStrategy<K> lookupStrategy
-        ) {
-            this.staticKeys = requireNonNull(staticKeys);
-            this.dynamicKeys = requireNonNull(dynamicKeys);
-            this.lookupStrategy = lookupStrategy;
-
-            Set<K> staticAndDynamicKeys = Utils.intersection(HashSet::new, staticKeys.keySet(), dynamicKeys);
-            if (!staticAndDynamicKeys.isEmpty()) {
-                throw new IllegalArgumentException("The following keys were configured both as dynamically " +
-                    "and statically mapped: " + staticAndDynamicKeys);
-            }
-
-            if (!dynamicKeys.isEmpty()) {
-                requireNonNull(lookupStrategy);
-            }
-        }
-
-        public static <K> Keys<K> staticMapped(
-            Map<K, Integer> staticKeys
-        ) {
-            return new Keys<>(staticKeys, Collections.emptySet(), null);
-        }
-
-        public static <K> Keys<K> dynamicMapped(
-            Set<K> dynamicKeys,
-            AdminApiLookupStrategy<K> lookupStrategy
-        ) {
-            return new Keys<>(Collections.emptyMap(), dynamicKeys, lookupStrategy);
-        }
-    }
+    /**
+     * Get the lookup strategy that is responsible for finding the brokerId
+     * which will handle each respective key.
+     *
+     * @return non-null lookup strategy
+     */
+    AdminApiLookupStrategy<K> lookupStrategy();
 
     class ApiResult<K, V> {
         public final Map<K, V> completedKeys;
@@ -157,6 +109,14 @@ public interface AdminApiHandler<K, V> {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 keys
+            );
+        }
+
+        public static <K, V> ApiResult<K, V> empty() {
+            return new ApiResult<>(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyList()
             );
         }
     }

@@ -134,7 +134,7 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
-  var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -257,19 +257,21 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        clientToControllerChannelManager = BrokerToControllerChannelManager(
+          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          time = time,
+          metrics = metrics,
+          config = config,
+          channelName = "forwarding",
+          threadNamePrefix = threadNamePrefix,
+          retryTimeoutMs = config.requestTimeoutMs.longValue)
+        clientToControllerChannelManager.start()
+
         /* start forwarding manager */
+        var autoTopicCreationChannel = Option.empty[BrokerToControllerChannelManager]
         if (enableForwarding) {
-          val brokerToControllerManager = BrokerToControllerChannelManager(
-            controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
-            time = time,
-            metrics = metrics,
-            config = config,
-            channelName = "forwarding",
-            threadNamePrefix = threadNamePrefix,
-            retryTimeoutMs = config.requestTimeoutMs.longValue)
-          brokerToControllerManager.start()
-          this.forwardingManager = Some(ForwardingManager(brokerToControllerManager))
-          clientToControllerChannelManager = Some(brokerToControllerManager)
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
         val apiVersionManager = ApiVersionManager(
@@ -330,10 +332,21 @@ class KafkaServer(
         groupCoordinator = GroupCoordinator(config, replicaManager, Time.SYSTEM, metrics)
         groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
 
+        /* create producer ids manager */
+        val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
+          ProducerIdManager.rpc(
+            config.brokerId,
+            brokerEpochSupplier = () => kafkaController.brokerEpoch,
+            clientToControllerChannelManager,
+            config.requestTimeoutMs
+          )
+        } else {
+          ProducerIdManager.zk(config.brokerId, zkClient)
+        }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
-          () => new ProducerIdManager(config.brokerId, zkClient), metrics, metadataCache, Time.SYSTEM)
+          () => producerIdManager, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 
@@ -342,7 +355,7 @@ class KafkaServer(
           config,
           metadataCache,
           threadNamePrefix,
-          clientToControllerChannelManager,
+          autoTopicCreationChannel,
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
@@ -680,7 +693,8 @@ class KafkaServer(
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-        CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
+        if (clientToControllerChannelManager != null)
+          CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

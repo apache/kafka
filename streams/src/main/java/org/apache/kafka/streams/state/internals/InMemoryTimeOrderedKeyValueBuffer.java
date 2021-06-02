@@ -90,7 +90,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
     private StreamsMetricsImpl streamsMetrics;
-    private String threadId;
     private String taskId;
 
     private volatile boolean open;
@@ -212,16 +211,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
 
-        threadId = Thread.currentThread().getName();
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
             streamsMetrics
         );
         bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
-            threadId,
             taskId,
             METRIC_SCOPE,
             storeName,
@@ -232,7 +228,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         updateBufferMetrics();
         open = true;
-        partition = context.taskId().partition;
+        partition = context.taskId().partition();
     }
 
     @Override
