@@ -75,17 +75,27 @@ public final class FileRawSnapshotReader implements RawSnapshotReader, AutoClose
      *
      * @param logDir the directory for the topic partition
      * @param snapshotId the end offset and epoch for the snapshotId
-     * @throws java.nio.file.NoSuchFileException if the snapshot doesn't exist
-     * @throws IOException for any IO error while opening the snapshot
      */
-    public static FileRawSnapshotReader open(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
-        FileRecords fileRecords = FileRecords.open(
-            Snapshots.snapshotPath(logDir, snapshotId).toFile(),
-            false, // mutable
-            true, // fileAlreadyExists
-            0, // initFileSize
-            false // preallocate
-        );
+    public static FileRawSnapshotReader open(Path logDir, OffsetAndEpoch snapshotId) {
+        FileRecords fileRecords;
+        Path filePath = Snapshots.snapshotPath(logDir, snapshotId);
+        try {
+            fileRecords = FileRecords.open(
+                    filePath.toFile(),
+                    false, // mutable
+                    true, // fileAlreadyExists
+                    0, // initFileSize
+                    false // preallocate
+            );
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                    String.format(
+                            "Unable to Opens a snapshot file %s",
+                            filePath.toAbsolutePath()
+                    ),
+                    e
+            );
+        }
 
         return new FileRawSnapshotReader(fileRecords, snapshotId);
     }

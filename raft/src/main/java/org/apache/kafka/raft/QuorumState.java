@@ -470,7 +470,7 @@ public class QuorumState {
                 this.state.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(
-                        "Failed to close Quorum status during transition to candidate, state is " + this.state, e);
+                        "Failed to transition from " + this.state.name() + " to " + state.name(), e);
             }
         }
 
