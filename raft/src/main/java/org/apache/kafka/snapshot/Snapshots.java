@@ -80,12 +80,12 @@ public final class Snapshots {
             tempFile = Files.createTempFile(dir, prefix, PARTIAL_SUFFIX);
         } catch (IOException e) {
             throw new UncheckedIOException(
-                    String.format(
-                            "Error creating temporary file. logDir = %s, snapshotId = %s",
-                            dir.toAbsolutePath(),
-                            snapshotId
-                    ),
-                    e
+                String.format(
+                    "Error creating temporary file. logDir = %s, snapshotId = %s",
+                     dir.toAbsolutePath(),
+                     snapshotId
+                ),
+                e
             );
         }
         return tempFile;
