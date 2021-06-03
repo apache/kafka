@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.util.Objects;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -67,7 +69,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private String topic;
     private Integer partition;
     private Long offset;
-    private Headers headers;
+    private Headers headers = new RecordHeaders();
     private Long recordTimestamp;
     private Long currentSystemTimeMs;
     private Long currentStreamTimeMs;
@@ -319,7 +321,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
-        this.headers = headers;
+        this.headers = Objects.requireNonNull(headers);
         this.recordTimestamp = timestamp;
     }
 
@@ -364,7 +366,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void setHeaders(final Headers headers) {
-        this.headers = headers;
+        this.headers = Objects.requireNonNull(headers);
     }
 
     /**

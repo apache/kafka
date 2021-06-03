@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -515,7 +516,6 @@ public class KTableKTableLeftJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        @SuppressWarnings("unchecked")
         final Processor<String, Change<String>> join = new KTableKTableLeftJoin<>(
             (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
             (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
@@ -523,7 +523,7 @@ public class KTableKTableLeftJoinTest {
         ).get();
 
         final MockProcessorContext context = new MockProcessorContext(props);
-        context.setRecordMetadata("left", -1, -2, null, -3);
+        context.setRecordMetadata("left", -1, -2, new RecordHeaders(), -3);
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableLeftJoin.class)) {
