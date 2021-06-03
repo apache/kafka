@@ -145,7 +145,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         context.assertSentFetchRequest(epoch, localLogEndOffset, snapshotId.epoch);
 
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener();
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
         context.client.poll();
 

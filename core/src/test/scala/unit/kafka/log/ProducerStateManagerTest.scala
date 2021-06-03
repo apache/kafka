@@ -46,7 +46,7 @@ class ProducerStateManagerTest {
   @BeforeEach
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
-    stateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    stateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
   }
 
   @AfterEach
@@ -467,7 +467,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, epoch, 1, 1L, isTransactional = true)
 
     stateManager.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
     // The snapshot only persists the last appended batch metadata
@@ -490,7 +490,7 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, offset = 2L)
 
     stateManager.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
     // The snapshot only persists the last appended batch metadata
@@ -510,7 +510,7 @@ class ProducerStateManagerTest {
       offset = 0L, timestamp = appendTimestamp)
     stateManager.takeSnapshot()
 
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(logStartOffset = 0L, logEndOffset = 1L, time.milliseconds)
 
     val lastEntry = recoveredMapping.lastEntry(producerId)
@@ -542,7 +542,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, epoch, 1, 1L, 1)
 
     stateManager.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
@@ -561,7 +561,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, epoch, 1, 1L, 1)
 
     stateManager.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     val sequence = 2
@@ -769,7 +769,7 @@ class ProducerStateManagerTest {
   @Test
   def testSequenceNotValidatedForGroupMetadataTopic(): Unit = {
     val partition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
-    val stateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val stateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
 
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, RecordBatch.NO_SEQUENCE, offset = 99,
@@ -818,7 +818,7 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 1)
     stateManager.takeSnapshot()
 
-    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     recoveredMapping.truncateAndReload(0L, 2L, 70000)
 
     // append from old coordinator should be rejected
@@ -922,7 +922,7 @@ class ProducerStateManagerTest {
     }
 
     // Ensure that the truncated snapshot is deleted and producer state is loaded from the previous snapshot
-    val reloadedStateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
+    val reloadedStateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs, time)
     reloadedStateManager.truncateAndReload(0L, 20L, time.milliseconds())
     assertFalse(snapshotToTruncate.exists())
 

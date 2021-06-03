@@ -171,7 +171,7 @@ public class AbstractProcessorContextTest {
         );
     }
 
-    private static class TestProcessorContext extends AbstractProcessorContext {
+    private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
             config = getStreamsConfig();
@@ -191,14 +191,6 @@ public class AbstractProcessorContextTest {
 
         @Override
         public <S extends StateStore> S getStateStore(final String name) {
-            return null;
-        }
-
-        @Override
-        @Deprecated
-        public Cancellable schedule(final long interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
             return null;
         }
 

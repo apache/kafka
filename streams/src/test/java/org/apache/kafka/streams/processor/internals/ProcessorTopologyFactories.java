@@ -27,7 +27,7 @@ public final class ProcessorTopologyFactories {
 
 
     public static ProcessorTopology with(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
-                                         final Map<String, SourceNode<?, ?, ?, ?>> sourcesByTopic,
+                                         final Map<String, SourceNode<?, ?>> sourcesByTopic,
                                          final List<StateStore> stateStoresByName,
                                          final Map<String, String> storeToChangelogTopic) {
         return new ProcessorTopology(processorNodes,
