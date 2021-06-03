@@ -97,6 +97,10 @@ public class Struct {
         return getInt(field.name);
     }
 
+    public Long get(Field.Uint32 field) {
+        return getLong(field.name);
+    }
+
     public Short get(Field.Int16 field) {
         return getShort(field.name);
     }
@@ -270,6 +274,10 @@ public class Struct {
         return (Long) get(name);
     }
 
+    public Long getUnsignedInt(BoundField field) {
+        return (Long) get(field);
+    }
+
     public Long getLong(BoundField field) {
         return (Long) get(field);
     }
@@ -402,6 +410,14 @@ public class Struct {
     public Struct set(Field.Uint16 def, int value) {
         if (value < 0 || value > 65535) {
             throw new RuntimeException("Invalid value for unsigned short for " +
+                    def.name + ": " + value);
+        }
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Uint32 def, long value) {
+        if (value < 0 || value > 4294967293L) {
+            throw new RuntimeException("Invalid value for unsigned int for " +
                     def.name + ": " + value);
         }
         return set(def.name, value);

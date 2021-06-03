@@ -94,6 +94,15 @@ public final class MessageUtil {
         return value;
     }
 
+    public static long jsonNodeToUnsignedInt(JsonNode node, String about) {
+        long value = jsonNodeToLong(node, about);
+        if (value < 0 || value > 4294967293L) {
+            throw new RuntimeException(about + ": value " + value +
+                    " does not fit in a 16-bit unsigned integer.");
+        }
+        return value;
+    }
+
     public static int jsonNodeToInt(JsonNode node, String about) {
         if (node.isInt()) {
             return node.asInt();
