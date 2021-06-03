@@ -27,7 +27,6 @@ import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -35,8 +34,9 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import scala.jdk.CollectionConverters._
 
@@ -100,6 +100,10 @@ trait RaftManager[T] {
     epoch: Int,
     records: Seq[T]
   ): Option[Long]
+
+  def leaderAndEpoch: LeaderAndEpoch
+
+  def client: RaftClient[T]
 }
 
 class KafkaRaftManager[T](
@@ -125,10 +129,10 @@ class KafkaRaftManager[T](
   private val dataDir = createDataDir()
   private val metadataLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
-  private val raftClient = buildRaftClient()
-  private val raftIoThread = new RaftIoThread(raftClient, threadNamePrefix)
+  val client: KafkaRaftClient[T] = buildRaftClient()
+  private val raftIoThread = new RaftIoThread(client, threadNamePrefix)
 
-  def kafkaRaftClient: KafkaRaftClient[T] = raftClient
+  def kafkaRaftClient: KafkaRaftClient[T] = client
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
@@ -151,7 +155,7 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     raftIoThread.shutdown()
-    raftClient.close()
+    client.close()
     scheduler.shutdown()
     netChannel.close()
     metadataLog.close()
@@ -160,7 +164,7 @@ class KafkaRaftManager[T](
   override def register(
     listener: RaftClient.Listener[T]
   ): Unit = {
-    raftClient.register(listener)
+    client.register(listener)
   }
 
   override def scheduleAtomicAppend(
@@ -183,9 +187,9 @@ class KafkaRaftManager[T](
     isAtomic: Boolean
   ): Option[Long] = {
     val offset = if (isAtomic) {
-      raftClient.scheduleAtomicAppend(epoch, records.asJava)
+      client.scheduleAtomicAppend(epoch, records.asJava)
     } else {
-      raftClient.scheduleAppend(epoch, records.asJava)
+      client.scheduleAppend(epoch, records.asJava)
     }
 
     Option(offset).map(Long.unbox)
@@ -202,7 +206,7 @@ class KafkaRaftManager[T](
       createdTimeMs
     )
 
-    raftClient.handle(inboundRequest)
+    client.handle(inboundRequest)
 
     inboundRequest.completion.thenApply { response =>
       response.data
@@ -307,4 +311,7 @@ class KafkaRaftManager[T](
     )
   }
 
+  override def leaderAndEpoch: LeaderAndEpoch = {
+    client.leaderAndEpoch
+  }
 }

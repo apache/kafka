@@ -499,7 +499,7 @@ public class ProcessorStateManagerTest {
         final TopicPartition changelogPartition = stateMgr.registeredChangelogPartitionFor(persistentStoreName);
 
         assertThat(changelogPartition.topic(), is(persistentStoreTopicName));
-        assertThat(changelogPartition.partition(), is(taskId.partition));
+        assertThat(changelogPartition.partition(), is(taskId.partition()));
     }
 
     @Test

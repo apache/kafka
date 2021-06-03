@@ -375,7 +375,7 @@ public final class AssignmentTestUtils {
             final UUID client = entry.getKey();
             final ClientState clientState = entry.getValue();
             for (final TaskId task : clientState.activeTasks()) {
-                final int subtopology = task.topicGroupId;
+                final int subtopology = task.subtopology();
                 subtopologyToClientsWithPartition
                     .computeIfAbsent(subtopology, initialClientCounts)
                     .get(client)

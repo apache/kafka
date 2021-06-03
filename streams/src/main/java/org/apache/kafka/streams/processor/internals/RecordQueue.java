@@ -39,7 +39,7 @@ public class RecordQueue {
     public static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
 
     private final Logger log;
-    private final SourceNode<?, ?, ?, ?> source;
+    private final SourceNode<?, ?> source;
     private final TopicPartition partition;
     private final ProcessorContext processorContext;
     private final TimestampExtractor timestampExtractor;
@@ -52,7 +52,7 @@ public class RecordQueue {
     private final Sensor droppedRecordsSensor;
 
     RecordQueue(final TopicPartition partition,
-                final SourceNode<?, ?, ?, ?> source,
+                final SourceNode<?, ?> source,
                 final TimestampExtractor timestampExtractor,
                 final DeserializationExceptionHandler deserializationExceptionHandler,
                 final InternalProcessorContext processorContext,
@@ -62,7 +62,7 @@ public class RecordQueue {
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
         this.processorContext = processorContext;
-        droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
             Thread.currentThread().getName(),
             processorContext.taskId().toString(),
             processorContext.metrics()
@@ -85,7 +85,7 @@ public class RecordQueue {
      *
      * @return SourceNode
      */
-    public SourceNode<?, ?, ?, ?> source() {
+    public SourceNode<?, ?> source() {
         return source;
     }
 

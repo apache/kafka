@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
@@ -44,7 +44,12 @@ public class TimestampedTupleForwarderTest {
         expect(store.setFlushListener(flushListener, sendOldValues)).andReturn(false);
         replay(store);
 
-        new TimestampedTupleForwarder<>(store, null, flushListener, sendOldValues);
+        new TimestampedTupleForwarder<>(
+            store,
+            (org.apache.kafka.streams.processor.api.ProcessorContext<Object, Change<Object>>) null,
+            flushListener,
+            sendOldValues
+        );
 
         verify(store);
     }
@@ -57,7 +62,7 @@ public class TimestampedTupleForwarderTest {
 
     private void shouldForwardRecordsIfWrappedStateStoreDoesNotCache(final boolean sendOldValues) {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
 
         expect(store.setFlushListener(null, sendOldValues)).andReturn(false);
         if (sendOldValues) {
@@ -71,7 +76,12 @@ public class TimestampedTupleForwarderTest {
         replay(store, context);
 
         final TimestampedTupleForwarder<String, String> forwarder =
-            new TimestampedTupleForwarder<>(store, context, null, sendOldValues);
+            new TimestampedTupleForwarder<>(
+                store,
+                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                null,
+                sendOldValues
+            );
         forwarder.maybeForward("key1", "newValue1", "oldValue1");
         forwarder.maybeForward("key2", "newValue2", "oldValue2", 42L);
 
@@ -81,13 +91,18 @@ public class TimestampedTupleForwarderTest {
     @Test
     public void shouldNotForwardRecordsIfWrappedStateStoreDoesCache() {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
 
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
 
         final TimestampedTupleForwarder<String, String> forwarder =
-            new TimestampedTupleForwarder<>(store, context, null, false);
+            new TimestampedTupleForwarder<>(
+                store,
+                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                null,
+                false
+            );
         forwarder.maybeForward("key", "newValue", "oldValue");
         forwarder.maybeForward("key", "newValue", "oldValue", 42L);
 

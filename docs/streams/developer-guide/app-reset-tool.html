@@ -78,44 +78,43 @@
             <h2>Step 1: Run the application reset tool<a class="headerlink" href="#step-1-run-the-application-reset-tool" title="Permalink to this headline"></a></h2>
             <p>Invoke the application reset tool from the command line</p>
             <p>Warning! This tool makes irreversible changes to your application. It is strongly recommended that you run this once with <code class="docutils literal"><span class="pre">--dry-run</span></code> to preview your changes before making them.</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span><code>&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset</code></pre></div>
-            </div>
+            <pre class="line-numbers"><code class="language-bash">&lt;path-to-kafka&gt;/bin/kafka-streams-application-reset</code></pre>
             <p>The tool accepts the following parameters:</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span>Option</span><code> <span class="o">(</span>* <span class="o">=</span> required<span class="o">)</span>                 Description
+            <pre class="line-numbers"><code class="language-text">Option (* = required)                 Description
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
-                                        <span class="o">(</span>application.id<span class="o">)</span>.
+                                        (application.id).
 --bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
                                         format: HOST1:PORT1,HOST2:PORT2
-                                        <span class="o">(</span>default: localhost:9092<span class="o">)</span>
---by-duration &lt;String: urls&gt;      Reset offsets to offset by duration from
-                                        current timestamp. Format: '<span>PnDTnHnMnS</span>'
+                                        (default: localhost:9092)
+--by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
+                                        current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
                                         passed to admin clients and embedded
                                         consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
---from-file &lt;String: urls&gt;        Reset offsets to values defined in CSV
+--from-file &lt;String: urls&gt;            Reset offsets to values defined in CSV
                                         file.
 --input-topics &lt;String: list&gt;         Comma-separated list of user input
                                         topics. For these topics, the tool will
                                         reset the offset to the earliest
                                         available offset.
 --intermediate-topics &lt;String: list&gt;  Comma-separated list of intermediate user
-                                        topics <span class="o">(</span>topics used in the through<span class="o">()</span>
-                                        method<span class="o">)</span>. For these topics, the tool
+                                        topics (topics used in the through()
+                                        method). For these topics, the tool
                                         will skip to the end.
 --internal-topics &lt;String: list&gt;      Comma-separated list of internal topics
                                         to delete. Must be a subset of the
                                         internal topics marked for deletion by
                                         the default behaviour (do a dry-run without
                                         this option to view these topics).
---shift-by &lt;Long: number-of-offsets&gt; Reset offsets shifting current offset by
-                                        'n', where 'n' can be positive or
+--shift-by &lt;Long: number-of-offsets&gt;  Reset offsets shifting current offset by
+                                        &#39;n&#39;, where &#39;n&#39; can be positive or
                                         negative
 --to-datetime &lt;String&gt;                Reset offsets to offset from datetime.
-                                        Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+                                        Format: &#39;YYYY-MM-DDTHH:mm:SS.sss&#39;
 --to-earliest                         Reset offsets to earliest offset.
 --to-latest                           Reset offsets to latest offset.
 --to-offset &lt;Long&gt;                    Reset offsets to a specific offset.
@@ -125,8 +124,7 @@
                                         directly.
 --force                               Force removing members of the consumer group
                                       (intended to remove left-over members if
-                                      long session timeout was configured).</code></pre></div>
-            </div>
+                                      long session timeout was configured).</code></pre>
             <p>Consider the following as reset-offset scenarios for <code>input-topics</code>:</p>
             <ul>
                 <li> by-duration</li>
