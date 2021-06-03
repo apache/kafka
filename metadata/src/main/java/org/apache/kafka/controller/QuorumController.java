@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -44,6 +46,7 @@ import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.QuotaRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -359,7 +362,8 @@ public final class QuorumController implements Controller {
                     new Section("cluster", clusterControl.iterator(epoch)),
                     new Section("replication", replicationControl.iterator(epoch)),
                     new Section("configuration", configurationControl.iterator(epoch)),
-                    new Section("clientQuotas", clientQuotaControlManager.iterator(epoch))));
+                    new Section("clientQuotas", clientQuotaControlManager.iterator(epoch)),
+                    new Section("producerIds", producerIdControlManager.iterator(epoch))));
             reschedule(0);
         }
 
@@ -855,6 +859,9 @@ public final class QuorumController implements Controller {
                 case QUOTA_RECORD:
                     clientQuotaControlManager.replay((QuotaRecord) message);
                     break;
+                case PRODUCER_IDS_RECORD:
+                    producerIdControlManager.replay((ProducerIdsRecord) message);
+                    break;
                 default:
                     throw new RuntimeException("Unhandled record type " + type);
             }
@@ -930,6 +937,12 @@ public final class QuorumController implements Controller {
     private final FeatureControlManager featureControl;
 
     /**
+     * An object which stores the controller's view of the latest producer ID
+     * that has been generated. This must be accessed only by the event queue thread.
+     */
+    private final ProducerIdControlManager producerIdControlManager;
+
+    /**
      * An object which stores the controller's view of topics and partitions.
      * This must be accessed only by the event queue thread.
      */
@@ -995,6 +1008,7 @@ public final class QuorumController implements Controller {
         this.clusterControl = new ClusterControlManager(logContext, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
+        this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotGeneratorManager = new SnapshotGeneratorManager(snapshotWriterBuilder);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
@@ -1197,6 +1211,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+            AllocateProducerIdsRequestData request) {
+        return appendWriteEvent("allocateProducerIds",
+            () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
+            .thenApply(result -> new AllocateProducerIdsResponseData()
+                    .setProducerIdStart(result.producerIdStart())
+                    .setProducerIdLen(result.producerIdLen()));
     }
 
     @Override
