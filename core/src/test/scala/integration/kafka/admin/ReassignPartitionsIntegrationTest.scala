@@ -126,7 +126,9 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         PartitionReassignmentState(Seq(3, 2, 0), Seq(3, 2, 0), true)
     )
 
-    assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).movesOngoing)
+    val verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false)
+    assertTrue(verifyAssignmentResult.partsOngoing)
+    assertFalse(verifyAssignmentResult.movesOngoing)
 
     // Wait for the assignment to complete
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
@@ -134,30 +136,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     assertEquals(unthrottledBrokerConfigs,
       describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
-  }
-
-  /**
-   * Test running a quick reassignment with the --zookeeper option.
-   */
-  @Test
-  def testLegacyReassignment(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
-    cluster.setup()
-    val assignment = """{"version":1,"partitions":""" +
-      """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]},""" +
-      """{"topic":"bar","partition":0,"replicas":[3,2,0],"log_dirs":["any","any","any"]}""" +
-      """]}"""
-    // Execute the assignment
-    runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L)
-    val finalAssignment = Map(
-      new TopicPartition("foo", 0) ->
-        PartitionReassignmentState(Seq(0, 1, 3), Seq(0, 1, 3), true),
-      new TopicPartition("bar", 0) ->
-        PartitionReassignmentState(Seq(3, 2, 0), Seq(3, 2, 0), true)
-    )
-    // Wait for the assignment to complete
-    waitForVerifyAssignment(cluster.adminClient, assignment, false,
-      VerifyAssignmentResult(finalAssignment))
   }
 
   @Test
@@ -532,7 +510,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     verifyAssignment(adminClient, jsonString, preserveThrottles)
   }
 
-  private def waitForVerifyAssignment(adminClient: Admin, jsonString: String,
+  private def waitForVerifyAssignment(adminClient: Admin,
+                                      jsonString: String,
                                       preserveThrottles: Boolean,
                                       expectedResult: VerifyAssignmentResult): Unit = {
     var latestResult: VerifyAssignmentResult = null
