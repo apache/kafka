@@ -48,7 +48,7 @@ public class NamedCacheTest {
     public void setUp() {
         final Metrics innerMetrics = new Metrics();
         final StreamsMetricsImpl metrics = new MockStreamsMetrics(innerMetrics);
-        cache = new NamedCache( "dummy-name", metrics);
+        cache = new NamedCache("dummy-name", metrics);
     }
 
     @Test
@@ -59,7 +59,7 @@ public class NamedCacheTest {
                 new KeyValue<>("K3", "V3"),
                 new KeyValue<>("K4", "V4"),
                 new KeyValue<>("K5", "V5"));
-        for (KeyValue<String, String> stringStringKeyValue : toInsert) {
+        for (final KeyValue<String, String> stringStringKeyValue : toInsert) {
             final byte[] key = stringStringKeyValue.key.getBytes();
             final byte[] value = stringStringKeyValue.value.getBytes();
             cache.put(Bytes.wrap(key),
