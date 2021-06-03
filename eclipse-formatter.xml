@@ -53,5 +53,8 @@
 
     <!-- No trailing spaces -->
     <setting id="org.eclipse.jdt.core.formatter.indent_empty_lines" value="false"/>
+
+    <!-- No blank line at the end of the class -->
+    <setting id="org.eclipse.jdt.core.formatter.insert_new_line_at_end_of_file_if_missing" value="do not insert"/>
 </profile>
 </profiles>
