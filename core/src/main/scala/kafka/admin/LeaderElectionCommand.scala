@@ -26,6 +26,7 @@ import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import kafka.utils.Json
 import kafka.utils.Logging
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
@@ -35,14 +36,13 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.concurrent.duration._
 
 object LeaderElectionCommand extends Logging {
   def main(args: Array[String]): Unit = {
-    run(args, 30.second)
+    run(args)
   }
 
-  def run(args: Array[String], timeout: Duration): Unit = {
+  def run(args: Array[String]): Unit = {
     val commandOptions = new LeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(
       commandOptions,
@@ -80,8 +80,9 @@ object LeaderElectionCommand extends Logging {
         AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
         commandOptions.options.valueOf(commandOptions.bootstrapServer)
       )
-      props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, timeout.toMillis.toString)
-      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, (timeout.toMillis / 2).toString)
+      val timeoutMs = commandOptions.options.valueOf(commandOptions.requestTimeout)
+      props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, (Integer.parseInt(timeoutMs)*2).toString)
+      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeoutMs)
 
       Admin.create(props)
     }
@@ -283,6 +284,14 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
     .describedAs("election type")
     .withValuesConvertedBy(ElectionTypeConverter)
 
+  val requestTimeout = parser
+    .accepts(
+      "timeout",
+      CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+    .withRequiredArg
+    .describedAs("timeout ms")
+    .ofType(classOf[String])
+    .defaultsTo("30000")
   options = parser.parse(args: _*)
 }
 

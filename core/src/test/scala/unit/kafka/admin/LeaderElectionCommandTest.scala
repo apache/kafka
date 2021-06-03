@@ -38,7 +38,6 @@ import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.concurrent.duration._
 
 final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   import LeaderElectionCommandTest._
@@ -268,8 +267,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         "--bootstrap-server", "example.com:1234",
         "--election-type", "unclean",
         "--all-topic-partitions"
-      ),
-      1.seconds
+      )
     ))
     assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
