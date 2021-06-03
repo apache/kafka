@@ -40,9 +40,8 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
     private class KTableSourceValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store = null;
 
-        @SuppressWarnings("unchecked")
         public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+            store = context.getStateStore(storeName);
         }
 
         public ValueAndTimestamp<V> get(final K key) {

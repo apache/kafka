@@ -18,17 +18,18 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.net.InetAddress
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.{ProducerIdGenerator, TransactionCoordinator}
+import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
+import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
@@ -41,12 +42,12 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{ClusterResource, Endpoint, KafkaException}
+import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -55,16 +56,16 @@ import scala.jdk.CollectionConverters._
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-                    val config: KafkaConfig,
-                    val metaProps: MetaProperties,
-                    val metaLogManager: MetaLogManager,
-                    val time: Time,
-                    val metrics: Metrics,
-                    val threadNamePrefix: Option[String],
-                    val initialOfflineDirs: Seq[String],
-                    val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-                    val supportedFeatures: util.Map[String, VersionRange]
-                  ) extends KafkaBroker {
+  val config: KafkaConfig,
+  val metaProps: MetaProperties,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val time: Time,
+  val metrics: Metrics,
+  val threadNamePrefix: Option[String],
+  val initialOfflineDirs: Seq[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val supportedFeatures: util.Map[String, VersionRange]
+) extends KafkaBroker {
 
   import kafka.server.Server._
 
@@ -181,7 +182,7 @@ class BrokerServer(
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
+      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
@@ -243,11 +244,18 @@ class BrokerServer(
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       groupCoordinator = GroupCoordinator(config, replicaManager, Time.SYSTEM, metrics)
 
+      val producerIdManagerSupplier = () => ProducerIdManager.rpc(
+        config.brokerId,
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch(),
+        clientToControllerChannelManager,
+        config.requestTimeoutMs
+      )
+
       // Create transaction coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
-        createTemporaryProducerIdManager, metrics, metadataCache, Time.SYSTEM)
+        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, Some(clientToControllerChannelManager), None, None,
@@ -284,7 +292,7 @@ class BrokerServer(
         metaProps.clusterId, networkListeners, supportedFeatures)
 
       // Register a listener with the Raft layer to receive metadata event notifications
-      metaLogManager.register(brokerMetadataListener)
+      raftManager.register(brokerMetadataListener)
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
@@ -373,24 +381,6 @@ class BrokerServer(
         shutdown()
         throw e
     }
-  }
-
-  class TemporaryProducerIdManager() extends ProducerIdGenerator {
-    val maxProducerIdsPerBrokerEpoch = 1000000
-    var currentOffset = -1
-    override def generateProducerId(): Long = {
-      currentOffset = currentOffset + 1
-      if (currentOffset >= maxProducerIdsPerBrokerEpoch) {
-        fatal(s"Exhausted all demo/temporary producerIds as the next one will has extend past the block size of $maxProducerIdsPerBrokerEpoch")
-        throw new KafkaException("Have exhausted all demo/temporary producerIds.")
-      }
-      lifecycleManager.initialCatchUpFuture.get()
-      lifecycleManager.brokerEpoch() * maxProducerIdsPerBrokerEpoch + currentOffset
-    }
-  }
-
-  def createTemporaryProducerIdManager(): ProducerIdGenerator = {
-    new TemporaryProducerIdManager()
   }
 
   def shutdown(): Unit = {

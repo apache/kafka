@@ -23,15 +23,9 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
@@ -45,7 +39,6 @@ import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockRunnerDelegate(Parameterized.class)
 @PrepareForTest({StreamsMetricsImpl.class, Sensor.class, ThreadMetrics.class, StateStoreMetrics.class, ProcessorNodeMetrics.class})
 public class TaskMetricsTest {
 
@@ -56,20 +49,9 @@ public class TaskMetricsTest {
     private final Sensor expectedSensor = createMock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
-    @Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {Version.LATEST},
-            {Version.FROM_0100_TO_24}
-        });
-    }
-
-    @Parameter
-    public Version builtInMetricsVersion;
-
     @Before
     public void setUp() {
-        expect(streamsMetrics.version()).andReturn(builtInMetricsVersion).anyTimes();
+        expect(streamsMetrics.version()).andStubReturn(Version.LATEST);
         mockStatic(StreamsMetricsImpl.class);
     }
 
@@ -126,19 +108,17 @@ public class TaskMetricsTest {
         final String operation = "process-latency";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .andReturn(expectedSensor);
-        if (builtInMetricsVersion == Version.LATEST) {
-            final String avgLatencyDescription = "The average latency of calls to process";
-            final String maxLatencyDescription = "The maximum latency of calls to process";
-            expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
-            StreamsMetricsImpl.addAvgAndMaxToSensor(
-                expectedSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                operation,
-                avgLatencyDescription,
-                maxLatencyDescription
-            );
-        }
+        final String avgLatencyDescription = "The average latency of calls to process";
+        final String maxLatencyDescription = "The maximum latency of calls to process";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            avgLatencyDescription,
+            maxLatencyDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = TaskMetrics.processLatencySensor(THREAD_ID, TASK_ID, streamsMetrics);
@@ -152,30 +132,28 @@ public class TaskMetricsTest {
         final String operation = "punctuate";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .andReturn(expectedSensor);
-        if (builtInMetricsVersion == Version.LATEST) {
-            final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-            final String totalDescription = "The total number of calls to punctuate";
-            final String rateDescription = "The average number of calls to punctuate per second";
-            final String avgLatencyDescription = "The average latency of calls to punctuate";
-            final String maxLatencyDescription = "The maximum latency of calls to punctuate";
-            expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
-            StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                expectedSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                operation,
-                rateDescription,
-                totalDescription
-            );
-            StreamsMetricsImpl.addAvgAndMaxToSensor(
-                expectedSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                operationLatency,
-                avgLatencyDescription,
-                maxLatencyDescription
-            );
-        }
+        final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
+        final String totalDescription = "The total number of calls to punctuate";
+        final String rateDescription = "The average number of calls to punctuate per second";
+        final String avgLatencyDescription = "The average latency of calls to punctuate";
+        final String maxLatencyDescription = "The maximum latency of calls to punctuate";
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operationLatency,
+            avgLatencyDescription,
+            maxLatencyDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = TaskMetrics.punctuateSensor(THREAD_ID, TASK_ID, streamsMetrics);
@@ -278,77 +256,5 @@ public class TaskMetricsTest {
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
-    }
-
-    @Test
-    public void shouldGetDroppedRecordsSensorOrSkippedRecordsSensor() {
-        mockStatic(ThreadMetrics.class);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics)).andReturn(expectedSensor);
-            replay(ThreadMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
-
-            final Sensor sensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
-
-            verify(ThreadMetrics.class);
-            assertThat(sensor, is(expectedSensor));
-        } else {
-            shouldGetDroppedRecordsSensor();
-        }
-    }
-
-    @Test
-    public void shouldGetDroppedRecordsSensorOrExpiredWindowRecordDropSensor() {
-        final String storeType = "test-store-type";
-        final String storeName = "test-store-name";
-        mockStatic(StateStoreMetrics.class);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(StateStoreMetrics.expiredWindowRecordDropSensor(
-                TASK_ID,
-                storeType,
-                storeName,
-                streamsMetrics
-            )).andReturn(expectedSensor);
-            replay(StateStoreMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
-
-            final Sensor sensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
-                THREAD_ID,
-                TASK_ID,
-                storeType,
-                storeName,
-                streamsMetrics
-            );
-
-            verify(StateStoreMetrics.class);
-            assertThat(sensor, is(expectedSensor));
-        } else {
-            shouldGetDroppedRecordsSensor();
-        }
-    }
-
-    @Test
-    public void shouldGetDroppedRecordsSensorOrLateRecordDropSensor() {
-        final String processorNodeId = "test-processor-node";
-        mockStatic(ProcessorNodeMetrics.class);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(ProcessorNodeMetrics.lateRecordDropSensor(
-                THREAD_ID,
-                TASK_ID,
-                processorNodeId,
-                streamsMetrics
-            )).andReturn(expectedSensor);
-            replay(ProcessorNodeMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
-
-            final Sensor sensor = TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor(
-                THREAD_ID,
-                TASK_ID,
-                processorNodeId,
-                streamsMetrics
-            );
-
-            verify(ProcessorNodeMetrics.class);
-            assertThat(sensor, is(expectedSensor));
-        } else {
-            shouldGetDroppedRecordsSensor();
-        }
     }
 }

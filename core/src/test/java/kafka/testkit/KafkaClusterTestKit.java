@@ -36,11 +36,9 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metalog.MetaLogManager;
+import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
-import org.apache.kafka.raft.metadata.MetaLogRaftShim;
-import org.apache.kafka.raft.metadata.MetadataRecordSerde;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,11 +173,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
-                    MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
                     ControllerServer controller = new ControllerServer(
                         nodes.controllerProperties(node.id()),
                         config,
-                        metaLogShim,
                         raftManager,
                         Time.SYSTEM,
                         new Metrics(),
@@ -220,6 +216,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // Just like above, we set a placeholder voter list here until we
                     // find out what ports the controllers picked.
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+                    props.putAll(node.propertyOverrides());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
@@ -228,11 +225,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
                             Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
-                    MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
                     BrokerServer broker = new BrokerServer(
                         config,
                         nodes.brokerProperties(node.id()),
-                        metaLogShim,
+                        raftManager,
                         Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),

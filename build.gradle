@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.12.4'
+  id 'com.diffplug.spotless' version '5.12.5'
   id 'com.github.ben-manes.versions' version '0.38.0'
   id 'idea'
   id 'java-library'
@@ -446,6 +446,14 @@ subprojects {
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
+    }
+  }
+
+  // remove test output from all test types
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.destination
+      delete t.reports.html.destination
     }
   }
 
@@ -1069,6 +1077,7 @@ project(':metadata') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':raft')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
@@ -1077,6 +1086,7 @@ project(':metadata') {
     testImplementation libs.hamcrest
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':raft').sourceSets.test.output
   }
 
   task processMessages(type:JavaExec) {
@@ -1267,7 +1277,6 @@ project(':raft') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
-    implementation project(':metadata')
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
 
