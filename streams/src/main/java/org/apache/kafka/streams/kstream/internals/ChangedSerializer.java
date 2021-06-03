@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNullableSerializer<Change<T>, Void, T> {
 
@@ -40,7 +40,10 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     @Override
     public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<T> defaultValueSerializer) {
         if (inner == null) {
-            inner = Objects.requireNonNull(defaultValueSerializer);
+            if (defaultValueSerializer == null) {
+                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+            }
+            inner = defaultValueSerializer;
         }
     }
 

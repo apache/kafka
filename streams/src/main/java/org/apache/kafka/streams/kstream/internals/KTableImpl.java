@@ -1169,10 +1169,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal.withKeySerde(keySerde);
         }
 
-        /*if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde((Serde<VR>) valueSerde);
-        }*/
-
         final KTableSource<K, VR> resultProcessorSupplier = new KTableSource<>(
             materializedInternal.storeName(),
             materializedInternal.queryableStoreName()

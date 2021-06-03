@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
 
@@ -39,7 +39,10 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
     @Override
     public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<T> defaultValueDeserializer) {
         if (inner == null) {
-            inner = Objects.requireNonNull(defaultValueDeserializer);
+            if (defaultValueDeserializer == null) {
+                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+            }
+            inner = defaultValueDeserializer;
         }
     }
 

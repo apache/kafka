@@ -38,16 +38,16 @@ public class WrappingNullableUtils {
         return deserializerToUse;
     }
     @SuppressWarnings("unchecked")
-    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
-        Serializer<T> serializerToUse = specificSerializer;
-        if (serializerToUse == null) {
-            if (contextKeySerializer == null) {
-                throw  new ConfigException("Please specify a key serde or set one through the default.key.serde config");
-            }
-            if (contextValueSerializer == null) {
-                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
-            }
+    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey, final String name) {
+        final Serializer<T> serializerToUse;
+        if (specificSerializer == null) {
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
+        } else {
+            serializerToUse = specificSerializer;
+        }
+        if (serializerToUse == null) {
+            final String serde = isKey ? "key" : "value";
+            throw new ConfigException("Please specify a " + serde + " serde through produced or materialized, or set one through the default." + serde + ".serde config for node " + name);
         } else {
             initNullableSerializer(serializerToUse, contextKeySerializer, contextValueSerializer);
         }
@@ -56,15 +56,15 @@ public class WrappingNullableUtils {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde, final boolean isKey) {
-        Serde<T> serdeToUse = specificSerde;
-        if (serdeToUse == null) {
-            if (contextKeySerde == null) {
-                throw new ConfigException("Please specify a key serde or set one through the default.key.serde config");
-            }
-            if (contextValueSerde == null) {
-                throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
-            }
+        final Serde<T> serdeToUse;
+        if (specificSerde == null) {
             serdeToUse = (Serde<T>) (isKey ?  contextKeySerde : contextValueSerde);
+        } else {
+            serdeToUse = specificSerde;
+        }
+        if (serdeToUse == null) {
+            final String serde = isKey ? "key" : "value";
+            throw new ConfigException("Please specify a " + serde + " serde or set one through the default." + serde + ".serde config");
         } else if (serdeToUse instanceof WrappingNullableSerde) {
             ((WrappingNullableSerde) serdeToUse).setIfUnset(contextKeySerde, contextValueSerde);
         }
@@ -79,12 +79,12 @@ public class WrappingNullableUtils {
         return prepareDeserializer(specificDeserializer, contextKeyDeserializer, contextValueDeserializer, false);
     }
 
-    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, true);
+    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final String name) {
+        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, true, name);
     }
 
-    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
-        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, false);
+    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final String name) {
+        return prepareSerializer(specificSerializer, contextKeySerializer, contextValueSerializer, false, name);
     }
 
     public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {

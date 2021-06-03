@@ -29,6 +29,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.TestUtils;
@@ -79,8 +80,6 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfig = mkProperties(mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
-            //mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class.getName()),
-            //mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.BytesSerde.class.getName())
         ));
     }
 
@@ -199,7 +198,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
 
         joinResult
             .toStream()
-            .to(OUTPUT);
+            .to(OUTPUT, Produced.with(null, Serdes.String()));
 
         return builder.build(streamsConfig);
     }

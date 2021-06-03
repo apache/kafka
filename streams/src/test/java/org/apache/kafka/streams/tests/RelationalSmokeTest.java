@@ -643,9 +643,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
                         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
                         mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName())
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
                     )
                 );
             properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);

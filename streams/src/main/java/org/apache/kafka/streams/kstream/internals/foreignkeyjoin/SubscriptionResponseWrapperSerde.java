@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -24,7 +25,6 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
     private final SubscriptionResponseWrapperSerializer<V> serializer;
@@ -57,7 +57,10 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         @Override
         public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
             if (serializer == null) {
-                serializer = Objects.requireNonNull(defaultValueSerializer);
+                if (defaultValueSerializer == null) {
+                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                }
+                serializer = defaultValueSerializer;
             }
         }
 
@@ -105,7 +108,10 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         @Override
         public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
             if (deserializer == null) {
-                deserializer = Objects.requireNonNull(defaultValueDeserializer);
+                if (defaultValueDeserializer == null) {
+                    throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
+                }
+                deserializer = defaultValueDeserializer;
             }
         }
 

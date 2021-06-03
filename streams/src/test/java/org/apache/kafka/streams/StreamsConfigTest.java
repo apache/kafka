@@ -863,30 +863,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldThrowErrorOnDefaults() {
-        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
-        try {
-            final Serde serde = config.defaultValueSerde();
-            serde.serializer();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                    "Failed to configure value serde null, please check your default value serde",
-                    e.getMessage()
-            );
-        }
-        try {
-            config.defaultKeySerde();
-            fail("Test should throw a StreamsException");
-        } catch (final StreamsException e) {
-            assertEquals(
-                    "Failed to configure key serde null, please check your default key serde",
-                    e.getMessage()
-            );
-        }
-    }
-
-    @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);

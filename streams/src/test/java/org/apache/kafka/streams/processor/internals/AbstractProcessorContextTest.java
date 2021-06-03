@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -185,15 +184,11 @@ public class AbstractProcessorContextTest {
     private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
-            config = getStreamsConfig(Serdes.ByteArray(), Serdes.ByteArray());
+            config = getStreamsConfig();
 
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
             config.put("user.supplied.config", "user-supplied-value");
-        }
-
-        TestProcessorContext(final MockStreamsMetrics metrics, final Properties newConfig) {
-            super(new TaskId(0, 0), new StreamsConfig(newConfig), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
@@ -259,11 +254,6 @@ public class AbstractProcessorContextTest {
         @Override
         public String changelogFor(final String storeName) {
             return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
-        }
-
-        private TestProcessorContext removeSerdeConfig(final MockStreamsMetrics metrics) {
-            //config.remove();
-            return new TestProcessorContext(metrics);
         }
     }
 }

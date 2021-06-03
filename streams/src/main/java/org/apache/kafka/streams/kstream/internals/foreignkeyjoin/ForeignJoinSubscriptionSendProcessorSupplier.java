@@ -87,7 +87,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements o
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
             if (valueSerializer == null) {
-                if (context.valueSerde().serializer() == null) {
+                if (context.valueSerde() == null || context.valueSerde().serializer() == null) {
                     throw new ConfigException("Please specify a value serde or set one through the default.value.serde config");
                 }
                 valueSerializer = (Serializer<V>) context.valueSerde().serializer();
