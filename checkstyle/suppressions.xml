@@ -108,7 +108,7 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="(DistributedHerder|Worker).java"/>
+              files="(AbstractHerder|DistributedHerder|Worker).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Worker(|Test).java"/>
     <suppress checks="MethodLength"

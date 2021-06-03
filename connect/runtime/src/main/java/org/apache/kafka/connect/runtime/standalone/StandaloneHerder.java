@@ -24,6 +24,8 @@ import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
+import org.apache.kafka.connect.runtime.RestartPlan;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -33,6 +35,7 @@ import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
@@ -48,6 +51,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -297,6 +301,56 @@ public class StandaloneHerder extends AbstractHerder {
         return new StandaloneHerderRequest(requestSeqNum.incrementAndGet(), future);
     }
 
+    @Override
+    public synchronized void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb) {
+        // Ensure the connector exists
+        String connectorName = request.connectorName();
+        configState = configBackingStore.snapshot();
+        if (!configState.contains(connectorName)) {
+            cb.onCompletion(new NotFoundException("Connector " + connectorName + " not found", null), null);
+            return;
+        }
+
+        Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
+        if (!maybePlan.isPresent()) {
+            cb.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
+            return;
+        }
+        RestartPlan plan = maybePlan.get();
+
+        // If requested, stop the connector and any tasks, marking each as restarting
+        log.info("Received {}", plan);
+        if (plan.restartConnector()) {
+            worker.stopAndAwaitConnector(connectorName);
+            recordRestarting(connectorName);
+        }
+        if (plan.restartAnyTasks()) {
+            // Stop the tasks and mark as restarting
+            worker.stopAndAwaitTasks(plan.taskIdsToRestart());
+            plan.taskIdsToRestart().forEach(this::recordRestarting);
+        }
+
+        // Now restart the connector and tasks
+        if (plan.restartConnector()) {
+            log.debug("Restarting connector {}", connectorName);
+            startConnector(connectorName, (error, targetState) -> {
+                if (error == null) {
+                    log.debug("Connector {} successfully restarted", connectorName);
+                } else {
+                    log.debug("Connector {} failed to restart", connectorName, error);
+                }
+            });
+        }
+        if (plan.restartAnyTasks()) {
+            log.debug("Restarting {} of {} tasks connector {}", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+            createConnectorTasks(connectorName, plan.taskIdsToRestart());
+            log.debug("{} tasks for connector {} restarted as requested ({} were left running)", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
+        }
+        // Complete the restart request
+        log.info("Completed {}", plan);
+        cb.onCompletion(null, plan.restartConnectorStateInfo());
+    }
+
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
@@ -313,10 +367,15 @@ public class StandaloneHerder extends AbstractHerder {
         return worker.connectorTaskConfigs(connName, connConfig);
     }
 
-    private void createConnectorTasks(String connName, TargetState initialState) {
-        Map<String, String> connConfigs = configState.connectorConfig(connName);
+    private void createConnectorTasks(String connName) {
+        List<ConnectorTaskId> taskIds = configState.tasks(connName);
+        createConnectorTasks(connName, taskIds);
+    }
 
-        for (ConnectorTaskId taskId : configState.tasks(connName)) {
+    private void createConnectorTasks(String connName, Collection<ConnectorTaskId> taskIds) {
+        TargetState initialState = configState.targetState(connName);
+        Map<String, String> connConfigs = configState.connectorConfig(connName);
+        for (ConnectorTaskId taskId : taskIds) {
             Map<String, String> taskConfigMap = configState.taskConfig(taskId);
             worker.startTask(taskId, configState, connConfigs, taskConfigMap, this, initialState);
         }
@@ -344,7 +403,7 @@ public class StandaloneHerder extends AbstractHerder {
             removeConnectorTasks(connName);
             List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
             configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
-            createConnectorTasks(connName, configState.targetState(connName));
+            createConnectorTasks(connName);
         }
     }
 
@@ -400,6 +459,11 @@ public class StandaloneHerder extends AbstractHerder {
 
         @Override
         public void onSessionKeyUpdate(SessionKey sessionKey) {
+            // no-op
+        }
+
+        @Override
+        public void onRestartRequest(RestartRequest restartRequest) {
             // no-op
         }
     }

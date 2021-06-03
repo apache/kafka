@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -2506,6 +2507,29 @@ public class DistributedHerderTest {
             assertEquals(rebalanceTime, rebalanceTimeMax, 0.0001d);
             assertEquals(rebalanceTime, rebalanceTimeAvg, 0.0001d);
         }
+    }
+
+    @Test
+    public void preserveOnlyLatestRestartRequest() {
+        member.wakeup();
+        PowerMock.expectLastCall().anyTimes();
+        PowerMock.replayAll();
+
+        final String connectorName = "foo";
+        RestartRequest restartRequest = new RestartRequest(connectorName, false, false);
+        configUpdateListener.onRestartRequest(restartRequest);
+
+        restartRequest = new RestartRequest(connectorName, false, true);
+        configUpdateListener.onRestartRequest(restartRequest);
+        assertEquals(1, herder.pendingRestartRequests.size());
+        assertFalse(herder.pendingRestartRequests.first().onlyFailed());
+        assertTrue(herder.pendingRestartRequests.first().includeTasks());
+
+        restartRequest = new RestartRequest(connectorName, true, false);
+        configUpdateListener.onRestartRequest(restartRequest);
+        assertEquals(1, herder.pendingRestartRequests.size());
+        assertTrue(herder.pendingRestartRequests.first().onlyFailed());
+        assertFalse(herder.pendingRestartRequests.first().includeTasks());
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
