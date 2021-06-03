@@ -18,7 +18,6 @@
 package org.apache.kafka.shell;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
@@ -26,19 +25,23 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metalog.MetaLogLeader;
-import org.apache.kafka.metalog.MetaLogListener;
-import org.apache.kafka.raft.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 
@@ -49,14 +52,14 @@ public final class SnapshotFileReader implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SnapshotFileReader.class);
 
     private final String snapshotPath;
-    private final MetaLogListener listener;
+    private final RaftClient.Listener<ApiMessageAndVersion> listener;
     private final KafkaEventQueue queue;
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
     private final MetadataRecordSerde serde = new MetadataRecordSerde();
 
-    public SnapshotFileReader(String snapshotPath, MetaLogListener listener) {
+    public SnapshotFileReader(String snapshotPath, RaftClient.Listener<ApiMessageAndVersion> listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
         this.queue = new KafkaEventQueue(Time.SYSTEM,
@@ -101,7 +104,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     private void scheduleHandleNextBatch() {
         queue.append(new EventQueue.Event() {
             @Override
-            public void run() throws Exception {
+            public void run() {
                 handleNextBatch();
             }
 
@@ -123,8 +126,10 @@ public final class SnapshotFileReader implements AutoCloseable {
                     case LEADER_CHANGE:
                         LeaderChangeMessage message = new LeaderChangeMessage();
                         message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        listener.handleNewLeader(new MetaLogLeader(message.leaderId(),
-                            batch.partitionLeaderEpoch()));
+                        listener.handleLeaderChange(new LeaderAndEpoch(
+                            OptionalInt.of(message.leaderId()),
+                            batch.partitionLeaderEpoch()
+                        ));
                         break;
                     default:
                         log.error("Ignoring control record with type {} at offset {}",
@@ -137,18 +142,28 @@ public final class SnapshotFileReader implements AutoCloseable {
     }
 
     private void handleMetadataBatch(FileChannelRecordBatch batch) {
-        List<ApiMessage> messages = new ArrayList<>();
-        for (Iterator<Record> iter = batch.iterator(); iter.hasNext(); ) {
-            Record record = iter.next();
+        List<ApiMessageAndVersion> messages = new ArrayList<>();
+        for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
                 ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
-                messages.add(messageAndVersion.message());
+                messages.add(messageAndVersion);
             } catch (Throwable e) {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);
             }
         }
-        listener.handleCommits(batch.lastOffset(), messages);
+        listener.handleCommit(
+            new MemoryBatchReader<>(
+                Collections.singletonList(
+                    Batch.of(
+                        batch.baseOffset(),
+                        batch.partitionLeaderEpoch(),
+                        messages
+                    )
+                ),
+                reader -> { }
+            )
+        );
     }
 
     public void beginShutdown(String reason) {

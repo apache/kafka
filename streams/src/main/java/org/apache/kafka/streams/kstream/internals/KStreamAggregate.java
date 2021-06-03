@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
@@ -66,7 +66,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(
+            droppedRecordsSensor = droppedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
                 (StreamsMetricsImpl) context.metrics());

@@ -74,7 +74,7 @@ class StandbyTaskCreator {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.buildSubtopology(taskId.subtopology());
 
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
@@ -120,7 +120,7 @@ class StandbyTaskCreator {
         return createStandbyTask(
             streamTask.id(),
             inputPartitions,
-            builder.buildSubtopology(streamTask.id.topicGroupId),
+            builder.buildSubtopology(streamTask.id.subtopology()),
             stateManager,
             context
         );
