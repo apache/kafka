@@ -407,6 +407,7 @@ public class KTableKTableOuterJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
+        @SuppressWarnings("unchecked")
         final Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
                 (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
                 (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
