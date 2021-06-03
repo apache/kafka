@@ -14,8 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.metadata;
+package org.apache.kafka.server.common.serialization;
 
 /**
  * An exception indicating that we failed to parse a metadata entry.

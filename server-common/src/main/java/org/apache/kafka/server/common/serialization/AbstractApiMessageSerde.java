@@ -46,6 +46,13 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     private static final short DEFAULT_FRAME_VERSION = 0;
     private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
+    private static short unsignedIntToShort(int val, String entity) {
+        if (val > Short.MAX_VALUE) {
+            throw new MetadataParseException("Value for " + entity + " was too large.");
+        }
+        return (short) val;
+    }
+
     @Override
     public int recordSize(ApiMessageAndVersion data,
                           ObjectSerializationCache serializationCache) {
@@ -69,16 +76,42 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
     @Override
     public ApiMessageAndVersion read(Readable input,
                                      int size) {
-        short frameVersion = (short) input.readUnsignedVarint();
+        short frameVersion;
+        try {
+            frameVersion = unsignedIntToShort(input.readUnsignedVarint(), "frame version");
+        } catch (Exception e) {
+            throw new MetadataParseException("Failed to read variable-length " +
+                    "frame version number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
         if (frameVersion != DEFAULT_FRAME_VERSION) {
             throw new SerializationException("Could not deserialize metadata record due to unknown frame version "
-                                                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
+                    + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }
-
-        short apiKey = (short) input.readUnsignedVarint();
-        short version = (short) input.readUnsignedVarint();
+        short apiKey;
+        try {
+            apiKey = unsignedIntToShort(input.readUnsignedVarint(), "type");
+        } catch (Exception e) {
+            throw new MetadataParseException("Failed to read variable-length type " +
+                    "number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        short version;
+        try {
+            version = unsignedIntToShort(input.readUnsignedVarint(), "version");
+        } catch (Exception e) {
+            throw new MetadataParseException("Failed to read variable-length " +
+                    "version number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
         ApiMessage record = apiMessageFor(apiKey);
-        record.read(input, version);
+        try {
+            record.read(input, version);
+        } catch (Exception e) {
+            throw new MetadataParseException(apiKey + "#parse failed: " +
+                    e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        if (input.remaining() > 0) {
+            throw new MetadataParseException("Found " + input.remaining() +
+                    " byte(s) of garbage after " + apiKey);
+        }
         return new ApiMessageAndVersion(record, version);
     }
 
