@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -60,6 +61,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -94,6 +96,7 @@ public class KafkaConfigBackingStoreTest {
     private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
     private static final List<String> COMMIT_TASKS_CONFIG_KEYS = Arrays.asList("commit-connector1", "commit-connector2");
     private static final List<String> TARGET_STATE_KEYS =  Arrays.asList("target-state-connector1", "target-state-connector2");
+    private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY("connector1"), RESTART_KEY("connector2"));
 
     // Need a) connector with multiple tasks and b) multiple connectors
     private static final List<ConnectorTaskId> TASK_IDS = Arrays.asList(
@@ -125,6 +128,13 @@ public class KafkaConfigBackingStoreTest {
 
     private static final Struct TASKS_COMMIT_STRUCT_ZERO_TASK_CONNECTOR
             = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0);
+
+    private static final List<Struct> RESTART_REQUEST_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("only-failed", true).put("include-tasks", false),
+            //missing only-failed value
+            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("include-tasks", false),
+            //missing include-tasks value
+            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put("only-failed", true));
 
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
@@ -914,6 +924,88 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPutRestartRequestOnlyFailed() throws Exception {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_IDS.get(0), true, false);
+        testPutRestartRequest(restartRequest);
+    }
+
+    @Test
+    public void testPutRestartRequestOnlyFailedIncludingTasks() throws Exception {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_IDS.get(0), true, true);
+        testPutRestartRequest(restartRequest);
+    }
+
+    private void testPutRestartRequest(RestartRequest restartRequest) throws Exception {
+        expectConfigure();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+
+        expectConvertWriteAndRead(
+                RESTART_CONNECTOR_KEYS.get(0), KafkaConfigBackingStore.RESTART_REQUEST_V0, CONFIGS_SERIALIZED.get(0),
+                "only-failed", restartRequest.onlyFailed());
+        final Capture<RestartRequest> capturedRestartRequest = EasyMock.newCapture();
+        configUpdateListener.onRestartRequest(EasyMock.capture(capturedRestartRequest));
+        EasyMock.expectLastCall();
+
+        expectPartitionCount(1);
+        expectStop();
+
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.start();
+
+        // Writing should block until it is written and read back from Kafka
+        configStorage.putRestartRequest(restartRequest);
+
+        assertEquals(restartRequest.connectorName(), capturedRestartRequest.getValue().connectorName());
+        assertEquals(restartRequest.onlyFailed(), capturedRestartRequest.getValue().onlyFailed());
+        assertEquals(restartRequest.includeTasks(), capturedRestartRequest.getValue().includeTasks());
+
+        configStorage.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestoreRestartRequestInconsistentState() throws Exception {
+        // Restoring data should notify only of the latest values after loading is complete. This also validates
+        // that inconsistent state is ignored.
+
+        expectConfigure();
+        // Overwrite each type at least once to ensure we see the latest data after loading
+        List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), RESTART_REQUEST_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), RESTART_REQUEST_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), RESTART_REQUEST_STRUCTS.get(2));
+        deserialized.put(CONFIGS_SERIALIZED.get(3), null);
+        logOffset = 4;
+        expectStart(existingRecords, deserialized);
+        expectPartitionCount(1);
+
+        // Shouldn't see any callbacks since this is during startup
+
+        expectStop();
+
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, DEFAULT_DISTRIBUTED_CONFIG);
+        configStorage.start();
 
         configStorage.stop();
 

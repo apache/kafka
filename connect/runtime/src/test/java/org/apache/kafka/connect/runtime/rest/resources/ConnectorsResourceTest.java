@@ -24,12 +24,14 @@ import javax.ws.rs.core.HttpHeaders;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
+import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
@@ -803,6 +805,45 @@ public class ConnectorsResourceTest {
 
         connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
 
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorAndTasksRebalanceNeeded() {
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackException(cb, new RebalanceNeededException("Request cannot be completed because a rebalance is expected"));
+
+        PowerMock.replayAll();
+
+        ConnectRestException ex = assertThrows(ConnectRestException.class, () ->
+                connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
+        );
+        assertEquals(ex.statusCode(), Response.Status.CONFLICT.getStatusCode());
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testRestartConnectorAndTasksRequestAccepted() throws Throwable {
+        ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
+                AbstractStatus.State.RESTARTING.name(),
+                "foo",
+                null
+        );
+        ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, Collections.emptyList(), ConnectorType.SOURCE);
+
+        RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
+        final Capture<Callback<ConnectorStateInfo>> cb = Capture.newInstance();
+        herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, connectorStateInfo);
+
+        PowerMock.replayAll();
+
+        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD);
+        assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
+        assertEquals(state.state(), ((ConnectorStateInfo) response.getEntity()).connector().state());
+        assertEquals(response.getStatus(), Response.Status.ACCEPTED.getStatusCode());
         PowerMock.verifyAll();
     }
 

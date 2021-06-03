@@ -747,7 +747,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().startsWith(RESTART_PREFIX)) {
-                String connectorName = record.key().substring(COMMIT_TASKS_PREFIX.length());
+                String connectorName = record.key().substring(RESTART_PREFIX.length());
                 if (value.value() == null) {
                     log.error("Ignoring restart request because it is unexpectedly null");
                     return;
