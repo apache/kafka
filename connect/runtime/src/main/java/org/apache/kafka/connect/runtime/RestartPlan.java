@@ -109,7 +109,7 @@ public class RestartPlan {
      * @return true if any {@link Task} instances are to be restarted, or false if none are to be restarted
      */
     public boolean restartAnyTasks() {
-        return isRestarting(stateInfo.connector());
+        return !taskIdsToRestart().isEmpty();
     }
 
     /**
@@ -131,15 +131,15 @@ public class RestartPlan {
         return stateInfo.tasks().size();
     }
 
-    protected boolean isRestarting(ConnectorStateInfo.ConnectorState state) {
+    private boolean isRestarting(ConnectorStateInfo.ConnectorState state) {
         return isRestarting(state.state());
     }
 
-    protected boolean isRestarting(ConnectorStateInfo.TaskState state) {
+    private boolean isRestarting(ConnectorStateInfo.TaskState state) {
         return isRestarting(state.state());
     }
 
-    protected boolean isRestarting(String state) {
+    private boolean isRestarting(String state) {
         return AbstractStatus.State.RESTARTING.toString().equalsIgnoreCase(state);
     }
 
