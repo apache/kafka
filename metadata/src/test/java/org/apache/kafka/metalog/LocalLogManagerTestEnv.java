@@ -137,6 +137,10 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return shared.waitForSnapshot(committedOffset);
     }
 
+    public RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
+        return shared.waitForLatestSnapshot();
+    }
+
     @Override
     public void close() throws InterruptedException {
         try {

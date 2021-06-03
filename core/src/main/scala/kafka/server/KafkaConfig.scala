@@ -74,6 +74,8 @@ object Defaults {
   val InitialBrokerRegistrationTimeoutMs = 60000
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
+  // TODO: Create a Jira to change this default
+  val MetadataSnapshotMinNewRecordBytes = Int.MaxValue
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
@@ -374,6 +376,7 @@ object KafkaConfig {
   val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
   val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
+  val MetadataSnapshotMinNewRecordBytesProp = "metadata.log.snapshot.min.new_record.bytes"
   val ControllerListenerNamesProp = "controller.listener.names"
   val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
 
@@ -664,6 +667,7 @@ object KafkaConfig {
     "This is required configuration when running in KRaft mode."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val MetadataSnapshotMinNewRecordBytesDoc = "This is the minimum number of bytes in the replicated log between the latest snapshot and the high-watermark needed before generating a new snapshot."
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the controller. This is required " +
     "if running in KRaft mode. The ZK-based controller will not use this configuration."
   val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
@@ -1049,6 +1053,7 @@ object KafkaConfig {
       .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
       .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
+      .defineInternal(MetadataSnapshotMinNewRecordBytesProp, INT, Defaults.MetadataSnapshotMinNewRecordBytes, atLeast(0), HIGH, MetadataSnapshotMinNewRecordBytesDoc)
       .defineInternal(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
       .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
 
@@ -1532,6 +1537,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
     numThreads
   }
+
+  /************* Metadata Configuration ***********/
+  val metadataSnapshotMinNewRecordBytes = getInt(KafkaConfig.MetadataSnapshotMinNewRecordBytesProp)
 
   /************* Authorizer Configuration ***********/
   val authorizer: Option[Authorizer] = {

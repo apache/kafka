@@ -132,6 +132,8 @@ class BrokerMetadataListenerTest {
           Batch.of(
             baseOffset,
             leaderEpoch,
+            // Assumes that each record in one byte; TODO: should we fix this?
+            records.size,
             records.asJava
           )
         ).asJava,
