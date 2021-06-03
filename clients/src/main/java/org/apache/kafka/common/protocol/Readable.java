@@ -74,4 +74,8 @@ public interface Readable {
     default int readUnsignedShort() {
         return Short.toUnsignedInt(readShort());
     }
+
+    default long readUnsignedInt() {
+        return Integer.toUnsignedLong(readInt());
+    }
 }
