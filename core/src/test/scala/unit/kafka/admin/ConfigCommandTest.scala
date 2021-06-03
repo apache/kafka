@@ -61,11 +61,44 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "topics",
+      "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "clients",
+      "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-type", "Ips",
+      "--describe"))
+  }
+
+  @Test
   def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
     assertNonZeroStatusExit(Array(
       "--bootstrap-server", "invalid host",
       "--entity-type", "brokers",
       "--entity-name", "1",
+      "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnBrokerCommandWithZkTlsConfigFile(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--bootstrap-server", "invalid host",
+      "--entity-type", "users",
+      "--zk-tls-config-file", "zk_tls_config.properties",
       "--describe"))
   }
 
@@ -88,11 +121,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("clients", zkConfig = true)
-  }
-
-  @Test
   def shouldParseArgumentsForClientsEntityType(): Unit = {
     testArgumentParse("clients", zkConfig = false)
   }
@@ -105,11 +133,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldParseArgumentsForUsersEntityType(): Unit = {
     testArgumentParse("users", zkConfig = false)
-  }
-
-  @Test
-  def shouldParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("topics", zkConfig = true)
   }
 
   @Test
@@ -135,11 +158,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldParseArgumentsForIpEntityType(): Unit = {
     testArgumentParse("ips", zkConfig = false)
-  }
-
-  @Test
-  def shouldParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("ips", zkConfig = true)
   }
 
   def testArgumentParse(entityType: String, zkConfig: Boolean): Unit = {
@@ -323,11 +341,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
     testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
-  }
-
-  @Test
-  def testOptionEntityTypeNamesUsingZookeeper(): Unit = {
-    doTestOptionEntityTypeNames(zkConfig = true)
   }
 
   @Test
@@ -1474,11 +1487,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testQuotaConfigEntityUsingZookeeper(): Unit = {
-    doTestQuotaConfigEntity(zkConfig = true)
-  }
-
-  @Test
   def testQuotaConfigEntity(): Unit = {
     doTestQuotaConfigEntity(zkConfig = false)
   }
@@ -1526,11 +1534,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/" + Sanitizer.sanitize("client1?@%"),
         "--entity-name", "client1?@%", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
         "--alter", "--add-config", "a=b,c=d")
-  }
-
-  @Test
-  def testUserClientQuotaOptsUsingZookeeper(): Unit = {
-    doTestUserClientQuotaOpts(zkConfig = true)
   }
 
   @Test

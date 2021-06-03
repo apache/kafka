@@ -68,7 +68,7 @@ object ConfigCommand extends Config {
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
   val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType
-  val ZkSupportedConfigTypes = ConfigType.all
+  val ZkSupportedConfigTypes = Seq(ConfigType.User, ConfigType.Broker)
   val DefaultScramIterations = 4096
   // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
   // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
@@ -731,10 +731,11 @@ object ConfigCommand extends Config {
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
     val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the form host:port. " +
-            "Multiple URLS can be given to allow fail-over. Replaced by --bootstrap-server, REQUIRED unless --bootstrap-server is given.")
-            .withRequiredArg
-            .describedAs("urls")
-            .ofType(classOf[String])
+      "Multiple URLS can be given to allow fail-over. Replaced by --bootstrap-server except configuring SCRAM credentials for user or " +
+      "password configs before starting brokers. REQUIRED unless --bootstrap-server is given.")
+      .withRequiredArg
+      .describedAs("urls")
+      .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka server to connect to. " +
       "This is required for describing and altering broker configs.")
       .withRequiredArg
@@ -750,30 +751,30 @@ object ConfigCommand extends Config {
     val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips)")
-            .withRequiredArg
-            .ofType(classOf[String])
+      .withRequiredArg
+      .ofType(classOf[String])
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip)")
-            .withRequiredArg
-            .ofType(classOf[String])
+      .withRequiredArg
+      .ofType(classOf[String])
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-            "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Ip + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-            s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
-            .withRequiredArg
-            .ofType(classOf[String])
+      "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.Ip + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
+      .withRequiredArg
+      .ofType(classOf[String])
     val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
-            .withRequiredArg
-            .ofType(classOf[String])
+      .withRequiredArg
+      .ofType(classOf[String])
     val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
-            .withRequiredArg
-            .ofType(classOf[String])
-            .withValuesSeparatedBy(',')
+      .withRequiredArg
+      .ofType(classOf[String])
+      .withValuesSeparatedBy(',')
     val forceOpt = parser.accepts("force", "Suppress console prompts")
     val topic = parser.accepts("topic", "The topic's name.")
       .withRequiredArg
@@ -874,6 +875,10 @@ object ConfigCommand extends Config {
 
       if (options.has(allOpt) && options.has(zkConnectOpt)) {
         throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
+      }
+
+      if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
+        throw new IllegalArgumentException(s"--zookeeper must be specified for --zk-tls-config-file")
       }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
