@@ -88,7 +88,8 @@ public interface ValueTransformerWithKey<K, V, VR> {
      * (or any other overload of {@code KTable#transformValues(...)}) operation,
      * then the provided {@link ProcessorContext} from {@link #init(ProcessorContext)}
      * does not guarantee that all context information will be available when {@code transform()}
-     * is executed.
+     * is executed, as it might be executed "out-of-band" due to some internal optimizations
+     * applied by the Kafka Streams DSL.
      *
      * @param readOnlyKey the read-only key
      * @param value       the value to be transformed
