@@ -160,7 +160,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
                 -1L, // we don't know the original offset
                 // technically, we know the partition, but in the new `api.Processor` class,
                 // we move to `RecordMetadata` than would be `null` for this case and thus
-                // we won't have the partition information, so it's better to now provide it
+                // we won't have the partition information, so it's better to not provide it
                 // here either, to not introduce a regression later on
                 -1,
                 null, // we don't know the upstream input topic
