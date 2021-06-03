@@ -29,8 +29,8 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     private final Map<String, String> logConfig;
 
     public EagerBufferConfigImpl(final long maxRecords,
-                                  final long maxBytes,
-                                  final Map<String, String> logConfig) {
+                                 final long maxBytes,
+                                 final Map<String, String> logConfig) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.logConfig = logConfig;
