@@ -85,10 +85,11 @@ public class StripedReplicaPlacerTest {
     }
 
     /**
-     * Test that we perform striped replica placement as expected on a single unfenced broker
+     * Test that we perform striped replica placement as expected for a multi-partition topic
+     * on a single unfenced broker
      */
     @Test
-    public void testPlacementOnSingleUnfencedBroker() {
+    public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
         assertEquals(Arrays.asList(Arrays.asList(0),
