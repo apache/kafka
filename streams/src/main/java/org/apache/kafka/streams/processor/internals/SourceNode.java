@@ -65,7 +65,7 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         // without parent is created with the same name.
         // Once the backwards compatibility is not needed anymore it might be possible to
         // change this.
-        processAtSourceSensor = ProcessorNodeMetrics.processorAtSourceSensorOrForwardSensor(
+        processAtSourceSensor = ProcessorNodeMetrics.processAtSourceSensor(
             Thread.currentThread().getName(),
             context.taskId().toString(),
             context.currentNode().name(),

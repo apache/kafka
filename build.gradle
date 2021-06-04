@@ -449,6 +449,14 @@ subprojects {
     }
   }
 
+  // remove test output from all test types
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.destination
+      delete t.reports.html.destination
+    }
+  }
+
   jar {
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"

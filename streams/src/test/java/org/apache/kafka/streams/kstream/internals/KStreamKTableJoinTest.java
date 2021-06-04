@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -65,7 +64,6 @@ public class KStreamKTableJoinTest {
     private MockProcessor<Integer, String> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
     private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
 
     @Before
@@ -229,31 +227,12 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_LATEST);
-    }
-
-    private void shouldLogAndMeterWhenSkippingNullLeftKey(final String builtInMetricsVersion) {
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-
+    public void shouldLogAndMeterWhenSkippingNullLeftKey() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
-            driver.close();
-            driver = new TopologyTestDriver(builder.build(), props);
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "A");
 
-            if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-                assertEquals(
-                    1.0,
-                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-                );
-            }
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record due to null join key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
@@ -262,36 +241,16 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-        driver.close();
-        driver = new TopologyTestDriver(builder.build(), props);
-        final TestInputTopic<Integer, String> inputTopic =
-            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-
+    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(1, null);
 
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record due to null join key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
                     + "offset=[0]")
-            );
-        }
-
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
         }
     }

@@ -182,6 +182,7 @@ class BrokerMetadataListener(
       case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)
       case rec: ConfigRecord => handleConfigRecord(rec)
       case rec: QuotaRecord => handleQuotaRecord(imageBuilder, rec)
+      case rec: ProducerIdsRecord => handleProducerIdRecord(rec)
       case _ => throw new RuntimeException(s"Unhandled record $record with type $recordType")
     }
   }
@@ -257,6 +258,11 @@ class BrokerMetadataListener(
                         record: QuotaRecord): Unit = {
     // TODO add quotas to MetadataImageBuilder
     clientQuotaManager.handleQuotaRecord(record)
+  }
+
+  def handleProducerIdRecord(record: ProducerIdsRecord): Unit = {
+    // This is a no-op since brokers get their producer ID blocks directly from the controller via
+    // AllocateProducerIds RPC response
   }
 
   class HandleNewLeaderEvent(leaderAndEpoch: LeaderAndEpoch)
