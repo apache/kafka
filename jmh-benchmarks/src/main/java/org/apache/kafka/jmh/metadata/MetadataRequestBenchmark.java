@@ -172,6 +172,7 @@ public class MetadataRequestBenchmark {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
+        KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApis(requestChannel,
             new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache),
             replicaManager,
@@ -179,7 +180,7 @@ public class MetadataRequestBenchmark {
             transactionCoordinator,
             autoTopicCreationManager,
             brokerId,
-            new KafkaConfig(kafkaProps),
+            config,
             new CachedConfigRepository(),
             metadataCache,
             metrics,

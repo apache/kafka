@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
-public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
@@ -263,18 +263,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         streamTask.requestCommit();
     }
 
-    @Override
-    @Deprecated
-    public Cancellable schedule(final long intervalMs,
-                                final PunctuationType type,
-                                final Punctuator callback) {
-        throwUnsupportedOperationExceptionIfStandby("schedule");
-        if (intervalMs < 1) {
-            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
-        }
-        return streamTask.schedule(intervalMs, type, callback);
-    }
-
     @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
@@ -282,7 +270,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final Punctuator callback) throws IllegalArgumentException {
         throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
-        return schedule(validateMillisecondDuration(interval, msgPrefix), type, callback);
+        final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        return streamTask.schedule(intervalMs, type, callback);
     }
 
     @Override

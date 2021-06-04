@@ -237,7 +237,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             Time.SYSTEM
         );
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), metrics);
+        TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }
 
     @Override
@@ -450,24 +450,20 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return (S) stateStores.get(name);
     }
 
-    @Override
-    @Deprecated
-    public Cancellable schedule(final long intervalMs,
-                                final PunctuationType type,
-                                final Punctuator callback) {
-        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
-
-        punctuators.add(capturedPunctuator);
-
-        return capturedPunctuator::cancel;
-    }
-
     @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        return schedule(ApiUtils.validateMillisecondDuration(interval, "interval"), type, callback);
+        final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
+
+        punctuators.add(capturedPunctuator);
+
+        return capturedPunctuator::cancel;
     }
 
     /**

@@ -64,6 +64,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
@@ -683,7 +684,7 @@ public class TaskManager {
 
         for (final File dir : stateDirectory.listNonEmptyTaskDirectories()) {
             try {
-                final TaskId id = TaskId.parseTaskDirectoryName(dir.getName(), null);
+                final TaskId id = parseTaskDirectoryName(dir.getName(), null);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
                     if (!tasks.owned(id)) {

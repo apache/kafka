@@ -37,6 +37,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
@@ -51,132 +53,147 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
             serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(DEFAULT_GENERATION))));
     }
 
-    @Test
-    public void testAssignmentWithMultipleGenerations1() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
+    @ParameterizedTest(name = "testAssignmentWithMultipleGenerations1 with isAllSubscriptionsEqual: {0}")
+    @ValueSource(booleans = {true, false})
+    public void testAssignmentWithMultipleGenerations1(boolean isAllSubscriptionsEqual) {
+        List<String> allTopics = topics(topic, topic2);
+        List<String> consumer2SubscribedTopics = isAllSubscriptionsEqual ? allTopics : topics(topic);
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 6);
-        subscriptions.put(consumer1, new Subscription(topics(topic)));
-        subscriptions.put(consumer2, new Subscription(topics(topic)));
-        subscriptions.put(consumer3, new Subscription(topics(topic)));
+        partitionsPerTopic.put(topic2, 6);
+        subscriptions.put(consumer1, new Subscription(allTopics));
+        subscriptions.put(consumer2, new Subscription(consumer2SubscribedTopics));
+        subscriptions.put(consumer3, new Subscription(allTopics));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r1partitions1 = assignment.get(consumer1);
         List<TopicPartition> r1partitions2 = assignment.get(consumer2);
         List<TopicPartition> r1partitions3 = assignment.get(consumer3);
-        assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
+        assertTrue(r1partitions1.size() == 4 && r1partitions2.size() == 4 && r1partitions3.size() == 4);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
-        subscriptions.put(consumer1, buildSubscription(topics(topic), r1partitions1));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), r1partitions2));
+        subscriptions.put(consumer1, buildSubscription(allTopics, r1partitions1));
+        subscriptions.put(consumer2, buildSubscription(consumer2SubscribedTopics, r1partitions2));
         subscriptions.remove(consumer3);
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r2partitions1 = assignment.get(consumer1);
         List<TopicPartition> r2partitions2 = assignment.get(consumer2);
-        assertTrue(r2partitions1.size() == 3 && r2partitions2.size() == 3);
-        assertTrue(r2partitions1.containsAll(r1partitions1));
+        assertTrue(r2partitions1.size() == 6 && r2partitions2.size() == 6);
+        if (isAllSubscriptionsEqual) {
+            // only true in all subscription equal case
+            assertTrue(r2partitions1.containsAll(r1partitions1));
+        }
         assertTrue(r2partitions2.containsAll(r1partitions2));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertFalse(Collections.disjoint(r2partitions2, r1partitions3));
 
         subscriptions.remove(consumer1);
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), r2partitions2, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(topics(topic), r1partitions3, 1));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(consumer2SubscribedTopics, r2partitions2, 2));
+        subscriptions.put(consumer3, buildSubscriptionWithGeneration(allTopics, r1partitions3, 1));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r3partitions2 = assignment.get(consumer2);
         List<TopicPartition> r3partitions3 = assignment.get(consumer3);
-        assertTrue(r3partitions2.size() == 3 && r3partitions3.size() == 3);
+        assertTrue(r3partitions2.size() == 6 && r3partitions3.size() == 6);
         assertTrue(Collections.disjoint(r3partitions2, r3partitions3));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
-    @Test
-    public void testAssignmentWithMultipleGenerations2() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
+    @ParameterizedTest(name = "testAssignmentWithMultipleGenerations2 with isAllSubscriptionsEqual: {0}")
+    @ValueSource(booleans = {true, false})
+    public void testAssignmentWithMultipleGenerations2(boolean isAllSubscriptionsEqual) {
+        List<String> allTopics = topics(topic, topic2, topic3);
+        List<String> consumer1SubscribedTopics = isAllSubscriptionsEqual ? allTopics : topics(topic);
+        List<String> consumer3SubscribedTopics = isAllSubscriptionsEqual ? allTopics : topics(topic, topic2);
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 6);
-        subscriptions.put(consumer1, new Subscription(topics(topic)));
-        subscriptions.put(consumer2, new Subscription(topics(topic)));
-        subscriptions.put(consumer3, new Subscription(topics(topic)));
+        partitionsPerTopic.put(topic, 4);
+        partitionsPerTopic.put(topic2, 4);
+        partitionsPerTopic.put(topic3, 4);
+        subscriptions.put(consumer1, new Subscription(consumer1SubscribedTopics));
+        subscriptions.put(consumer2, new Subscription(allTopics));
+        subscriptions.put(consumer3, new Subscription(consumer3SubscribedTopics));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r1partitions1 = assignment.get(consumer1);
         List<TopicPartition> r1partitions2 = assignment.get(consumer2);
         List<TopicPartition> r1partitions3 = assignment.get(consumer3);
-        assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
+        assertTrue(r1partitions1.size() == 4 && r1partitions2.size() == 4 && r1partitions3.size() == 4);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
         subscriptions.remove(consumer1);
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), r1partitions2, 1));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(allTopics, r1partitions2, 1));
         subscriptions.remove(consumer3);
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r2partitions2 = assignment.get(consumer2);
-        assertEquals(6, r2partitions2.size());
+        assertEquals(12, r2partitions2.size());
         assertTrue(r2partitions2.containsAll(r1partitions2));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), r1partitions1, 1));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), r2partitions2, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(topics(topic), r1partitions3, 1));
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(consumer1SubscribedTopics, r1partitions1, 1));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(allTopics, r2partitions2, 2));
+        subscriptions.put(consumer3, buildSubscriptionWithGeneration(consumer3SubscribedTopics, r1partitions3, 1));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> r3partitions1 = assignment.get(consumer1);
         List<TopicPartition> r3partitions2 = assignment.get(consumer2);
         List<TopicPartition> r3partitions3 = assignment.get(consumer3);
-        assertTrue(r3partitions1.size() == 2 && r3partitions2.size() == 2 && r3partitions3.size() == 2);
-        assertEquals(r1partitions1, r3partitions1);
-        assertEquals(r1partitions2, r3partitions2);
-        assertEquals(r1partitions3, r3partitions3);
+        assertTrue(r3partitions1.size() == 4 && r3partitions2.size() == 4 && r3partitions3.size() == 4);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
-    @Test
-    public void testAssignmentWithConflictingPreviousGenerations() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
+    @ParameterizedTest(name = "testAssignmentWithConflictingPreviousGenerations with isAllSubscriptionsEqual: {0}")
+    @ValueSource(booleans = {true, false})
+    public void testAssignmentWithConflictingPreviousGenerations(boolean isAllSubscriptionsEqual) {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 6);
-        subscriptions.put(consumer1, new Subscription(topics(topic)));
-        subscriptions.put(consumer2, new Subscription(topics(topic)));
-        subscriptions.put(consumer3, new Subscription(topics(topic)));
+        partitionsPerTopic.put(topic, 4);
+        partitionsPerTopic.put(topic2, 4);
+        partitionsPerTopic.put(topic3, 4);
+
+        List<String> allTopics = topics(topic, topic2, topic3);
+        List<String> consumer1SubscribedTopics = isAllSubscriptionsEqual ? allTopics : topics(topic);
+        List<String> consumer2SubscribedTopics = isAllSubscriptionsEqual ? allTopics : topics(topic, topic2);
+
+        subscriptions.put(consumer1, new Subscription(consumer1SubscribedTopics));
+        subscriptions.put(consumer2, new Subscription(consumer2SubscribedTopics));
+        subscriptions.put(consumer3, new Subscription(allTopics));
 
         TopicPartition tp0 = new TopicPartition(topic, 0);
         TopicPartition tp1 = new TopicPartition(topic, 1);
         TopicPartition tp2 = new TopicPartition(topic, 2);
         TopicPartition tp3 = new TopicPartition(topic, 3);
-        TopicPartition tp4 = new TopicPartition(topic, 4);
-        TopicPartition tp5 = new TopicPartition(topic, 5);
+        TopicPartition t2p0 = new TopicPartition(topic2, 0);
+        TopicPartition t2p1 = new TopicPartition(topic2, 1);
+        TopicPartition t2p2 = new TopicPartition(topic2, 2);
+        TopicPartition t2p3 = new TopicPartition(topic2, 3);
+        TopicPartition t3p0 = new TopicPartition(topic3, 0);
+        TopicPartition t3p1 = new TopicPartition(topic3, 1);
+        TopicPartition t3p2 = new TopicPartition(topic3, 2);
+        TopicPartition t3p3 = new TopicPartition(topic3, 3);
 
-        List<TopicPartition> c1partitions0 = partitions(tp0, tp1, tp4);
-        List<TopicPartition> c2partitions0 = partitions(tp0, tp1, tp2);
-        List<TopicPartition> c3partitions0 = partitions(tp3, tp4, tp5);
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), c1partitions0, 1));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic), c2partitions0, 2));
-        subscriptions.put(consumer3, buildSubscriptionWithGeneration(topics(topic), c3partitions0, 2));
+        List<TopicPartition> c1partitions0 = isAllSubscriptionsEqual ? partitions(tp0, tp1, tp2, t2p2, t2p3, t3p0) :
+            partitions(tp0, tp1, tp2, tp3);
+        List<TopicPartition> c2partitions0 = partitions(tp0, tp1, t2p0, t2p1, t2p2, t2p3);
+        List<TopicPartition> c3partitions0 = partitions(tp2, tp3, t3p0, t3p1, t3p2, t3p3);
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(consumer1SubscribedTopics, c1partitions0, 1));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(consumer2SubscribedTopics, c2partitions0, 2));
+        subscriptions.put(consumer3, buildSubscriptionWithGeneration(allTopics, c3partitions0, 2));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> c1partitions = assignment.get(consumer1);
         List<TopicPartition> c2partitions = assignment.get(consumer2);
         List<TopicPartition> c3partitions = assignment.get(consumer3);
 
-        assertTrue(c1partitions.size() == 2 && c2partitions.size() == 2 && c3partitions.size() == 2);
+        assertTrue(c1partitions.size() == 4 && c2partitions.size() == 4 && c3partitions.size() == 4);
         assertTrue(c2partitions0.containsAll(c2partitions));
         assertTrue(c3partitions0.containsAll(c3partitions));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
@@ -185,10 +202,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Test
     public void testSchemaBackwardCompatibility() {
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         subscriptions.put(consumer1, new Subscription(topics(topic)));

@@ -254,6 +254,66 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testOfflinePartitionAndReplicaImbalanceMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        for (int i = 0; i < 4; i++) {
+            registerBroker(i, ctx);
+            unfenceBroker(i, ctx);
+        }
+
+        CreatableTopicResult foo = ctx.createTestTopic("foo", new int[][] {
+            new int[] {0, 2}, new int[] {0, 1}});
+
+        CreatableTopicResult zar = ctx.createTestTopic("zar", new int[][] {
+            new int[] {0, 1, 2}, new int[] {1, 2, 3}, new int[] {1, 2, 0}});
+
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+
+        // All partitions should still be online after unregistering broker 0
+        assertEquals(0, ctx.metrics.offlinePartitionCount());
+        // Three partitions should not have their preferred (first) replica 0
+        assertEquals(3, ctx.metrics.preferredReplicaImbalanceCount());
+
+        result = replicationControl.unregisterBroker(1);
+        ctx.replay(result.records());
+
+        // After unregistering broker 1, 1 partition for topic foo should go offline
+        assertEquals(1, ctx.metrics.offlinePartitionCount());
+        // All five partitions should not have their preferred (first) replica at this point
+        assertEquals(5, ctx.metrics.preferredReplicaImbalanceCount());
+
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+
+        // After unregistering broker 2, the last partition for topic foo should go offline
+        // and 2 partitions for topic zar should go offline
+        assertEquals(4, ctx.metrics.offlinePartitionCount());
+
+        result = replicationControl.unregisterBroker(3);
+        ctx.replay(result.records());
+
+        // After unregistering broker 3 the last partition for topic zar should go offline
+        assertEquals(5, ctx.metrics.offlinePartitionCount());
+
+        // Deleting topic foo should bring the offline partition count down to 3
+        ArrayList<ApiMessageAndVersion> records = new ArrayList<>();
+        replicationControl.deleteTopic(foo.topicId(), records);
+        ctx.replay(records);
+
+        assertEquals(3, ctx.metrics.offlinePartitionCount());
+
+        // Deleting topic zar should bring the offline partition count down to 0
+        records = new ArrayList<>();
+        replicationControl.deleteTopic(zar.topicId(), records);
+        ctx.replay(records);
+
+        assertEquals(0, ctx.metrics.offlinePartitionCount());
+    }
+
+    @Test
     public void testValidateNewTopicNames() {
         Map<String, ApiError> topicErrors = new HashMap<>();
         CreatableTopicCollection topics = new CreatableTopicCollection();
