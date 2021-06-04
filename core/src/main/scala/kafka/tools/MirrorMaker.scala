@@ -36,7 +36,6 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
@@ -61,7 +60,7 @@ import scala.util.{Failure, Success, Try}
  *
  * @deprecated Since 3.0, use the Connect-based MirrorMaker instead (aka MM2).
  */
-@Deprecated
+@deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] var producer: MirrorMakerProducer = null
@@ -195,7 +194,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     setName(threadName)
 
-    @nowarn("cat=deprecation")
     private def toBaseConsumerRecord(record: ConsumerRecord[Array[Byte], Array[Byte]]): BaseConsumerRecord =
       BaseConsumerRecord(record.topic,
         record.partition,
@@ -418,12 +416,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
    * If message.handler.args is specified. A constructor that takes in a String as argument must exist.
    */
   trait MirrorMakerMessageHandler {
-    @nowarn("cat=deprecation")
     def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
-    @nowarn("cat=deprecation")
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
