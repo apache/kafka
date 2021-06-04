@@ -131,7 +131,8 @@ public final class Coordinator {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("trogdor-coordinator")
+            .newFor("trogdor-coordinator")
+            .build()
             .defaultHelp(true)
             .description("The Trogdor fault injection coordinator");
         parser.addArgument("--coordinator.config", "-c")
