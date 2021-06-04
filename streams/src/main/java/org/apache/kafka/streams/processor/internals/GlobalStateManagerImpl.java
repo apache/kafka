@@ -168,11 +168,15 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         log.info("Restoring state for global store {}", store.name());
 
+        // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
+        // fail-crash; in this case we would not need to immediately close the state store before throwing
         if (globalStores.containsKey(store.name())) {
+            store.close();
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
 
         if (!globalStoreNames.contains(store.name())) {
+            store.close();
             throw new IllegalArgumentException(String.format("Trying to register store %s that is not a known global store", store.name()));
         }
 
