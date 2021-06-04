@@ -192,29 +192,14 @@ public class ConfigEntry {
     }
 
     /**
-     * Override toString not to print values by default in case there are secret fields or secret fields but incorrectly
-     * marked as isSensitive = false.
+     * Override toString to redact sensitive value.
+     * WARNING, user should be responsible to set correct "senstive" field for each config entry.
      */
     @Override
     public String toString() {
         return "ConfigEntry(" +
                 "name=" + name +
-                ", value=Omitted" +
-                ", source=" + source +
-                ", isSensitive=" + isSensitive +
-                ", isReadOnly=" + isReadOnly +
-                ", synonyms=" + synonyms +
-                ")";
-    }
-
-    /**
-     * Convert the object to String value with sensitive fields be to redacted.
-     * WARNING: the caller MUST make sure all sensitive fields have been marked as isSensitive = true.
-     */
-    public String configEntryToRedactedString() {
-        return "ConfigEntry(" +
-                "name=" + name +
-                ", value=" + (isSensitive ? "redacted" : value) +
+                ", value=" + (isSensitive ? "Redacted" : value) +
                 ", source=" + source +
                 ", isSensitive=" + isSensitive +
                 ", isReadOnly=" + isReadOnly +
