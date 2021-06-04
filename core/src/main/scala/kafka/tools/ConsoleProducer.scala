@@ -37,14 +37,15 @@ object ConsoleProducer {
 
   def main(args: Array[String]): Unit = {
 
+    var reader: MessageReader = null
     try {
         val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
+        reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
-    Exit.addShutdownHook("producer-shutdown-hook", producer.close)
+        Exit.addShutdownHook("producer-shutdown-hook", producer.close)
 
         var record: ProducerRecord[Array[Byte], Array[Byte]] = null
         do {
@@ -59,6 +60,9 @@ object ConsoleProducer {
       case e: Exception =>
         e.printStackTrace
         Exit.exit(1)
+    } finally {
+      if (reader != null)
+        reader.close()
     }
     Exit.exit(0)
   }
@@ -74,6 +78,10 @@ object ConsoleProducer {
   def getReaderProps(config: ProducerConfig): Properties = {
     val props = new Properties
     props.put("topic", config.topic)
+    if(config.options.has(config.filesPathOpt)) {
+      props.put("filesPath", config.options.valueOf(config.filesPathOpt))
+      props.put("files.separator", config.options.valueOf(config.filesSeparatorOpt))
+    }
     props ++= config.cmdLineProps
     props
   }
@@ -223,6 +231,17 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
 
+    val filesPathOpt = parser.accepts("files", s"Files to be read.")
+      .withRequiredArg
+      .describedAs("files to be read")
+      .ofType(classOf[String])
+
+    val filesSeparatorOpt = parser.accepts("files-separator", s"Multiple file path separator. The default separator is comma.")
+      .withRequiredArg
+      .describedAs("Multiple file path separator.")
+      .ofType(classOf[String])
+      .defaultsTo(",")
+
     options = tryParse(parser, args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
@@ -245,7 +264,7 @@ object ConsoleProducer {
                              else compressionCodecOptionValue
                            else NoCompressionCodec.name
     val batchSize = options.valueOf(batchSizeOpt)
-    val readerClass = options.valueOf(messageReaderOpt)
+    val readerClass = if (options.has(filesPathOpt)) classOf[FileMessageReader].getName else options.valueOf(messageReaderOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
 
@@ -299,4 +318,60 @@ object ConsoleProducer {
       }
     }
   }
+
+  class FileMessageReader extends MessageReader {
+    var topic: String = null
+    var reader: BufferedReader = null
+    var parseKey = false
+    var keySeparator = "\t"
+    var ignoreError = false
+    var lineNumber = 0
+    var filePaths = Array.empty[String]
+    var next = 0
+
+    override def init(inputStream: InputStream, props: Properties): Unit = {
+      topic = props.getProperty("topic")
+      if (props.containsKey("parse.key"))
+        parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
+      if (props.containsKey("key.separator"))
+        keySeparator = props.getProperty("key.separator")
+      if (props.containsKey("ignore.error"))
+        ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
+      filePaths = props.getProperty("filesPath").split(props.getProperty("files.separator"))
+      reader = new BufferedReader(new FileReader(filePaths(next)))
+    }
+
+    override def readMessage() = {
+      lineNumber += 1
+
+      (reader.readLine(), parseKey) match {
+        case (null, _) =>
+          next += 1
+          if (next >= filePaths.length)
+            null
+          else {
+            reader = new BufferedReader(new FileReader(filePaths(next)))
+            readMessage()
+          }
+        case (line, true) =>
+          line.indexOf(keySeparator) match {
+            case -1 =>
+              if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+              else throw new KafkaException(s"No key found on line $lineNumber: $line")
+            case n =>
+              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
+              new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
+          }
+        case (line, false) =>
+          new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+      }
+    }
+
+    override def close(): Unit = {
+      if (reader != null)
+        reader.close()
+    }
+  }
+
+
 }
