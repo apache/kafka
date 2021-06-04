@@ -35,6 +35,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
 
+import scala.annotation.nowarn
+
+@nowarn("cat=deprecation")
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
