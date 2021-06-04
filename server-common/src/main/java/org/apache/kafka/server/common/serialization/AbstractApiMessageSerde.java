@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common.serialization;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
@@ -80,33 +79,35 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
         try {
             frameVersion = unsignedIntToShort(input.readUnsignedVarint(), "frame version");
         } catch (Exception e) {
-            throw new MetadataParseException("Failed to read variable-length " +
-                    "frame version number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new MetadataParseException(e);
         }
         if (frameVersion != DEFAULT_FRAME_VERSION) {
-            throw new SerializationException("Could not deserialize metadata record due to unknown frame version "
+            throw new MetadataParseException("Could not deserialize metadata record due to unknown frame version "
                     + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }
         short apiKey;
         try {
             apiKey = unsignedIntToShort(input.readUnsignedVarint(), "type");
         } catch (Exception e) {
-            throw new MetadataParseException("Failed to read variable-length type " +
-                    "number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new MetadataParseException(e);
         }
         short version;
         try {
             version = unsignedIntToShort(input.readUnsignedVarint(), "version");
         } catch (Exception e) {
-            throw new MetadataParseException("Failed to read variable-length " +
-                    "version number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new MetadataParseException(e);
         }
-        ApiMessage record = apiMessageFor(apiKey);
+
+        ApiMessage record;
+        try {
+            record = apiMessageFor(apiKey);
+        } catch (Exception e) {
+            throw new MetadataParseException(e);
+        }
         try {
             record.read(input, version);
         } catch (Exception e) {
-            throw new MetadataParseException(apiKey + "#parse failed: " +
-                    e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new MetadataParseException(e);
         }
         if (input.remaining() > 0) {
             throw new MetadataParseException("Found " + input.remaining() +

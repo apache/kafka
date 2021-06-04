@@ -17,7 +17,6 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -68,7 +67,7 @@ class MetadataRecordSerdeTest {
         buffer.flip();
 
         MetadataRecordSerde serde = new MetadataRecordSerde();
-        assertThrows(SerializationException.class,
+        assertThrows(MetadataParseException.class,
             () -> serde.read(new ByteBufferAccessor(buffer), 16));
     }
 
@@ -88,9 +87,8 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertStartsWith("Failed to read variable-length frame version number",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+        assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
     }
 
     /**
@@ -110,9 +108,8 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertStartsWith("Failed to read variable-length type number",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+        assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
     }
 
     /**
@@ -132,9 +129,65 @@ class MetadataRecordSerdeTest {
         buffer.put((byte) 0x80);
         buffer.position(0);
         buffer.limit(64);
-        assertStartsWith("Failed to read variable-length version number",
+        assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+    }
+
+    /**
+     * Test attempting to parse an event which has a version > Short.MAX_VALUE
+     */
+    @Test
+    public void testParsingVersionToLarge() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x08); // apiKey
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0xff); // api version
+        buffer.put((byte) 0x7f); // api version end
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Value for version was too large",
                 assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
+    }
+
+    /**
+     * Test attempting to parse an event which has a unsupported version
+     */
+    @Test
+    public void testParsingUnsupportedApiKey() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0xff); // apiKey
+        buffer.put((byte) 0x7f); // apiKey
+        buffer.put((byte) 0x00); // api version
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
+    }
+
+    /**
+     * Test attempting to parse an event which has a malformed message body.
+     */
+    @Test
+    public void testParsingMalformedMessage() {
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        ByteBuffer buffer = ByteBuffer.allocate(4);
+        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x00); // apiKey
+        buffer.put((byte) 0x00); // apiVersion
+        buffer.put((byte) 0x80); // malformed data
+        buffer.position(0);
+        buffer.limit(4);
+        assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining()));
     }
 
     /**
