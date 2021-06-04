@@ -306,7 +306,7 @@ public class StandaloneHerder extends AbstractHerder {
         // Ensure the connector exists
         String connectorName = request.connectorName();
         if (!configState.contains(connectorName)) {
-            cb.onCompletion(new NotFoundException("Connector " + connectorName + " not found", null), null);
+            cb.onCompletion(new NotFoundException("Unknown connector: " + connectorName, null), null);
             return;
         }
 

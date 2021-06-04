@@ -1025,7 +1025,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else if (isLeader()) {
                     callback.onCompletion(new NotAssignedException("Cannot restart connector since it is not assigned to this member", member.ownerUrl(connName)), null);
                 } else {
-                    callback.onCompletion(new NotLeaderException("Cannot restart connector since it is not assigned to this member", leaderUrl()), null);
+                    callback.onCompletion(new NotLeaderException("Only the leader can process restart requests.", leaderUrl()), null);
                 }
                 return null;
             },
@@ -1102,7 +1102,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             callback.onCompletion(null, plan.restartConnectorStateInfo());
                         }
                     } else {
-                        callback.onCompletion(new NotLeaderException("Cannot restart task since it is not assigned to this member", leaderUrl()), null);
+                        callback.onCompletion(new NotLeaderException("Cannot process restart request since it is not assigned to this member", leaderUrl()), null);
                     }
 
                     return null;

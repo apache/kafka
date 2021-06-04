@@ -126,7 +126,9 @@ public class StandaloneHerderTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass"/*, "validateConnectorConfig"*/});
+        String[] methodNames = new String[]{"connectorTypeForClass"/*, "validateConnectorConfig"*/, "buildRestartPlanFor", "recordRestarting"};
+        herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
+                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
         createCallback = new FutureCallback<>();
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
@@ -135,11 +137,6 @@ public class StandaloneHerderTest {
         PowerMock.mockStatic(WorkerConnector.class);
         Capture<Map<String, String>> configCapture = Capture.newInstance();
         EasyMock.expect(transformer.transform(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(configCapture))).andAnswer(configCapture::getValue).anyTimes();
-    }
-
-    private StandaloneHerder getStandaloneHerderPartialMock(String[] methodNames) {
-        return PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
-                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
     }
 
     @Test
@@ -444,9 +441,7 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartConnectorAndTasksNoStatus() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass", "buildRestartPlanFor"});
-        EasyMock.expect(herder.buildRestartPlanFor(restartRequest))
-                .andReturn(Optional.empty()).anyTimes();
+        EasyMock.expect(herder.buildRestartPlanFor(restartRequest)).andReturn(Optional.empty()).anyTimes();
 
         connector = PowerMock.createMock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
@@ -471,7 +466,6 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartConnectorAndTasksNoRestarts() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass", "buildRestartPlanFor"});
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.restartConnector()).andReturn(false).anyTimes();
@@ -502,7 +496,6 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartConnectorAndTasksOnlyConnector() throws Exception {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass", "buildRestartPlanFor", "recordRestarting"});
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.restartConnector()).andReturn(true).anyTimes();
@@ -548,7 +541,6 @@ public class StandaloneHerderTest {
     public void testRestartConnectorAndTasksOnlyTasks() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass", "buildRestartPlanFor", "recordRestarting"});
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.restartConnector()).andReturn(false).anyTimes();
@@ -600,7 +592,6 @@ public class StandaloneHerderTest {
     public void testRestartConnectorAndTasksBoth() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
-        herder = getStandaloneHerderPartialMock(new String[]{"connectorTypeForClass", "buildRestartPlanFor", "recordRestarting"});
         RestartPlan restartPlan = PowerMock.createMock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = PowerMock.createMock(ConnectorStateInfo.class);
         EasyMock.expect(restartPlan.restartConnector()).andReturn(true).anyTimes();
