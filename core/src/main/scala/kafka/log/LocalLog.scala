@@ -17,12 +17,10 @@
 
 package kafka.log
 
-import java.lang.{Long => JLong}
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.text.NumberFormat
 import java.util.concurrent.atomic.AtomicLong
-import java.util.Map.{Entry => JEntry}
 import java.util.regex.Pattern
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
@@ -36,20 +34,6 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, immutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
-/**
- * Defines the actions to be performed before and after rolling the active segment. Please refer
- * to its usage in LocalLog.roll() API.
- *
- * @param preRollAction A function that accepts as parameter the segment newly created and
- *                      performs the required activities just prior to when the current active segment
- *                      is being rolled.
- * @param postRollAction A function that accepts as parameters (1) the latest active segment (after the roll)
- *                       and (2) the segment (if any) that was deleted prior to the roll. The function
- *                       performs the required activities just after the active segment was rolled.
- */
-case class RollAction(preRollAction: LogSegment => Unit,
-                      postRollAction: (LogSegment, Option[LogSegment]) => Unit)
 
 /**
  * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
@@ -232,18 +216,28 @@ private[log] class LocalLog(@volatile private var _dir: File,
   }
 
   /**
-   * Completely delete this log directory and all contents from the file system with no delay.
-   *
-   * @return the segments that were deleted
+   * Completely delete this log directory with no delay.
    */
-  private[log] def delete(): Iterable[LogSegment] = {
+  private[log] def deleteEmptyDir(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       checkIfMemoryMappedBufferClosed()
-      val deletableSegments = List[LogSegment]() ++ segments.values
-      removeAndDeleteSegments(deletableSegments, asyncDelete = false, LogDeletion(this))
+      if (segments.nonEmpty) {
+        throw new IllegalStateException(s"Can not delete directory when ${segments.numberOfSegments} segments are still present")
+      }
       Utils.delete(dir)
       // File handlers will be closed if this log is deleted
       isMemoryMappedBufferClosed = true
+    }
+  }
+
+  /**
+   * Completely delete all segments with no delay.
+   * @return the deleted segments
+   */
+  private[log] def deleteAllSegments(): Iterable[LogSegment] = {
+    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
+      val deletableSegments = List[LogSegment]() ++ segments.values
+      removeAndDeleteSegments(segments.values, asyncDelete = false, LogDeletion(this))
       deletableSegments
     }
   }
@@ -449,52 +443,46 @@ private[log] class LocalLog(@volatile private var _dir: File,
    * This will trim the index to the exact size of the number of entries it currently contains.
    *
    * @param expectedNextOffset The expected next offset after the segment is rolled
-   * @param rollAction The pre/post roll actions to be performed
    *
    * @return The newly rolled segment
    */
-  private[log] def roll(expectedNextOffset: Option[Long] = None, rollAction: Option[RollAction] = None): LogSegment = {
+  private[log] def roll(expectedNextOffset: Option[Long] = None): LogSegment = {
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
       val start = time.hiResClockMs()
       checkIfMemoryMappedBufferClosed()
       val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
       val logFile = Log.logFile(dir, newOffset)
       val activeSegment = segments.activeSegment
-      val deletedSegmentOpt: Option[LogSegment] = {
-        if (segments.contains(newOffset)) {
-          // segment with the same base offset already exists and loaded
-          if (activeSegment.baseOffset == newOffset && activeSegment.size == 0) {
-            // We have seen this happen (see KAFKA-6388) after shouldRoll() returns true for an
-            // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
-            warn(s"Trying to roll a new log segment with start offset $newOffset " +
-              s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
-              s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
-              s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-            val toDelete = Seq(activeSegment)
-            removeAndDeleteSegments(toDelete, asyncDelete = true, LogRoll(this))
-            Some(toDelete.head)
-          } else {
-            throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
-              s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
-              s"segment is ${segments.get(newOffset)}.")
-          }
-        } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
-          throw new KafkaException(
-            s"Trying to roll a new log segment for topic partition $topicPartition with " +
-              s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
+      if (segments.contains(newOffset)) {
+        // segment with the same base offset already exists and loaded
+        if (activeSegment.baseOffset == newOffset && activeSegment.size == 0) {
+          // We have seen this happen (see KAFKA-6388) after shouldRoll() returns true for an
+          // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
+          warn(s"Trying to roll a new log segment with start offset $newOffset " +
+            s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
+            s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
+            s" size of offset index: ${activeSegment.offsetIndex.entries}.")
+          removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRoll(this))
         } else {
-          val offsetIdxFile = offsetIndexFile(dir, newOffset)
-          val timeIdxFile = timeIndexFile(dir, newOffset)
-          val txnIdxFile = transactionIndexFile(dir, newOffset)
-
-          for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
-            warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
-            Files.delete(file.toPath)
-          }
-
-          segments.lastSegment.foreach(_.onBecomeInactiveSegment())
-          Option.empty
+          throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
+            s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
+            s"segment is ${segments.get(newOffset)}.")
         }
+      } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+        throw new KafkaException(
+          s"Trying to roll a new log segment for topic partition $topicPartition with " +
+            s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
+      } else {
+        val offsetIdxFile = offsetIndexFile(dir, newOffset)
+        val timeIdxFile = timeIndexFile(dir, newOffset)
+        val txnIdxFile = transactionIndexFile(dir, newOffset)
+
+        for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
+          warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
+          Files.delete(file.toPath)
+        }
+
+        segments.lastSegment.foreach(_.onBecomeInactiveSegment())
       }
 
       val newSegment = LogSegment.open(dir,
@@ -503,7 +491,6 @@ private[log] class LocalLog(@volatile private var _dir: File,
         time = time,
         initFileSize = config.initFileSize,
         preallocate = config.preallocate)
-      rollAction.foreach(_.preRollAction(newSegment))
       segments.add(newSegment)
 
       // We need to update the segment base offset and append position data of the metadata when log rolls.
@@ -511,8 +498,6 @@ private[log] class LocalLog(@volatile private var _dir: File,
       updateLogEndOffset(nextOffsetMetadata.messageOffset)
 
       info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
-
-      rollAction.foreach(_.postRollAction(newSegment, deletedSegmentOpt))
 
       newSegment
     }

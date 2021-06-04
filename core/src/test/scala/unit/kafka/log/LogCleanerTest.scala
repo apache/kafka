@@ -130,12 +130,12 @@ class LogCleanerTest {
                       producerStateManager = producerStateManager,
                       _topicId = None,
                       keepPartitionMetadataFile = true) {
-      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+      override def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
         deleteStartLatch.countDown()
         if (!deleteCompleteLatch.await(5000, TimeUnit.MILLISECONDS)) {
           throw new IllegalStateException("Log segment deletion timed out")
         }
-        super.replaceSegments(newSegments, oldSegments, isRecoveredSwapFile)
+        super.replaceSegments(newSegments, oldSegments)
       }
     }
 

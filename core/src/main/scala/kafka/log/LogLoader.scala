@@ -514,8 +514,9 @@ object LogLoader extends Logging {
 
   private def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment],
                                            params: LoadLogParams): Unit = {
-    Log.deleteProducerSnapshotsAsync(segments,
+    Log.deleteProducerSnapshots(segments,
       params.producerStateManager,
+      asyncDelete = true,
       params.scheduler,
       params.config,
       params.logDirFailureChannel,

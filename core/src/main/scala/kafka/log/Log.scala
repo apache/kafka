@@ -19,10 +19,8 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.Files
-import java.text.NumberFormat
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.AppendOrigin.RaftLeader
@@ -1321,7 +1319,7 @@ class Log(@volatile var logStartOffset: Long,
           localLog.checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           localLog.removeAndDeleteSegments(deletable, asyncDelete = true, reason)
-          deleteProducerSnapshotAsync(deletable)
+          deleteProducerSnapshots(deletable, asyncDelete = true)
           maybeIncrementLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, SegmentDeletion)
         }
       }
@@ -1396,24 +1394,6 @@ class Log(@volatile var logStartOffset: Long,
    */
   def logEndOffsetMetadata: LogOffsetMetadata = localLog.logEndOffsetMetadata
 
-  private val rollAction = RollAction(
-    preRollAction = (newSegment: LogSegment) => {
-      // Take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
-      // offset align with the new segment offset since this ensures we can recover the segment by beginning
-      // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
-      // may actually be ahead of the current producer state end offset (which corresponds to the log end offset),
-      // we manually override the state offset here prior to taking the snapshot.
-      producerStateManager.updateMapEndOffset(newSegment.baseOffset)
-      producerStateManager.takeSnapshot()
-    },
-    postRollAction = (newSegment: LogSegment, deletedSegment: Option[LogSegment]) => {
-      deletedSegment.foreach(segment => deleteProducerSnapshotAsync(Seq(segment)))
-      updateHighWatermarkWithLogEndOffset()
-      // Schedule an asynchronous flush of the old segment
-      scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
-    }
-  )
-
   /**
    * Roll the log over to a new empty log segment if necessary.
    * The segment will be rolled if one of the following conditions met:
@@ -1457,7 +1437,9 @@ class Log(@volatile var logStartOffset: Long,
         .map(_.messageOffset)
         .getOrElse(maxOffsetInMessages - Integer.MAX_VALUE)
 
-      localLog.roll(Some(rollOffset), Some(rollAction))
+      val newSegment = localLog.roll(Some(rollOffset))
+      afterRoll(newSegment)
+      newSegment
     } else {
       segment
     }
@@ -1469,10 +1451,23 @@ class Log(@volatile var logStartOffset: Long,
    *
    * @return The newly rolled segment
    */
-  def roll(expectedNextOffset: Option[Long] = None): LogSegment = {
-    lock synchronized {
-      localLog.roll(expectedNextOffset, Some(rollAction))
-    }
+  def roll(expectedNextOffset: Option[Long] = None): LogSegment = lock synchronized {
+    val newSegment = localLog.roll(expectedNextOffset)
+    afterRoll(newSegment)
+    newSegment
+  }
+
+  private def afterRoll(newSegment: LogSegment): Unit = {
+    // Take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
+    // offset align with the new segment offset since this ensures we can recover the segment by beginning
+    // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
+    // may actually be ahead of the current producer state end offset (which corresponds to the log end offset),
+    // we manually override the state offset here prior to taking the snapshot.
+    producerStateManager.updateMapEndOffset(newSegment.baseOffset)
+    producerStateManager.takeSnapshot()
+    updateHighWatermarkWithLogEndOffset()
+    // Schedule an asynchronous flush of the old segment
+    scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
   }
 
   /**
@@ -1511,8 +1506,9 @@ class Log(@volatile var logStartOffset: Long,
       lock synchronized {
         producerExpireCheck.cancel(true)
         leaderEpochCache.foreach(_.clear())
-        val deletedSegments = localLog.delete()
-        deleteProducerSnapshotAsync(deletedSegments)
+        val deletedSegments = localLog.deleteAllSegments()
+        deleteProducerSnapshots(deletedSegments, asyncDelete = false)
+        localLog.deleteEmptyDir()
       }
     }
   }
@@ -1568,7 +1564,7 @@ class Log(@volatile var logStartOffset: Long,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
-            deleteProducerSnapshotAsync(deletedSegments)
+            deleteProducerSnapshots(deletedSegments, asyncDelete = true)
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
 
             completeTruncation(
@@ -1592,7 +1588,7 @@ class Log(@volatile var logStartOffset: Long,
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
         val deletedSegments = localLog.truncateFullyAndStartAt(newOffset)
-        deleteProducerSnapshotAsync(deletedSegments)
+        deleteProducerSnapshots(deletedSegments, asyncDelete = true)
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
 
@@ -1609,9 +1605,8 @@ class Log(@volatile var logStartOffset: Long,
     endOffset: Long
   ): Unit = {
     logStartOffset = startOffset
-    lock synchronized {
-      rebuildProducerState(endOffset, producerStateManager)
-    }
+    localLog.updateLogEndOffset(endOffset)
+    rebuildProducerState(endOffset, producerStateManager)
     updateHighWatermark(math.min(highWatermark, endOffset))
   }
 
@@ -1655,12 +1650,12 @@ class Log(@volatile var logStartOffset: Long,
     logString.toString
   }
 
-  private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
+  private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
     lock synchronized {
       localLog.checkIfMemoryMappedBufferClosed()
       val deletedSegments = Log.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
-        config, scheduler, logDirFailureChannel, logIdent, isRecoveredSwapFile)
-      deleteProducerSnapshotAsync(deletedSegments)
+        config, scheduler, logDirFailureChannel, logIdent)
+      deleteProducerSnapshots(deletedSegments, asyncDelete = true)
     }
   }
 
@@ -1700,12 +1695,12 @@ class Log(@volatile var logStartOffset: Long,
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
     val result = Log.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
-    deleteProducerSnapshotAsync(result.deletedSegments)
+    deleteProducerSnapshots(result.deletedSegments, asyncDelete = true)
     result.newSegments.toList
   }
 
-  private[log] def deleteProducerSnapshotAsync(segments: Iterable[LogSegment]): Unit = {
-    Log.deleteProducerSnapshotsAsync(segments, producerStateManager, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
+  private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
+    Log.deleteProducerSnapshots(segments, producerStateManager, asyncDelete = true, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
   }
 }
 
@@ -2006,7 +2001,7 @@ object Log extends Logging {
       config,
       scheduler,
       logDirFailureChannel,
-      logPrefix: String,
+      logPrefix,
       isRecoveredSwapFile)
   }
 
@@ -2032,13 +2027,14 @@ object Log extends Logging {
     LocalLog.deleteSegmentFiles(segmentsToDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
   }
 
-  private[log] def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment],
-                                                producerStateManager: ProducerStateManager,
-                                                scheduler: Scheduler,
-                                                config: LogConfig,
-                                                logDirFailureChannel: LogDirFailureChannel,
-                                                parentDir: String,
-                                                topicPartition: TopicPartition): Unit = {
+  private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment],
+                                           producerStateManager: ProducerStateManager,
+                                           asyncDelete: Boolean,
+                                           scheduler: Scheduler,
+                                           config: LogConfig,
+                                           logDirFailureChannel: LogDirFailureChannel,
+                                           parentDir: String,
+                                           topicPartition: TopicPartition): Unit = {
     def deleteProducerSnapshots(segments: Iterable[LogSegment]): Unit = {
       LocalLog.maybeHandleIOException(logDirFailureChannel,
         parentDir,
@@ -2049,26 +2045,15 @@ object Log extends Logging {
       }
     }
 
-    scheduler.schedule("delete-producer-snapshot", () => deleteProducerSnapshots(segments), delay = config.fileDeleteDelayMs)
+
+    if (asyncDelete)
+      scheduler.schedule("delete-producer-snapshot", () => deleteProducerSnapshots(segments), delay = config.fileDeleteDelayMs)
+    else
+      deleteProducerSnapshots(segments)
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
     LocalLog.createNewCleanedSegment(dir, logConfig, baseOffset)
-  }
-
-  /**
-   * Wraps the value of iterator.next() in an option.
-   * Note: this facility is a part of the Iterator class starting from scala v2.13.
-   *
-   * @param iterator
-   * @tparam T the type of object held within the iterator
-   * @return Some(iterator.next) if a next element exists, None otherwise.
-   */
-  private def nextOption[T](iterator: Iterator[T]): Option[T] = {
-    if (iterator.hasNext)
-      Some(iterator.next())
-    else
-      None
   }
 }
 

@@ -54,8 +54,12 @@ class LocalLogTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    if (!log.isMemoryMappedBufferClosed) {
+    try {
       log.close()
+    } catch {
+      case _: KafkaStorageException => {
+        // ignore
+      }
     }
     Utils.delete(tmpDir)
   }
@@ -113,28 +117,39 @@ class LocalLogTest {
   }
 
   @Test
-  def testLogDeleteSuccess(): Unit = {
+  def testLogDeleteSegmentsSuccess(): Unit = {
     val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
     appendRecords(List(record))
     log.roll()
     assertEquals(2, log.segments.numberOfSegments)
     assertFalse(logDir.listFiles.isEmpty)
     val segmentsBeforeDelete = List[LogSegment]() ++ log.segments.values
-    val deletedSegments = log.delete()
+    val deletedSegments = log.deleteAllSegments()
     assertTrue(log.segments.isEmpty)
     assertEquals(segmentsBeforeDelete, deletedSegments)
-    assertThrows(classOf[KafkaStorageException], () => log.checkIfMemoryMappedBufferClosed())
+    assertTrue(logDir.exists)
+  }
+
+  @Test
+  def testLogDeleteDirSuccessWhenEmptyAndFailureWhenNonEmpty(): Unit ={
+    val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
+    appendRecords(List(record))
+    log.roll()
+    assertEquals(2, log.segments.numberOfSegments)
+    assertFalse(logDir.listFiles.isEmpty)
+
+    assertThrows(classOf[IllegalStateException], () => log.deleteEmptyDir())
+    assertTrue(logDir.exists)
+
+    log.deleteAllSegments()
+    log.deleteEmptyDir()
     assertFalse(logDir.exists)
   }
 
   @Test
-  def testLogDeleteFailureAfterCloseHandlers(): Unit = {
+  def testLogDeleteDirFailureAfterCloseHandlers(): Unit = {
     log.closeHandlers()
-    assertEquals(1, log.segments.numberOfSegments)
-    val segmentsBeforeDelete = log.segments.values
-    assertThrows(classOf[KafkaStorageException], () => log.delete())
-    assertEquals(1, log.segments.numberOfSegments)
-    assertEquals(segmentsBeforeDelete, log.segments.values)
+    assertThrows(classOf[KafkaStorageException], () => log.deleteEmptyDir())
     assertTrue(logDir.exists)
   }
 
@@ -143,7 +158,7 @@ class LocalLogTest {
     val oldConfig = log.config
     assertEquals(oldConfig, log.config)
 
-    val newConfig = createLogConfig()
+    val newConfig = createLogConfig(segmentBytes=oldConfig.segmentSize + 1)
     log.updateConfig(newConfig)
     assertEquals(newConfig, log.config)
   }
@@ -353,7 +368,7 @@ class LocalLogTest {
     assertEquals(10L, log.segments.numberOfSegments)
 
     var offset = 0
-    log.deletableSegments(
+    val deletableSegments = log.deletableSegments(
       (segment: LogSegment, nextSegmentOpt: Option[LogSegment], logEndOffset: Long) => {
         assertEquals(offset, segment.baseOffset)
         val floorSegmentOpt = log.segments.floorSegment(offset)
@@ -372,6 +387,8 @@ class LocalLogTest {
         offset += 1
         true
       })
+    assertEquals(10L, log.segments.numberOfSegments)
+    assertEquals(log.segments.nonActiveLogSegmentsFrom(0L).toSeq, deletableSegments.toSeq)
   }
 
   @Test
@@ -609,52 +626,34 @@ class LocalLogTest {
   }
 
   @Test
-  def testRollActionsArePerformed(): Unit = {
+  def testNewSegmentsAfterRoll(): Unit = {
     assertEquals(1, log.segments.numberOfSegments, "Log begins with a single empty segment.")
 
     // roll active segment with the same base offset of size zero should recreate the segment
-    log.roll(rollAction = Some(RollAction(
-      preRollAction = (newSegment: LogSegment) => {
-        assertEquals(0L, newSegment.baseOffset)
-        assertEquals(0, log.segments.numberOfSegments)
-        assertEquals(0L, log.logEndOffset)
-      },
-      postRollAction = (newSegment: LogSegment, deletedSegmentOpt: Option[LogSegment]) => {
-        assertTrue(deletedSegmentOpt.isDefined)
-        assertEquals(0L, deletedSegmentOpt.get.baseOffset)
-        assertNotEquals(newSegment, deletedSegmentOpt.get)
-        assertEquals(0L, newSegment.baseOffset)
-        assertEquals(1, log.segments.numberOfSegments)
-        assertEquals(0L, log.logEndOffset)
-      })))
+    {
+      val newSegment = log.roll()
+      assertEquals(0L, newSegment.baseOffset)
+      assertEquals(1, log.segments.numberOfSegments)
+      assertEquals(0L, log.logEndOffset)
+    }
 
     appendRecords(List(KeyValue("k1", "v1").toRecord()))
-    log.roll(rollAction = Some(RollAction(
-      preRollAction = (newSegment: LogSegment) => {
-        assertEquals(1L, newSegment.baseOffset)
-        assertEquals(1, log.segments.numberOfSegments)
-        assertEquals(1L, log.logEndOffset)
-      },
-      postRollAction = (newSegment: LogSegment, deletedSegmentOpt: Option[LogSegment]) => {
-        assertFalse(deletedSegmentOpt.isDefined)
-        assertEquals(1L, newSegment.baseOffset)
-        assertEquals(2, log.segments.numberOfSegments)
-        assertEquals(1L, log.logEndOffset)
-      })))
+
+    {
+      val newSegment = log.roll()
+      assertEquals(1L, newSegment.baseOffset)
+      assertEquals(2, log.segments.numberOfSegments)
+      assertEquals(1L, log.logEndOffset)
+    }
 
     appendRecords(List(KeyValue("k2", "v2").toRecord()), initialOffset = 1L)
-    log.roll(rollAction = Some(RollAction(
-      preRollAction = (newSegment: LogSegment) => {
-        assertEquals(2L, newSegment.baseOffset)
-        assertEquals(2, log.segments.numberOfSegments)
-        assertEquals(2L, log.logEndOffset)
-      },
-      postRollAction = (newSegment: LogSegment, deletedSegmentOpt: Option[LogSegment]) => {
-        assertFalse(deletedSegmentOpt.isDefined)
-        assertEquals(2L, newSegment.baseOffset)
-        assertEquals(3, log.segments.numberOfSegments)
-        assertEquals(2L, log.logEndOffset)
-      })))
+
+    {
+      val newSegment = log.roll(Some(1L))
+      assertEquals(2L, newSegment.baseOffset)
+      assertEquals(3, log.segments.numberOfSegments)
+      assertEquals(2L, log.logEndOffset)
+    }
   }
 
   @Test
