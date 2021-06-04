@@ -375,7 +375,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @return the restart plan, or empty this worker has no status for the connector named in the request and therefore the
      *         connector cannot be restarted
      */
-    protected Optional<RestartPlan> buildRestartPlanFor(RestartRequest request) {
+    public Optional<RestartPlan> buildRestartPlanFor(RestartRequest request) {
         String connectorName = request.connectorName();
         ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
         if (connectorStatus == null) {

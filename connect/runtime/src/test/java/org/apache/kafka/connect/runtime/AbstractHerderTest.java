@@ -269,8 +269,8 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testBuildRestartPlanForMissingConnector() {
-        String connectorName = "InvalidConnector";
+    public void testBuildRestartPlanForUnknownConnector() {
+        String connectorName = "UnknownConnector";
         RestartRequest restartRequest = new RestartRequest(connectorName, false, true);
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,

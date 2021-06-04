@@ -165,12 +165,12 @@ public class RestartPlan {
         if (restartConnector()) {
             return String.format(
                 "request to restart connector '%s' and %d of %d tasks (onlyFailed=%s, includeTasks=%s)",
-                connectorName(), restartTaskCount(), totalTaskCount()
+                connectorName(), restartTaskCount(), totalTaskCount(), request.onlyFailed(), request.includeTasks()
             );
         }
         return String.format(
                 "request to restart %d of %d tasks for connector '%s' (onlyFailed=%s, includeTasks=%s)",
-                restartTaskCount(), totalTaskCount(), connectorName()
+                restartTaskCount(), totalTaskCount(), connectorName(), request.onlyFailed(), request.includeTasks()
         );
     }
 }

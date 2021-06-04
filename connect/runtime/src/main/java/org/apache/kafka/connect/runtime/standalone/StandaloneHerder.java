@@ -305,7 +305,6 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb) {
         // Ensure the connector exists
         String connectorName = request.connectorName();
-        configState = configBackingStore.snapshot();
         if (!configState.contains(connectorName)) {
             cb.onCompletion(new NotFoundException("Connector " + connectorName + " not found", null), null);
             return;
