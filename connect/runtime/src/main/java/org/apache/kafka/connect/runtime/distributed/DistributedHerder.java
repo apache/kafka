@@ -168,7 +168,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean rebalanceResolved;
     private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
     private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
-    private ExtendedAssignment assignment;
+    // visible for testing
+    ExtendedAssignment assignment;
     private boolean canReadConfigs;
     // visible for testing
     protected ClusterConfigState configState;
@@ -191,6 +192,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private short currentProtocolVersion;
     private short backoffRetries;
 
+    // visible for testing
     // The pending restart requests for the connectors;
     final NavigableSet<RestartRequest> pendingRestartRequests = new TreeSet<>();
 
@@ -1125,12 +1127,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {
+    protected synchronized boolean doRestartConnectorAndTasks(RestartRequest request) {
         final String connectorName = request.connectorName();
         Optional<RestartPlan> maybePlan = buildRestartPlanFor(request);
         if (!maybePlan.isPresent()) {
             log.debug("Skipping restart of connector '{}' since no status is available: {}", connectorName, request);
-            return;
+            return false;
         }
         RestartPlan plan = maybePlan.get();
         log.info("Executing {}", plan);
@@ -1170,6 +1172,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("{} tasks for connector {} restarted as requested ({} were left running)", plan.restartTaskCount(), plan.totalTaskCount(), connectorName);
         }
         log.info("Completed {}", plan);
+        return restartConnector || restartTasks;
     }
 
     // Should only be called from work thread, so synchronization should not be needed
